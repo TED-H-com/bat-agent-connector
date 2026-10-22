@@ -19,716 +19,6 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
-//#region src/managed-recovery.js
-function managedRecoveryKey(code) {
-	if (!code) return null;
-	if (code === "MANAGED_RECOVERING") return "managed_service_recovering";
-	if (code === "MANAGED_RECOVERY_IDENTITY_CHANGED") return "managed_service_identity";
-	return "managed_service_retry";
-}
-//#endregion
-//#region src/central-service-status.js
-function pollFailure(error, at) {
-	const status = Number.isFinite(error.status) ? error.status : 200;
-	const code = error.code || "INVALID_EVENT_PAGE";
-	return {
-		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
-		status,
-		code,
-		at
-	};
-}
-var pollKeys = {
-	transport: "ui_reconnecting",
-	refused: "ui_connection_refused",
-	service_error: "ui_service_error",
-	invalid_response: "ui_invalid_response",
-	continuity: "ui_connecting"
-};
-var pollReasons = {
-	ui_reconnecting: "reconnecting",
-	ui_connection_refused: "refused",
-	ui_service_error: "service_error",
-	ui_invalid_response: "invalid_response"
-};
-function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
-	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
-	const recoveryKey = managedRecoveryKey(managedRecovery);
-	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
-	return {
-		key,
-		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
-		connection,
-		recoveryKey
-	};
-}
-function clientActionGate(facts, requirements) {
-	const ready = requirements.post || requirements.attachment;
-	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
-		allowed: true,
-		reason: null
-	};
-	const key = centralServiceStatus(facts).key;
-	return {
-		allowed: false,
-		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
-	};
-}
-var clientReasons = [
-	"not_connected",
-	"connecting",
-	...Object.values(pollReasons),
-	"connection_changing",
-	"view_not_ready",
-	"manage_required",
-	"attachments_unavailable",
-	"uploads_not_allowed"
-];
-var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
-var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
-var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
-//#endregion
-//#region src/state/sessions.js
-var text$6 = (value) => typeof value === "string" ? value : "";
-function workspaceGroup(session) {
-	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
-	return {
-		key: JSON.stringify([
-			host,
-			id ? "id" : name ? "label" : "unknown",
-			id || name
-		]),
-		host,
-		id,
-		name
-	};
-}
-function groupedSessions(sessions) {
-	const groups = new Map();
-	for (const session of sessions) {
-		const group = workspaceGroup(session);
-		if (!groups.has(group.key)) groups.set(group.key, {
-			...group,
-			sessions: []
-		});
-		groups.get(group.key).sessions.push(session);
-	}
-	return [...groups.values()].sort((a, b) => a.host.localeCompare(b.host) || (a.name || a.id).localeCompare(b.name || b.id) || a.key.localeCompare(b.key));
-}
-function matchesSession(session, query) {
-	const haystack = [
-		session.title,
-		session.session_id,
-		session.host,
-		session.workspace,
-		session.workspace_id,
-		session.agent_kind,
-		session.model,
-		session.worktree_branch,
-		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$6).join("\n").toLocaleLowerCase();
-	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
-}
-function runtimeStale(session) {
-	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
-}
-function sessionFacets(session) {
-	const source = session || {}, pending = source.pending;
-	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
-	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
-		"needs_ted",
-		"needs_you",
-		"needs_attention",
-		"waiting_permission",
-		"awaiting_approval",
-		"uncertain",
-		"blocked"
-	].includes(managedStatus) ? "needs_you" : "none";
-	const staleness = {
-		runtime: runtimeStale(source),
-		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
-		missing: source.state?.enumeration === "missing"
-	};
-	const lifecycle = source.state?.lifecycle || "unknown";
-	return {
-		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
-		attention,
-		staleness,
-		lifecycle,
-		pendingKind: pending?.kind,
-		hasPending: Boolean(pending),
-		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
-	};
-}
-function sessionActivity(session) {
-	const facets = sessionFacets(session);
-	if (facets.hasPending) return {
-		key: "pending_" + facets.pendingKind,
-		tone: "stale"
-	};
-	if (facets.attention === "failed") return {
-		key: "op_failed",
-		tone: "bad"
-	};
-	if (facets.attention === "needs_you") return {
-		key: "workspace_needs_you",
-		tone: "stale"
-	};
-	if (facets.lifecycle === "ended") return {
-		key: "obs_value_ended",
-		tone: ""
-	};
-	if (facets.staleness.gone || facets.staleness.missing) return {
-		key: "sessions_not_seen",
-		tone: "stale"
-	};
-	if (facets.staleness.runtime) return {
-		key: "sessions_stale",
-		tone: "stale"
-	};
-	if (facets.activity === "streaming") return {
-		key: "obs_value_streaming",
-		tone: "info"
-	};
-	if (facets.activity === "not_streaming") return {
-		key: "obs_value_not_streaming",
-		tone: ""
-	};
-	if (facets.notLoaded) return {
-		key: "sessions_not_loaded",
-		tone: ""
-	};
-	return {
-		key: "sessions_activity_unknown",
-		tone: ""
-	};
-}
-function sessionStatus(session) {
-	const facets = sessionFacets(session);
-	if (facets.attention !== "none") return facets.attention;
-	if (Object.values(facets.staleness).some(Boolean)) return "stale";
-	if (facets.activity === "streaming") return "running";
-	return null;
-}
-function sessionPill(session) {
-	const status = sessionStatus(session);
-	if (status === "asking_you" || status === "needs_you") return {
-		key: "sessions_pill_waiting",
-		tone: "stale",
-		status
-	};
-	if (status === "failed") return {
-		key: "op_failed",
-		tone: "bad",
-		status
-	};
-	if (status === "stale") return {
-		key: "sessions_pill_stale",
-		tone: "stale",
-		status
-	};
-	if (status === "running") return {
-		key: "sessions_pill_running",
-		tone: "info",
-		status
-	};
-	return null;
-}
-//#endregion
-//#region src/fleet-status.js
-function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
-	const layers = row?.layers || {};
-	const reason = row?.code || row?.blocking;
-	let state;
-	if (!readable) state = "unavailable";
-	else if (row?.selected === false || row?.level === "off") state = "off";
-	else if (lookup(codeReason, reason) === "ownership") state = "ownership";
-	else if (snapshot.monitor.state === "stopped") state = "stopped";
-	else if (snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable") state = "checking";
-	else if (snapshot.selection.applied_revision !== snapshot.selection.revision) state = "selection_pending";
-	else if (snapshot.readiness.state !== "fresh" || row?.stale || row?.blocking === "stale") state = "stale";
-	else if (!row || row.selected !== true) state = "checking";
-	else if (reason) state = lookup(codeReason, reason) || lookup(layerReason, row.blocking) || "unknown";
-	else if (row.level === "ready" && layers.tunnel === true && (kind === "connector" ? !["unknown", "refused"].includes(layers.auth) : layers.tls === true && layers.auth === "ok" && layers.bat === true && layers.workspace === true)) state = "ready";
-	else state = "checking";
-	const current = ![
-		"unavailable",
-		"configuration",
-		"off",
-		"stopped",
-		"stale",
-		"checking",
-		"selection_pending",
-		"unknown",
-		"ownership"
-	].includes(state);
-	const blockedAt = (reason === "BAT_PROTOCOL_INVALID" ? "service" : lookup(layerStep, row?.blocking)) || {
-		network: "network",
-		waking: "network",
-		trust: "identity",
-		identity: "identity",
-		service: "service",
-		version: "service",
-		workspace: "workspace",
-		local_endpoint: "network",
-		local_ssh: "network"
-	}[state];
-	const steps = [
-		["network", layers.tunnel === true],
-		["identity", layers.auth === "ok" && (kind === "connector" || layers.tls === true)],
-		["service", kind === "connector" ? state === "ready" : layers.bat === true],
-		...kind === "connector" ? [] : [["workspace", layers.workspace === true]]
-	];
-	let blocked = false;
-	return {
-		state,
-		kind,
-		steps: steps.map(([id, passed]) => {
-			if (id === blockedAt) blocked = true;
-			return {
-				id,
-				state: !current ? "unchecked" : blocked ? id === blockedAt && !["waking", "timeout"].includes(state) ? "attention" : "unchecked" : passed ? "passed" : "unchecked"
-			};
-		})
-	};
-}
-function rememberFleetDetails(content, detailsState) {
-	for (const details of content.querySelectorAll("details[data-fleet-details-key]")) detailsState.set(details.dataset.fleetDetailsKey, details.open);
-}
-function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
-	const { state, kind, steps } = fleetDiagnosis(row, {
-		snapshot,
-		readable,
-		name: entry.name,
-		kind: entry.kind
-	});
-	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
-	const details = h("details", {
-		open: detailsState?.get(key) === true,
-		"data-fleet-details-key": key
-	}, h("summary", { "data-fleet-details": entry.name }, t("fleet_status_details")), h("dl", { class: "fleet-checks" }, ...steps.flatMap((step) => [h("dt", {}, t("fleet_check_" + step.id)), h("dd", {
-		"data-fleet-check": step.id,
-		"data-check-state": step.state
-	}, t("fleet_check_" + step.state))])), ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index).map((value) => h("code", {}, value)));
-	const helpKey = [
-		"ready",
-		"identity",
-		"service",
-		"version"
-	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
-	return h("div", {
-		class: "fleet-diagnosis",
-		"data-fleet-diagnosis": entry.name,
-		"data-fleet-state": state
-	}, h("p", { class: "fleet-diagnosis-title" }, t("fleet_check_title_" + state)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
-}
-var codeReason, layerReason, layerStep, lookup;
-var init_fleet_status = __esmMin((() => {
-	codeReason = {
-		TAILSCALE_WAKING: "waking",
-		ROUTE_UNAVAILABLE: "network",
-		TUNNEL_DOWN: "network",
-		TLS_PIN_MISSING: "trust",
-		TLS_IDENTITY_MISMATCH: "trust",
-		TLS_FAILED: "trust",
-		CREDENTIAL_MISSING: "identity",
-		CREDENTIAL_CHANGED: "identity",
-		BAT_AUTH_REFUSED: "identity",
-		CONNECTOR_AUTH_REFUSED: "identity",
-		CONNECTOR_SCOPE_MISSING: "identity",
-		BAT_VERSION_UNSUPPORTED: "version",
-		CONNECTOR_CONTRACT_UNSUPPORTED: "version",
-		BAT_PROTOCOL_INVALID: "service",
-		CONNECTOR_UNAVAILABLE: "service",
-		CONNECTOR_CAPABILITY_MISSING: "service",
-		WORKSPACE_UNREADABLE: "workspace",
-		WORKSPACE_INVALID: "workspace",
-		WORKSPACE_BINDING_MISMATCH: "workspace",
-		INVENTORY_INVALID: "configuration",
-		OWNER_UNPROVEN: "ownership",
-		STOP_UNCONFIRMED: "ownership",
-		TUNNEL_START_UNSETTLED: "ownership",
-		TUNNEL_RECORD_CHANGED: "ownership",
-		OTHER_LOGIN_OWNER: "ownership",
-		ENDPOINT_IN_USE: "local_endpoint",
-		SSH_UNAVAILABLE: "local_ssh",
-		PROBE_PENDING: "checking",
-		PROBE_TIMEOUT: "timeout",
-		PROBE_STALE: "stale"
-	};
-	layerReason = {
-		inventory: "configuration",
-		tunnel: "network",
-		tls: "trust",
-		auth: "identity",
-		bat: "service",
-		connector: "service",
-		contract: "version",
-		workspace: "workspace",
-		stale: "stale"
-	};
-	layerStep = {
-		tunnel: "network",
-		tls: "identity",
-		auth: "identity",
-		bat: "service",
-		connector: "service",
-		contract: "service",
-		workspace: "workspace"
-	};
-	lookup = (table, key) => Object.hasOwn(table, key) ? table[key] : void 0;
-}));
-//#endregion
-//#region src/health-display.js
-init_fleet_status();
-var time$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
-var healthRevision = (caps) => JSON.stringify([
-	caps?.connector,
-	caps?.build?.version,
-	caps?.build?.commit,
-	caps?.build?.source,
-	caps?.contract_version
-]);
-var rowId = (row) => JSON.stringify([row.host, row.session_id]);
-var gone = (row) => Boolean(row.gone_at) || row.state?.enumeration === "gone";
-var selectedRows = (health) => (health.sessions || []).filter((row) => !gone(row) && row.host === health.selected?.host && (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
-function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
-	const observed = time$1(fact.observed_at), deadline = time$1(fact.valid_until);
-	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
-	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
-	return {
-		...fact,
-		freshness,
-		ageSeconds
-	};
-}
-function compactHealth({ attention, stale, unknown, activity }) {
-	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
-}
-function runtimeSummary$1(health, now) {
-	const selected = health.selected;
-	if (!selected) return null;
-	const rows = selectedRows(health);
-	const complete = health.sessionsComplete || health.completeHosts?.has(selected.host);
-	const facts = rows.map((row) => {
-		const facets = sessionFacets(row), evidence = row.state?.evidence?.activity;
-		const activity = displayFact({
-			value: row.state?.activity ?? facets.activity,
-			observed_at: evidence ? evidence.observed_at : row.observed_at,
-			valid_until: evidence?.valid_until,
-			error: health.readErrors?.get(health.rowSources?.get(rowId(row))),
-			stale: Object.values(facets.staleness).some(Boolean)
-		}, { now });
-		return {
-			attention: facets.attention !== "none" || row.api_access === "managed" && [
-				"blocked",
-				"failed",
-				"error",
-				"needs_attention",
-				"awaiting_approval"
-			].includes(row.runtime_status),
-			activity,
-			working: ["streaming", "starting"].includes(activity.value),
-			idle: ["not_streaming", "ended"].includes(activity.value)
-		};
-	});
-	const connection = rows.filter((row) => row.state?.connection).map((row) => displayFact({
-		value: row.state.connection,
-		...row.state.evidence?.connection
-	}, { now })).sort((a, b) => (time$1(b.observed_at) || 0) - (time$1(a.observed_at) || 0))[0] || null;
-	const attention = facts.some((row) => row.attention);
-	const stale = facts.some((row) => row.activity.freshness === "stale") || connection?.freshness === "stale";
-	const unknown = !facts.length || Boolean(selected.workspaceId && !complete) || facts.some((row) => row.activity.freshness === "unknown" || !row.idle && !row.working) || connection?.freshness === "unknown";
-	const activity = facts.some((row) => row.working && row.activity.freshness === "current") ? "working" : !facts.length || selected.workspaceId && !complete || facts.some((row) => !row.idle || row.activity.freshness !== "current") ? "unknown" : "idle";
-	return {
-		selected,
-		attention,
-		stale,
-		unknown,
-		activity,
-		connection,
-		compact: compactHealth({
-			attention,
-			stale,
-			unknown,
-			activity
-		}),
-		facts
-	};
-}
-function countFact(rows, now, href = null) {
-	const facts = rows.map((row) => displayFact(row, { now }));
-	return {
-		...displayFact({
-			value: rows.length,
-			observed_at: rows.length ? Math.min(...rows.map((row) => time$1(row.observed_at))) : null,
-			stale: facts.some((row) => row.freshness === "stale")
-		}, { now }),
-		href,
-		stale_reason: rows.length && rows.every((row) => row.stale_reason === "host_unreachable") ? "host_unreachable" : null,
-		freshness: facts.some((row) => row.freshness === "stale") ? "stale" : facts.some((row) => row.freshness === "unknown") ? "unknown" : "current"
-	};
-}
-function otherMachines(health, now) {
-	if (health.hostsLoaded) return countFact((health.hosts || []).filter((row) => row.host !== health.selected?.host && (row.error || row.reachable === false && row.last_attempt_at)).map((row) => ({
-		observed_at: row.last_attempt_at,
-		valid_until: row.valid_until,
-		stale: row.stale,
-		stale_reason: row.stale_reason
-	})), now);
-	const snapshot = health.fleet;
-	return countFact((health.selected ? [] : snapshot?.readiness?.hosts || []).filter((row) => {
-		return fleetDiagnosis(row, {
-			snapshot,
-			readable: true
-		}).steps.some((step) => step.state === "attention");
-	}).map((row) => ({
-		observed_at: row.observed_at,
-		stale: row.stale
-	})), now, "#/settings?section=fleet");
-}
-function healthDisplay(input, now = Date.now()) {
-	const health = input.health || {}, status = centralServiceStatus(input);
-	const pollAt = typeof input.pollHealth === "object" ? input.pollHealth?.at : input.pollHealth === "connected" && input.lastPoll?.namespace === input.namespace ? input.lastPoll.at : health.bootstrapAt;
-	const connection = {
-		...status,
-		...displayFact({
-			value: status.key,
-			observed_at: status.recoveryKey ? input.managedObservedAt : pollAt,
-			valid_until: typeof input.pollHealth === "object" ? input.pollHealth?.valid_until : input.lastPoll?.valid_until
-		}, { now })
-	};
-	if (!input.token && !status.recoveryKey) connection.freshness = "unconfigured";
-	const receipt = health.capabilities;
-	const capabilities = displayFact({
-		value: receipt?.data,
-		static: true,
-		bootstrap: receipt?.bootstrap,
-		version: healthRevision(receipt?.data)
-	}, {
-		now,
-		bootstrap: health.bootstrap,
-		version: healthRevision(health.currentCaps || input.caps)
-	});
-	if (!receipt) capabilities.freshness = "unknown";
-	capabilities.refresh = health.capabilityRefresh;
-	const other = otherMachines(health, now);
-	return {
-		connection,
-		capabilities,
-		summary: runtimeSummary$1(health, now),
-		otherAttention: other.value,
-		other
-	};
-}
-function selectHealthSession(health, host, sessionId) {
-	if (health.selected?.host !== host || health.selected?.sessionId !== sessionId) health.selected = {
-		host,
-		sessionId
-	};
-	const row = health.sessions?.find((row) => row.host === host && row.session_id === sessionId);
-	if (row) health.selected = {
-		...health.selected,
-		workspaceId: row.workspace_id || void 0,
-		label: row.workspace || row.host
-	};
-}
-function resetHealthBootstrap(previous = {}, { sameScope, caps, now = Date.now() }) {
-	previous ||= {};
-	const bootstrap = (previous.bootstrap || 0) + 1;
-	const result = {
-		bootstrap,
-		bootstrapAt: now,
-		capabilities: {
-			data: caps,
-			bootstrap
-		},
-		currentCaps: caps,
-		selected: sameScope ? previous.selected : null,
-		sessions: [],
-		hosts: [],
-		fleet: previous.fleet
-	};
-	if (sameScope) Object.assign(result, {
-		sessions: (previous.sessions || []).map((row) => ({
-			...row,
-			stale: true
-		})),
-		hosts: (previous.hosts || []).map((row) => ({
-			...row,
-			stale: true
-		})),
-		hostsLoaded: previous.hostsLoaded,
-		rowSources: new Map(previous.rowSources),
-		hostSources: new Map(previous.hostSources),
-		readers: new Map(previous.readers),
-		bootstrapRenewal: true
-	});
-	return result;
-}
-function rememberHealthRead(health, path, data) {
-	if (!data || typeof data !== "object") return;
-	path = path.replace(/\?$/, "");
-	const [pathname, query = ""] = path.split("?"), params = new URLSearchParams(query);
-	health.readErrors?.delete(path);
-	if (Array.isArray(data.hosts) && ["/hosts", "/sessions"].includes(pathname)) {
-		const full = pathname === "/sessions" || ![...params.keys()].some((key) => key !== "limit");
-		const hosts = new Map((full ? [] : health.hosts || []).map((row) => [row.host, row]));
-		health.hostSources ||= new Map();
-		for (const row of data.hosts) {
-			hosts.set(row.host, row);
-			health.hostSources.set(row.host, path);
-		}
-		health.hosts = [...hosts.values()];
-		if (full) health.hostsLoaded = true;
-	}
-	if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) return;
-	const rows = Array.isArray(data.sessions) ? data.sessions : data.session ? [data.session] : [];
-	const sessions = new Map((health.sessions || []).map((row) => [rowId(row), row]));
-	health.rowSources ||= new Map();
-	for (const row of rows) {
-		sessions.set(rowId(row), row);
-		health.rowSources.set(rowId(row), path);
-	}
-	if (Array.isArray(data.sessions) && [...params.keys()].every((key) => [
-		"order",
-		"include_gone",
-		"limit",
-		"cursor",
-		"host"
-	].includes(key))) {
-		health.chains ||= new Map();
-		health.completeHosts ||= new Set();
-		const chainParams = new URLSearchParams(params);
-		chainParams.delete("cursor");
-		chainParams.sort();
-		const key = chainParams.toString(), scope = params.get("host");
-		let chain = health.chains.get(key);
-		if (!params.has("cursor")) chain = {
-			next: null,
-			ids: new Set()
-		};
-		if (chain && (!params.has("cursor") || params.get("cursor") === chain.next)) {
-			for (const row of rows) chain.ids.add(rowId(row));
-			chain.next = data.next_cursor;
-			health.chains.set(key, chain);
-			if (data.next_cursor === null) {
-				for (const [id, row] of sessions) if ((!scope || row.host === scope) && !chain.ids.has(id)) sessions.delete(id);
-				if (scope) {
-					if (chain.ids.size <= 500) health.completeHosts.add(scope);
-					else health.completeHosts.delete(scope);
-				} else health.sessionsComplete = chain.ids.size <= 500;
-			}
-		}
-	}
-	const all = [...sessions.values()];
-	const selected = all.find((row) => row.host === health.selected?.host && row.session_id === health.selected?.sessionId);
-	const kept = all.filter((row) => row !== selected).slice(selected ? -499 : -500);
-	if (selected) kept.push(selected);
-	if (all.length > kept.length) {
-		health.sessionsComplete = false;
-		const ids = new Set(kept.map(rowId));
-		for (const row of all) if (!ids.has(rowId(row))) {
-			health.completeHosts?.delete(row.host);
-			health.rowSources.delete(rowId(row));
-		}
-	}
-	health.sessions = kept;
-	const retained = new Set(kept.map(rowId));
-	for (const id of health.rowSources.keys()) if (!retained.has(id)) health.rowSources.delete(id);
-	if (health.selected) selectHealthSession(health, health.selected.host, health.selected.sessionId);
-}
-function withdrawHealthRead(health, method, path, error) {
-	path = path.replace(/\?$/, "");
-	const pathname = path.split("?")[0], inventoryRead = method === "GET" && /^\/(hosts|sessions)(?:\/|$)/.test(pathname);
-	if (error.status === 401 || error.status === 403 && inventoryRead) Object.assign(health, {
-		sessions: [],
-		hosts: [],
-		hostsLoaded: false,
-		sessionsComplete: false,
-		inventoryRevision: (health.inventoryRevision || 0) + 1,
-		readers: new Map(),
-		completeHosts: new Set(),
-		chains: new Map(),
-		rowSources: new Map(),
-		hostSources: new Map(),
-		readErrors: new Map()
-	});
-	else if (error.status === 404 && method === "GET" && health.selected && pathname === `/sessions/${encodeURIComponent(health.selected.host)}/${encodeURIComponent(health.selected.sessionId)}`) health.sessions = (health.sessions || []).filter((row) => row.host !== health.selected.host || row.session_id !== health.selected.sessionId);
-	else if (inventoryRead) {
-		health.readErrors ||= new Map();
-		health.readErrors.set(path, {
-			status: error.status,
-			code: error.code
-		});
-	}
-}
-function takeHealthRenewal(health, now = Date.now()) {
-	const sources = new Map();
-	const add = (path, deadline) => {
-		const at = time$1(deadline);
-		if (path && Number.isFinite(at)) sources.set(path, Math.min(sources.get(path) ?? Infinity, at));
-	};
-	for (const row of selectedRows(health)) {
-		const path = health.rowSources?.get(rowId(row));
-		add(path, row.state?.evidence?.activity?.valid_until);
-		add(path, row.state?.evidence?.connection?.valid_until);
-	}
-	for (const row of health.hosts || []) add(health.hostSources?.get(row.host), row.valid_until);
-	health.renewed ||= new Map();
-	for (const [path, deadline] of sources) {
-		const key = `${health.bootstrap || 0}:${deadline}`;
-		if ((now >= deadline || health.bootstrapRenewal) && health.renewed.get(path) !== key) {
-			health.renewed.set(path, key);
-			return path;
-		}
-	}
-	health.bootstrapRenewal = false;
-	return null;
-}
-function healthAge(seconds, t) {
-	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
-}
-function healthLabel(fact, t, { age = true } = {}) {
-	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
-	if (fact.error) return t("health_read_failed", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		reason: fact.error.code || fact.error.status
-	});
-	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t)
-	});
-	if (fact.freshness === "stale" && age) return t("health_stale_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		checking: t("health_checking")
-	});
-	if ([
-		"stale",
-		"unknown",
-		"invalidated"
-	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
-		value: label,
-		checking: t("health_checking")
-	});
-	return label;
-}
-//#endregion
-//#region src/workbench-mode.js
-function decideLayout({ search = "", policy } = {}) {
-	const requested = new URLSearchParams(search).get("workbench");
-	const blocked = requested === "1" && policy?.allowWorkbench === false;
-	return Object.freeze({
-		layout: requested === "1" && !blocked ? "workbench" : "classic",
-		source: blocked ? "policy" : requested === null ? "default" : "url",
-		status: "preview",
-		reason: blocked ? "policy_disabled" : requested !== null && !["0", "1"].includes(requested) ? "unrecognized_workbench_value" : null
-	});
-}
-var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
-//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -752,169 +42,6 @@ function h$1(tag, attrs = {}, ...children) {
 		if (!el.hasAttribute("aria-label")) el.setAttribute("aria-label", el.textContent);
 	}
 	return el;
-}
-//#endregion
-//#region src/session-navigation.js
-var projectViews$2 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function workSessionContext(params) {
-	const fields = {
-		workspaceId: "workspace",
-		workItemId: "work",
-		attemptId: "attempt"
-	};
-	const patterns = {
-		workspaceId: /^ws_[0-9a-f]{32}$/,
-		workItemId: /^wi_[0-9a-f]{20}$/,
-		attemptId: /^att_[0-9a-f]{32}$/
-	};
-	const context = {};
-	for (const [key, name] of Object.entries(fields)) {
-		if (params.getAll(name).length !== 1 || !patterns[key].test(params.get(name))) return null;
-		context[key] = params.get(name);
-	}
-	return context;
-}
-function sessionHref$1({ host, sessionId, from = "", workspaceId, workItemId, attemptId }) {
-	const query = new URLSearchParams(projectViews$2.has(from) ? { from } : {});
-	const context = new URLSearchParams({
-		workspace: workspaceId || "",
-		work: workItemId || "",
-		attempt: attemptId || ""
-	});
-	if (workSessionContext(context)) for (const [key, value] of context) query.set(key, value);
-	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query.size ? "?" + query : ""}`;
-}
-function sessionOrigin(value) {
-	if (typeof value !== "string" || value.length > 4096) return "";
-	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
-	if (!match) return "";
-	try {
-		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
-		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
-		const query = new URLSearchParams(match[3] || "");
-		if ([...query.keys()].some((key) => ![
-			"from",
-			"workspace",
-			"work",
-			"attempt"
-		].includes(key)) || query.getAll("from").length > 1) return "";
-		const from = query.get("from") || "";
-		if (from && !projectViews$2.has(from)) return "";
-		const context = workSessionContext(query);
-		if ([
-			"workspace",
-			"work",
-			"attempt"
-		].some((key) => query.has(key)) && !context) return "";
-		return sessionHref$1({
-			host,
-			sessionId,
-			from,
-			...context
-		});
-	} catch {
-		return "";
-	}
-}
-var contextFields = {
-	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
-	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
-	requirement: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrev_[0-9a-f]{32}$/
-	},
-	milestone: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrb_[0-9a-f]{32}$/
-	},
-	work_item: { id: /^wi_[0-9a-f]{20}$/ },
-	work_input: { id: /^op_[0-9a-f]{32}$/ },
-	quality_assessment: {
-		id: /^op_[0-9a-f]{32}$/,
-		review_id: /^pmqr_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
-	finding: {
-		id: /^pmfn_[0-9a-f]{32}$/,
-		observation_id: /^pmgh_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
-	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
-	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
-	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
-	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
-	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
-};
-var projectViews$1 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function fullMatch(value, pattern) {
-	return typeof value === "string" && pattern.exec(value)?.[0] === value;
-}
-function isContextRef(ref) {
-	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
-	const fields = Object.entries(contextFields[ref.kind]);
-	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
-}
-function normalizeRefs(refs) {
-	const result = [], seen = new Set();
-	if (!Array.isArray(refs)) return result;
-	for (const ref of refs) {
-		if (!isContextRef(ref)) continue;
-		const item = { kind: ref.kind };
-		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
-		const identity = JSON.stringify(item);
-		if (seen.has(identity)) continue;
-		seen.add(identity);
-		result.push(item);
-		if (result.length === 8) break;
-	}
-	return result;
-}
-function normalizeDetails(title, from, report) {
-	return {
-		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews$1.has(from) ? from : sessionOrigin(from),
-		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
-	};
-}
-function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
-	const query = new URLSearchParams();
-	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
-	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
-	const search = query.toString();
-	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
-}
-function parseDiscussRefs(query) {
-	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
-	return {
-		refs: normalizeRefs(params.getAll("ref").map((value) => {
-			try {
-				return JSON.parse(value);
-			} catch {
-				return null;
-			}
-		})),
-		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
-	};
 }
 //#endregion
 //#region src/health-strings.js
@@ -2414,6 +1541,21 @@ var init_ui_strings = __esmMin((() => {
 			"zh-TW": "已回復",
 			tone: "warn"
 		},
+		github_closed: {
+			en: "Closed (not completed)",
+			"zh-TW": "已關閉（未完成）",
+			tone: "neutral"
+		},
+		github_completed: {
+			en: "Completed · GitHub",
+			"zh-TW": "完成議題 · GitHub",
+			tone: "neutral"
+		},
+		github_done: {
+			en: "Done · GitHub",
+			"zh-TW": "完成 · GitHub",
+			tone: "neutral"
+		},
 		unconfirmed: {
 			en: "Unconfirmed",
 			"zh-TW": "待確認",
@@ -2810,6 +1952,7 @@ var init_ui_strings = __esmMin((() => {
 		terminal_time_unrecorded: ["End time not recorded", "尚無結束時間紀錄"],
 		state_time_unrecorded: ["State time not recorded", "尚無狀態時間紀錄"],
 		multiple_explicit_parents: ["Linked to several parents", "已連結多個上層項目"],
+		github_source_closed_is_not_delivery: ["GitHub closure does not prove delivery", "GitHub 關閉不代表已有交付證據"],
 		attempt_finished_is_not_work_completion: ["Attempt finished; work completion unknown", "執行嘗試已結束，工作是否完成仍未知"],
 		inconsistent_dates: ["End precedes start; end omitted", "結束早於開始，已省略結束日期"],
 		mapping_page_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
@@ -2853,11 +1996,108 @@ var init_ui_strings = __esmMin((() => {
 	}
 }));
 //#endregion
+//#region src/board-github-strings.js
+var boardGitHubStrings;
+var init_board_github_strings = __esmMin((() => {
+	boardGitHubStrings = {
+		en: {
+			bgh_issue: "Issue",
+			bgh_pr: "PR",
+			bgh_draft: "Draft",
+			bgh_closed: "Closed (not completed)",
+			bgh_completed: "Completed · GitHub",
+			bgh_missing_card: "Source missing",
+			bgh_history: "Include closed history",
+			bgh_missing: "Some sources are missing from GitHub. Their last observations are retained; no closure was inferred.",
+			bgh_invalid_source: "GitHub returned invalid source data. No partial changes were applied; sync will retry later.",
+			bgh_apply_failed: "GitHub data could not be applied. Your cards are safe; sync will retry later.",
+			bgh_sync_failed: "Automatic sync could not run. Your cards are safe; sync will retry later.",
+			bgh_lifecycle_stopped: "Automatic sync paused because the workspace lifecycle stopped new work. Reopen it and save settings to authorize sync again.",
+			bgh_identity_conflict: "The repository identity changed. Existing cards are preserved; check the repository binding.",
+			bgh_action_import: "Import GitHub board",
+			bgh_action_configure: "Configure GitHub board sync",
+			bgh_action_sync: "Sync GitHub board",
+			bgh_title: "GitHub board sync",
+			bgh_repo: "GitHub repository",
+			bgh_project: "Board project",
+			bgh_new: "Create a project for this board",
+			bgh_import: "Import from GitHub",
+			bgh_sync: "Sync now",
+			bgh_keep: "Keep in sync",
+			bgh_save: "Save settings",
+			bgh_no_repo: "Link a GitHub repository to bring its issues and pull requests onto this board.",
+			bgh_not_synced: "This repository has not been imported yet. Import its issues and pull requests to get started.",
+			bgh_empty: "This repository has no open issues or pull requests to import.",
+			bgh_no_open: "This repository has no open issues or pull requests. Closed cards retain their source status.",
+			bgh_synced: "Up to date with GitHub. Open issues go to To do, pull requests to Doing, with separate source lanes for merged, completed and other closed items.",
+			bgh_rate_limited: "GitHub is limiting requests. Your cards are safe. Try syncing after the limit resets. Signing in with gh on the Connector can increase the public repository limit.",
+			bgh_unreachable: "GitHub could not be reached. Your cards are safe. Try syncing later.",
+			bgh_auth_required: "GitHub could not open this repository. Check its name and your GitHub access on the Connector (gh auth login or the existing token setting).",
+			bgh_authorization_required: "Automatic sync paused because its original access changed. Turn on Keep in sync and save settings to authorize it again.",
+			bgh_too_large: "This repository exceeds the bounded import size. Existing cards are preserved; no partial import was applied.",
+			bgh_conflicts: "Some GitHub identities match more than one legacy card or have changed. Existing cards were preserved; review their GitHub links.",
+			bgh_public: "Using public GitHub access. GitHub allows fewer requests without signing in.",
+			bgh_help: "Sync runs about every five minutes while the Connector is running, even with this board closed. Your edits and manual lane moves are preserved; later closures use separate source lanes. Closed history is optional. GitHub changes never claim or approve local completion.",
+			bgh_checked: "GitHub check finished. See the sync status above.",
+			bgh_saved: "Settings saved",
+			bgh_done: "Done · GitHub",
+			bgh_last: "Last synced",
+			bgh_read_failed: "GitHub sync settings could not be loaded. Try refreshing the board."
+		},
+		"zh-TW": {
+			bgh_issue: "議題",
+			bgh_pr: "PR",
+			bgh_draft: "草稿",
+			bgh_closed: "已關閉（未完成）",
+			bgh_completed: "完成議題 · GitHub",
+			bgh_missing_card: "來源已消失",
+			bgh_history: "包含已關閉的歷史",
+			bgh_missing: "部分 GitHub 來源已消失。保留上次觀察，不會推定為已關閉。",
+			bgh_invalid_source: "GitHub 來源資料無效。本次未套用任何部分變更，稍後會重試同步。",
+			bgh_apply_failed: "無法套用 GitHub 資料。現有卡片會保留，稍後會重試同步。",
+			bgh_sync_failed: "自動同步無法執行。現有卡片會保留，稍後會重試同步。",
+			bgh_lifecycle_stopped: "工作區生命週期已停止新工作，自動同步已暫停。重新開啟工作區並儲存設定，才能重新授權同步。",
+			bgh_identity_conflict: "儲存庫身分已變更。現有卡片會保留，請檢查儲存庫綁定。",
+			bgh_action_import: "匯入 GitHub 看板",
+			bgh_action_configure: "設定 GitHub 看板同步",
+			bgh_action_sync: "同步 GitHub 看板",
+			bgh_title: "GitHub 看板同步",
+			bgh_repo: "GitHub 儲存庫",
+			bgh_project: "看板專案",
+			bgh_new: "為這個看板建立專案",
+			bgh_import: "從 GitHub 匯入",
+			bgh_sync: "立即同步",
+			bgh_keep: "持續同步",
+			bgh_save: "儲存設定",
+			bgh_no_repo: "連結 GitHub 儲存庫，即可將議題與 PR 匯入這個看板。",
+			bgh_not_synced: "這個儲存庫尚未匯入。匯入議題與 PR，即可開始使用看板。",
+			bgh_empty: "這個儲存庫目前沒有開啟中的議題或 PR 可匯入。",
+			bgh_no_open: "這個儲存庫目前沒有開啟中的議題或 PR。已關閉的卡片會保留其來源狀態。",
+			bgh_synced: "已與 GitHub 同步。開啟中的議題放入「待辦」，PR 放入「進行中」，合併、完成議題與其他關閉項目各自顯示來源狀態。",
+			bgh_rate_limited: "GitHub 暫時限制請求次數。現有卡片會保留，請在限制解除後再次同步。在 Connector 以 gh 登入可提高公開儲存庫的請求額度。",
+			bgh_unreachable: "目前無法連線至 GitHub。現有卡片會保留，請稍後再次同步。",
+			bgh_auth_required: "GitHub 無法開啟這個儲存庫。請確認名稱，以及 Connector 上的 GitHub 存取權限（gh auth login 或既有權杖設定）。",
+			bgh_authorization_required: "原本的存取權限已變更，自動同步已暫停。請開啟「持續同步」並儲存設定，以重新授權。",
+			bgh_too_large: "這個儲存庫超過單次匯入的大小上限。現有卡片會保留，本次未套用不完整的匯入。",
+			bgh_conflicts: "部分 GitHub 身分對應到多張舊卡片，或身分已變更。現有卡片會保留，請檢查其 GitHub 連結。",
+			bgh_public: "目前使用 GitHub 公開存取，未登入時可用的請求額度較少。",
+			bgh_help: "Connector 執行時約每五分鐘同步一次，關閉看板後仍會繼續。文字編輯與手動移動會保留；GitHub 後續關閉時，卡片使用各自的來源狀態欄。歷史匯入可自行選擇。同步不會回報本機工作完成或核可內容。",
+			bgh_checked: "已完成 GitHub 查核，請查看上方同步狀態。",
+			bgh_saved: "已儲存設定",
+			bgh_done: "完成 · GitHub",
+			bgh_last: "上次同步",
+			bgh_read_failed: "無法讀取 GitHub 同步設定，請重新整理看板。"
+		}
+	};
+}));
+//#endregion
 //#region src/global-strings.js
 var globalStrings;
 var init_global_strings = __esmMin((() => {
+	init_board_github_strings();
 	globalStrings = {
 		en: {
+			...boardGitHubStrings.en,
 			global_product: "BAT Dashboard",
 			global_first_sentence: "Connect this dashboard to your Connector.",
 			global_setup_guide: "Setup guide",
@@ -3063,6 +2303,7 @@ var init_global_strings = __esmMin((() => {
 			action_work_item_pin: "Pin work item"
 		},
 		"zh-TW": {
+			...boardGitHubStrings["zh-TW"],
 			global_product: "BAT Dashboard",
 			global_first_sentence: "將這個儀表板連到你的 Connector。",
 			global_setup_guide: "設定說明",
@@ -11905,8 +11146,13 @@ var init_i18n = __esmMin((() => {
 			link_session: "工作階段",
 			link_checkpoint: "檢查點",
 			link_operation: "操作",
+			wi_state_github_closed: "已關閉（未完成）",
+			wi_state_github_completed: "完成議題 · GitHub",
+			wi_state_github_done: "完成 · GitHub",
 			link_task: "任務",
 			link_pull_request: "PR",
+			link_github_source: "GitHub 主要來源",
+			link_ref_github_source: "https://github.com/owner/repo/issues/123",
 			link_ref_hint: "對象",
 			link_ref_session: "host/session_id",
 			link_ref_checkpoint: "cp_…",
@@ -13598,9 +12844,14 @@ var init_i18n = __esmMin((() => {
 			new_step: "New step",
 			link_session: "Session",
 			link_checkpoint: "Checkpoint",
+			wi_state_github_closed: "Closed (not completed)",
+			wi_state_github_completed: "Completed · GitHub",
+			wi_state_github_done: "Done · GitHub",
 			link_operation: "Operation",
 			link_task: "Task",
 			link_pull_request: "PR",
+			link_github_source: "Primary GitHub source",
+			link_ref_github_source: "https://github.com/owner/repo/issues/123",
 			link_ref_hint: "Target",
 			link_ref_session: "host/session_id",
 			link_ref_checkpoint: "cp_…",
@@ -14027,8 +13278,1125 @@ var init_i18n = __esmMin((() => {
 	if (globalThis.document) document.documentElement.lang = locale;
 }));
 //#endregion
-//#region src/ui/icons.js
+//#region src/board-github.js
 init_i18n();
+init_board_github_strings();
+var boardGitHubText = (key, fallback = key) => (boardGitHubStrings[locale] || boardGitHubStrings.en)[key] || fallback;
+function boardGitHubLink(external) {
+	if (!external || typeof external.repository !== "string" || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(external.repository) || !Number.isSafeInteger(external.number) || external.number < 1 || !["issue", "pull_request"].includes(external.kind)) return null;
+	const url = `https://github.com/${external.repository}/${external.kind === "pull_request" ? "pull" : "issues"}/${external.number}`;
+	if (external.url !== url) return null;
+	const stage = external.state === "closed" && (external.kind === "pull_request" || external.state_reason !== "completed") ? "bgh_closed" : external.state === "closed" && external.state_reason === "completed" ? "bgh_completed" : external.state === "merged" ? "bgh_done" : null;
+	const markers = external.availability === "missing" ? ["bgh_missing_card"] : [stage, external.draft ? "bgh_draft" : null].filter(Boolean);
+	return {
+		url,
+		label: [`${boardGitHubText(external.kind === "pull_request" ? "bgh_pr" : "bgh_issue")} #${external.number}`, ...markers.map((key) => boardGitHubText(key))].join(" · "),
+		repository: external.repository
+	};
+}
+function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = null, projectId = null, onSaved }) {
+	const bt = (key, values) => boardGitHubText(key, t(key, values));
+	let current = null, projects = [], forms = [], loaded = false, serial = 0, preferredProject = null;
+	let repository = h$1("input", {
+		type: "text",
+		maxlength: 200,
+		placeholder: "owner/repo",
+		required: true,
+		"aria-label": bt("bgh_repo")
+	});
+	let project = h$1("select", { "aria-label": bt("bgh_project") });
+	let enabled = h$1("input", {
+		type: "hidden",
+		value: "true"
+	});
+	let toggle = h$1("input", {
+		type: "checkbox",
+		checked: true
+	});
+	let includeClosed = h$1("input", {
+		type: "hidden",
+		value: "false"
+	});
+	let history = h$1("input", { type: "checkbox" });
+	const status = h$1("p", {
+		role: "status",
+		class: "muted",
+		"data-github-sync-status": ""
+	});
+	const controls = h$1("div"), description = h$1("p", { class: "muted" }), stamp = h$1("p", { class: "ui-meta" });
+	const element = h$1("section", {
+		class: "panel",
+		"data-board-github": "",
+		hidden: true
+	}, h$1("h3", {}, bt("bgh_title")), status, controls, description, stamp, h$1("details", {}, h$1("summary", {}, bt("bgh_title")), h$1("p", {}, bt("bgh_help"))));
+	const selected = () => projectId || project.value || null;
+	const allowed = () => loaded && permitted() && !forms.some((f) => f.locked());
+	const updateStatus = () => {
+		const repo = current?.repository;
+		status.textContent = bt(!repo ? "bgh_no_repo" : "bgh_" + (current?.status || "not_synced"));
+		description.textContent = current?.authenticated === false ? bt("bgh_public") : "";
+		stamp.textContent = current?.last_sync ? `${bt("bgh_last")} · ${new Date(current.last_sync * 1e3).toLocaleString()}` : "";
+	};
+	function build() {
+		const repoValue = repository.value, projectValue = project.value;
+		for (const f of forms) f.dispose();
+		forms = [];
+		repository = repository.cloneNode(true);
+		repository.disabled = false;
+		repository.value = repoValue;
+		project = project.cloneNode(true);
+		project.disabled = false;
+		project.value = projectValue;
+		enabled = enabled.cloneNode(true);
+		enabled.disabled = false;
+		toggle = toggle.cloneNode(true);
+		toggle.disabled = false;
+		includeClosed = includeClosed.cloneNode(true);
+		includeClosed.disabled = false;
+		history = history.cloneNode(true);
+		history.disabled = false;
+		current = projects.find((p) => p.project_id === selected()) || null;
+		repository.value = current?.repository || repository.value || "";
+		toggle.checked = current?.revision ? current.enabled : true;
+		enabled.value = String(toggle.checked);
+		repository.dataset.pmDefault = repository.value;
+		enabled.dataset.pmDefault = enabled.value;
+		history.checked = Boolean(current?.include_closed);
+		includeClosed.value = String(history.checked);
+		includeClosed.dataset.pmDefault = includeClosed.value;
+		const fields = {
+			repository,
+			enabled,
+			include_closed: includeClosed,
+			...workspaceId ? { project_id: project } : {}
+		};
+		let importForm, submittedValues = null;
+		const refreshSaved = async (result) => {
+			preferredProject = result.project_id || selected();
+			await refresh(null, true);
+			await onSaved();
+		};
+		const saved = async (result) => {
+			if ([
+				"unreachable",
+				"rate_limited",
+				"auth_required",
+				"invalid_source",
+				"apply_failed",
+				"sync_failed",
+				"too_large",
+				"identity_conflict"
+			].includes(result.status)) {
+				for (const [name, input] of Object.entries(fields)) input.value = submittedValues?.[name] ?? input.value;
+				history.checked = includeClosed.value === "true";
+				toggle.checked = enabled.value === "true";
+				status.textContent = bt("bgh_" + result.status);
+				setTimeout(() => {
+					if (element.isConnected && forms.includes(importForm)) importForm.changed();
+				}, 0);
+				return;
+			}
+			await refreshSaved(result);
+		};
+		importForm = form({
+			t: bt,
+			action: workspaceId ? "pm.github.import" : "project.github.import",
+			target: workspaceId ? { workspace_id: workspaceId } : { project_id: projectId },
+			fields,
+			params: (values) => ({
+				repository: values.repository.trim(),
+				enabled: values.enabled === "true",
+				include_closed: values.include_closed === "true",
+				...workspaceId ? { project_id: values.project_id || null } : {}
+			}),
+			preconditions: () => ({ expected_revision: current?.revision || 0 }),
+			permitted: () => loaded && permitted() && !forms.some((f) => f !== importForm && f.locked()),
+			recoverPermitted: permitted,
+			label: current?.last_sync ? "bgh_sync" : "bgh_import",
+			extra: h$1("div", { class: "capture-fields" }, workspaceId ? h$1("label", {}, bt("bgh_project"), project) : null, h$1("label", {}, bt("bgh_repo"), repository), h$1("label", { class: "capture-choice" }, toggle, bt("bgh_keep")), h$1("label", { class: "capture-choice" }, history, bt("bgh_history")), enabled, includeClosed),
+			onBeforeSaved: (_result, values) => {
+				submittedValues = { ...values };
+			},
+			onSaved: saved,
+			savedText: "bgh_checked"
+		});
+		toggle.checked = enabled.value === "true";
+		history.checked = includeClosed.value === "true";
+		current = projects.find((p) => p.project_id === selected()) || null;
+		forms.push(importForm);
+		const save = h$1("div");
+		if (current?.project_id) {
+			const pid = current.project_id;
+			const configForm = form({
+				t: bt,
+				action: "project.github.configure",
+				target: { project_id: pid },
+				fields: {},
+				params: () => ({
+					repository: repository.value.trim(),
+					enabled: toggle.checked,
+					include_closed: history.checked
+				}),
+				preconditions: () => ({ expected_revision: current.revision }),
+				permitted: () => loaded && permitted() && !importForm.locked(),
+				recoverPermitted: permitted,
+				label: "bgh_save",
+				extra: h$1("span"),
+				savedText: "bgh_saved",
+				onSaved: refreshSaved
+			});
+			configForm.box.querySelector("button[type=submit]").classList.replace("primary", "secondary");
+			forms.push(configForm);
+			save.append(configForm.box);
+		}
+		toggle.addEventListener("change", () => {
+			enabled.value = String(toggle.checked);
+			forms[0]?.changed();
+		});
+		history.addEventListener("change", () => {
+			includeClosed.value = String(history.checked);
+			forms[0]?.changed();
+		});
+		project.addEventListener("change", () => {
+			if (allowed()) {
+				repository.value = "";
+				build();
+			}
+		});
+		controls.replaceChildren(importForm.box, save);
+		updateStatus();
+		for (const f of forms) f.update();
+	}
+	async function refresh(data = null, force = false) {
+		if (caps()?.features?.board_github_sync?.version !== 1) return;
+		const ticket = ++serial;
+		element.hidden = false;
+		try {
+			data ||= await api("GET", workspaceId ? `/pm/workspaces/${encodeURIComponent(workspaceId)}/projects?limit=100` : `/projects/${projectId}`);
+			alive();
+			if (ticket !== serial) return;
+			const settings = data.github_sync;
+			if (!settings) throw Error();
+			projects = workspaceId ? settings.projects : [{
+				...settings,
+				name: data.project?.name
+			}];
+			if (!Array.isArray(projects)) throw Error();
+			loaded = true;
+			if (force || !forms.some((f) => f.locked() || f.hasDraft())) {
+				if (workspaceId) {
+					const previous = preferredProject || project.value;
+					preferredProject = null;
+					project.replaceChildren(...projects.map((p) => h$1("option", { value: p.project_id }, p.name)), h$1("option", { value: "" }, bt("bgh_new")));
+					project.value = projects.some((p) => p.project_id === previous) ? previous : projects[0]?.project_id || "";
+					project.dataset.pmDefault = project.value;
+					if (!repository.value) repository.value = settings.suggested_repository || "";
+				}
+				build();
+			} else {
+				current = projects.find((p) => p.project_id === selected()) || null;
+				updateStatus();
+				for (const f of forms) f.update();
+			}
+		} catch {
+			try {
+				alive();
+				if (ticket === serial) {
+					loaded = false;
+					status.textContent = bt("bgh_read_failed");
+					for (const f of forms) f.update();
+				}
+			} catch {}
+		}
+	}
+	return {
+		element,
+		refresh,
+		update: () => {
+			for (const f of forms) f.update();
+		},
+		message: () => status.textContent,
+		dispose: () => {
+			serial++;
+			for (const f of forms) f.dispose();
+		}
+	};
+}
+//#endregion
+//#region src/managed-recovery.js
+function managedRecoveryKey(code) {
+	if (!code) return null;
+	if (code === "MANAGED_RECOVERING") return "managed_service_recovering";
+	if (code === "MANAGED_RECOVERY_IDENTITY_CHANGED") return "managed_service_identity";
+	return "managed_service_retry";
+}
+//#endregion
+//#region src/central-service-status.js
+function pollFailure(error, at) {
+	const status = Number.isFinite(error.status) ? error.status : 200;
+	const code = error.code || "INVALID_EVENT_PAGE";
+	return {
+		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
+		status,
+		code,
+		at
+	};
+}
+var pollKeys = {
+	transport: "ui_reconnecting",
+	refused: "ui_connection_refused",
+	service_error: "ui_service_error",
+	invalid_response: "ui_invalid_response",
+	continuity: "ui_connecting"
+};
+var pollReasons = {
+	ui_reconnecting: "reconnecting",
+	ui_connection_refused: "refused",
+	ui_service_error: "service_error",
+	ui_invalid_response: "invalid_response"
+};
+function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
+	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
+	const recoveryKey = managedRecoveryKey(managedRecovery);
+	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
+	return {
+		key,
+		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
+		connection,
+		recoveryKey
+	};
+}
+function clientActionGate(facts, requirements) {
+	const ready = requirements.post || requirements.attachment;
+	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
+		allowed: true,
+		reason: null
+	};
+	const key = centralServiceStatus(facts).key;
+	return {
+		allowed: false,
+		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
+	};
+}
+var clientReasons = [
+	"not_connected",
+	"connecting",
+	...Object.values(pollReasons),
+	"connection_changing",
+	"view_not_ready",
+	"manage_required",
+	"attachments_unavailable",
+	"uploads_not_allowed"
+];
+var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
+var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
+var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
+//#endregion
+//#region src/state/sessions.js
+var text$6 = (value) => typeof value === "string" ? value : "";
+function workspaceGroup(session) {
+	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
+	return {
+		key: JSON.stringify([
+			host,
+			id ? "id" : name ? "label" : "unknown",
+			id || name
+		]),
+		host,
+		id,
+		name
+	};
+}
+function groupedSessions(sessions) {
+	const groups = new Map();
+	for (const session of sessions) {
+		const group = workspaceGroup(session);
+		if (!groups.has(group.key)) groups.set(group.key, {
+			...group,
+			sessions: []
+		});
+		groups.get(group.key).sessions.push(session);
+	}
+	return [...groups.values()].sort((a, b) => a.host.localeCompare(b.host) || (a.name || a.id).localeCompare(b.name || b.id) || a.key.localeCompare(b.key));
+}
+function matchesSession(session, query) {
+	const haystack = [
+		session.title,
+		session.session_id,
+		session.host,
+		session.workspace,
+		session.workspace_id,
+		session.agent_kind,
+		session.model,
+		session.worktree_branch,
+		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
+	].map(text$6).join("\n").toLocaleLowerCase();
+	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
+}
+function runtimeStale(session) {
+	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
+}
+function sessionFacets(session) {
+	const source = session || {}, pending = source.pending;
+	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
+	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
+		"needs_ted",
+		"needs_you",
+		"needs_attention",
+		"waiting_permission",
+		"awaiting_approval",
+		"uncertain",
+		"blocked"
+	].includes(managedStatus) ? "needs_you" : "none";
+	const staleness = {
+		runtime: runtimeStale(source),
+		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
+		missing: source.state?.enumeration === "missing"
+	};
+	const lifecycle = source.state?.lifecycle || "unknown";
+	return {
+		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
+		attention,
+		staleness,
+		lifecycle,
+		pendingKind: pending?.kind,
+		hasPending: Boolean(pending),
+		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
+	};
+}
+function sessionActivity(session) {
+	const facets = sessionFacets(session);
+	if (facets.hasPending) return {
+		key: "pending_" + facets.pendingKind,
+		tone: "stale"
+	};
+	if (facets.attention === "failed") return {
+		key: "op_failed",
+		tone: "bad"
+	};
+	if (facets.attention === "needs_you") return {
+		key: "workspace_needs_you",
+		tone: "stale"
+	};
+	if (facets.lifecycle === "ended") return {
+		key: "obs_value_ended",
+		tone: ""
+	};
+	if (facets.staleness.gone || facets.staleness.missing) return {
+		key: "sessions_not_seen",
+		tone: "stale"
+	};
+	if (facets.staleness.runtime) return {
+		key: "sessions_stale",
+		tone: "stale"
+	};
+	if (facets.activity === "streaming") return {
+		key: "obs_value_streaming",
+		tone: "info"
+	};
+	if (facets.activity === "not_streaming") return {
+		key: "obs_value_not_streaming",
+		tone: ""
+	};
+	if (facets.notLoaded) return {
+		key: "sessions_not_loaded",
+		tone: ""
+	};
+	return {
+		key: "sessions_activity_unknown",
+		tone: ""
+	};
+}
+function sessionStatus(session) {
+	const facets = sessionFacets(session);
+	if (facets.attention !== "none") return facets.attention;
+	if (Object.values(facets.staleness).some(Boolean)) return "stale";
+	if (facets.activity === "streaming") return "running";
+	return null;
+}
+function sessionPill(session) {
+	const status = sessionStatus(session);
+	if (status === "asking_you" || status === "needs_you") return {
+		key: "sessions_pill_waiting",
+		tone: "stale",
+		status
+	};
+	if (status === "failed") return {
+		key: "op_failed",
+		tone: "bad",
+		status
+	};
+	if (status === "stale") return {
+		key: "sessions_pill_stale",
+		tone: "stale",
+		status
+	};
+	if (status === "running") return {
+		key: "sessions_pill_running",
+		tone: "info",
+		status
+	};
+	return null;
+}
+//#endregion
+//#region src/fleet-status.js
+function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
+	const layers = row?.layers || {};
+	const reason = row?.code || row?.blocking;
+	let state;
+	if (!readable) state = "unavailable";
+	else if (row?.selected === false || row?.level === "off") state = "off";
+	else if (lookup(codeReason, reason) === "ownership") state = "ownership";
+	else if (snapshot.monitor.state === "stopped") state = "stopped";
+	else if (snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable") state = "checking";
+	else if (snapshot.selection.applied_revision !== snapshot.selection.revision) state = "selection_pending";
+	else if (snapshot.readiness.state !== "fresh" || row?.stale || row?.blocking === "stale") state = "stale";
+	else if (!row || row.selected !== true) state = "checking";
+	else if (reason) state = lookup(codeReason, reason) || lookup(layerReason, row.blocking) || "unknown";
+	else if (row.level === "ready" && layers.tunnel === true && (kind === "connector" ? !["unknown", "refused"].includes(layers.auth) : layers.tls === true && layers.auth === "ok" && layers.bat === true && layers.workspace === true)) state = "ready";
+	else state = "checking";
+	const current = ![
+		"unavailable",
+		"configuration",
+		"off",
+		"stopped",
+		"stale",
+		"checking",
+		"selection_pending",
+		"unknown",
+		"ownership"
+	].includes(state);
+	const blockedAt = (reason === "BAT_PROTOCOL_INVALID" ? "service" : lookup(layerStep, row?.blocking)) || {
+		network: "network",
+		waking: "network",
+		trust: "identity",
+		identity: "identity",
+		service: "service",
+		version: "service",
+		workspace: "workspace",
+		local_endpoint: "network",
+		local_ssh: "network"
+	}[state];
+	const steps = [
+		["network", layers.tunnel === true],
+		["identity", layers.auth === "ok" && (kind === "connector" || layers.tls === true)],
+		["service", kind === "connector" ? state === "ready" : layers.bat === true],
+		...kind === "connector" ? [] : [["workspace", layers.workspace === true]]
+	];
+	let blocked = false;
+	return {
+		state,
+		kind,
+		steps: steps.map(([id, passed]) => {
+			if (id === blockedAt) blocked = true;
+			return {
+				id,
+				state: !current ? "unchecked" : blocked ? id === blockedAt && !["waking", "timeout"].includes(state) ? "attention" : "unchecked" : passed ? "passed" : "unchecked"
+			};
+		})
+	};
+}
+function rememberFleetDetails(content, detailsState) {
+	for (const details of content.querySelectorAll("details[data-fleet-details-key]")) detailsState.set(details.dataset.fleetDetailsKey, details.open);
+}
+function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
+	const { state, kind, steps } = fleetDiagnosis(row, {
+		snapshot,
+		readable,
+		name: entry.name,
+		kind: entry.kind
+	});
+	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
+	const details = h("details", {
+		open: detailsState?.get(key) === true,
+		"data-fleet-details-key": key
+	}, h("summary", { "data-fleet-details": entry.name }, t("fleet_status_details")), h("dl", { class: "fleet-checks" }, ...steps.flatMap((step) => [h("dt", {}, t("fleet_check_" + step.id)), h("dd", {
+		"data-fleet-check": step.id,
+		"data-check-state": step.state
+	}, t("fleet_check_" + step.state))])), ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index).map((value) => h("code", {}, value)));
+	const helpKey = [
+		"ready",
+		"identity",
+		"service",
+		"version"
+	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
+	return h("div", {
+		class: "fleet-diagnosis",
+		"data-fleet-diagnosis": entry.name,
+		"data-fleet-state": state
+	}, h("p", { class: "fleet-diagnosis-title" }, t("fleet_check_title_" + state)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
+}
+var codeReason, layerReason, layerStep, lookup;
+var init_fleet_status = __esmMin((() => {
+	codeReason = {
+		TAILSCALE_WAKING: "waking",
+		ROUTE_UNAVAILABLE: "network",
+		TUNNEL_DOWN: "network",
+		TLS_PIN_MISSING: "trust",
+		TLS_IDENTITY_MISMATCH: "trust",
+		TLS_FAILED: "trust",
+		CREDENTIAL_MISSING: "identity",
+		CREDENTIAL_CHANGED: "identity",
+		BAT_AUTH_REFUSED: "identity",
+		CONNECTOR_AUTH_REFUSED: "identity",
+		CONNECTOR_SCOPE_MISSING: "identity",
+		BAT_VERSION_UNSUPPORTED: "version",
+		CONNECTOR_CONTRACT_UNSUPPORTED: "version",
+		BAT_PROTOCOL_INVALID: "service",
+		CONNECTOR_UNAVAILABLE: "service",
+		CONNECTOR_CAPABILITY_MISSING: "service",
+		WORKSPACE_UNREADABLE: "workspace",
+		WORKSPACE_INVALID: "workspace",
+		WORKSPACE_BINDING_MISMATCH: "workspace",
+		INVENTORY_INVALID: "configuration",
+		OWNER_UNPROVEN: "ownership",
+		STOP_UNCONFIRMED: "ownership",
+		TUNNEL_START_UNSETTLED: "ownership",
+		TUNNEL_RECORD_CHANGED: "ownership",
+		OTHER_LOGIN_OWNER: "ownership",
+		ENDPOINT_IN_USE: "local_endpoint",
+		SSH_UNAVAILABLE: "local_ssh",
+		PROBE_PENDING: "checking",
+		PROBE_TIMEOUT: "timeout",
+		PROBE_STALE: "stale"
+	};
+	layerReason = {
+		inventory: "configuration",
+		tunnel: "network",
+		tls: "trust",
+		auth: "identity",
+		bat: "service",
+		connector: "service",
+		contract: "version",
+		workspace: "workspace",
+		stale: "stale"
+	};
+	layerStep = {
+		tunnel: "network",
+		tls: "identity",
+		auth: "identity",
+		bat: "service",
+		connector: "service",
+		contract: "service",
+		workspace: "workspace"
+	};
+	lookup = (table, key) => Object.hasOwn(table, key) ? table[key] : void 0;
+}));
+//#endregion
+//#region src/health-display.js
+init_fleet_status();
+var time$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
+var healthRevision = (caps) => JSON.stringify([
+	caps?.connector,
+	caps?.build?.version,
+	caps?.build?.commit,
+	caps?.build?.source,
+	caps?.contract_version
+]);
+var rowId = (row) => JSON.stringify([row.host, row.session_id]);
+var gone = (row) => Boolean(row.gone_at) || row.state?.enumeration === "gone";
+var selectedRows = (health) => (health.sessions || []).filter((row) => !gone(row) && row.host === health.selected?.host && (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
+function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
+	const observed = time$1(fact.observed_at), deadline = time$1(fact.valid_until);
+	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
+	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
+	return {
+		...fact,
+		freshness,
+		ageSeconds
+	};
+}
+function compactHealth({ attention, stale, unknown, activity }) {
+	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
+}
+function runtimeSummary$1(health, now) {
+	const selected = health.selected;
+	if (!selected) return null;
+	const rows = selectedRows(health);
+	const complete = health.sessionsComplete || health.completeHosts?.has(selected.host);
+	const facts = rows.map((row) => {
+		const facets = sessionFacets(row), evidence = row.state?.evidence?.activity;
+		const activity = displayFact({
+			value: row.state?.activity ?? facets.activity,
+			observed_at: evidence ? evidence.observed_at : row.observed_at,
+			valid_until: evidence?.valid_until,
+			error: health.readErrors?.get(health.rowSources?.get(rowId(row))),
+			stale: Object.values(facets.staleness).some(Boolean)
+		}, { now });
+		return {
+			attention: facets.attention !== "none" || row.api_access === "managed" && [
+				"blocked",
+				"failed",
+				"error",
+				"needs_attention",
+				"awaiting_approval"
+			].includes(row.runtime_status),
+			activity,
+			working: ["streaming", "starting"].includes(activity.value),
+			idle: ["not_streaming", "ended"].includes(activity.value)
+		};
+	});
+	const connection = rows.filter((row) => row.state?.connection).map((row) => displayFact({
+		value: row.state.connection,
+		...row.state.evidence?.connection
+	}, { now })).sort((a, b) => (time$1(b.observed_at) || 0) - (time$1(a.observed_at) || 0))[0] || null;
+	const attention = facts.some((row) => row.attention);
+	const stale = facts.some((row) => row.activity.freshness === "stale") || connection?.freshness === "stale";
+	const unknown = !facts.length || Boolean(selected.workspaceId && !complete) || facts.some((row) => row.activity.freshness === "unknown" || !row.idle && !row.working) || connection?.freshness === "unknown";
+	const activity = facts.some((row) => row.working && row.activity.freshness === "current") ? "working" : !facts.length || selected.workspaceId && !complete || facts.some((row) => !row.idle || row.activity.freshness !== "current") ? "unknown" : "idle";
+	return {
+		selected,
+		attention,
+		stale,
+		unknown,
+		activity,
+		connection,
+		compact: compactHealth({
+			attention,
+			stale,
+			unknown,
+			activity
+		}),
+		facts
+	};
+}
+function countFact(rows, now, href = null) {
+	const facts = rows.map((row) => displayFact(row, { now }));
+	return {
+		...displayFact({
+			value: rows.length,
+			observed_at: rows.length ? Math.min(...rows.map((row) => time$1(row.observed_at))) : null,
+			stale: facts.some((row) => row.freshness === "stale")
+		}, { now }),
+		href,
+		stale_reason: rows.length && rows.every((row) => row.stale_reason === "host_unreachable") ? "host_unreachable" : null,
+		freshness: facts.some((row) => row.freshness === "stale") ? "stale" : facts.some((row) => row.freshness === "unknown") ? "unknown" : "current"
+	};
+}
+function otherMachines(health, now) {
+	if (health.hostsLoaded) return countFact((health.hosts || []).filter((row) => row.host !== health.selected?.host && (row.error || row.reachable === false && row.last_attempt_at)).map((row) => ({
+		observed_at: row.last_attempt_at,
+		valid_until: row.valid_until,
+		stale: row.stale,
+		stale_reason: row.stale_reason
+	})), now);
+	const snapshot = health.fleet;
+	return countFact((health.selected ? [] : snapshot?.readiness?.hosts || []).filter((row) => {
+		return fleetDiagnosis(row, {
+			snapshot,
+			readable: true
+		}).steps.some((step) => step.state === "attention");
+	}).map((row) => ({
+		observed_at: row.observed_at,
+		stale: row.stale
+	})), now, "#/settings?section=fleet");
+}
+function healthDisplay(input, now = Date.now()) {
+	const health = input.health || {}, status = centralServiceStatus(input);
+	const pollAt = typeof input.pollHealth === "object" ? input.pollHealth?.at : input.pollHealth === "connected" && input.lastPoll?.namespace === input.namespace ? input.lastPoll.at : health.bootstrapAt;
+	const connection = {
+		...status,
+		...displayFact({
+			value: status.key,
+			observed_at: status.recoveryKey ? input.managedObservedAt : pollAt,
+			valid_until: typeof input.pollHealth === "object" ? input.pollHealth?.valid_until : input.lastPoll?.valid_until
+		}, { now })
+	};
+	if (!input.token && !status.recoveryKey) connection.freshness = "unconfigured";
+	const receipt = health.capabilities;
+	const capabilities = displayFact({
+		value: receipt?.data,
+		static: true,
+		bootstrap: receipt?.bootstrap,
+		version: healthRevision(receipt?.data)
+	}, {
+		now,
+		bootstrap: health.bootstrap,
+		version: healthRevision(health.currentCaps || input.caps)
+	});
+	if (!receipt) capabilities.freshness = "unknown";
+	capabilities.refresh = health.capabilityRefresh;
+	const other = otherMachines(health, now);
+	return {
+		connection,
+		capabilities,
+		summary: runtimeSummary$1(health, now),
+		otherAttention: other.value,
+		other
+	};
+}
+function selectHealthSession(health, host, sessionId) {
+	if (health.selected?.host !== host || health.selected?.sessionId !== sessionId) health.selected = {
+		host,
+		sessionId
+	};
+	const row = health.sessions?.find((row) => row.host === host && row.session_id === sessionId);
+	if (row) health.selected = {
+		...health.selected,
+		workspaceId: row.workspace_id || void 0,
+		label: row.workspace || row.host
+	};
+}
+function resetHealthBootstrap(previous = {}, { sameScope, caps, now = Date.now() }) {
+	previous ||= {};
+	const bootstrap = (previous.bootstrap || 0) + 1;
+	const result = {
+		bootstrap,
+		bootstrapAt: now,
+		capabilities: {
+			data: caps,
+			bootstrap
+		},
+		currentCaps: caps,
+		selected: sameScope ? previous.selected : null,
+		sessions: [],
+		hosts: [],
+		fleet: previous.fleet
+	};
+	if (sameScope) Object.assign(result, {
+		sessions: (previous.sessions || []).map((row) => ({
+			...row,
+			stale: true
+		})),
+		hosts: (previous.hosts || []).map((row) => ({
+			...row,
+			stale: true
+		})),
+		hostsLoaded: previous.hostsLoaded,
+		rowSources: new Map(previous.rowSources),
+		hostSources: new Map(previous.hostSources),
+		readers: new Map(previous.readers),
+		bootstrapRenewal: true
+	});
+	return result;
+}
+function rememberHealthRead(health, path, data) {
+	if (!data || typeof data !== "object") return;
+	path = path.replace(/\?$/, "");
+	const [pathname, query = ""] = path.split("?"), params = new URLSearchParams(query);
+	health.readErrors?.delete(path);
+	if (Array.isArray(data.hosts) && ["/hosts", "/sessions"].includes(pathname)) {
+		const full = pathname === "/sessions" || ![...params.keys()].some((key) => key !== "limit");
+		const hosts = new Map((full ? [] : health.hosts || []).map((row) => [row.host, row]));
+		health.hostSources ||= new Map();
+		for (const row of data.hosts) {
+			hosts.set(row.host, row);
+			health.hostSources.set(row.host, path);
+		}
+		health.hosts = [...hosts.values()];
+		if (full) health.hostsLoaded = true;
+	}
+	if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) return;
+	const rows = Array.isArray(data.sessions) ? data.sessions : data.session ? [data.session] : [];
+	const sessions = new Map((health.sessions || []).map((row) => [rowId(row), row]));
+	health.rowSources ||= new Map();
+	for (const row of rows) {
+		sessions.set(rowId(row), row);
+		health.rowSources.set(rowId(row), path);
+	}
+	if (Array.isArray(data.sessions) && [...params.keys()].every((key) => [
+		"order",
+		"include_gone",
+		"limit",
+		"cursor",
+		"host"
+	].includes(key))) {
+		health.chains ||= new Map();
+		health.completeHosts ||= new Set();
+		const chainParams = new URLSearchParams(params);
+		chainParams.delete("cursor");
+		chainParams.sort();
+		const key = chainParams.toString(), scope = params.get("host");
+		let chain = health.chains.get(key);
+		if (!params.has("cursor")) chain = {
+			next: null,
+			ids: new Set()
+		};
+		if (chain && (!params.has("cursor") || params.get("cursor") === chain.next)) {
+			for (const row of rows) chain.ids.add(rowId(row));
+			chain.next = data.next_cursor;
+			health.chains.set(key, chain);
+			if (data.next_cursor === null) {
+				for (const [id, row] of sessions) if ((!scope || row.host === scope) && !chain.ids.has(id)) sessions.delete(id);
+				if (scope) {
+					if (chain.ids.size <= 500) health.completeHosts.add(scope);
+					else health.completeHosts.delete(scope);
+				} else health.sessionsComplete = chain.ids.size <= 500;
+			}
+		}
+	}
+	const all = [...sessions.values()];
+	const selected = all.find((row) => row.host === health.selected?.host && row.session_id === health.selected?.sessionId);
+	const kept = all.filter((row) => row !== selected).slice(selected ? -499 : -500);
+	if (selected) kept.push(selected);
+	if (all.length > kept.length) {
+		health.sessionsComplete = false;
+		const ids = new Set(kept.map(rowId));
+		for (const row of all) if (!ids.has(rowId(row))) {
+			health.completeHosts?.delete(row.host);
+			health.rowSources.delete(rowId(row));
+		}
+	}
+	health.sessions = kept;
+	const retained = new Set(kept.map(rowId));
+	for (const id of health.rowSources.keys()) if (!retained.has(id)) health.rowSources.delete(id);
+	if (health.selected) selectHealthSession(health, health.selected.host, health.selected.sessionId);
+}
+function withdrawHealthRead(health, method, path, error) {
+	path = path.replace(/\?$/, "");
+	const pathname = path.split("?")[0], inventoryRead = method === "GET" && /^\/(hosts|sessions)(?:\/|$)/.test(pathname);
+	if (error.status === 401 || error.status === 403 && inventoryRead) Object.assign(health, {
+		sessions: [],
+		hosts: [],
+		hostsLoaded: false,
+		sessionsComplete: false,
+		inventoryRevision: (health.inventoryRevision || 0) + 1,
+		readers: new Map(),
+		completeHosts: new Set(),
+		chains: new Map(),
+		rowSources: new Map(),
+		hostSources: new Map(),
+		readErrors: new Map()
+	});
+	else if (error.status === 404 && method === "GET" && health.selected && pathname === `/sessions/${encodeURIComponent(health.selected.host)}/${encodeURIComponent(health.selected.sessionId)}`) health.sessions = (health.sessions || []).filter((row) => row.host !== health.selected.host || row.session_id !== health.selected.sessionId);
+	else if (inventoryRead) {
+		health.readErrors ||= new Map();
+		health.readErrors.set(path, {
+			status: error.status,
+			code: error.code
+		});
+	}
+}
+function takeHealthRenewal(health, now = Date.now()) {
+	const sources = new Map();
+	const add = (path, deadline) => {
+		const at = time$1(deadline);
+		if (path && Number.isFinite(at)) sources.set(path, Math.min(sources.get(path) ?? Infinity, at));
+	};
+	for (const row of selectedRows(health)) {
+		const path = health.rowSources?.get(rowId(row));
+		add(path, row.state?.evidence?.activity?.valid_until);
+		add(path, row.state?.evidence?.connection?.valid_until);
+	}
+	for (const row of health.hosts || []) add(health.hostSources?.get(row.host), row.valid_until);
+	health.renewed ||= new Map();
+	for (const [path, deadline] of sources) {
+		const key = `${health.bootstrap || 0}:${deadline}`;
+		if ((now >= deadline || health.bootstrapRenewal) && health.renewed.get(path) !== key) {
+			health.renewed.set(path, key);
+			return path;
+		}
+	}
+	health.bootstrapRenewal = false;
+	return null;
+}
+function healthAge(seconds, t) {
+	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
+}
+function healthLabel(fact, t, { age = true } = {}) {
+	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
+	if (fact.error) return t("health_read_failed", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		reason: fact.error.code || fact.error.status
+	});
+	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t)
+	});
+	if (fact.freshness === "stale" && age) return t("health_stale_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		checking: t("health_checking")
+	});
+	if ([
+		"stale",
+		"unknown",
+		"invalidated"
+	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
+		value: label,
+		checking: t("health_checking")
+	});
+	return label;
+}
+//#endregion
+//#region src/workbench-mode.js
+function decideLayout({ search = "", policy } = {}) {
+	const requested = new URLSearchParams(search).get("workbench");
+	const blocked = requested === "1" && policy?.allowWorkbench === false;
+	return Object.freeze({
+		layout: requested === "1" && !blocked ? "workbench" : "classic",
+		source: blocked ? "policy" : requested === null ? "default" : "url",
+		status: "preview",
+		reason: blocked ? "policy_disabled" : requested !== null && !["0", "1"].includes(requested) ? "unrecognized_workbench_value" : null
+	});
+}
+var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
+//#endregion
+//#region src/session-navigation.js
+var projectViews$2 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function workSessionContext(params) {
+	const fields = {
+		workspaceId: "workspace",
+		workItemId: "work",
+		attemptId: "attempt"
+	};
+	const patterns = {
+		workspaceId: /^ws_[0-9a-f]{32}$/,
+		workItemId: /^wi_[0-9a-f]{20}$/,
+		attemptId: /^att_[0-9a-f]{32}$/
+	};
+	const context = {};
+	for (const [key, name] of Object.entries(fields)) {
+		if (params.getAll(name).length !== 1 || !patterns[key].test(params.get(name))) return null;
+		context[key] = params.get(name);
+	}
+	return context;
+}
+function sessionHref$1({ host, sessionId, from = "", workspaceId, workItemId, attemptId }) {
+	const query = new URLSearchParams(projectViews$2.has(from) ? { from } : {});
+	const context = new URLSearchParams({
+		workspace: workspaceId || "",
+		work: workItemId || "",
+		attempt: attemptId || ""
+	});
+	if (workSessionContext(context)) for (const [key, value] of context) query.set(key, value);
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query.size ? "?" + query : ""}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => ![
+			"from",
+			"workspace",
+			"work",
+			"attempt"
+		].includes(key)) || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$2.has(from)) return "";
+		const context = workSessionContext(query);
+		if ([
+			"workspace",
+			"work",
+			"attempt"
+		].some((key) => query.has(key)) && !context) return "";
+		return sessionHref$1({
+			host,
+			sessionId,
+			from,
+			...context
+		});
+	} catch {
+		return "";
+	}
+}
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	work_input: { id: /^op_[0-9a-f]{32}$/ },
+	quality_assessment: {
+		id: /^op_[0-9a-f]{32}$/,
+		review_id: /^pmqr_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews$1.has(from) ? from : sessionOrigin(from),
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/ui/icons.js
 /*!
 ISC License
 
@@ -14453,6 +14821,7 @@ function sheetHistory({ show, hide, canRestore = () => true }) {
 }
 //#endregion
 //#region src/ui/components.js
+init_i18n();
 init_ui_strings();
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
@@ -15346,7 +15715,8 @@ function workbenchProjection(data, record = null) {
 		id: item?.work_item_id || JSON.stringify([session.host, session.session_id]),
 		title: item?.title || session.title,
 		goal: item?.goal || item?.request || "",
-		recordState: item?.completion?.display_state || item?.state || null,
+		recordState: item?.display_state || item?.completion?.display_state || item?.state || null,
+		external: item?.external || null,
 		href: item ? "#/item/" + encodeURIComponent(item.work_item_id) : href,
 		source,
 		host: session.host,
@@ -15368,6 +15738,11 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	const summary = h$1("p", {
 		class: "wc-summary",
 		"data-workbench-summary": ""
+	});
+	const source = h$1("p", {
+		class: "ui-meta",
+		hidden: true,
+		"data-workbench-github": ""
 	});
 	const goal = h$1("p", {
 		class: "wc-goal",
@@ -15403,7 +15778,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	});
 	controls.dataset.workbenchViews = "";
 	const bar = h$1("div", { class: "wc-view-bar" }, controls);
-	head.append(goal, responsibility, summary);
+	head.append(goal, responsibility, summary, source);
 	head.before(bar);
 	work.after(lineage, live, evidence);
 	function select(value) {
@@ -15480,6 +15855,13 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	}
 	function paint() {
 		if (!projection) return;
+		const github = boardGitHubLink(projection.external);
+		source.replaceChildren(...github ? [h$1("a", {
+			href: github.url,
+			target: "_blank",
+			rel: "noopener noreferrer"
+		}, github.label)] : []);
+		source.hidden = !github;
 		goal.textContent = projection.goal;
 		goal.hidden = !projection.goal;
 		responsibility.textContent = [
@@ -15526,6 +15908,8 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection = null;
 			signature = "";
 			panel?.close();
+			source.replaceChildren();
+			source.hidden = true;
 			goal.textContent = "";
 			goal.hidden = true;
 			responsibility.textContent = "";
@@ -15536,6 +15920,8 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection = null;
 			signature = "";
 			panel?.close();
+			source.replaceChildren();
+			source.hidden = true;
 			goal.textContent = "";
 			goal.hidden = true;
 			responsibility.textContent = "";
@@ -17473,6 +17859,10 @@ function joinLabel(parts, separator = " · ") {
 init_i18n();
 init_ui_strings();
 var ACTIONS = {
+	"pm.github.import": "bgh_action_import",
+	"project.github.import": "bgh_action_import",
+	"project.github.configure": "bgh_action_configure",
+	"project.github.sync": "bgh_action_sync",
 	"checkpoint.continue": "action_checkpoint_continue",
 	"checkpoint.continue.revalidate": "action_checkpoint_revalidate",
 	"artifact.upload": "action_artifact_upload",
@@ -17629,6 +18019,9 @@ var OPERATION_STATUS = {
 	cancelled: "historical"
 };
 var WORK_STATUS = {
+	github_closed: "github_closed",
+	github_completed: "github_completed",
+	github_done: "github_done",
 	todo: "not_started",
 	doing: "in_progress",
 	waiting: "waiting",
@@ -20907,9 +21300,20 @@ var workStatus = (card) => ({
 	waiting: "waiting",
 	review: "in_review",
 	accepted: "done",
+	github_done: "done",
+	github_closed: "historical",
+	github_completed: "historical",
 	archived: "historical"
 })[typeof card?.column === "string" ? card.column : ""] || "unknown";
-var workStatusLabel = (t, card) => card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
+var workStatusLabel = (t, card) => [
+	"github_done",
+	"github_closed",
+	"github_completed"
+].includes(card?.column) ? boardGitHubText({
+	github_done: "bgh_done",
+	github_closed: "bgh_closed",
+	github_completed: "bgh_completed"
+}[card.column]) : card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
 function workStatusPill(t, card) {
 	const pill = statusPill(workStatus(card));
 	pill.textContent = workStatusLabel(t, card);
@@ -21151,6 +21555,12 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				from
 			}) }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
 			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
+			const external = boardGitHubLink(card.work.external);
+			if (external) state.append(paragraph(h$1("a", {
+				href: external.url,
+				target: "_blank",
+				rel: "noopener noreferrer"
+			}, `${external.repository} · ${external.label}`)));
 			if (workHref(card.binding)) state.append(h$1("a", { href: workHref(card.binding) }, t("wv_work_details")));
 			if (source.errors?.some((row) => row.kind === "session")) state.append(paragraph(t("wv_session_unavailable")));
 			if (card.quality?.selected_assessment) result.append(qualityFact({
@@ -41949,6 +42359,16 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		caps,
 		errorBox
 	});
+	const github = form && caps()?.features?.board_github_sync?.version === 1 ? boardGitHubPanel({
+		t,
+		api,
+		alive,
+		caps,
+		form,
+		permitted: () => permitted(true),
+		workspaceId,
+		onSaved: () => refresh()
+	}) : null;
 	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -42012,7 +42432,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		title: t("ui_board"),
 		meta,
 		actions: [refreshButton]
-	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, landing.element, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
+	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, ...github ? [github.element] : [], landing.element, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
 		label: t("pm_kanban_board_details"),
 		body: h$1("div", {}, boardInfo, h$1("p", {}, t("pm_kanban_wip_basis")), h$1("p", {}, t("pm_kanban_quality")), h$1("p", {}, t("pm_kanban_limits")))
 	})));
@@ -42212,6 +42632,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		more.disabled = reading;
 	}
 	function preview(card) {
+		const external = boardGitHubLink(card.work.external);
 		const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
 		const earlier = card.binding.plan_revision_id !== plan?.revision_id;
 		const chip = (text) => {
@@ -42237,7 +42658,14 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				title: text,
 				href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(req.id)}`
 			}, text);
-		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
+		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, external ? h$1("a", {
+			class: "ui-context-chip",
+			href: external.url,
+			target: "_blank",
+			rel: "noopener noreferrer",
+			title: `${external.repository} · ${external.label}`,
+			"data-github-card-link": ""
+		}, external.label) : null, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
 			const node = contextChip({ text: `PR #${target.pull_number}` });
 			node.title = joinLabel([
 				node.textContent,
@@ -42303,7 +42731,13 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const locked = (lane) => lane && (lane.matches(":hover") || lane.contains(document.activeElement));
 	function laneKey(card) {
 		if (group.value === "milestone") return milestones.find((row) => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some((id) => card.binding.requirement_ids?.includes(id)))?.milestone_id || "unassigned";
-		return [...columns, "archived"].includes(card.column) ? card.column : "unknown";
+		return [
+			...columns,
+			"github_done",
+			"github_closed",
+			"github_completed",
+			"archived"
+		].includes(card.column) ? card.column : "unknown";
 	}
 	function renderColumns(force = false) {
 		if (!page) return;
@@ -42610,6 +43044,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				if (data.next_cursor == null) break;
 				after = data.next_cursor;
 			}
+			await github?.refresh();
+			alive();
+			if (ticket !== serial) return;
 			const features = caps()?.features?.pm_workspaces;
 			const [accepted, roadmap, read] = await Promise.all([
 				features?.plan_drafting ? api("GET", `${endpoint}/plans/accepted`) : null,
@@ -42772,6 +43209,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		dispose: () => {
 			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
+			github?.dispose();
 			landing.dispose();
 			startPanel?.dispose();
 			startPanel = null;
@@ -43981,6 +44419,11 @@ var scheduleFirstLine = (row) => scheduleTitle(row).split(/\r?\n/)[0];
 init_i18n();
 init_ui_strings();
 function rowStatus(row, data) {
+	if ([
+		"github_closed",
+		"github_completed",
+		"github_done"
+	].includes(row.refs?.source_lane)) return h$1("span", {}, statusPill(row.refs.source_lane), ...["merged", "deployed"].includes(row.status) ? [" ", statusPill(row.status)] : []);
 	return notObserved(row, data) ? h$1("span", { class: "ui-pill tone-neutral" }, t("sched_not_observed")) : statusPill(row.status);
 }
 function dateRange(span) {
@@ -54695,7 +55138,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 				...current.context
 			}) : `#/item/${encodeURIComponent(item.work_item_id)}`;
 			const itemActivity = {
-				key: "wi_state_" + (item.completion?.display_state || item.state),
+				key: "wi_state_" + (item.display_state || item.completion?.display_state || item.state),
 				tone: item.completion?.pending ? "stale" : ""
 			};
 			const row = link(href, item.title, current && !item.completion?.pending ? workActivity(current.source) : itemActivity, current?.source.reading);
@@ -73090,7 +73533,34 @@ async function viewProject(main, pid) {
 	create.box.hidden = true;
 	const note = manageNote();
 	if (note) note.hidden = true;
-	main.append(note || "", out, head, work, itemCard);
+	const github = boardGitHubPanel({
+		t,
+		api,
+		alive: () => assertView(connection),
+		caps: () => state.caps,
+		form: (options) => durableForm({
+			h,
+			t,
+			api,
+			caps: () => state.caps,
+			namespace: connection.namespace,
+			guard: () => assertView(connection),
+			errorBox,
+			...options,
+			canSend: () => state.online && !state.nativeBusy && state.viewReady,
+			clientGate: () => clientActionGate(state, { post: true })
+		}),
+		permitted: () => may("manage"),
+		projectId: pid,
+		onSaved: () => render()
+	});
+	const offGitHubOnline = onOnline(() => {
+		try {
+			assertView(connection);
+			github.update();
+		} catch {}
+	});
+	main.append(note || "", out, head, github.element, work, itemCard);
 	const rememberEditors = () => {
 		if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
 		for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden) workDrafts.set(id, {
@@ -73162,6 +73632,7 @@ async function viewProject(main, pid) {
 		workEditors = new Map();
 		freshPage();
 		const p = data.project;
+		await github.refresh(data);
 		if (note) note.hidden = false;
 		itemCard.hidden = false;
 		const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed !== false;
@@ -73334,7 +73805,7 @@ async function viewProject(main, pid) {
 	};
 	showArchived.onchange = () => render();
 	await render();
-	return liveReload(render, [
+	const off = liveReload(render, [
 		"project",
 		"work_item",
 		"operation",
@@ -73343,6 +73814,11 @@ async function viewProject(main, pid) {
 		"session",
 		"integration"
 	], prepare);
+	return () => {
+		off?.();
+		offGitHubOnline();
+		github.dispose();
+	};
 }
 function linkTarget(l) {
 	const x = l.target || {};
@@ -73416,7 +73892,8 @@ async function viewWorkItem(main, wid) {
 		"checkpoint",
 		"operation",
 		"task",
-		"pull_request"
+		"pull_request",
+		"github_source"
 	].map((k) => h("option", { value: k }, t("link_" + k))));
 	const ref = h("input", { placeholder: t("link_ref_hint") });
 	kind.onchange = () => {
@@ -73806,14 +74283,14 @@ function workItemRow(w, open) {
 		title,
 		href,
 		meta,
-		pill: statusPill(workStatusKey(w.completion?.display_state)),
+		pill: statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
 		action: h("a", {
 			class: "ui-button secondary ui-sm",
 			href
 		}, t("global_review")),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
-			statusPill(workStatusKey(w.completion?.display_state)),
+			statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
 			meta ? h("p", {}, meta) : null,
 			w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
 			disclosure({

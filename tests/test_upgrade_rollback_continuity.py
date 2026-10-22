@@ -19,12 +19,14 @@ import pytest
 
 from bat_agent_connector import (
     api_auth,
+    board_github,
     managed_runtime,
     platform_files,
 )
 from bat_agent_connector.errors import ConnectionLost
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests import test_repository_sync
+from tests.conftest import make_config
 from tests.operation_helpers import settle_operations, stop_workers
 from tests.test_api_v1 import http
 from tests.test_checkpoints import snapshot
@@ -39,7 +41,13 @@ from tests.test_pm_work_attempt_result import (
 from tests.test_pm_work_follow_up import _get_op, _patch_roundtrip, _post, _settle
 from tests.test_pr_publication import DELIVERER, delivery_ready, envelope, fixed, pub
 from tests.test_repository_sync import world as repository_world
-from tests.upgrade_continuity_helpers import crash_after_201, rows, seed_publication
+from tests.test_work_items import item, project
+from tests.upgrade_continuity_helpers import (
+    assert_rows_preserved,
+    crash_after_201,
+    seed_publication,
+    snapshot_rows,
+)
 
 _ = deployment, pm, ready, start_ready, delivery_ready, fixed, pub, installation, versioned_installation
 
@@ -91,18 +99,45 @@ def enroll(deployment):
 def retained(db):
     tables = ('work_items', 'work_attempts', 'session_results', 'work_inputs',
               'operations', 'operation_steps', 'api_principals')
-    result = {table: rows(db, table) for table in tables}
-    result['api_events'] = rows(db, 'api_events')
+    result = {table: snapshot_rows(db, table) for table in tables}
+    result['api_events'] = snapshot_rows(db, 'api_events')
     return result
 
 
 def assert_retained(db, saved):
     for table, expected in saved.items():
         # Restart/observation may append new events, never rewrite original ones.
-        actual = rows(db, table)
-        assert actual[:len(expected)] == expected, table
-        if table != 'api_events':
-            assert actual == expected, table
+        assert_rows_preserved(db, table, expected, allow_append=table == 'api_events')
+
+
+async def test_startup_preserves_old_work_rows_when_github_column_is_added(mock, tmp_path, monkeypatch):
+    config = make_config(mock, writes=True)
+    path = tmp_path / 'journal/tasks.sqlite3'
+    # Seed through the real actions on the base schema, before the additive installer existed.
+    with monkeypatch.context() as previous:
+        previous.setattr(board_github, 'install', lambda ops: None)
+        daemon = TaskDaemon(config, path)
+        daemon.acquire_owner()
+    try:
+        pid = await project(daemon)
+        for title in ('First preserved item', 'Second preserved item'):
+            await item(daemon, pid, title, state='waiting', request='Keep the original request')
+        assert 'github_external' not in {column[1] for column in daemon.ops.db.execute('PRAGMA table_info(work_items)')}
+        saved = retained(daemon.ops.db)
+    finally:
+        await daemon.fleet.close()
+        await daemon.inventory.close()
+        daemon.journal.close()
+
+    # TaskDaemon -> ApiV1 -> board_github.install is the actual upgraded startup path.
+    daemon = TaskDaemon(config, path)
+    try:
+        assert [tuple(row) for row in daemon.ops.db.execute('SELECT github_external FROM work_items')] == [(None,), (None,)]
+        assert_retained(daemon.ops.db, saved)
+    finally:
+        await daemon.fleet.close()
+        await daemon.inventory.close()
+        daemon.journal.close()
 
 
 def differences(before, after, path=''):
@@ -191,7 +226,7 @@ async def continuity(w, mock, deployment, monkeypatch, switches):
     before_checkout = snapshot(w['human'])
     original_token = w['owner_token']
     saved = retained(w['d'].ops.db)
-    assert saved['work_attempts'] and saved['session_results'] and saved['operation_steps'] and saved['api_events']
+    assert all(saved[table]['rows'] for table in ('work_attempts', 'session_results', 'operation_steps', 'api_events'))
     try:
         for switch, commit in switches:
             path = w['d']._db_path
@@ -304,9 +339,9 @@ async def test_managed_upgrade_recovers_original_201(start_ready, mock, monkeypa
         assert status == 200 and replay['created'] is False
         assert replay['operation']['operation_id'] == operation_id
         with closing(sqlite3.connect(root / 'state/tasks.sqlite3')) as db:
-            assert rows(db, 'pr_creation_receipts') == receipt
+            assert_rows_preserved(db, 'pr_creation_receipts', receipt)
             for table, expected in saved.items():
-                assert rows(db, table) == expected
+                assert_rows_preserved(db, table, expected)
         assert len(w['posts']) == w['runner'].ran['publication-push'] == 1
         assert snapshot(w['human']) == before
     finally:
@@ -342,7 +377,7 @@ async def test_plain_pointer_switch_recovers_original_201_without_repeating_effe
         await settle_operations(w['d'].ops)
         done = w['d'].ops.get(operation['operation_id'])
         assert done['status'] == 'succeeded', done
-        assert rows(w['d'].ops.db, 'pr_creation_receipts') == receipt
+        assert_rows_preserved(w['d'].ops.db, 'pr_creation_receipts', receipt)
         assert len(w['posts']) == w['runner'].ran['publication-push'] == 1
         assert not any(method == 'POST' and path == '/repos/o/r/pulls' for method, path, _ in w['gh'].requests)
         assert snapshot(w['human']) == before_checkout

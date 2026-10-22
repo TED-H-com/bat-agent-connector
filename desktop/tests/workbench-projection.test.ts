@@ -24,6 +24,15 @@ test('recorded relationships retain source and type without inferring completion
   assert.equal(workbenchProjection({session: {...session, provenance: 'manual'}}).managed, false);
   assert.equal(workbenchProjection({}), null);
 });
+test('GitHub source closure supplies the Work record state while runtime stays independent', () => {
+  const record = {work_item: {work_item_id: 'wi_fixed', title: 'Closed source', state: 'doing', display_state: 'github_closed',
+    source_lane: 'github_closed', completion: {display_state: 'doing', pending: false, approved: false},
+    external: {source: 'github', state: 'closed', board_lane: 'github_closed'}}};
+  const result = workbenchProjection({session}, record);
+  assert.equal(result.recordState, 'github_closed');
+  assert.equal(result.external, record.work_item.external);
+  assert.equal(result.state, 'running');
+});
 
 test('managed attention without a pending prompt uses the existing shared status', () => {
   for(const status of ['needs_you','blocked','uncertain','needs_attention'])

@@ -5,6 +5,10 @@ import {t} from './i18n.js';
 import {reasonLabel} from './ui/ui-strings.js';
 
 const ACTIONS = {
+  'pm.github.import': 'bgh_action_import',
+  'project.github.import': 'bgh_action_import',
+  'project.github.configure': 'bgh_action_configure',
+  'project.github.sync': 'bgh_action_sync',
   'checkpoint.continue': 'action_checkpoint_continue',
   'checkpoint.continue.revalidate': 'action_checkpoint_revalidate',
   'artifact.upload': 'action_artifact_upload',
@@ -163,6 +167,9 @@ const OPERATION_STATUS = {
 };
 
 const WORK_STATUS = {
+  github_closed: 'github_closed',
+  github_completed: 'github_completed',
+  github_done: 'github_done',
   todo: 'not_started',
   doing: 'in_progress',
   waiting: 'waiting',

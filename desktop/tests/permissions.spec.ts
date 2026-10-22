@@ -103,11 +103,17 @@ for (const native of [false, true]) {
     expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
   });
   test(`${transport}: lost reply retains fixed mode, session and key across reload`, async ({page}) => {
-    const state = await permissionFixture(page, native, {lost: true});
+    const state = await permissionFixture(page, native, {lost: true, delayPost: true});
     let form = await openPermissions(page);
     await form.getByRole('combobox').selectOption('allow_all');
-    await form.getByRole('button', {name: 'Apply permissions', exact: true}).dblclick();
-    await expect.poll(() => state.posts.length).toBe(1);
+    // Keep the reply pending through both clicks. An immediate native error can
+    // otherwise relabel this button as Retry before the second click lands.
+    try {
+      await form.getByRole('button', {name: 'Apply permissions', exact: true}).dblclick();
+      await expect.poll(() => state.posts.length).toBe(1);
+      await expect.poll(() => Boolean(state.holdPost)).toBe(true);
+    } finally {state.delayPost = false; state.holdPost?.();}
+    await expect(form).toContainText('Lost permission reply');
     await expect(form.getByRole('combobox')).toBeDisabled();
     expect(state.posts[0].body).toEqual({action: 'session.permissions', target: {host: 'demo', session_id: 'managed-session-1'},
       params: {mode: 'allow_all'}, preconditions: {}}); // unrelated synthetic row version is not task authority

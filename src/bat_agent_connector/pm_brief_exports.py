@@ -48,6 +48,7 @@ _TEXT = {
         "quality": "Original acceptance: {acceptance}; Definition of Done: {dod}",
         "quality_count": "Qualified original requirements: {qualified} / {total}",
         "quality_fixed": "These attributed assessments were explicitly selected at capture time. Later conclusions and current applicability are not substituted.",
+        "source_state": "GitHub source: {status}; local completion and delivery remain separate.",
         "work_state": "Work state recorded as {status}",
         "quality_deviations_note": "Only explicitly selected reviewer rejections of original criteria are shown. These are attributed judgments, not independent proof of semantic failure. Current applicability and other deviation dimensions are not assessed.",
         "quality_rejection": "Reviewer rejected {kind}: {criterion}\nReviewer: {reviewer}\nRationale: {rationale}",
@@ -79,6 +80,7 @@ _TEXT = {
         "quality": "原始驗收條件：{acceptance}；完成定義：{dod}",
         "quality_count": "符合驗收與完成定義的原始需求：{qualified} / {total}",
         "quality_fixed": "這些具責任歸屬的評估由整理證據時明確選取；不會替換成後來的結論，也不代表已重查目前適用性。",
+        "source_state": "GitHub 來源：{status}；本機完成聲明與交付證據仍分開記錄。",
         "work_state": "工作狀態記錄為 {status}",
         "quality_deviations_note": "僅呈現明確選取、對原始條件提出的審查者否決；這是具責任歸屬的判斷，不代表獨立驗證已證明語意缺陷。目前適用性與其他偏差面向尚未評估。",
         "quality_rejection": "審查者否決{kind}：{criterion}\n評估者：{reviewer}\n理由：{rationale}",
@@ -86,14 +88,14 @@ _TEXT = {
     },
 }
 _STATUSES = {
-    "en": {"user_confirmed": "User confirmed", "repo_evidence": "Attributed repository claim",
+    "en": {"github_closed": "Closed (not completed)", "github_completed": "Completed issue · GitHub", "github_done": "Done · GitHub", "user_confirmed": "User confirmed", "repo_evidence": "Attributed repository claim",
            "agent_assumption": "Agent assumption", "unresolved": "Unresolved", "conflicting": "Conflicting",
            "not_applicable": "Recorded not applicable", "unassessed": "Unassessed", "unknown": "Unknown",
            "quality_unassessed": "Quality unassessed", "partial_source_states": "Partial saved source states",
            "fixed_quality_assessments": "Explicit original quality assessments", "qualified": "Qualified", "not_qualified": "Not qualified",
            "fixed_quality_deviations": "Selected original quality judgments", "rejected": "Reviewer rejected",
            "accepted_sources": "Accepted sources", "recorded_sources": "Recorded sources", "unavailable": "Unavailable"},
-    "zh-TW": {"user_confirmed": "使用者已確認", "repo_evidence": "有來源歸屬的 Repo 聲明",
+    "zh-TW": {"github_closed": "已關閉（未完成）", "github_completed": "完成議題 · GitHub", "github_done": "完成 · GitHub", "user_confirmed": "使用者已確認", "repo_evidence": "有來源歸屬的 Repo 聲明",
               "agent_assumption": "Agent 假設", "unresolved": "尚未決定", "conflicting": "存在衝突",
               "not_applicable": "已記錄不適用", "unassessed": "尚未評估", "unknown": "未知",
               "quality_unassessed": "品質尚未評估", "partial_source_states": "部分已保存來源狀態",
@@ -173,6 +175,8 @@ def _item_text(item, source, text, locale, *, quality=False):
     if kind == 'quality_rejection':
         return text['quality_rejection'].format(kind=text[details['criterion']['criterion']['kind'] + '_criterion'],
             criterion=details['criterion']['text'], reviewer=details['assessed_by'], rationale=details['assessment']['rationale'])
+    if kind == 'work_claim' and details.get('source_lane'):
+        return text['source_state'].format(status=value)
     if kind == 'work_claim' and quality:
         return text['work_state'].format(status=value)
     if kind in {"deployment", "integration_delivery", "work_claim"}:
