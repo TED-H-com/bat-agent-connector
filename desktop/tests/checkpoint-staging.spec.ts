@@ -3,8 +3,12 @@ import {expect, test} from '@playwright/test';
 import {openSession} from './session-fixture.ts';
 
 // These operation records are generated and checked by the real Python producer tests.
-const operations = Object.fromEntries(['staging', 'destination'].map(kind => [kind, JSON.parse(readFileSync(
-  new URL(`../../tests/fixtures/checkpoint-refusal-${kind}.json`, import.meta.url), 'utf8'))]));
+const operations = {
+  staging: JSON.parse(readFileSync(
+    new URL('../../tests/fixtures/checkpoint-refusal-staging.json', import.meta.url), 'utf8')),
+  destination: JSON.parse(readFileSync(
+    new URL('../../tests/fixtures/checkpoint-refusal-destination.json', import.meta.url), 'utf8')),
+};
 const copy = {
   en: {
     staging: 'An earlier attempt may have left an incomplete copy. It has been kept.',
