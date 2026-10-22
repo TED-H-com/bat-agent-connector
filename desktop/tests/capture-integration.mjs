@@ -45,7 +45,10 @@ try {
     assert.equal(after[0][0], before[0][0]);
     assert.deepEqual(JSON.parse(after[0][1]).input, JSON.parse(before[0][1]).input);
     assert.equal(Boolean(JSON.parse(after[0][1]).intent), false);
+    const refreshed = page.waitForResponse(response => response.ok()
+      && new URL(response.url()).pathname === '/api/v1/events');
     events.resume();
+    await refreshed;
     // One deliberate person retry after the refresh, not a click-until-success loop.
     await events.post(preview);
     await expect(box.locator('[data-capture-evidence]')).toContainText(fixture.digest);
