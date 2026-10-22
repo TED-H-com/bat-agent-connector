@@ -856,7 +856,10 @@ mod tests {
     fn producer_status() -> Value {
         project_status(fixture()["result"].clone())
     }
-    fn project_status(mut result: Value) -> Value {
+    fn project_status(result: Value) -> Value {
+        project_status_at(result, 1_791_460_800_000)
+    }
+    fn project_status_at(mut result: Value, now: u64) -> Value {
         let readiness = &result["readiness"];
         let mut entries = readiness["hosts"].as_array().unwrap().clone();
         entries.push(readiness["connector"].clone());
@@ -869,7 +872,7 @@ mod tests {
         .unwrap();
         // This is the same projection Context::status calls after its ownership
         // checks. Platform discovery stays outside this synthetic fixture.
-        result["readiness"] = native_readiness(Some(&snapshot), 1_791_460_800_000).unwrap();
+        result["readiness"] = native_readiness(Some(&snapshot), now).unwrap();
         result
     }
     fn stop_cases() -> Value {
@@ -927,7 +930,14 @@ mod tests {
             .map(|(name, case)| {
                 (
                     name.clone(),
-                    sanitize_result(&project_status(case["result"].clone()), "status").unwrap(),
+                    sanitize_result(
+                        &project_status_at(
+                            case["result"].clone(),
+                            case["now"].as_u64().unwrap_or(1_791_460_800_000),
+                        ),
+                        "status",
+                    )
+                    .unwrap(),
                 )
             })
             .collect()
@@ -950,6 +960,17 @@ mod tests {
                 sanitize_result(&producer_status(), "status").unwrap()["readiness"]["hosts"][1]
             );
         }
+    }
+    #[test]
+    fn aged_requirement_is_withdrawn_through_native_projection_and_sanitizer() {
+        let cases = requirement_cases();
+        let row = &cases["aged"]["readiness"]["hosts"][0];
+        assert_eq!(cases["aged"]["readiness"]["state"], "stale");
+        assert_eq!(row["code"], "PROBE_STALE");
+        assert_eq!(row["level"], "degraded");
+        assert_eq!(row["blocking"], "stale");
+        assert_eq!(row["layers"]["tunnel"], false);
+        assert!(row.get("route_requirement").is_none());
     }
     #[test]
     fn requirement_allowlist_rejects_anything_outside_the_closed_vocabulary() {

@@ -53,4 +53,14 @@ for (const locale of ['en', 'zh-TW']) test.describe(`Fleet evidence ${locale}`, 
       }
     }
   });
+  test('aged route failure withdraws its explanation with the code', async ({page}) => {
+    await mount(page, requirements.aged, 60_001);
+    await expect(page.locator('[data-fleet-diagnosis="node-1"]')).toHaveAttribute('data-fleet-state', 'stale');
+    await expect(page.locator('[data-fleet-route-requirement="node-1"]')).toHaveCount(0);
+    const row = page.locator('[data-fleet-diagnosis="node-1"]');
+    for (const text of words[locale]) await expect(row).not.toContainText(text);
+    await row.locator('summary').click();
+    await expect(row.locator('code').filter({hasText: 'PROBE_STALE'})).toBeVisible();
+    await expect(row.locator('[data-check-state="passed"]')).toHaveCount(0);
+  });
 });

@@ -33,7 +33,8 @@ function render(snapshot: any, row: any, locale: string, now: number) {
 }
 for (const locale of ['en', 'zh-TW']) {
   test(`real route requirement goldens explain only the affected host: ${locale}`, () => {
-    for (const [name, snapshot] of Object.entries(requirements) as [string, any][]) {
+    for (const name of Object.keys(requirementWords[locale])) {
+      const snapshot = requirements[name];
       const now = Date.parse(snapshot.readiness.observed_at);
       const row = snapshot.readiness.hosts[0];
       const view = render(snapshot, row, locale, now);
@@ -43,6 +44,15 @@ for (const locale of ['en', 'zh-TW']) {
       assert.equal(fleetDiagnosis(snapshot.readiness.hosts[1], {snapshot, readable: true}).state, 'ready');
       assert.ok(!JSON.stringify(render(snapshot, snapshot.readiness.hosts[1], locale, now)).includes('data-fleet-route-requirement'));
     }
+  });
+  test(`aged route failure withdraws its explanation with the code: ${locale}`, () => {
+    const snapshot = requirements.aged;
+    const row = snapshot.readiness.hosts[0];
+    assert.equal(row.code, 'PROBE_STALE');
+    const view = render(snapshot, row, locale, Date.parse(snapshot.readiness.observed_at) + 60_001);
+    assert.equal(view.attrs['data-fleet-state'], 'stale');
+    assert.ok(!JSON.stringify(view).includes('data-fleet-route-requirement'));
+    for (const text of Object.values(requirementWords[locale])) assert.ok(!JSON.stringify(view).includes(text));
   });
   test(`real unresolved stop goldens retain priority across age, deselection and re-read: ${locale}`, () => {
     for (const snapshot of Object.values(stops) as any[]) {

@@ -437,6 +437,7 @@ mod contract_tests {
             ("unknown", b"unreadable fixture status".as_slice(), false),
             ("idle", br#"{"Peer":{"fixture":{"TailscaleIPs":["100.64.0.1"],"Online":true,"CurAddr":""}}}"#.as_slice(), false),
             ("tcp", br#"{"Peer":{"fixture":{"TailscaleIPs":["100.64.0.1"],"Online":true,"CurAddr":"203.0.113.1:1234"}}}"#.as_slice(), false),
+            ("aged", br#"{"Peer":{"fixture":{"TailscaleIPs":["100.64.0.1"],"Online":true,"CurAddr":"203.0.113.1:1234"}}}"#.as_slice(), false),
             ("exhausted", b"{\"Peer\":{}}".as_slice(), true),
         ] {
             let mut raw = observed_fixture().await;
@@ -455,9 +456,158 @@ mod contract_tests {
             let row = Entry::observed(("node-1", "Fixture 1"), true, ProbeKind::Bat,
                 (None, None, failure.route_requirement), &generation, now, Some((failure.code, Layer::Tunnel))).unwrap();
             raw["result"]["readiness"]["hosts"][0] = serde_json::to_value(row).unwrap();
+            if name == "aged" {
+                let later = now + 60_001;
+                let parsed = parse_fixture_file(&raw, &inventory, later).unwrap();
+                assert!(!parsed.is_fresh(later).unwrap());
+                for row in parsed.entries {
+                    if row.name == "connector" {
+                        raw["result"]["readiness"]["connector"] = serde_json::to_value(row).unwrap();
+                    } else {
+                        let target = raw["result"]["readiness"]["hosts"].as_array_mut().unwrap()
+                            .iter_mut().find(|target| target["name"] == row.name).unwrap();
+                        *target = serde_json::to_value(row).unwrap();
+                    }
+                }
+                raw["now"] = later.into();
+            }
             cases[name] = raw;
         }
         cases
+    }
+    /// Publish typed producer rows to disk, then use the real configuration-bound
+    /// parser at the reader's clock. No expected row values are synthesized here.
+    fn parse_fixture_file(
+        raw: &Value,
+        inventory: &crate::inventory::Inventory,
+        now: u64,
+    ) -> Result<Snapshot> {
+        struct Temporary(std::path::PathBuf);
+        impl Drop for Temporary {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let temp = Temporary(
+            std::env::temp_dir().join(format!("fleet-requirement-{:032x}", rand::random::<u128>())),
+        );
+        std::fs::create_dir_all(temp.0.join("kit/bat-profiles")).unwrap();
+        std::fs::create_dir(temp.0.join("user")).unwrap();
+        std::fs::write(
+            temp.0.join("kit/fleet-inventory.json"),
+            serde_json::to_vec(inventory.document()).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            temp.0.join("kit/bat-profiles/index.json"),
+            include_bytes!("../tests/fixtures/profile-index.json"),
+        )
+        .unwrap();
+        std::fs::write(
+            temp.0.join("kit/ssh-config"),
+            include_bytes!("../tests/fixtures/ssh-config"),
+        )
+        .unwrap();
+        let config = Configuration::load(
+            crate::configuration::Paths::new(&temp.0.join("kit"), &temp.0.join("user"), None, None)
+                .unwrap(),
+        )
+        .unwrap();
+        let readiness = &raw["result"]["readiness"];
+        let mut entries: Vec<Entry> = serde_json::from_value(readiness["hosts"].clone()).unwrap();
+        entries.push(serde_json::from_value(readiness["connector"].clone()).unwrap());
+        let snapshot = Snapshot::new(
+            &"a".repeat(32),
+            config.binding(),
+            &"d".repeat(64),
+            entries,
+            millis(readiness["observed_at"].as_str().unwrap()).unwrap(),
+        )
+        .unwrap();
+        let path = temp.0.join("fleet-desktop-status.json");
+        std::fs::write(&path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        Snapshot::parse(
+            &std::fs::read(path).unwrap(),
+            &config,
+            &snapshot.monitor_epoch,
+            now,
+        )
+    }
+    #[tokio::test]
+    async fn aged_route_requirement_is_withdrawn_with_its_failure() {
+        let cases = requirement_fixture().await;
+        let row = &cases["aged"]["result"]["readiness"]["hosts"][0];
+        assert_eq!(row["code"], "PROBE_STALE");
+        assert_eq!(row["level"], "degraded");
+        assert_eq!(row["blocking"], "stale");
+        assert_eq!(row["layers"]["tunnel"], false);
+        assert!(row.get("route_requirement").is_none());
+    }
+    #[test]
+    fn route_requirement_is_emitted_only_for_selected_route_failure() {
+        let generation = ProbeGeneration {
+            epoch: "a".repeat(32),
+            configuration_binding: "c".repeat(64),
+            selection_revision: "d".repeat(64),
+            generation: 1,
+        };
+        for selected in [true, false] {
+            for code in [
+                None,
+                Some("ROUTE_UNAVAILABLE"),
+                Some("TAILSCALE_WAKING"),
+                Some("STOP_UNCONFIRMED"),
+                Some("TUNNEL_DOWN"),
+            ] {
+                let row = Entry::observed(
+                    ("node-1", "Fixture 1"),
+                    selected,
+                    ProbeKind::Bat,
+                    (None, None, Some(RouteRequirement::DirectTcpUnreachable)),
+                    &generation,
+                    1000,
+                    code.map(|code| (code, Layer::Tunnel)),
+                )
+                .unwrap();
+                let expected =
+                    selected && matches!(code, Some("ROUTE_UNAVAILABLE" | "TAILSCALE_WAKING"));
+                assert_eq!(
+                    row.route_requirement.is_some(),
+                    expected,
+                    "selected={selected}, code={code:?}"
+                );
+            }
+        }
+    }
+    #[tokio::test]
+    async fn route_requirement_impossible_pairs_are_unproven() {
+        let raw = observed_fixture().await;
+        let now = millis(raw["result"]["readiness"]["observed_at"].as_str().unwrap()).unwrap();
+        let inventory =
+            crate::inventory::Inventory::parse(include_bytes!("../tests/fixtures/inventory.json"))
+                .unwrap();
+        for code in [
+            None,
+            Some("STOP_UNCONFIRMED"),
+            Some("TUNNEL_DOWN"),
+            Some("PROBE_STALE"),
+        ] {
+            let mut invalid = raw.clone();
+            let row = &mut invalid["result"]["readiness"]["hosts"][0];
+            row["route_requirement"] = serde_json::json!(RouteRequirement::DirectTcpUnreachable);
+            row["code"] = code.into();
+            if code.is_some() {
+                row["level"] = "down".into();
+                row["blocking"] = "tunnel".into();
+            }
+            assert!(
+                matches!(
+                    parse_fixture_file(&invalid, &inventory, now),
+                    Err("STATUS_UNPROVEN")
+                ),
+                "code={code:?}"
+            );
+        }
     }
     #[tokio::test]
     async fn requirement_rows_match_native_status_fixture() {
