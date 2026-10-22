@@ -503,20 +503,34 @@ as possibly sent. A repeated claim within the 300-second TTL returns the identic
 challenge, expiry and epoch. A claimed expired step cannot be claimed or rotated again.
 The TTL starts **at claim**, not at prepare, so opening the desktop after leaving a
 browser intent pending for six minutes is supported. When a never-claimed prepared
-challenge has expired, claim or resumed execution reissues it under the same
+challenge has expired, claim or an explicit resume reissues it under the same
 operation, step and effect ID, with epoch + 1 and a new expiry; the old challenge is
 invalidated. A first claim also sets expiry to claim time + 300 seconds. It never
 creates another intent or key. Terminal operations cannot claim a new step. An
 already claimed, unexpired envelope can still be replayed after definitive
 completion, with its recorded receipt; cancelled/abandoned operations cannot claim.
+Background receipt polling never reissues an unclaimed challenge or emits issue
+events, even if the operation waits for hours.
+
+Before the first dispatch fence, claim checks the accepted connection revision
+again. A mismatch ends the operation `failed SETUP_REVIEW_CHANGED` without serving
+a write instruction. This also protects operations admitted before serialization.
 
 All claims above, except `receipt`, bind a domain-separated HMAC using the existing
 Connector-local `task-admin.token`, held in its protected file outside the journal.
 No new credential or secret file is introduced. Only a challenge hash is stored in
 step state, alongside the claims; raw challenges do not enter receipts, events or
 exports. A database reader without that local secret cannot reconstruct a challenge.
-Someone with both the database and that file can. Rotation/unavailability of the
-local secret invalidates reconstruction; it is not a device attestation. The source
+Someone with both the database and that file can. Before serving an envelope, claim
+compares the reconstructed challenge digest to its stored hash with `compare_digest`.
+A changed/unavailable original key refuses replay with `CONNECTION_HANDOFF_KEY_CHANGED`;
+no new challenge or write instruction is served. This refusal leaves the operation's
+state and original evidence unchanged: it cannot establish whether the original local
+effect happened. An original cached challenge can still report evidence against its
+stored hash, even after key rotation. Restore the original key to reconstruct an
+envelope, or use original participant evidence / the ordinary uncertainty and
+abandonment rules; never rotate a claimed effect into another write. This is not a
+device attestation. The source
 resolver's key choice is a separate integration concern; no discovery key is copied.
 
 **POST /api/v1/connections/receipt** uses `manage` and the same original personal
@@ -557,6 +571,9 @@ of the first receipt for an already claimed effect, including a late `refused` o
 `unchanged` receipt. Identical replay is idempotent. One definitive receipt may
 supersede `uncertain`; its evidence is appended to the step's `receipts` history,
 never replacing the earlier entry. A definitive receipt cannot be superseded.
+For every terminal state (`cancelled`, `succeeded`, `failed`), an identical already
+accepted receipt returns `replayed: true`; every other valid receipt returns
+`CONNECTION_OPERATION_TERMINAL`. Replay never changes the terminal state or history.
 The envelope's `receipt` is the latest receipt. No route admits another intent.
 
 #### Projection, admission and recovery
@@ -601,6 +618,22 @@ intent before replay and execution. Endpoint/pin/remote profile/principal change
 require a separate connection, not an in-place rebind. Selected services/workspaces
 must already be readable; missing evidence does not trigger a probe.
 
+Only one non-terminal connection operation may be open per authenticated principal,
+installation reference and existing connection ID. Both preview and admission refuse
+a second `setup.connection.apply` or `connection.reference.apply` with
+`CONNECTION_BUSY`, naming the open operation in English and Traditional Chinese.
+The journal transaction repeats the gate at admission; there is no separate lock.
+Creates mint independent IDs and are unaffected. Original-key replay keeps the same
+operation. Cancelling an unclaimed operation releases this gate without sending an effect.
+
+If a final projection compare-and-set still loses after `applied` or `unchanged`,
+the operation enters `needs_attention CONNECTION_PROJECTION_CHANGED`, never `failed`.
+The native step remains succeeded and its receipts stay linked on operation read in
+`external_refs.connection_id` and `external_refs.receipt_refs`; the competing projection
+revision and choices are not overwritten. Other refused proven-completion guards use
+`CONNECTION_COMPLETION_BLOCKED`. A projection I/O failure uses the existing Uncertain
+budget, retaining the proven native step and allowing only the original completion path.
+
 `installation_ref` is an opaque client claim under the authenticated principal.
 It separates one person's installations; it grants nothing and proves no attestation.
 A holder of the same effective principal can claim its installation strings. Identity
@@ -621,12 +654,21 @@ pure GET. A claimed uncertain effect is never resent and never rotates its epoch
 Its existing bounded Uncertain budget may reach `needs_attention`. A definitive
 readback resumes completion of the original operation. Alternatively, the original
 person can use the existing cancel operation **from needs_attention** to record the
-human decision `LOCAL_EFFECT_NEVER_PROVEN` ("local effect never proven") on that step.
+human decision `LOCAL_EFFECT_NEVER_PROVEN` ("local effect never proven") on that step,
+only when the open step is `native_effects` and has no definitive receipt (none or
+latest `uncertain`). A configuration-only uncertainty uses ordinary cancel with its
+`managed_configuration` reason. If the runner has reached `needs_attention` but has
+not exited, cancel refuses with `CONNECTION_OPERATION_RUNNING`; retry after it exits.
 This explicit abandonment cancels that one operation and releases its busy status;
 it proves neither that the local write happened nor that it did not. It does not
 resend, mint a key, clear unrelated locks or undo earlier configuration. Subsequent
-late receipts are refused with `CONNECTION_OPERATION_TERMINAL`, keeping it terminal.
-Definitive refusal ends failed; applied/unchanged ends succeeded. Earlier known
+new/different receipts are refused with `CONNECTION_OPERATION_TERMINAL`, keeping it
+terminal; identical accepted replay follows the rule above. A definitive receipt
+cannot be abandoned: cancel refuses with `CONNECTION_EFFECT_PROVEN`, preserving the
+step and evidence. Resume retries proven completion after its projection fault is
+resolved, without another native write. Definitive refusal ends failed;
+applied/unchanged completes succeeded unless a projection conflict needs attention.
+Earlier known
 configuration effects remain in operation history even if the local participant fails.
 
 繁體中文：observe 僅儲存自己的連線關聯；會解析 BAT 來源的預覽必須有 manage 與原
@@ -635,4 +677,4 @@ personal 安裝身分。GET 不派送；POST claim 先記錄 fence 再回傳，T
 的效果不重發，晚到收據與 uncertain 後的一次確定 readback 可完成原操作。
 needs_attention 的取消是針對單一 operation 的明確人工放棄，記錄本機效果始終未證實，
 不是重送、清空 locks 或證明沒有本機寫入。native 收據不能證明中央可達性或遠端擁有權。
-此契約沿 E01／E03／E11 與既有 R／A 驗收接續，不宣稱實機驗收完成。
+此證據不代表實機驗收完成。

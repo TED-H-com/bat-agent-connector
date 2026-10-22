@@ -85,12 +85,14 @@ def _renew(ops, operation_id, request, *, claiming=False):
     return request
 
 
-def renew_unclaimed(ctx, request):
-    operation = ctx.service.get(ctx.operation_id, steps=False)
+def renew_unclaimed(ops, operation):
+    """Explicit resume may renew; background receipt polling never issues challenges."""
     if not (operation.get("external_refs") or {}).get("native_effects_sent"):
-        with ctx.service.journal.tx():
-            return _renew(ctx.service, ctx.operation_id, request)
-    return request
+        with ops.journal.tx():
+            row = ops.db.execute("SELECT request FROM operation_steps WHERE operation_id=? AND name=?",
+                (operation["operation_id"], STEP)).fetchone()
+            if row:
+                _renew(ops, operation["operation_id"], json.loads(row["request"]))
 
 
 def receipts(row):
@@ -123,11 +125,25 @@ def claim(ops, principal, body):
             _refuse("A terminal operation cannot claim a new native effect")
         if sent and now() >= request["expires_at"]:
             raise OperationError("CONNECTION_HANDOFF_EXPIRED", "A claimed effect cannot be claimed again after expiry", 409)
-        if not sent:
-            request = _renew(ops, operation["operation_id"], request, claiming=True)
-            ops._merge_refs(operation["operation_id"], {"native_effects_sent": True})
-        claims = {key: request[key] for key in CLAIMS}
-        return {"native_handoff": {**claims, "challenge": _challenge(ops, claims), "receipt": history[-1] if history else None}}
+        from .setup_connections import revision_matches
+        if not sent and not revision_matches(ops, operation):
+            # Commit this honest failure before returning the refusal; no fence/effect was sent.
+            if operation["status"] not in {"running", "needs_attention"}:
+                ops._transition(operation["operation_id"], "running")
+            message = "Connection revision changed before dispatch; review again / 派送前連線版本已變更；請重新檢閱"
+            ops._transition(operation["operation_id"], "failed", error_code="SETUP_REVIEW_CHANGED", reason=message)
+            refusal = OperationError("SETUP_REVIEW_CHANGED", message, 409)
+        else:
+            if not sent:
+                request = _renew(ops, operation["operation_id"], request, claiming=True)
+                ops._merge_refs(operation["operation_id"], {"native_effects_sent": True})
+            claims = {key: request[key] for key in CLAIMS}
+            challenge = _challenge(ops, claims)
+            if not hmac.compare_digest(digest(challenge), request["challenge_hash"]):
+                raise OperationError("CONNECTION_HANDOFF_KEY_CHANGED", "Original challenge cannot be reconstructed; no write instruction is served / "
+                    "無法重建原 challenge；不提供寫入指示", 409)
+            return {"native_handoff": {**claims, "challenge": challenge, "receipt": history[-1] if history else None}}
+    raise refusal
 
 
 def validate_receipt(body):
@@ -166,23 +182,21 @@ def receive(ops, principal, body):
     with ops.journal.tx():
         row = ops.db.execute("SELECT request,response FROM operation_steps WHERE operation_id=? AND name=?",
             (operation["operation_id"], STEP)).fetchone()
-        if not row:
-            _refuse()
-        request = json.loads(row["request"])
-        if any(body[key] != request[key] for key in RECEIPT_FIELDS - {"challenge", "outcome", "roles", "code"}):
-            _refuse()
-        if not hmac.compare_digest(digest(body["challenge"]), request["challenge_hash"]):
-            _refuse()
-        if not (operation.get("external_refs") or {}).get("native_effects_sent"):
-            _refuse("Handoff has not been dispatched")
         receipt = {**value, "receipt_ref": "receipt_" + digest(value)}
-        history = receipts(row)
-        if operation["status"] == "cancelled":
-            raise OperationError("CONNECTION_OPERATION_TERMINAL", "This operation was cancelled; no further local evidence is accepted", 409)
-        if receipt in history:
+        history = receipts(row) if row else []
+        request = json.loads(row["request"]) if row else {}
+        matches = bool(row) and all(body[key] == request[key]
+            for key in RECEIPT_FIELDS - {"challenge", "outcome", "roles", "code"}) and hmac.compare_digest(
+                digest(body["challenge"]), request["challenge_hash"])
+        sent = (operation.get("external_refs") or {}).get("native_effects_sent")
+        if receipt in history and matches and sent:
             return {"receipt": receipt, "replayed": True}
-        if operation["status"] in {"failed", "succeeded"}:
+        if operation["status"] in {"failed", "succeeded", "cancelled"}:
             raise OperationError("CONNECTION_OPERATION_TERMINAL", "This operation is terminal", 409)
+        if not matches:
+            _refuse()
+        if not sent:
+            _refuse("Handoff has not been dispatched")
         if history and (history[-1]["outcome"] != "uncertain" or receipt["outcome"] == "uncertain"):
             _refuse("Only one definitive readback may supersede uncertain evidence")
         # Expiry prohibits a new claim/write, not late evidence of the original claimed effect.

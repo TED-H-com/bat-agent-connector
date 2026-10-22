@@ -47,9 +47,9 @@ def test_receipt_rejects_untyped_or_private_payloads(change):
     assert error.value.status == 422
 
 
-async def test_r2_get_is_pure_and_post_claim_is_personal(installed, served_setup, source):
+async def test_get_is_pure_and_post_claim_is_personal(installed, served_setup, source):
     daemon, principal, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
     before = daemon.journal.db.total_changes
     status, response = await served_setup("GET", f"/api/v1/operations/{ident}?installation_ref=desktop-a")
     assert status == 200 and "native_handoff" not in response["operation"]
@@ -65,9 +65,9 @@ async def test_r2_get_is_pure_and_post_claim_is_personal(installed, served_setup
     assert (await served_setup("POST", connections.HANDOFF, body))[0] == 403
 
 
-async def test_r2_claim_ttl_starts_on_claim_and_reissues_expired_unclaimed_epoch(installed, served_setup, source):
+async def test_claim_ttl_starts_on_claim_and_reissues_expired_unclaimed_epoch(installed, served_setup, source):
     daemon, _, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
     row = daemon.journal.db.execute("SELECT request FROM operation_steps WHERE name='native_effects'").fetchone()
     old = json.loads(row[0])
     claimed_at = old["expires_at"] + 60
@@ -83,9 +83,9 @@ async def test_r2_claim_ttl_starts_on_claim_and_reissues_expired_unclaimed_epoch
         assert (await served_setup("POST", connections.HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"}))[0] == 409
 
 
-async def test_r2_resume_reissues_only_never_claimed_challenge(installed, served_setup, source):
+async def test_resume_reissues_only_never_claimed_challenge(installed, served_setup, source):
     daemon, _, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
     old = json.loads(daemon.journal.db.execute("SELECT request FROM operation_steps WHERE name='native_effects'").fetchone()[0])
     daemon.journal.db.execute("UPDATE operations SET status='needs_attention' WHERE operation_id=?", (ident,))
     with patch.object(handoff, "now", return_value=old["expires_at"] + 1):
@@ -96,9 +96,9 @@ async def test_r2_resume_reissues_only_never_claimed_challenge(installed, served
     assert daemon.ops.get(ident)["external_refs"]["native_effects_sent"] is False
 
 
-async def test_r2_processed_claim_with_lost_reply_keeps_original_fence(installed, served_setup, source, monkeypatch):
+async def test_processed_claim_with_lost_reply_keeps_original_fence(installed, served_setup, source, monkeypatch):
     daemon, _, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
     send = daemon.api._send_json
     processed = asyncio.Event()
     captured = []
@@ -121,25 +121,25 @@ async def test_r2_processed_claim_with_lost_reply_keeps_original_fence(installed
     assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
 
 
-async def test_r2_handoff_key_is_outside_journal(installed, served_setup, source):
+async def test_handoff_key_is_outside_journal(installed, served_setup, source):
     daemon, _, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
-    native = await connections._r2_dispatch(served_setup, ident)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
+    native = await connections.claim_handoff(served_setup, ident)
     daemon.journal.db.execute("UPDATE api_sync_metadata SET signing_key=?", ("f" * 64,))
-    again = await connections._r2_dispatch(served_setup, ident)
+    again = await connections.claim_handoff(served_setup, ident)
     assert again["challenge"] == native["challenge"]
     assert daemon._admin_token not in "\n".join(daemon.journal.db.iterdump())
 
 
-async def test_r2_receipt_wire_limit_precedes_json_parsing(installed, served_setup):
+async def test_receipt_wire_limit_precedes_json_parsing(installed, served_setup):
     status, _ = await served_setup.raw_request(connections.RECEIPT, b"not-json" + b" " * 8192)
     assert status == 413
 
 
-async def test_r2_claim_replay_after_completion_keeps_original_challenge(installed, served_setup, source, tmp_path):
+async def test_claim_replay_after_completion_keeps_original_challenge(installed, served_setup, source, tmp_path):
     daemon, _, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
-    native = await connections._r2_dispatch(served_setup, ident)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
+    native = await connections.claim_handoff(served_setup, ident)
     assert (await connections.DiskParticipant(tmp_path / "participant.json").send(served_setup, native))[0][0] == 200
     await settle_operations(daemon.ops)
     assert daemon.ops.get(ident)["status"] == "succeeded"
@@ -153,8 +153,8 @@ async def test_r2_claim_replay_after_completion_keeps_original_challenge(install
 async def test_claim_key_change_refuses_unverifiable_envelope_but_keeps_original_evidence(
         installed, served_setup, source, tmp_path):
     daemon, _, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
-    native = await connections._r2_dispatch(served_setup, ident)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
+    native = await connections.claim_handoff(served_setup, ident)
     before = daemon.ops.get(ident)
     daemon._admin_token = "R" * 64
     status, response = await served_setup("POST", connections.HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
@@ -167,7 +167,7 @@ async def test_claim_key_change_refuses_unverifiable_envelope_but_keeps_original
 
 async def test_background_polling_never_reissues_unclaimed_challenge(installed, served_setup, source):
     daemon, _, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
     first = daemon.journal.db.execute("SELECT request FROM operation_steps WHERE operation_id=? AND name='native_effects'", (ident,)).fetchone()[0]
     for offset in range(1, 13):
         with patch.object(handoff, "now", return_value=json.loads(first)["expires_at"] + offset * 300):
@@ -182,8 +182,8 @@ async def test_background_polling_never_reissues_unclaimed_challenge(installed, 
 async def test_identical_receipt_replay_is_idempotent_in_every_terminal_state(installed, served_setup, source, tmp_path, terminal):
     from bat_agent_connector.operations import UNCERTAIN_RETRY_S
     daemon, _, _ = installed
-    _, ident = await connections._r2_waiting(installed, served_setup, source)
-    native = await connections._r2_dispatch(served_setup, ident)
+    _, ident = await connections.waiting_connection(installed, served_setup, source)
+    native = await connections.claim_handoff(served_setup, ident)
     outcome = {"succeeded": "applied", "failed": "refused", "cancelled": "uncertain"}[terminal]
     (status, response), receipt = await connections.DiskParticipant(tmp_path / "participant.json").send(served_setup, native, outcome=outcome)
     assert status == 200, response
@@ -196,6 +196,7 @@ async def test_identical_receipt_replay_is_idempotent_in_every_terminal_state(in
     status, replay = await served_setup("POST", connections.RECEIPT, receipt)
     assert status == 200 and replay["replayed"] is True
     different = {**receipt, "roles": [{"role": "inventory", "before_digest": "e" * 64, "after_digest": "e" * 64}]}
-    status, refused = await served_setup("POST", connections.RECEIPT, different)
-    assert status == 409 and refused["error"]["code"] == "CONNECTION_OPERATION_TERMINAL"
+    for other in (different, {**receipt, "challenge": "0" * 64}, {**receipt, "epoch": receipt["epoch"] + 1}):
+        status, refused = await served_setup("POST", connections.RECEIPT, other)
+        assert status == 409 and refused["error"]["code"] == "CONNECTION_OPERATION_TERMINAL"
     assert daemon.ops.get(ident)["status"] == terminal

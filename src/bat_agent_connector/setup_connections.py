@@ -9,7 +9,7 @@ from . import connection_handoff as handoff
 from . import dashboard_sync, platform_files
 from . import managed_setup as setup
 from .connection_source_descriptor import build_source_descriptor
-from .operations import ActionDef, NeedsAttention, OperationError, Uncertain, Wait
+from .operations import TERMINAL, ActionDef, NeedsAttention, OperationError, Uncertain, Wait
 
 PARAMS = frozenset({"source", "source_reference", "remote_profile_id", "service_ref", "workspace_ref",
                     "label", "preferences", "server_configuration"})
@@ -118,6 +118,27 @@ def _decode(row):
     return value
 
 
+def _require_connection_available(ops, principal_id, target):
+    if "connection_id" not in target:
+        return  # Creates mint independent IDs from their accepted operations.
+    row = ops.db.execute("""SELECT operation_id FROM operations
+        WHERE action IN ('setup.connection.apply','connection.reference.apply')
+        AND status NOT IN ('succeeded','failed','cancelled')
+        AND json_extract(external_refs,'$.admission_binding.principal_id')=?
+        AND json_extract(target,'$.installation_ref')=? AND json_extract(target,'$.connection_id')=?
+        ORDER BY created_at,operation_id LIMIT 1""",
+        (principal_id, target["installation_ref"], target["connection_id"])).fetchone()
+    if row:
+        raise OperationError("CONNECTION_BUSY", f"Connection operation {row['operation_id']} is still open; finish or cancel it first / "
+            f"連線操作 {row['operation_id']} 尚未完成；請先完成或取消該操作", 409)
+
+
+def revision_matches(ops, operation):
+    binding = operation["external_refs"]["admission_binding"]
+    before = _row(ops, binding["principal_id"], operation["target"])
+    return (before["revision"] if before else 0) == operation["preconditions"]["expected_revision"]
+
+
 def _choices(ops, params, descriptor, config=None):
     service, workspace = params.get("service_ref"), params.get("workspace_ref")
     if service is not None:
@@ -163,6 +184,7 @@ def _plan(ops, principal, action, target, params, pre):
         raise OperationError("NOT_FOUND", "Connection not found in this principal and installation", 404)
     if pre["expected_revision"] != (before["revision"] if before else 0):
         _changed("Connection revision changed; review again")
+    _require_connection_available(ops, identity["principal_id"], target)
     fields = ("label", "preferences", "service_ref", "workspace_ref", "remote_profile_id")
     if not before and not (PARAMS - {"server_configuration"}) <= params.keys():
         raise OperationError("INVALID_PARAMS", "Create needs the full connection choices and a source", 422)
@@ -266,13 +288,16 @@ def _authorize(ops, principal, operation, verb):
     _require_intent(operation)
     if operation["action"] == "setup.connection.apply":
         setup._installation(ops.context["daemon"], principal)
-        if (verb == "cancel" and operation["status"] not in {"succeeded", "failed", "cancelled", "needs_attention"}
-                and (operation.get("external_refs") or {}).get("native_effects_sent")):
+        if verb == "cancel" and operation["status"] not in TERMINAL:
             row = ops.db.execute("SELECT response FROM operation_steps WHERE operation_id=? AND name=?",
                 (operation["operation_id"], handoff.STEP)).fetchone()
             history = handoff.receipts(row) if row else []
             receipt = history[-1] if history else None
-            if not receipt or receipt["outcome"] != "refused":
+            if receipt and receipt["outcome"] != "uncertain":
+                raise OperationError("CONNECTION_EFFECT_PROVEN", "The native outcome is proven; resume its completion instead of abandoning it / "
+                    "本機結果已有確定回執；請恢復完成原操作，不能放棄已證實的效果", 409)
+            if (operation["status"] != "needs_attention"
+                    and (operation.get("external_refs") or {}).get("native_effects_sent")):
                 raise OperationError("CONNECTION_EFFECT_PENDING", "Read back the dispatched native effect before cancelling", 409)
 
 
@@ -288,8 +313,14 @@ def _require_intent(operation):
 def abandon(ops, principal, operation):
     """Record one human decision, preserving all uncertain evidence and unrelated locks."""
     with ops.journal.tx():
+        if ops._running(operation["operation_id"]):
+            raise OperationError("CONNECTION_OPERATION_RUNNING", "Wait for the current runner to exit before cancelling / "
+                "請等待目前的執行程序退出後再取消", 409)
         row = ops.db.execute("SELECT * FROM operation_steps WHERE operation_id=? AND name=?",
             (operation["operation_id"], handoff.STEP)).fetchone()
+        history = handoff.receipts(row) if row else []
+        if history and history[-1]["outcome"] != "uncertain":
+            raise OperationError("CONNECTION_EFFECT_PROVEN", "A definitive native receipt cannot be abandoned / 不能放棄已有確定回執的本機效果", 409)
         if row:
             decision = {"code": "LOCAL_EFFECT_NEVER_PROVEN", "outcome": "local effect never proven", "actor": principal.actor}
             saved = {"receipts": handoff.receipts(row), "decisions": [decision]}
@@ -314,6 +345,9 @@ def _save(ctx):
     target = {**ctx.target, "connection_id": ctx.target.get("connection_id") or "conn_" + ctx.operation_id[3:]}
     before = _row(ctx.service, binding["principal_id"], target)
     if (before["revision"] if before else 0) != ctx.preconditions["expected_revision"]:
+        if ctx.op["action"] == "setup.connection.apply":
+            raise NeedsAttention("CONNECTION_PROJECTION_CHANGED", "Native outcome is proven but the connection revision changed; reconcile the original operation / "
+                "本機結果已證實，但連線版本已變更；請協調原操作的投影")
         _changed("Connection revision changed before saving; review again")
     descriptor = binding["source_descriptor"]
     choices = binding["projection"]
@@ -351,9 +385,8 @@ async def _native(ctx):
     if not row:
         ctx.check_cancel()
         handoff.prepare(ctx)
-        raise Wait("waiting_external", "Connector association saved; native connection receipt pending")
+        raise Wait("waiting_external", "Connection intent accepted; waiting for native receipt before saving the association / 連線意圖已接受；等待本機回執後儲存關聯")
     request = json.loads(row["request"])
-    request = handoff.renew_unclaimed(ctx, request)
     history = handoff.receipts(row)
     if not history:
         if handoff.now() > request["expires_at"]:
@@ -361,7 +394,7 @@ async def _native(ctx):
             if sent:
                 ctx.service._step_status(ctx.operation_id, handoff.STEP, "uncertain")
                 raise Uncertain(handoff.STEP, "Dispatched native effect has no receipt; read back the original effect")
-        raise Wait("waiting_external", "Waiting for the original native effect receipt")
+        raise Wait("waiting_external", "Waiting for the original native effect receipt before saving the association / 等待原本機效果回執後儲存關聯")
     receipt = history[-1]
     if receipt["outcome"] == "uncertain":
         ctx.service._step_status(ctx.operation_id, handoff.STEP, "uncertain")
@@ -393,6 +426,11 @@ async def _run(ctx):
             raise Uncertain(handoff.STEP, "Native receipt needs reconciliation under the original operation") from None
     # A successful operation and its projection become visible in the same commit.
     try:
+        if ctx.op["action"] == "setup.connection.apply":
+            # Keep proven local evidence linked even if the following projection transaction cannot commit.
+            ctx.set_refs(connection_id=ctx.target.get("connection_id") or "conn_" + ctx.operation_id[3:],
+                receipt_refs=[item["receipt_ref"] for item in handoff.receipts(ctx.service.db.execute(
+                    "SELECT response FROM operation_steps WHERE operation_id=? AND name=?", (ctx.operation_id, handoff.STEP)).fetchone())])
         with ctx.service.journal.tx():
             result = ctx.effect("connection_binding", lambda: _save(ctx), request={
                 "installation_ref": ctx.target["installation_ref"], "expected_revision": ctx.preconditions["expected_revision"]})
@@ -401,6 +439,11 @@ async def _run(ctx):
             ctx.service._transition(ctx.operation_id, "succeeded", result=result)
     except OSError:
         raise Uncertain("connection_binding", "Projection and success receipt need the original transaction replay") from None
+    except OperationError as error:
+        if ctx.op["action"] == "setup.connection.apply":
+            raise NeedsAttention("CONNECTION_COMPLETION_BLOCKED", f"Proven native receipt retained; completion requires attention ({error.code}) / "
+                "已保留確定的本機回執；完成原操作需要處理") from None
+        raise
     return result
 
 

@@ -647,6 +647,9 @@ class OperationService:
             refs["resolved_params"] = _resolved_params
         now = time.time()
         with self.journal.tx():
+            if action in {"setup.connection.apply", "connection.reference.apply"}:
+                from .setup_connections import _require_connection_available
+                _require_connection_available(self, binding["principal_id"], target)
             from .pm_overview_assessments import ACTION as OVERVIEW_ACTION
             from .pm_overview_assessments import admit_operation as admit_overview
             if action == OVERVIEW_ACTION:
@@ -738,8 +741,11 @@ class OperationService:
         if op["status"] in TERMINAL:
             return op
         if op["action"] == "setup.connection.apply" and op["status"] == "needs_attention":
-            from .setup_connections import abandon
-            return abandon(self, principal, op)
+            open_step = self.db.execute("SELECT name FROM operation_steps WHERE operation_id=? "
+                "AND status IN ('started','uncertain') ORDER BY seq DESC LIMIT 1", (operation_id,)).fetchone()
+            if open_step and open_step["name"] == "native_effects":
+                from .setup_connections import abandon
+                return abandon(self, principal, op)
         if op["action"] == "worktree.merge":
             from .worktree_merge_operations import cancel
             return cancel(self, principal, op)
@@ -806,6 +812,9 @@ class OperationService:
         if op["status"] != "needs_attention":
             raise OperationError("NOT_RESUMABLE", f"only needs_attention operations resume (this one is "
                                  f"{op['status']})", 409)
+        if op["action"] == "setup.connection.apply":
+            from .connection_handoff import renew_unclaimed
+            renew_unclaimed(self, op)
         op = self._transition(operation_id, "running", reason=f"resumed by {principal.actor}", uncertain_tries=0,
                               actor=principal.actor)
         if op["action"] == "session.approve_pending":
