@@ -94,15 +94,14 @@ test('real writer snapshots distinguish retained requests from ordinary text', a
   for (const name of ['start', 'published', 'dispatch', 'orchestrate', 'labels', 'forms']) {
     const rows = JSON.parse(readFileSync(new URL(`./fixtures/earlier-drafts-${name}.json`, import.meta.url), 'utf8'));
     for (const row of rows) {
-      const value = JSON.parse(row.raw), local = new MemoryStorage();
+      const local = new MemoryStorage();
       local.setItem(`batc.sync.${old()}`, JSON.stringify({cursor: 1, token: 'fixture-proof'}));
       local.setItem(`batc.${row.family}.${old()}${row.suffix ? '.' + row.suffix : ''}`, row.raw);
       const entries = await earlierDrafts(identity, local);
       assert.ok(entries.length, row.family);
-      const state = value.intent || value.submission || value.accept ? 'possibly-sent' : 'draft';
-      assert.ok(entries.every(entry => entry.state === state), row.family + ' ' + state);
+      assert.ok(entries.every(entry => entry.state === row.expected.state), row.family + ' ' + row.expected.state);
       assert.ok(entries.every(entry => entry.field && entry.href.startsWith('#/')), row.family);
-      assert.deepEqual(entries.map(entry => entry.text), draftText(row.family, row.suffix, row.raw).map(field => field.text));
+      assert.deepEqual(entries.map(({field, text}) => ({field, text})), row.expected.fields);
     }
   }
 });
@@ -133,7 +132,7 @@ test('unreadable sibling key never becomes an ordinary draft', async () => {
 });
 
 test('generated continuation, repair prompts, hidden titles and seeded goals are not authored drafts', () => {
-  assert.deepEqual(draftText('draft', 'continue.cp_fixture', JSON.stringify({text: 'Generated Work summary', attachments: []})), []);
+  assert.deepEqual(draftText('draft', 'continue.cp_fixture.wi_fixture', JSON.stringify({text: 'Generated Work summary', attachments: []})), []);
   assert.deepEqual(draftText('dispatch', 'prj_' + 'a'.repeat(20) + '.wi_' + 'b'.repeat(20), JSON.stringify({prompt: 'Server repair instructions', title: ''})), []);
   assert.deepEqual(draftText('pm', 'overview-assessment.ws_fixture.pm.thread.create.{"workspace_id":"ws_fixture"}',
     JSON.stringify({version: 1, values: {title: 'Project overview assessment', _version: '1', _refs: '[]'}})), []);
@@ -194,12 +193,66 @@ test('ambiguous session names link to the session list without guessing the host
 test('recovery warnings and field labels have matching English and Traditional Chinese strings', async () => {
   const {earlierDraftStrings} = await import('../src/earlier-drafts-strings.js');
   const {earlierFieldLabel} = await import('../src/earlier-drafts.js');
+  const {pmText, collections, formText} = await import('../src/state/earlier-drafts.ts');
+  const {actionMessageKey} = await import('../src/global-labels.js');
+  const {STRINGS} = await import('../src/i18n.js');
+  const fields = [...Object.values(pmText).flat(), ...Object.values(formText).flat(), 'reason_0',
+    ...Object.values(collections).flatMap(value => Object.entries(value).flatMap(([name, fields]) => fields.map(field => `${name}.0.${field}`)))];
   assert.deepEqual(Object.keys(earlierDraftStrings.en).sort(), Object.keys(earlierDraftStrings['zh-TW']).sort());
   for (const locale of ['en', 'zh-TW']) {
     const strings = earlierDraftStrings[locale], t = (key: string) => strings[key] || key;
     assert.ok(Object.values(strings).every(value => typeof value === 'string' && value.trim()));
-    for (const field of ['title', 'goal', 'rationale', 'reason_0', 'follow_ups.0.verification', 'items.1.prompt', 'reviewText'])
+    for (const action of Object.keys(pmText)) assert.ok(STRINGS[locale][actionMessageKey(action)], `${locale}: ${action}`);
+    for (const field of fields)
       assert.ok(!earlierFieldLabel(t, field).includes('earlier_field_'), `${locale}: ${field}`);
     assert.equal(earlierFieldLabel(t, 'reason_0'), t('earlier_field_reason') + ' 1');
   }
+});
+
+test('session continuation instructions survive while generated Work continuation stays excluded', async () => {
+  const local = new MemoryStorage(), checkpoint = 'cp_' + 'a'.repeat(32), work = 'wi_' + 'b'.repeat(20);
+  local.setItem(`batc.sync.${old()}`, JSON.stringify({cursor: 1, token: 'fixture-proof'}));
+  const key = `batc.draft.${old()}.continue.${checkpoint}`;
+  local.setItem(key, JSON.stringify({text: 'My continuation instructions', attachments: [], fields: {agent: 'claude'}}));
+  local.setItem(`${key}.${work}`, JSON.stringify({text: 'Generated Work summary', attachments: [], fields: {agent: 'claude'}}));
+  let entries = await earlierDrafts(identity, local);
+  assert.deepEqual(entries.map(({field, text, state}) => ({field, text, state})), [
+    {field: 'text', text: 'My continuation instructions', state: 'draft'},
+  ]);
+  local.setItem(key, JSON.stringify({text: 'My continuation instructions', attachments: [], submission: {
+    key: 'original-key', operation_id: 'op_' + 'c'.repeat(32), request: {action: 'checkpoint.continue', target: {checkpoint_id: checkpoint}, params: {instructions: 'My continuation instructions', agent: 'claude'}, preconditions: {}},
+  }}));
+  entries = await earlierDrafts(identity, local);
+  assert.equal(entries[0].state, 'possibly-sent'); assert.equal(entries[0].href, '#/op/op_' + 'c'.repeat(32));
+});
+
+test('artifact capture does not send review text; acceptance does', async () => {
+  const local = new MemoryStorage();
+  local.setItem(`batc.sync.${old()}`, JSON.stringify({cursor: 1, token: 'fixture-proof'}));
+  const row = JSON.parse(readFileSync(new URL('./fixtures/earlier-drafts-forms.json', import.meta.url), 'utf8'))[4];
+  const value = JSON.parse(row.raw), key = `batc.artifact-review.${old()}.${row.suffix}`;
+  // The capture writer sends only the preview token and expected fingerprint.
+  value.capture = {key: 'capture-key', actor: identity.actor, operation_id: 'op_' + 'd'.repeat(32), request: {
+    action: 'artifact.capture.managed', target: {preview_id: 'acpv_' + 'e'.repeat(32)},
+    params: {preview_token: 'fixture-preview'}, preconditions: {expected_fingerprint: 'f'.repeat(64)},
+  }};
+  local.setItem(key, JSON.stringify(value));
+  const [entry] = await earlierDrafts(identity, local);
+  assert.equal(entry.state, 'draft'); assert.deepEqual(entry.operations, []);
+  value.accept = {key: 'accept-key', operation_id: 'op_' + 'a'.repeat(32)};
+  local.setItem(key, JSON.stringify(value));
+  const [accepted] = await earlierDrafts(identity, local);
+  assert.equal(accepted.state, 'possibly-sent'); assert.deepEqual(accepted.operations, ['op_' + 'a'.repeat(32)]);
+});
+
+test('nested PM launch metadata does not replace the target after the action', async () => {
+  const local = new MemoryStorage(), workspace = 'ws_' + 'a'.repeat(32);
+  local.setItem(`batc.sync.${old()}`, JSON.stringify({cursor: 1, token: 'fixture-proof'}));
+  const launch = JSON.stringify({title: 'New discussion', refs: [], from: 'discussions'});
+  const target = JSON.stringify({workspace_id: workspace});
+  local.setItem(`batc.pm.${old()}.discussion.${launch}.pm.thread.create.${target}`, JSON.stringify({version: 1,
+    values: {title: 'Discussion title', content: 'Discussion text'}, intent: {key: 'original-key'}}));
+  const entries = await earlierDrafts(identity, local);
+  assert.equal(entries.length, 2);
+  assert.ok(entries.every(entry => entry.href === `#/pm/${workspace}`));
 });

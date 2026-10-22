@@ -19,11 +19,12 @@ async function snapshot(page: Page, family: string) {
 }
 async function golden(name: string, rows: any[]) {
   const path = new URL(`./fixtures/earlier-drafts-${name}.json`, import.meta.url);
+  const saved = JSON.parse(await readFile(path, 'utf8'));
   if (process.env.UPDATE_EARLIER_DRAFT_FIXTURES === '1') {
     await mkdir(new URL('./fixtures/', import.meta.url), {recursive: true});
-    await writeFile(path, JSON.stringify(rows, null, 2) + '\n');
+    await writeFile(path, JSON.stringify(rows.map((row, index) => ({...row, ...(saved[index]?.expected ? {expected: saved[index].expected} : {})})), null, 2) + '\n');
   }
-  expect(rows).toEqual(JSON.parse(await readFile(path, 'utf8')));
+  expect(rows).toEqual(JSON.parse(await readFile(path, 'utf8')).map(({expected, ...row}: any) => row));
 }
 
 for (const locale of ['en-US', 'zh-TW']) test.describe(locale, () => {

@@ -1,4 +1,5 @@
 import {test, expect, type Page} from '@playwright/test';
+import {holdRecoveryReset, pressRetainedRecoveryControls} from './earlier-drafts-reset-fixture';
 import {readFile} from 'node:fs/promises';
 import {stripTypeScriptTypes} from 'node:module';
 import {unavailableBriefTransport} from './pm-source-transport-fixture';
@@ -73,6 +74,11 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
     expect(await panel.locator('textarea').evaluateAll(nodes => nodes.map(node => (node as HTMLTextAreaElement).value).sort())).toEqual(
       ['Session draft', 'Work title', 'PM draft', 'Follow-up'].flatMap(text => [`${text} one`, `${text} two`]).sort());
     await expect(panel.locator('textarea:not([readonly])')).toHaveCount(0);
+    for (const address of ['http://127.0.0.1:41001/', 'http://127.0.0.1:41002/']) {
+      const sameName = panel.getByRole('textbox', {name: locale === 'zh-TW' ? '工作階段訊息 · 文字' : 'Session message · Text', exact: true});
+      expect(await sameName.evaluateAll((nodes, address) => nodes.filter(node =>
+        document.getElementById(node.getAttribute('aria-describedby') || '')?.textContent?.includes(address)).length, address)).toBe(1);
+    }
     await expect(panel.locator('[data-error-summary], [role=alert]')).toHaveCount(0);
     const row = panel.locator('[data-earlier-draft]').first();
     const copied = await row.locator('textarea').inputValue();
@@ -234,20 +240,55 @@ for (const locale of ['en-US', 'zh-TW']) {
     await context.close();
   });
 
-  test(`resnapshot preserves the open panel, reading position and focused control (${locale})`, async ({browser}) => {
-    const context = await browser.newContext({locale}); const page = await context.newPage();
-    await setup(page, {legacy: true, legacyCursors: [1, 2]});
+  for (const reason of ['cursor_expired', 'cursor_ahead', 'history_changed', 'checkpoint_cursor_mismatch'])
+  test(`resnapshot ${reason} suspends controls and preserves the panel, focus and scroll (${locale})`, async ({browser}) => {
+    const context = await browser.newContext({locale, viewport: {width: 1440, height: 600}, permissions: ['clipboard-read', 'clipboard-write']});
+    const page = await context.newPage();
+    await setup(page, {source: 'external'}); await writeForms(page, 'one');
+    await changeIdentity(page, {endpoint: 'http://127.0.0.1:41002/'}); await page.reload(); await writeForms(page, 'two');
+    await changeIdentity(page, {endpoint: 'http://127.0.0.1:41003/', source: 'managed'}); await page.reload();
     await page.evaluate(() => {location.hash = '#/settings?section=about&drafts=earlier';});
-    await expect(page.locator('[data-earlier-draft]')).toHaveCount(4);
-    await page.locator('[data-earlier-draft] button').first().focus();
+    const slot = page.locator('[data-earlier-drafts-slot]'), panel = slot.locator('[data-earlier-drafts]');
+    await expect(slot).toHaveAttribute('data-scan-state', 'complete');
+    await expect(panel.locator('[data-earlier-draft]')).toHaveCount(8);
+    await panel.locator('button').first().focus();
     await page.evaluate(() => {
-      (window as any).__panel = document.querySelector('[data-earlier-drafts]');
-      (window as any).__focused = document.activeElement;
-      (window as any).__storage.reset = true;
+      // Give the reading region a bounded viewport so scroll preservation is nonzero.
+      const main = document.getElementById('main')!;
+      main.style.maxHeight = '400px'; main.style.overflowY = 'auto'; main.scrollTop = 180;
     });
-    await expect.poll(() => page.evaluate(() => (window as any).__storage.bootstraps)).toBeGreaterThan(1);
-    expect(await page.evaluate(() => (window as any).__panel === document.querySelector('[data-earlier-drafts]') && (window as any).__focused === document.activeElement)).toBe(true);
-    await expect(page.locator('[data-earlier-drafts]')).toHaveAttribute('open', '');
+    expect(await page.locator('#main').evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+    await page.evaluate(() => navigator.clipboard.writeText('Before verification'));
+    await holdRecoveryReset(page, reason);
+    await expect.poll(() => page.evaluate(() => (window as any).__recoveryReset.verificationWaiting)).toBe(true);
+    await expect(slot).toHaveAttribute('data-scan-state', 'waiting');
+    const unchanged = async () => {
+      await pressRetainedRecoveryControls(page);
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Before verification');
+      expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.earlier-drafts.')).sort()))
+        .toEqual(await page.evaluate(() => (window as any).__recoveryReset.markers));
+      await expect(panel.locator('[data-earlier-draft]')).toHaveCount(8);
+    };
+    await unchanged();
+    await page.evaluate(() => (window as any).__recoveryReset.releaseVerification());
+    await expect.poll(() => page.evaluate(() => (window as any).__recoveryReset.scanWaiting)).toBe(true);
+    await expect(slot).toHaveAttribute('data-scan-state', 'scanning');
+    await expect.poll(() => page.evaluate(() => (window as any).__recoveryReset.slot !== document.querySelector('[data-earlier-drafts-slot]'))).toBe(true);
+    await unchanged();
+    await page.evaluate(() => (window as any).__recoveryReset.releaseScan());
+    await expect(slot).toHaveAttribute('data-scan-state', 'complete');
+    expect(await page.evaluate(() => {
+      const before = (window as any).__recoveryReset;
+      return before.panel === document.querySelector('[data-earlier-drafts]') && before.focus === document.activeElement
+        && before.scroll === document.getElementById('main')!.scrollTop;
+    })).toBe(true);
+    await expect(panel).toHaveAttribute('open', '');
+    const row = panel.locator('[data-earlier-draft]').first(), text = await row.locator('textarea').inputValue();
+    await row.getByRole('button', {name: labels(locale).copy, exact: true}).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(text);
+    await row.getByRole('button', {name: labels(locale).hide, exact: true}).click();
+    await expect(panel.locator('[data-earlier-draft]')).toHaveCount(7);
+    expect(await page.evaluate(() => (window as any).__storage.writes)).toBe(0);
     await context.close();
   });
 }
