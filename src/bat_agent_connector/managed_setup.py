@@ -601,7 +601,9 @@ async def _run(ctx):
             _require_setup_identity(daemon, binding)
             if _busy(daemon, ctx.operation_id) or _configuration(daemon)[3] != before:
                 raise _error("CONFIGURATION_CHANGED", "Work or configuration changed during verification; review again", 409)
-            platform_files.atomic_write(path, encoded)
+            # Equal revisions mean these exact bytes are already on disk.
+            if before != after:
+                platform_files.atomic_write(path, encoded)
             old = _activate(daemon, config, document, after, runner=runner)
             await asyncio.gather(*(client.close() for client in old), return_exceptions=True)
             return {"configured": True, "revision": after, **proof}

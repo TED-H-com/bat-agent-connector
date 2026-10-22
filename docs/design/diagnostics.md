@@ -9,6 +9,42 @@ telemetry, credentials fallback or central mutation is introduced.
 All OS templates for managed desktop and standalone installations are included;
 the client's OS does not establish the Connector's OS or actual state directory.
 
+## Source reads and compatibility
+
+`batc.diagnostics.v1` evolves additively. Existing `sources` entries retain the
+`available` / `not_available` strings for old consumers. The additional
+`source_reads` map covers `capabilities`, `hosts`, `operations`, `managed_setup`
+and `observation`. Each entry contains `status`, `http_status`, `code` and
+`read_at`; the binary map is derived from this same classification. Readers may
+ignore additional fields. Changing existing field types or enum meanings requires
+a new schema string.
+
+| Status | Meaning |
+| --- | --- |
+| `available` | The read completed and its data passed the current revision fence. |
+| `not_permitted` | Current capabilities lack the required scope; no request is made. |
+| `not_offered` | This installation does not provide the source; no request is made. |
+| `failed` | The attempted read failed, or its data was discarded after access changed. |
+| `not_attempted` | No read was recorded, or failed capabilities prevented deciding whether to read it. |
+
+`read_at` is the client time when a read completed or a decision to skip it was
+made; it is null if no read or decision was recorded. It is not a host observation
+time. Failed reads retain their HTTP status (null for transport failures) and
+validated error code, with `HTTP_ERROR` / `NETWORK_ERROR` fallbacks. A successful
+read discarded by the withdrawal fence has code `SOURCE_ACCESS_CHANGED` and null
+HTTP status; an original refusal keeps its own status and code. Other statuses
+have null HTTP status and code. Server free-text messages are never selected.
+
+Without a successful capabilities read, dependent sources are `not_attempted`,
+not inferred to lack scope. A non-managed installation's setup source is
+`not_offered`; a managed installation without `manage` is `not_permitted`.
+The absent observation status endpoint is `not_offered` and is never probed.
+Each anonymous host additionally retains `last_attempt_at` and `last_success_at`
+through the existing timestamp validator; absent or invalid times stay null.
+Neither `read_at` nor `exported_at` replaces those observations. Unknown counts
+remain null, while counts from a known empty page can remain zero. All additional
+fields pass the unchanged serialized scrubber as the final gate.
+
 The report referenced an observation status endpoint and host `bat`/`policy`
 fields that this base does not supply. This branch has no `/v1/observation/status`;
 its source stays unavailable. `/hosts` supplies reachability, stale reasons and
@@ -58,12 +94,117 @@ existing disclosure. A detached caller that constructs its own Details passes
 Capabilities adds `build: {version, commit, source}`. Git installs use installed
 PEP 610 `direct_url.json` (`vcs_info.commit_id`) only when the distribution's package
 directory resolves to the running package's directory; a different site-packages
-copy cannot identify a checkout on `PYTHONPATH`. Plain packages and editable local
-checkouts without matching VCS metadata have a null commit. A frozen runtime reads only
+copy cannot identify a checkout on `PYTHONPATH`. Wheels read their packaged
+`bat_agent_connector/build-info.json` with `source: package`; conflicting embedded
+and VCS commits produce an unknown commit with `source: vcs`. Packages without
+provenance and editable local checkouts without matching VCS metadata have a null
+commit. A frozen runtime reads only
 its packaged `build-info.json`. No runtime Git process is invoked. The packaging
 job supplies `BATC_BUILD_COMMIT` to PyInstaller and Rust `option_env!`; native
 version comes from `CARGO_PKG_VERSION`. Missing commit means unknown in both
-locales. Browser assets use the serving Connector build and remain reproducible.
+locales. Connector identity comes only from capabilities and identifies the service,
+not the UI loaded in a window.
+The Python build is captured once at module initialization, alongside the loaded
+version; later in-place metadata changes cannot identify that running process.
+
+The Hatch build hook accepts a full 40-hex `BATC_BUILD_COMMIT` (normalized to
+lowercase). In a clean Git checkout it must equal HEAD; a mismatch is unknown.
+Without a valid override, the hook uses that clean checkout's HEAD.
+Dirty tracked inputs always produce an unknown commit, including with an override.
+Outside any checkout, without `PKG-INFO`, an explicit override can identify an
+exported source candidate: there is no independent checkout identity to contradict
+it. This remains a build-time declaration, never a guessed Git identity.
+An sdist carries that attribution into a wheel without consulting an enclosing
+checkout; a conflicting override makes it unknown. No provenance is guessed from
+an archive without it. This commit identifies the build's declared source
+candidate; it does not prove that the wheel's bytes match a published release.
+Release manifests and their verification remain separate.
+
+Editable builds skip provenance and workflow file copies: their imports resolve
+to `src/`, without a partial `bat_agent_connector/` in site-packages. The existing
+distribution-path guard keeps their build identity unknown. Normal Python
+bytecode caches may be created; source and provenance files are not modified.
+
+## Served frontend identity
+
+Connector identifies the UI it serves, separately from its own `build`. On every
+`app.js` or capabilities read it reads the exact stored bytes of the four
+`DASHBOARD_FILES`: `app.css`, `app.js`, `i18n.js`, `index.html`, in that sorted
+order. SHA-256 starts with UTF-8 `batc.frontend.files.v1` and a NUL. For each file
+it hashes decimal UTF-8 name-byte length, `:`, name, NUL, decimal content-byte
+length, NUL, then the exact stored bytes. This includes the placeholder, not the
+transformed response, and can be verified from a wheel or checkout. There is no
+process cache: an in-place upgrade changes the next read's identity.
+
+The committed JS has one fixed, non-hex 64-byte placeholder. When serving `app.js`,
+Connector replaces it with the digest from that same file-set read, preserving
+byte length for GET and HEAD. If the slot is missing or repeated, the file is
+served unchanged and identity is unknown. The other three files are served
+unchanged. This binds identity to the loaded module without a separate identity
+fetch; a loaded tab retains it across later capabilities reads. Reads are not an
+atomic snapshot of a multi-file upgrade, nor an attestation of toolchain, signature
+or release order. The withdrawn build-time source digest made independent
+frontend merges change a shared literal; no aggregate digest is now committed.
+
+Capabilities adds `frontend: {digest}` for the files served at read time.
+`batc.diagnostics.v1` adds `client.frontend_digest` (loaded) and
+`client.served_frontend_digest` (capabilities). Both are validated lowercase
+64-character hex or null; exports retain all 64 characters. About and the summary
+show 12 characters, followed by Connector version, commit and source. When both
+browser identities are known and differ, they explain that the page differs
+from the UI now served and that reloading loads it. This is a mismatch signal,
+not proof of version ordering. Settings reads capabilities again when opened;
+export uses its own fresh capabilities read. Neither replaces loaded identity.
+
+Browser `app_version` and `app_commit` are null, never aliases of Connector.
+Native values still come from `appBuild`, displayed first as Desktop. Native and
+dev leave the placeholder unchanged and report null. Native omits the Frontend
+segment when null; browser always shows it, with unknown when null. No native
+hash algorithm or browser build commit is added. These identities do not prove
+native abilities, reachability, or a readable release name.
+
+## Shared component version facts
+
+`desktop/src/version-projection.js` selects the version facts used by About,
+Diagnostics (summary and JSON) and Updates. The existing readable build line and
+its order remain unchanged. Desktop build, loaded UI digest, served UI digest,
+answering Connector build, bundled/runtime launch observations, PM adapter
+requirements, read BAT-run revisions and the Desktop updater version are separate
+rows; none supplies a missing value for another. Inputs live only in this window
+and connection epoch. Each row names its source and retains the client read time
+or the producer's observation time. Unknown values and times remain null.
+
+The loaded UI row reads the immutable `frontendBuild` in
+`frontend-identity.js`; its client load time is captured once with that module
+identity. The served UI row reads `capabilities.frontend.digest` and keeps the
+capabilities read time. A later read can change only the served value. The
+compatibility fields and the existing Frontend/build line, including the browser
+stale-tab warning, are rendered from these same rows. Native/dev unknown values
+and the first-line ordering retain the served-frontend identity contract above.
+
+Managed status is read through `managed_control` and retains the launch reply's
+original `observed_at`; reading it again does not establish which process is
+answering now. Only a fresh capabilities read supplies that Connector build.
+`runtime_difference` explains the launch comparison without stopping, restarting
+or replacing anything. When the connection is offline, the answering Connector
+and served UI facts are unknown. Earlier launch facts remain explicitly labelled
+as launch observations. A BAT run's immutable provenance is labelled as a past
+run, with its record-update time separately retained from the client read time.
+
+Installation capabilities expose the native adapter's `required_version`, but
+not an observed executable version. Even a rejected older executable exposes
+only `PM_NATIVE_VERSION_UNSUPPORTED`; neither that code nor readiness supplies
+the missing number. BAT run provenance exposes Codex/BAT source revisions, not
+their numeric versions. These facts remain separate, and no historical receipt
+is upgraded to a current installation observation. Installation hints do not
+verify model execution. The producer-owned fixture `pm-version-facts.json` pins
+these limits with empty host paths/config and a real immutable-run read model.
+
+All exported version rows use explicit fields before the existing JSON scrubber;
+raw native status, launch replies, PM runs and credentials are never spread into
+the export. The updater's `current_version` is one independently sourced row;
+its display and the other surfaces use the same projection, including after a
+failed read withdraws that value.
 
 ## Save boundary
 

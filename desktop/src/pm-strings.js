@@ -1,4 +1,5 @@
 import {discussionStrings} from './pm-discussions-strings.js';
+import {pmEffectiveRouteStrings} from './pm-effective-route-strings.js';
 import {resourceStrings} from './pm-resources-strings.js';
 import {workbenchStrings} from './pm-workbench-strings.js';
 import {pmPlanProposalStrings} from './pm-plan-proposal-strings.js';
@@ -18,6 +19,7 @@ import {pmMeetingStrings} from './pm-meetings-strings.js';
 
 export const pmStrings = {
   en: {
+    ...pmEffectiveRouteStrings.en,
     ...workbenchStrings.en,
     ...resourceStrings.en,
     ...pmPlanProposalStrings.en,
@@ -245,6 +247,8 @@ export const pmStrings = {
     pm_workspace_name: 'Workspace name', pm_create_workspace: 'Create workspace', pm_repositories_optional: 'Repositories (optional)',
     pm_repositories: 'Repositories, separated by commas', pm_repository_help: 'Use owner/repository names. These references do not select a BAT host or grant execution access.',
     pm_back_projects: 'Projects and work →', pm_intro: 'Keep ideas, evidence and a planning draft together.', pm_refresh: 'Refresh',
+    pm_availability_unsupported: 'PM workspaces are not supported by this Connector. Use a compatible Connector version.',
+    pm_availability_observe: 'PM workspaces need View access. Reconnect with a credential that has View access.',
     pm_unavailable: 'This Connector does not provide PM workspaces for this account.', pm_no_workspaces: 'No PM workspaces yet.',
     pm_start_title: 'A place to work through an idea', pm_start_help: 'Create a workspace in the left list, then start a discussion. Notes are saved in Connector so you can continue later.',
     pm_new_thread: 'Start an idea discussion', pm_thread_title: 'Discussion title', pm_create_thread: 'Start discussion',
@@ -276,6 +280,7 @@ export const pmStrings = {
     pm_receipt_mismatch: 'The receipt does not match the original request. Its key and draft have been preserved.',
     pm_damaged: 'The saved request cannot be validated. It has been preserved; no replacement will be sent.',
     pm_action_unavailable: 'This action is currently unavailable. Your draft and original request are preserved.',
+    pm_click_interrupted: 'The action was unavailable during this click. Your original request is preserved. Review the current state, then check the original request.',
     pm_stale: 'Could not confirm the current version. Your draft is preserved. Refresh and review before another change.',
     pm_scope_mismatch: 'The response does not belong to the selected workspace and discussion.',
     pm_partial: 'This is a bounded view; older records or additional candidates may not be included.',
@@ -286,6 +291,7 @@ export const pmStrings = {
     pm_slot_resources: 'Resources', pm_slot_risk: 'Risk', pm_slot_quality: 'Quality',
   },
   'zh-TW': {
+    ...pmEffectiveRouteStrings['zh-TW'],
     ...workbenchStrings['zh-TW'],
     ...resourceStrings['zh-TW'],
     ...pmPlanProposalStrings['zh-TW'],
@@ -513,6 +519,8 @@ export const pmStrings = {
     pm_workspace_name: '工作區名稱', pm_create_workspace: '建立工作區', pm_repositories_optional: '儲存庫（選填）',
     pm_repositories: '儲存庫（以逗號分隔）', pm_repository_help: '填入 owner/repository。這些參照不會選定 BAT 主機，也不會取得執行權限。',
     pm_back_projects: '專案與工作 →', pm_intro: '將想法、依據與規劃草稿放在同一處。', pm_refresh: '重新整理',
+    pm_availability_unsupported: '此 Connector 不支援 PM 工作區。請使用相容版本的 Connector。',
+    pm_availability_observe: 'PM 工作區需要檢視權限。請使用具備檢視權限的憑證重新連線。',
     pm_unavailable: '此 Connector 未向目前帳號提供 PM 工作區。', pm_no_workspaces: '尚無 PM 工作區。',
     pm_start_title: '從一個想法開始討論', pm_start_help: '先在左側建立工作區，再開啟討論。筆記會存到 Connector，之後可以接著整理。',
     pm_new_thread: '開啟想法討論', pm_thread_title: '討論標題', pm_create_thread: '開始討論',
@@ -544,6 +552,7 @@ export const pmStrings = {
     pm_receipt_mismatch: '回執與原請求不一致。已保留原 key 與草稿。',
     pm_damaged: '無法驗證已存請求。原資料仍保留，不會另送一筆。',
     pm_action_unavailable: '目前無法執行這項操作。草稿與原請求仍保留。',
+    pm_click_interrupted: '這次點擊期間無法執行這項操作。原請求仍保留；請檢視目前狀態，再查回原請求。',
     pm_stale: '目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。',
     pm_scope_mismatch: '回應不屬於選定的工作區與討論。', pm_partial: '目前只顯示部分紀錄；較早的內容或其他候選想法可能未列入。',
     pm_open_planning: '規劃中仍待釐清', pm_repository_source_required: '儲存庫來源說法需要填入儲存庫參照。', pm_slot_alternatives: '替代方案',

@@ -134,3 +134,32 @@ test('result sources more on the last page focuses the first new child', async (
   const summary = ui.panel.locator('[data-result-child] summary', {hasText: 'Accepted work'});
   await expect(summary).toBeFocused();
 });
+
+for(const lang of ['en','zh-TW'] as const)for(const width of [390,1440])for(const name of ['managed_pending','stale_pending','streaming_pending_permission']){
+  test(`runtime facets result observation ${name} ${lang} ${width}`,async({browser,baseURL})=>{
+    const {runtimeCase}=await import('./session-runtime-fixture.ts');
+    const context=await browser.newContext({baseURL,locale:lang==='en'?'en-US':lang,viewport:{width,height:900}}),page=await context.newPage();
+    const f=attentionFixture(),parent=f.data.items[0],entry=runtimeCase(name);
+    const summary={...parent,links:[],result_artifacts:[],links_truncated:false,artifacts_truncated:false};
+    const dispatch=async(input:any)=>{
+      const path=new URL(input.path,'http://fixture').pathname;
+      if(path.endsWith('/result-sources'))return {status:200,data:{version:1,source:'central_journal',read_at:1790000010,
+        item:{...summary,links:[{kind:'session',ref:'demo/search-results',target:{found:true,title:'Runtime observation',host:'demo',session_id:'search-results'},observation:entry.observation}]},parent:null,derived_from:null,children:[],children_next_cursor:null}};
+      const response=await f.dispatch(input);
+      if(path==='/capabilities')response.data.features.work_item_results={version:1};
+      if(path==='/bootstrap')response.data.capabilities.features.work_item_results={version:1};
+      return response;
+    };
+    await mountAttention(page,false,f,dispatch);await page.goto('/dashboard/#/item/'+parent.work_item_id);
+    const panel=page.locator('[data-result-sources]');await panel.locator(':scope > details > summary').click();
+    const facts=panel.locator('[data-result-runtime-facets]');
+    await expect(facts).toContainText(lang==='en'?'waiting for you in this observation':'此份觀察記錄有待回覆事項');
+    await expect(facts.locator('time')).toHaveAttribute('datetime',new Date(entry.observation.observed_at).toISOString());
+    if(name==='stale_pending'){
+      await expect(facts).toContainText(lang==='en'?'observation is stale':'觀察已過期');
+      await expect(facts).toContainText(lang==='en'?'unknown':'未知');
+      await expect(facts).not.toContainText(lang==='en'?'responding':'正在回覆');
+    }else if(name==='streaming_pending_permission')await expect(facts).toContainText(lang==='en'?'responding':'正在回覆');
+    expect(f.data.writes).toEqual([]);await context.close();
+  });
+}

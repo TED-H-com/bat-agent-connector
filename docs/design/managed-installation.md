@@ -24,6 +24,8 @@ Setup now uses an authenticated active write connection or existing inventory ev
 
 `GET /managed/setup` adds per-host `connection_status` and `connection_checked_at`. `connected` is `null` for unknown reachability. No schema, migration, permission or token-handling changes are introduced. Status is a recent observation, not a continuous network guarantee. Configured installs retain IDs, history, non-secret drafts and original operation keys and never automatically repeat setup.
 
+A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
+
 ## 與「加入機器」共用的契約（待審查）
 
 本節補充上方現行首次設定，未實作新的角色精靈。程式查核基線為 `ebee8196`
@@ -63,8 +65,33 @@ The translation regression checks explicit English/zh-TW entries and variables f
 
 ## Ownership, identity and storage
 
+The managed launch reply and native status distinguish `bundled_runtime` from
+`running_runtime`. Both carry `version`, `commit`, provenance `build_source`,
+observation `source` and an epoch-seconds `observed_at`. The bundle fact is the
+`build_identity()` snapshot this launcher loaded at startup (`this_process`), not
+an installed receipt. The running fact comes from the proven owner's existing
+authenticated capabilities read (`capabilities`), whose build is that service's loaded snapshot.
+Missing identity fields remain null, including for an older service.
+
+`runtime_difference` is `same`, `differs` or `unknown`; either missing commit
+makes it unknown. `differs` means the running service is not that bundle and the
+change waits for the service's next launch. These facts do not trigger replacement,
+restart, stop or refusal. Same-version reuse and the existing version upgrade gates
+are unchanged; readiness is not a build comparison. Native launch/status fields are
+additive and optional, and recovery refreshes the recorded observations. Same-version
+restart/refusal policy and each platform's ensure/stop ownership are owner decisions
+that have not been made.
+
 - The persistent installation manifest binds runtime version, data location, installation actor, server ID and principal ID. Reopening and concurrent clients recover that installation.
 - Central uses kernel file leases, not an occupied port, stale PID or matching path, to enforce a single owner. The endpoint pointer is checked against the owned database, then a challenge verifies the live service before any bearer is sent.
+- Concurrent first clients open an existing POSIX lease without `O_CREAT`, or
+  create it with `O_CREAT | O_EXCL` after `ENOENT`. A losing creator reopens the
+  existing inode; it never replaces or unlinks another client's lease. The shared
+  private-file helper bounds this lookup/create reconciliation to eight pairs and
+  reports `PrivateFileCreateRaceError` (`EAGAIN`) if the leaf keeps changing.
+  Other create errors propagate. Every open keeps `O_NOFOLLOW`, ownership, private
+  mode and single-link checks; truncation still waits for validation. This is
+  file-creation reconciliation, not a retry of `ensure` or application effects.
 - Windows uses private ACLs, verified handles, reparse rejection and native locking. POSIX uses private owned directories/files and process locks. These protections also cover journal, token and atomic configuration publication.
 - The package pins its compressed runtime and executable digests. Installation does not download and execute an unversioned script. The frozen runtime starts without Python or uv on the user's PATH.
 - Browser handoff is short-lived and single-use. The resulting session uses an HttpOnly SameSite cookie plus origin/CSRF checks; this is not a public unauthenticated hosting mode.
@@ -118,14 +145,114 @@ must verify the same identity. A successful rebind advances the bridge generatio
 invalidating in-flight responses and file scopes. A native recovery counter triggers
 fresh navigation/shell reads even when restart produces no event; failed views
 retry through the existing deferred-render guards. Failed initial managed reads
-remain eligible for native recovery; an explicit Disconnect disables it. It retains existing drafts,
-event checkpoints and operation keys, and never resends an application mutation.
+remain eligible for native recovery; an explicit Disconnect disables it. Client state
+across recovery/reset follows the [shared managed resnapshot contract](two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08).
+Managed `/capabilities` and `/bootstrap` both include `desktop_identity`. An
+external central may omit that field from bootstrap; the native bridge still
+checks the bootstrap server/principal against its verified credential identity.
+Missing the optional field alone is not evidence of an account change.
 Disconnect, credential removal or switching configuration cancels a pending rebind.
 External-central connections never use this recovery loop, provision a local
 service or transfer a local credential to another endpoint. Recovery errors appear
 as short English/zh-TW status labels and visible recovery explanations, with a
 fixed diagnostic code in connection details;
 a changed identity stops automatic recovery until the connection is reviewed.
+
+### Verified storage identity and legacy port migration
+
+The native managed route uses `managed:v1:<server_id>:<principal_id>:<actor>`
+(each component URI encoded) for **all** shared-frontend storage. The native
+configuration source must be `managed`, and bootstrap must pass the existing
+identity checks before any view mounts or migration runs. The persistent journal
+`server_id` already distinguishes installations; adding `installation_id` would
+split the same journal unnecessarily. Principal identity includes effective actor,
+scopes and admin status. Workspaces, Works and exact Attempts retain their existing
+key suffixes and request bodies. A runtime port is only the current transport.
+
+Previously, the namespace included the endpoint. The managed runtime selects a
+random port on each start, so relaunching the native app after a service restart
+could hide local drafts, operation keys and checkpoints under the old port. The
+data was still stored. In-session recovery does not activate a new scope and did
+not reproduce that relaunch defect. This explains a reproducible failure mode,
+not a diagnosis of a particular installation without its local evidence.
+
+External-central native connections keep the endpoint in their namespace, even
+when that central advertises a managed installation: the explicit native route,
+not a remote capability, determines the storage rule. Distinct external bindings
+remain isolated. `bridge.rs` continues to reject a bootstrap whose verified server
+or principal changes. Browser clients keep endpoint scopes too: a changed port is
+a different origin with separate localStorage, which this migration cannot read.
+
+Migration runs only into a destination with no scoped data in either localStorage
+or sessionStorage. Exactly one legacy loopback-port scope must have an exact
+`batc.sync.<scope>` key whose encoded server, principal and actor all match the
+verified bootstrap. The checkpoint key delimits the old identity; an action suffix
+on a draft alone is insufficient. Only that complete scope is copied, byte for
+byte, including nested form namespaces. Nothing is submitted or automatically
+retried as part of migration. A matching retained draft can therefore reappear
+after an upgrade even if it looked lost on the previous port.
+
+The originals remain unchanged for rollback. A local
+`batc.storage-migration.<new-scope>` receipt records source, destination, version
+and copy status. A completed receipt prevents deleted/consumed drafts and keys from
+being imported again. A failed copy rolls back only its exact newly written values;
+an interrupted copy or failed rollback retains its marker and refuses activation
+instead of reading a draft separated from its original operation key. This case
+needs explicit recovery; automatic repair is not supported.
+
+Multiple matching old ports are **not** merged or ranked, even when their values
+look identical or one port only has orphan drafts/tab preferences without a
+checkpoint. Existing destination data, missing old checkpoint keys, legacy
+keys without server/principal proof, unrecognized legacy key envelopes, ambiguous namespace boundaries, non-loopback
+endpoints and different identities are left in place. These cases require explicit
+review/export of the retained data; there is no automatic picker or recovery UI in
+this change. Reverting to the old frontend can still read original old-port keys
+when connected at that original endpoint, but later edits in the new scope are not
+copied back automatically.
+
+`batc.sync.<scope>` stores only `{cursor, token}`, not a last-used time or a
+namespace generation. The cursor orders journal events, not local draft edits:
+several restarts can save the same cursor with different drafts. A restored
+journal also retains its `server_id` while its cursor regresses; the B02 backend
+test covers both regression and divergent reuse of a sequence. Thus even a
+unique highest saved cursor does not prove the latest namespace. This migration
+deliberately leaves all such sources untouched. A user with several old scopes
+gets an empty new scope; their old drafts remain available for explicit local
+inspection/export. Recovery requires reviewing the matching identity and choosing
+the intended complete source, including its original operation keys and pending
+requests, after backing up both old and new data. This change supplies no tool
+for that selection or import; copying draft text alone must not replay a pending
+request. Do not clear storage or guess a source from its port or cursor.
+
+The namespace audit covers these durable families uniformly (names below omit
+`batc.`); memory-only consumers use the same verified namespace:
+
+| Stored state | Storage family / scope |
+| --- | --- |
+| Drafts, original operation IDs/keys and sync proof | `draft`, `key`, `sync` |
+| PM forms, intents, handoffs, exact Work/Attempt navigation | `pm.<scope>.*`, nested `pm.*-selection`, `pm.*-navigation`, `pm.governance.selection`, `pm.verifier` |
+| Setup, create, repair, capture and work controls | `managed.setup`, `create`, `repair`, `capture`, `task-control`, `start`, `orchestrate`, `published`, `dispatch` |
+| Resource forms, approvals and cleanup | `labels`, `session-bat`, `permissions`, `artifact-review`, `model-preferences`, `project-skills`, `approvals`, `cleanup.draft`, `cleanup.pending`, `cleanup.intent` |
+| Tab preferences | `tree`, `sessions`, `attention`, `composer-shortcut` |
+| Standalone delivery repository/PR selection | sessionStorage `delivery.<scope>.repo`, `delivery.<scope>.pr` |
+| In-memory view selection and navigation folds | `viewState(namespace, workspaceId, view)` and `pm-workbench` maps, including `project-navigation`; no durable keys to copy |
+
+`ui/view-state.js`, `pm-workbench.js`, project navigation and workbench perspectives use the same new namespace in their
+bounded in-memory maps; they have no durable data to migrate. Delivery selections
+use the same verified scope; the old global `batc.repo` / `batc.pr` hints remain
+untouched and are never adopted because they cannot prove their source. For keys
+outside this namespace and why they may cross sources, use the
+[out-of-namespace key inventory](two-service-isolation.md#every-key-outside-the-connector-namespace).
+Migration does not turn retained native file handles into
+valid handles for a different credential; existing native checks still apply.
+
+`tests/fixtures/managed-bootstrap.json` is produced and drift-checked by
+`tests/test_api_v1_bootstrap_golden.py`, using the real Python bootstrap handler.
+Both recovery and relaunch Playwright specs load this same de-identified response;
+the external-central omission is checked against the real handler too. Regenerate
+the golden with `BATC_UPDATE_BOOTSTRAP_GOLDEN=1 pytest-disktmp uv run pytest -q
+tests/test_api_v1_bootstrap_golden.py`. These are automated contract/transport
+fixtures, not installed Tauri, BAT/model or operating-system restart acceptance.
 
 ### Windows job objects
 
@@ -177,6 +304,57 @@ explicitly launched fixture process tree is reaped for teardown; the product nev
 kills an owner to upgrade. Passing output includes both binary digests and cleanup.
 This supplements clean-profile installation evidence; it does not establish an
 in-place app installer upgrade or acceptance of an operator's existing data.
+
+The publication extension uses the earlier checkout's own Python product source
+with this checkout's supporting test fixtures to produce a real Work/Attempt/Result and a GitHub REST 201 receipt
+in the earlier core's owned journal. Only the outer completion is interrupted;
+receipt rows are not synthesized. That producer releases its journal while its
+FakeGitHub/MockBat peers remain alive. The current core's ordinary `serve` child
+then opens the same data, and `ensure` verifies its ownership and identity. The
+original key resolves the same operation without a second creation call or push;
+immutable Work/Attempt/Result and creation-receipt rows, original events, Result
+API content and manual checkout bytes are checked.
+Only fixture-owned process handles are terminated for fault-case teardown.
+
+The receipt records the old producer version/source hashes and the added time,
+which must be at most 90 seconds including cleanup. The source harness can test
+two actual source revisions locally; distinct frozen binaries remain CI evidence
+for their exact platform/head. Existing Linux and macOS receipts prove continuity
+on their recorded heads; the revised wait needs new native CI evidence. Its
+seed log, fixture setup stages and 40-second thread dump are preserved on failure.
+A test-only audit plugin records monotonic child-start and fixture start/end
+events without replacing subprocess or socket functions. Collection start/end
+events separate test-module imports from fixture setup. Large host arguments
+remain opaque (length and digest only); phase detection reads at most a 128-character
+plain-text prefix. The fixture's own host-call await records duration, and fixture
+setup samples at most twelve main-thread frame locations once per second. Import
+origins and reverse-lookup call stacks identify which checkout owns a slow fake.
+Environment values and frame locals are omitted; the same log redactor is used
+before printing and uploading.
+
+The seed wait fails after 20 seconds without a useful timeline event, or at an
+unconditional 75-second readiness ceiling. Collection/fixture transitions, child
+starts and host-call boundaries count as progress; periodic stack samples, socket diagnostics
+and arbitrary output do not. There are no retries or Intel-specific skips.
+An Intel macOS failure reached readiness at 47.127 seconds despite the former
+45-second limit: the observer-to-first-fixture interval was 10.903 seconds, and
+15 host calls took 26.475 seconds, with the longest call taking 3.855 seconds.
+The 20-second inactivity bound rounds 1.5 times that largest observed progress
+gap up to five seconds. Recent Intel whole-case receipts ranged from 23.602 to
+50.545 seconds; adding one inactivity interval to the slowest receipt and rounding
+up to five seconds gives the 75-second ceiling. The whole-case budget is 90 seconds,
+retaining the former 60 - 45 = 15 seconds for recovery and cleanup. The new core's
+recovery waits are unchanged. The 40-second faulthandler timeout and 60-second
+provider window after readiness also remain unchanged. Numeric-only fake HTTP
+binding and bounded observer argument handling remain in place.
+Linux source measurements and virtual-clock deadline tests establish the rule's
+behavior; the revised wait still needs Intel native CI evidence on its exact head.
+Pytest's `--setup-show` prints fixture completion; the timeline locates slow work.
+macOS retains the existing packaged workspace/identity/busy checks. Windows also
+keeps those checks; its publication path and real OS-vault continuity remain open
+acceptance items.
+This is upgrade evidence: managed downgrade refusal remains unchanged, and the
+separate plain-updater rollback cases cannot stand in for a managed rollback.
 
 The owner explicitly excluded formal signing, Mac notarization, production update channels and Linux persistent native credential enrollment from this delivery. Full human execution of the 46-item real-environment acceptance matrix is user-owned and is not an outstanding agent task. Exclusion does not mean these capabilities or checks were completed. Unknown native BAT merge acknowledgements preserve original work under the [merge contract](worktree-merge.md); its separate human-adjudication API is not a delivery gate.
 

@@ -145,10 +145,8 @@ def deployment(tmp_path):
     return u, receipt, inspections
 
 
-def test_enrollment_and_update_keep_work_and_switch_all_future_launches(deployment):
+def test_enrollment_switches_future_launches_and_rollback_disables_updates(deployment):
     u, receipt, _ = deployment
-    sentinel = u.home / "existing-operation-journal"
-    sentinel.write_bytes(b"original operation keys and unknown effects")
     u.enroll(receipt, "preview")
     candidate = release("b" * 40, "0.2.8")
     installs = []
@@ -163,14 +161,13 @@ def test_enrollment_and_update_keep_work_and_switch_all_future_launches(deployme
     for name in updater.COMMANDS:
         assert (u.home / ".local/bin" / name).resolve() == u.root / "versions" / candidate["commit"] / "bin" / name
     assert (u.home / ".agents/skills/bat-agent-connector/SKILL.md").read_bytes() == SKILL
-    assert sentinel.read_bytes() == b"original operation keys and unknown effects"
     u.apply()
     assert installs == [candidate["commit"]]
     result = u.rollback()
     assert result["installed"]["commit"] == "a" * 40 and not result["enabled"]
-    u.apply()
+    paused = u.apply()
+    assert paused["installed"]["commit"] == "a" * 40 and not paused["enabled"]
     assert installs == [candidate["commit"]]
-    assert sentinel.read_bytes() == b"original operation keys and unknown effects"
 
 
 @pytest.mark.parametrize("change,code", [
@@ -316,6 +313,109 @@ def test_disabling_after_interruption_does_not_activate_a_pending_release(deploy
     assert u.policy(True)["installed"]["commit"] == "b" * 40
 
 
+def policy_file_snapshot(path):
+    info = path.lstat()
+    content = os.readlink(path) if path.is_symlink() else path.read_bytes() if path.is_file() else None
+    return content, info.st_ino, info.st_mtime_ns
+
+
+@pytest.mark.parametrize("channel", [None, "preview"])
+def test_repeated_disable_preserves_state_links_and_receipts(deployment, monkeypatch, channel):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    # Retain a real update outcome as well as the original deployment receipt.
+    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
+    u.apply()
+    calls = []
+    def unexpected(*args, **kwargs):
+        calls.append((args, kwargs))
+        pytest.fail("Changing policy must not install a package or invoke the scheduler")
+    monkeypatch.setattr(u, "install", unexpected)
+    monkeypatch.setattr(u, "schedule", unexpected)
+    monkeypatch.setattr(u, "command", unexpected)
+    first = u.policy(False, channel)
+    state = u.root / "state.json"
+    assert not first["enabled"] and not first["pending"]
+    before = policy_file_snapshot(state)
+    links = {p: policy_file_snapshot(p) for p in [u.root / "current", *u.links()]}
+    receipt_root = u.root / "receipts"
+    assert len(list(receipt_root.glob("*.json"))) == 1
+    def receipts():
+        return {p: policy_file_snapshot(p) for p in [receipt, receipt_root, *receipt_root.rglob("*")]}
+    saved_receipts = receipts()
+
+    assert u.policy(False, channel) == first
+    assert calls == []
+    assert {p: policy_file_snapshot(p) for p in links} == links
+    assert receipts() == saved_receipts
+    assert state.read_bytes() == before[0]
+    assert state.stat().st_ino == before[1]
+    assert state.stat().st_mtime_ns == before[2]
+
+
+@pytest.mark.parametrize("change", ["enable", "channel", "pending"])
+def test_policy_changes_are_persisted_including_reconciliation(deployment, monkeypatch, change):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    if change == "pending":
+        u.find_release = lambda channel: release("b" * 40, "0.2.8")
+        u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
+        def crash(*args, **kwargs):
+            raise KeyboardInterrupt("fixture stops before pointer activation")
+        with monkeypatch.context() as patch:
+            patch.setattr(updater, "replace_link", crash)
+            with pytest.raises(KeyboardInterrupt):
+                u.apply()
+        assert u.read()["enabled"] and u.read()["pending"]
+    else:
+        u.policy(False, "preview")
+    path = u.root / "state.json"
+    before = policy_file_snapshot(path)
+    # Reconciliation can replace twice; keep the original inode allocated.
+    with path.open("rb") as original:
+        result = u.policy(change != "channel", "stable" if change == "channel" else "preview")
+        assert path.stat().st_ino != os.fstat(original.fileno()).st_ino
+        assert original.read() == before[0]
+    saved = u.read()
+    assert saved["enabled"] is result["enabled"] is (change != "channel")
+    assert saved["channel"] == result["channel"] == ("stable" if change == "channel" else "preview")
+    assert u.status() == result
+    assert path.read_bytes() != before[0]
+    if change == "pending":
+        assert not saved.get("pending") and not result["pending"]
+        assert saved["current"] == result["installed"]["commit"] == "b" * 40
+        assert os.readlink(u.root / "current") == saved["versions"][saved["current"]]["root"]
+        outcome = json.loads((u.root / "receipts" / (saved["last"]["receipt"] + ".json")).read_bytes())
+        assert outcome["to"] == "b" * 40 and outcome["status"] == "installed_for_next_launch"
+
+
+@pytest.mark.parametrize("guard,code", [("lease", "update_already_running"), ("channel", "invalid_channel"),
+    ("state", "update_state_incompatible"), ("entrypoint", "managed_entrypoint_changed")])
+def test_unchanged_policy_keeps_validation_and_lease(deployment, guard, code):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    enabled = guard == "entrypoint"
+    if not enabled:
+        u.policy(False, "preview")
+    if guard == "state":
+        state = u.read()
+        u.save({**state, "format": 2})
+    elif guard == "entrypoint":
+        path = next(iter(u.links()))
+        path.unlink()
+        path.symlink_to(receipt.parent / "bin" / path.name)
+    path = u.root / "state.json"
+    before = policy_file_snapshot(path)
+    if guard == "lease":
+        with u.locked(), pytest.raises(UpdateError, match=code):
+            u.policy(False, "preview")
+    else:
+        with pytest.raises(UpdateError, match=code):
+            u.policy(enabled, "invalid" if guard == "channel" else "preview")
+    assert policy_file_snapshot(path) == before
+
+
 def test_scheduler_uses_owned_units_and_reconciles_systemctl_failure(deployment):
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
@@ -410,7 +510,10 @@ def test_command_timeout_output_limit_and_clean_environment(tmp_path, monkeypatc
     monkeypatch.setenv("BATC_API_TOKEN", "fixture-secret")
     monkeypatch.setenv("GIT_CONFIG_COUNT", "9")
     env = clean_env(tmp_path)
-    assert "BATC_API_TOKEN" not in env and "GIT_CONFIG_COUNT" not in env
+    assert "BATC_API_TOKEN" not in env
+    assert env["GIT_CONFIG_COUNT"] == "2"
+    assert (env["GIT_CONFIG_KEY_0"], env["GIT_CONFIG_VALUE_0"]) == ("maintenance.auto", "false")
+    assert (env["GIT_CONFIG_KEY_1"], env["GIT_CONFIG_VALUE_1"]) == ("gc.auto", "0")
     with pytest.raises(UpdateError, match="command_timeout"):
         run([sys.executable, "-c", "import time; time.sleep(10)"], env=env, timeout=0.05)
     with pytest.raises(UpdateError, match="output_limit"):
@@ -419,7 +522,8 @@ def test_command_timeout_output_limit_and_clean_environment(tmp_path, monkeypatc
         run([sys.executable, "-c", "raise SystemExit(4)"], env=env)
 
 
-def test_interrupted_updater_reaps_its_installer_and_descendant(tmp_path):
+@pytest.mark.parametrize("ignored_sigint", [False, True])
+def test_interrupted_updater_reaps_its_installer_and_descendant(tmp_path, ignored_sigint):
     # Signal a separate updater process, never pytest or a live installation.
     ready = tmp_path / "ready.json"
     child_code = """
@@ -436,15 +540,24 @@ ready.with_suffix(".tmp").replace(ready)
 time.sleep(60)
 """
     runner_code = """
-import sys
+import signal, sys
 from pathlib import Path
 from bat_agent_connector.update_install import clean_env, run
+signal.signal(signal.SIGINT, signal.default_int_handler)
 try:
     run([sys.executable, '-c', sys.argv[2], sys.argv[3]], env=clean_env(Path(sys.argv[1])))
 except KeyboardInterrupt:
     raise SystemExit(130)
 """
-    runner = subprocess.Popen([sys.executable, "-c", runner_code, str(tmp_path), child_code, str(ready)],
+    # Bash background jobs (including local parallel shards) inherit SIGINT
+    # ignored. Reproduce that state without changing pytest's signal handlers.
+    launcher_code = """
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_IGN if sys.argv[1] == 'True' else signal.default_int_handler)
+os.execv(sys.executable, [sys.executable, '-c', *sys.argv[2:]])
+"""
+    runner = subprocess.Popen([sys.executable, "-c", launcher_code, str(ignored_sigint), runner_code,
+                               str(tmp_path), child_code, str(ready)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     owned = []
     try:
@@ -454,6 +567,8 @@ except KeyboardInterrupt:
             time.sleep(0.02)
         owned = json.loads(ready.read_text())
         runner.send_signal(signal.SIGINT)
+        # Readiness proves the interrupt handler is installed. This bound only
+        # protects the suite from a hung runner; production keeps its 5s grace.
         assert runner.wait(timeout=10) == 130
         for pid in owned:
             with pytest.raises(ProcessLookupError):

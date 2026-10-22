@@ -16,6 +16,7 @@ from bat_agent_connector.config import parse_config
 from bat_agent_connector.errors import ConfigError
 from bat_agent_connector.task_journal import LATEST_DATA_STEP, Journal
 from tests.conftest import adopt
+from tests.test_journal_compatibility import snapshot as journal_snapshot
 
 MANAGED = {"managed_roots": ["/srv/demo"], "legacy_shared_worktrees": True}
 
@@ -301,12 +302,18 @@ def test_a10_host_evidence_migration_is_idempotent_and_persists(tmp_path):
 
 @pytest.mark.parametrize("version", [2, 3, 17])
 def test_host_check_table_is_created_without_consuming_schema_version(tmp_path, version):
-    """A10: observation/delivery/future data steps are independent of this additive table."""
+    """Additive DDL preserves supported steps; unknown future steps must refuse before DDL."""
     path = tmp_path / "tasks.db"
     journal = Journal(path)
     journal.db.execute("DROP TABLE confinement_host_checks")
     journal.db.execute(f"PRAGMA user_version={version}")
     journal.close()
+    if version > LATEST_DATA_STEP:
+        before = journal_snapshot(path)
+        with pytest.raises(ValueError, match="JOURNAL_NEWER_DATA_STEP"):
+            Journal(path)
+        assert journal_snapshot(path) == before
+        return
     journal = Journal(path)
     assert journal.db.execute("SELECT count(*) FROM confinement_host_checks").fetchone()[0] == 0
     assert journal.db.execute("PRAGMA user_version").fetchone()[0] == max(version, LATEST_DATA_STEP)

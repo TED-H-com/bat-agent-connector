@@ -1,0 +1,3317 @@
+{
+  "saved_bat_blocked": {
+    "capabilities": {
+      "features": {
+        "pm_workspaces": {
+          "version": 1,
+          "native_analysis": true,
+          "bat_analysis": true,
+          "installation_eligibility": true,
+          "workspace_adapter": {
+            "version": 1,
+            "action": "pm.workspace.adapter.select"
+          },
+          "work_profiles": {
+            "version": 1,
+            "contract": "work-profile-readiness/v1",
+            "supported": true,
+            "available": true,
+            "write_action": "pm.work_profile.save",
+            "reads": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "mcp_tools": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "routes": {
+              "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+              "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+              "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+            },
+            "required_scopes": {
+              "read": [
+                "observe"
+              ],
+              "write": [
+                "observe",
+                "manage"
+              ]
+            },
+            "reads_never_write": true,
+            "calls_bat": false,
+            "adapters": {
+              "bat": {
+                "discover": "stored_observation_only",
+                "start_owned": "not_probed"
+              }
+            }
+          }
+        }
+      },
+      "scopes": [
+        "manage",
+        "observe",
+        "start"
+      ],
+      "actions": [
+        {
+          "action": "pm.run.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one isolated native turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.run.bat.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one dedicated BAT turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.conversation.propose",
+          "scope": "manage",
+          "summary": "Prepare sourced candidate plan updates for one owner review",
+          "allowed": true
+        }
+      ]
+    },
+    "workspace": {
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "native_analysis": {
+        "adapter": "codex-native-linux",
+        "contract": "codex-pm-linux-v1",
+        "required_version": "0.160.0",
+        "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service",
+        "eligible_for_preflight": true,
+        "options_confirmed": false,
+        "version_verification": "per_run",
+        "auth_validity": "unverified",
+        "model_execution_verified": false,
+        "auth_file_readable": true,
+        "reason": null,
+        "action_registered": true,
+        "authorized": true
+      },
+      "bat_analysis": {
+        "adapter": "bat-pm-linux-v1",
+        "contract": "codex-pm-linux-v1",
+        "action_registered": true,
+        "authorized": true,
+        "eligible_for_preflight": false,
+        "reason": "PM_WORKTREE_REQUIRED",
+        "selected_binding": null,
+        "execution_scope": "frozen_context_only",
+        "runtime_attestation_required": true,
+        "options_confirmed": false,
+        "auth_validity": "unverified",
+        "model_execution_verified": false
+      },
+      "structured_analysis": {
+        "version": 1,
+        "default_adapter": "codex-native-linux",
+        "actions": {
+          "pm.conversation.propose": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.follow_up.analyze": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.continuation.prepare": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.overview.assess": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          }
+        }
+      },
+      "workspace_adapter": {
+        "version": 1,
+        "action": "pm.workspace.adapter.select",
+        "adapters": [
+          "codex-native-linux",
+          "bat-pm-linux-v1"
+        ],
+        "choice": {
+          "adapter": "bat-pm-linux-v1",
+          "continuity": {
+            "accepted_context_ref": null,
+            "accepted_revision_id": null,
+            "carrier_creation_operation_id": null,
+            "carrier_digest": null,
+            "plan_version": 0,
+            "source_operation_ids": []
+          },
+          "execution_authorized": false,
+          "operation_id": "op_00000000000000000000000000000001",
+          "previous_choice": null,
+          "rationale": "Use this bounded PM route",
+          "recorded_at": 1790000000.0,
+          "runtime_preflight": "not_performed",
+          "selected_by": "pm-owner",
+          "successor_started": false,
+          "version": 1,
+          "workspace_id": "ws_11111111111111111111111111111111",
+          "writer_generation": 0
+        },
+        "choice_ref": {
+          "version": 1,
+          "operation_id": "op_00000000000000000000000000000001",
+          "document_digest": "0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "available": true,
+        "reason": null,
+        "preconditions": {
+          "expected_selection_version": 1,
+          "expected_writer_generation": 0,
+          "expected_plan_version": 0,
+          "expected_accepted_revision_id": null,
+          "expected_continuity_digest": "0000000000000000000000000000000000000000000000000000000000000002"
+        },
+        "writer": {
+          "generation": 0,
+          "occupied": false
+        },
+        "runtime_preflight": "not_performed",
+        "execution_authorized": false
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "saved",
+        "adapter": "bat-pm-linux-v1",
+        "choice_ref": {
+          "version": 1,
+          "operation_id": "op_00000000000000000000000000000001",
+          "document_digest": "0000000000000000000000000000000000000000000000000000000000000001"
+        },
+        "ready": false,
+        "reason": "PM_WORKTREE_REQUIRED",
+        "eligible_adapters": [],
+        "adapters": [
+          {
+            "adapter": "bat-pm-linux-v1",
+            "ready": false,
+            "reason": "PM_WORKTREE_REQUIRED"
+          }
+        ],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      }
+    },
+    "profile": {
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "is_default": false,
+      "agent": "claude",
+      "model": null,
+      "delivery_goal": "pull_request",
+      "repository": "o/r",
+      "host": "h1",
+      "workspace_id": "ws-1",
+      "created_at": 1790000000.0,
+      "operation_id": "op_00000000000000000000000000000002",
+      "actor": "pm-owner"
+    },
+    "readiness": {
+      "contract": "work-profile-readiness/v1",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "observed_at": 1790000000.0,
+      "calls_bat": false,
+      "coding_route_ready": false,
+      "work_follow_up": {
+        "route": "bat_work_start",
+        "agent": "claude",
+        "state": "requires_attempt",
+        "reason": "owned_attempt_required",
+        "admission_checked": false
+      },
+      "configured": {
+        "agent": "claude",
+        "model": null,
+        "delivery_goal": "pull_request",
+        "binding": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "ws-1"
+        }
+      },
+      "states": {
+        "discovered": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "signed_in_or_available": {
+          "value": "unknown",
+          "reason": "auth_validity_unverified",
+          "evidence_ref": {
+            "auth_validity": "unverified"
+          },
+          "verified": null
+        },
+        "can_observe": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_start_own": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_continue_own": {
+          "value": "unknown",
+          "reason": "no_owned_session_verified",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "last_verified_execution": {
+          "value": "unknown",
+          "reason": "execution_not_verified",
+          "evidence_ref": null,
+          "verified": null
+        }
+      },
+      "smallest_gap": null,
+      "unverified": [
+        "signed_in_or_available",
+        "can_continue_own",
+        "last_verified_execution"
+      ],
+      "resume": {
+        "kind": "client_draft",
+        "stored_on_server": false
+      },
+      "pm_analysis": {
+        "pm_ready": false,
+        "native_analysis": {
+          "adapter": "codex-native-linux",
+          "contract": "codex-pm-linux-v1",
+          "required_version": "0.160.0",
+          "execution_scope": "frozen_context_only",
+          "execution_location": "connector_service",
+          "eligible_for_preflight": true,
+          "options_confirmed": false,
+          "version_verification": "per_run",
+          "auth_validity": "unverified",
+          "model_execution_verified": false,
+          "auth_file_readable": true,
+          "reason": null,
+          "action_registered": true,
+          "authorized": true
+        },
+        "bat_analysis": {
+          "adapter": "bat-pm-linux-v1",
+          "contract": "codex-pm-linux-v1",
+          "action_registered": true,
+          "authorized": true,
+          "eligible_for_preflight": false,
+          "reason": "PM_WORKTREE_REQUIRED",
+          "selected_binding": null,
+          "execution_scope": "frozen_context_only",
+          "runtime_attestation_required": true,
+          "options_confirmed": false,
+          "auth_validity": "unverified",
+          "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "saved",
+          "adapter": "bat-pm-linux-v1",
+          "choice_ref": {
+            "version": 1,
+            "operation_id": "op_00000000000000000000000000000001",
+            "document_digest": "0000000000000000000000000000000000000000000000000000000000000001"
+          },
+          "ready": false,
+          "reason": "PM_WORKTREE_REQUIRED",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "PM_WORKTREE_REQUIRED"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
+        }
+      }
+    }
+  },
+  "saved_native_ready": {
+    "capabilities": {
+      "features": {
+        "pm_workspaces": {
+          "version": 1,
+          "native_analysis": true,
+          "bat_analysis": true,
+          "installation_eligibility": true,
+          "workspace_adapter": {
+            "version": 1,
+            "action": "pm.workspace.adapter.select"
+          },
+          "work_profiles": {
+            "version": 1,
+            "contract": "work-profile-readiness/v1",
+            "supported": true,
+            "available": true,
+            "write_action": "pm.work_profile.save",
+            "reads": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "mcp_tools": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "routes": {
+              "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+              "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+              "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+            },
+            "required_scopes": {
+              "read": [
+                "observe"
+              ],
+              "write": [
+                "observe",
+                "manage"
+              ]
+            },
+            "reads_never_write": true,
+            "calls_bat": false,
+            "adapters": {
+              "bat": {
+                "discover": "stored_observation_only",
+                "start_owned": "not_probed"
+              }
+            }
+          }
+        }
+      },
+      "scopes": [
+        "manage",
+        "observe",
+        "start"
+      ],
+      "actions": [
+        {
+          "action": "pm.run.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one isolated native turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.run.bat.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one dedicated BAT turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.conversation.propose",
+          "scope": "manage",
+          "summary": "Prepare sourced candidate plan updates for one owner review",
+          "allowed": true
+        }
+      ]
+    },
+    "workspace": {
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "native_analysis": {
+        "adapter": "codex-native-linux",
+        "contract": "codex-pm-linux-v1",
+        "required_version": "0.160.0",
+        "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service",
+        "eligible_for_preflight": true,
+        "options_confirmed": false,
+        "version_verification": "per_run",
+        "auth_validity": "unverified",
+        "model_execution_verified": false,
+        "auth_file_readable": true,
+        "reason": null,
+        "action_registered": true,
+        "authorized": true
+      },
+      "bat_analysis": {
+        "adapter": "bat-pm-linux-v1",
+        "contract": "codex-pm-linux-v1",
+        "action_registered": true,
+        "authorized": true,
+        "eligible_for_preflight": false,
+        "reason": "PM_WORKTREE_REQUIRED",
+        "selected_binding": null,
+        "execution_scope": "frozen_context_only",
+        "runtime_attestation_required": true,
+        "options_confirmed": false,
+        "auth_validity": "unverified",
+        "model_execution_verified": false
+      },
+      "structured_analysis": {
+        "version": 1,
+        "default_adapter": "codex-native-linux",
+        "actions": {
+          "pm.conversation.propose": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.follow_up.analyze": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.continuation.prepare": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.overview.assess": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          }
+        }
+      },
+      "workspace_adapter": {
+        "version": 1,
+        "action": "pm.workspace.adapter.select",
+        "adapters": [
+          "codex-native-linux",
+          "bat-pm-linux-v1"
+        ],
+        "choice": {
+          "adapter": "codex-native-linux",
+          "continuity": {
+            "accepted_context_ref": null,
+            "accepted_revision_id": null,
+            "carrier_creation_operation_id": null,
+            "carrier_digest": null,
+            "plan_version": 0,
+            "source_operation_ids": []
+          },
+          "execution_authorized": false,
+          "operation_id": "op_00000000000000000000000000000003",
+          "previous_choice": {
+            "document_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "operation_id": "op_00000000000000000000000000000001",
+            "version": 1
+          },
+          "rationale": "Use this bounded PM route",
+          "recorded_at": 1790000000.0,
+          "runtime_preflight": "not_performed",
+          "selected_by": "pm-owner",
+          "successor_started": false,
+          "version": 2,
+          "workspace_id": "ws_11111111111111111111111111111111",
+          "writer_generation": 0
+        },
+        "choice_ref": {
+          "version": 2,
+          "operation_id": "op_00000000000000000000000000000003",
+          "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+        },
+        "available": true,
+        "reason": null,
+        "preconditions": {
+          "expected_selection_version": 2,
+          "expected_writer_generation": 0,
+          "expected_plan_version": 0,
+          "expected_accepted_revision_id": null,
+          "expected_continuity_digest": "0000000000000000000000000000000000000000000000000000000000000002"
+        },
+        "writer": {
+          "generation": 0,
+          "occupied": false
+        },
+        "runtime_preflight": "not_performed",
+        "execution_authorized": false
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "saved",
+        "adapter": "codex-native-linux",
+        "choice_ref": {
+          "version": 2,
+          "operation_id": "op_00000000000000000000000000000003",
+          "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+        },
+        "ready": true,
+        "reason": null,
+        "eligible_adapters": [
+          "codex-native-linux"
+        ],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": true,
+            "reason": null
+          }
+        ],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      }
+    },
+    "profile": {
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "is_default": false,
+      "agent": "claude",
+      "model": null,
+      "delivery_goal": "pull_request",
+      "repository": "o/r",
+      "host": "h1",
+      "workspace_id": "ws-1",
+      "created_at": 1790000000.0,
+      "operation_id": "op_00000000000000000000000000000002",
+      "actor": "pm-owner"
+    },
+    "readiness": {
+      "contract": "work-profile-readiness/v1",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "observed_at": 1790000000.0,
+      "calls_bat": false,
+      "coding_route_ready": false,
+      "work_follow_up": {
+        "route": "bat_work_start",
+        "agent": "claude",
+        "state": "requires_attempt",
+        "reason": "owned_attempt_required",
+        "admission_checked": false
+      },
+      "configured": {
+        "agent": "claude",
+        "model": null,
+        "delivery_goal": "pull_request",
+        "binding": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "ws-1"
+        }
+      },
+      "states": {
+        "discovered": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "signed_in_or_available": {
+          "value": "unknown",
+          "reason": "auth_validity_unverified",
+          "evidence_ref": {
+            "auth_validity": "unverified"
+          },
+          "verified": null
+        },
+        "can_observe": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_start_own": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_continue_own": {
+          "value": "unknown",
+          "reason": "no_owned_session_verified",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "last_verified_execution": {
+          "value": "unknown",
+          "reason": "execution_not_verified",
+          "evidence_ref": null,
+          "verified": null
+        }
+      },
+      "smallest_gap": null,
+      "unverified": [
+        "signed_in_or_available",
+        "can_continue_own",
+        "last_verified_execution"
+      ],
+      "resume": {
+        "kind": "client_draft",
+        "stored_on_server": false
+      },
+      "pm_analysis": {
+        "pm_ready": true,
+        "native_analysis": {
+          "adapter": "codex-native-linux",
+          "contract": "codex-pm-linux-v1",
+          "required_version": "0.160.0",
+          "execution_scope": "frozen_context_only",
+          "execution_location": "connector_service",
+          "eligible_for_preflight": true,
+          "options_confirmed": false,
+          "version_verification": "per_run",
+          "auth_validity": "unverified",
+          "model_execution_verified": false,
+          "auth_file_readable": true,
+          "reason": null,
+          "action_registered": true,
+          "authorized": true
+        },
+        "bat_analysis": {
+          "adapter": "bat-pm-linux-v1",
+          "contract": "codex-pm-linux-v1",
+          "action_registered": true,
+          "authorized": true,
+          "eligible_for_preflight": false,
+          "reason": "PM_WORKTREE_REQUIRED",
+          "selected_binding": null,
+          "execution_scope": "frozen_context_only",
+          "runtime_attestation_required": true,
+          "options_confirmed": false,
+          "auth_validity": "unverified",
+          "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "saved",
+          "adapter": "codex-native-linux",
+          "choice_ref": {
+            "version": 2,
+            "operation_id": "op_00000000000000000000000000000003",
+            "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+          },
+          "ready": true,
+          "reason": null,
+          "eligible_adapters": [
+            "codex-native-linux"
+          ],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": true,
+              "reason": null
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
+        }
+      }
+    }
+  },
+  "saved_native_blocked": {
+    "capabilities": {
+      "features": {
+        "pm_workspaces": {
+          "version": 1,
+          "native_analysis": true,
+          "bat_analysis": true,
+          "installation_eligibility": true,
+          "workspace_adapter": {
+            "version": 1,
+            "action": "pm.workspace.adapter.select"
+          },
+          "work_profiles": {
+            "version": 1,
+            "contract": "work-profile-readiness/v1",
+            "supported": true,
+            "available": true,
+            "write_action": "pm.work_profile.save",
+            "reads": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "mcp_tools": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "routes": {
+              "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+              "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+              "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+            },
+            "required_scopes": {
+              "read": [
+                "observe"
+              ],
+              "write": [
+                "observe",
+                "manage"
+              ]
+            },
+            "reads_never_write": true,
+            "calls_bat": false,
+            "adapters": {
+              "bat": {
+                "discover": "stored_observation_only",
+                "start_owned": "not_probed"
+              }
+            }
+          }
+        }
+      },
+      "scopes": [
+        "manage",
+        "observe",
+        "start"
+      ],
+      "actions": [
+        {
+          "action": "pm.run.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one isolated native turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.run.bat.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one dedicated BAT turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.conversation.propose",
+          "scope": "manage",
+          "summary": "Prepare sourced candidate plan updates for one owner review",
+          "allowed": true
+        }
+      ]
+    },
+    "workspace": {
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "native_analysis": {
+        "adapter": "codex-native-linux",
+        "contract": "codex-pm-linux-v1",
+        "required_version": "0.160.0",
+        "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service",
+        "eligible_for_preflight": false,
+        "options_confirmed": false,
+        "version_verification": "per_run",
+        "auth_validity": "unverified",
+        "model_execution_verified": false,
+        "auth_file_readable": false,
+        "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+        "action_registered": true,
+        "authorized": true
+      },
+      "bat_analysis": {
+        "adapter": "bat-pm-linux-v1",
+        "contract": "codex-pm-linux-v1",
+        "action_registered": true,
+        "authorized": true,
+        "eligible_for_preflight": true,
+        "reason": null,
+        "selected_binding": {
+          "host": "h1",
+          "workspace_id": "ws-1",
+          "repository": "o/r"
+        },
+        "execution_scope": "frozen_context_only",
+        "runtime_attestation_required": true,
+        "options_confirmed": false,
+        "auth_validity": "unverified",
+        "model_execution_verified": false
+      },
+      "structured_analysis": {
+        "version": 1,
+        "default_adapter": "codex-native-linux",
+        "actions": {
+          "pm.conversation.propose": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": false,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": false,
+                "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.follow_up.analyze": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": false,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": false,
+                "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.continuation.prepare": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": false,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": false,
+                "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.overview.assess": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": false,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": false,
+                "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          }
+        }
+      },
+      "workspace_adapter": {
+        "version": 1,
+        "action": "pm.workspace.adapter.select",
+        "adapters": [
+          "codex-native-linux",
+          "bat-pm-linux-v1"
+        ],
+        "choice": {
+          "adapter": "codex-native-linux",
+          "continuity": {
+            "accepted_context_ref": null,
+            "accepted_revision_id": null,
+            "carrier_creation_operation_id": null,
+            "carrier_digest": null,
+            "plan_version": 0,
+            "source_operation_ids": []
+          },
+          "execution_authorized": false,
+          "operation_id": "op_00000000000000000000000000000003",
+          "previous_choice": {
+            "document_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "operation_id": "op_00000000000000000000000000000001",
+            "version": 1
+          },
+          "rationale": "Use this bounded PM route",
+          "recorded_at": 1790000000.0,
+          "runtime_preflight": "not_performed",
+          "selected_by": "pm-owner",
+          "successor_started": false,
+          "version": 2,
+          "workspace_id": "ws_11111111111111111111111111111111",
+          "writer_generation": 0
+        },
+        "choice_ref": {
+          "version": 2,
+          "operation_id": "op_00000000000000000000000000000003",
+          "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+        },
+        "available": true,
+        "reason": null,
+        "preconditions": {
+          "expected_selection_version": 2,
+          "expected_writer_generation": 1,
+          "expected_plan_version": 0,
+          "expected_accepted_revision_id": null,
+          "expected_continuity_digest": "0000000000000000000000000000000000000000000000000000000000000004"
+        },
+        "writer": {
+          "generation": 1,
+          "occupied": false
+        },
+        "runtime_preflight": "not_performed",
+        "execution_authorized": false
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "saved",
+        "adapter": "codex-native-linux",
+        "choice_ref": {
+          "version": 2,
+          "operation_id": "op_00000000000000000000000000000003",
+          "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+        },
+        "ready": false,
+        "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+        "eligible_adapters": [],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": false,
+            "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED"
+          }
+        ],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      }
+    },
+    "profile": {
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "is_default": false,
+      "agent": "claude",
+      "model": null,
+      "delivery_goal": "pull_request",
+      "repository": "o/r",
+      "host": "h1",
+      "workspace_id": "ws-1",
+      "created_at": 1790000000.0,
+      "operation_id": "op_00000000000000000000000000000002",
+      "actor": "pm-owner"
+    },
+    "readiness": {
+      "contract": "work-profile-readiness/v1",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "observed_at": 1790000000.0,
+      "calls_bat": false,
+      "coding_route_ready": false,
+      "work_follow_up": {
+        "route": "bat_work_start",
+        "agent": "claude",
+        "state": "requires_attempt",
+        "reason": "owned_attempt_required",
+        "admission_checked": false
+      },
+      "configured": {
+        "agent": "claude",
+        "model": null,
+        "delivery_goal": "pull_request",
+        "binding": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "ws-1"
+        }
+      },
+      "states": {
+        "discovered": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "signed_in_or_available": {
+          "value": "unknown",
+          "reason": "auth_validity_unverified",
+          "evidence_ref": {
+            "auth_validity": "unverified"
+          },
+          "verified": null
+        },
+        "can_observe": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_start_own": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_continue_own": {
+          "value": "unknown",
+          "reason": "no_owned_session_verified",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "last_verified_execution": {
+          "value": "unknown",
+          "reason": "execution_not_verified",
+          "evidence_ref": null,
+          "verified": null
+        }
+      },
+      "smallest_gap": null,
+      "unverified": [
+        "signed_in_or_available",
+        "can_continue_own",
+        "last_verified_execution"
+      ],
+      "resume": {
+        "kind": "client_draft",
+        "stored_on_server": false
+      },
+      "pm_analysis": {
+        "pm_ready": false,
+        "native_analysis": {
+          "adapter": "codex-native-linux",
+          "contract": "codex-pm-linux-v1",
+          "required_version": "0.160.0",
+          "execution_scope": "frozen_context_only",
+          "execution_location": "connector_service",
+          "eligible_for_preflight": false,
+          "options_confirmed": false,
+          "version_verification": "per_run",
+          "auth_validity": "unverified",
+          "model_execution_verified": false,
+          "auth_file_readable": false,
+          "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+          "action_registered": true,
+          "authorized": true
+        },
+        "bat_analysis": {
+          "adapter": "bat-pm-linux-v1",
+          "contract": "codex-pm-linux-v1",
+          "action_registered": true,
+          "authorized": true,
+          "eligible_for_preflight": true,
+          "reason": null,
+          "selected_binding": {
+            "host": "h1",
+            "workspace_id": "ws-1",
+            "repository": "o/r"
+          },
+          "execution_scope": "frozen_context_only",
+          "runtime_attestation_required": true,
+          "options_confirmed": false,
+          "auth_validity": "unverified",
+          "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "saved",
+          "adapter": "codex-native-linux",
+          "choice_ref": {
+            "version": 2,
+            "operation_id": "op_00000000000000000000000000000003",
+            "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+          },
+          "ready": false,
+          "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
+        }
+      }
+    }
+  },
+  "unset_native_ready": {
+    "capabilities": {
+      "features": {
+        "pm_workspaces": {
+          "version": 1,
+          "native_analysis": true,
+          "bat_analysis": true,
+          "installation_eligibility": true,
+          "workspace_adapter": {
+            "version": 1,
+            "action": "pm.workspace.adapter.select"
+          },
+          "work_profiles": {
+            "version": 1,
+            "contract": "work-profile-readiness/v1",
+            "supported": true,
+            "available": true,
+            "write_action": "pm.work_profile.save",
+            "reads": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "mcp_tools": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "routes": {
+              "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+              "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+              "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+            },
+            "required_scopes": {
+              "read": [
+                "observe"
+              ],
+              "write": [
+                "observe",
+                "manage"
+              ]
+            },
+            "reads_never_write": true,
+            "calls_bat": false,
+            "adapters": {
+              "bat": {
+                "discover": "stored_observation_only",
+                "start_owned": "not_probed"
+              }
+            }
+          }
+        }
+      },
+      "scopes": [
+        "manage",
+        "observe",
+        "start"
+      ],
+      "actions": [
+        {
+          "action": "pm.run.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one isolated native turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.run.bat.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one dedicated BAT turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.conversation.propose",
+          "scope": "manage",
+          "summary": "Prepare sourced candidate plan updates for one owner review",
+          "allowed": true
+        }
+      ]
+    },
+    "workspace": {
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "native_analysis": {
+        "adapter": "codex-native-linux",
+        "contract": "codex-pm-linux-v1",
+        "required_version": "0.160.0",
+        "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service",
+        "eligible_for_preflight": true,
+        "options_confirmed": false,
+        "version_verification": "per_run",
+        "auth_validity": "unverified",
+        "model_execution_verified": false,
+        "auth_file_readable": true,
+        "reason": null,
+        "action_registered": true,
+        "authorized": true
+      },
+      "bat_analysis": {
+        "adapter": "bat-pm-linux-v1",
+        "contract": "codex-pm-linux-v1",
+        "action_registered": true,
+        "authorized": true,
+        "eligible_for_preflight": false,
+        "reason": "PM_WORKTREE_REQUIRED",
+        "selected_binding": null,
+        "execution_scope": "frozen_context_only",
+        "runtime_attestation_required": true,
+        "options_confirmed": false,
+        "auth_validity": "unverified",
+        "model_execution_verified": false
+      },
+      "structured_analysis": {
+        "version": 1,
+        "default_adapter": "codex-native-linux",
+        "actions": {
+          "pm.conversation.propose": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.follow_up.analyze": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.continuation.prepare": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.overview.assess": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          }
+        }
+      },
+      "workspace_adapter": {
+        "version": 1,
+        "action": "pm.workspace.adapter.select",
+        "adapters": [
+          "codex-native-linux",
+          "bat-pm-linux-v1"
+        ],
+        "choice": null,
+        "choice_ref": null,
+        "available": true,
+        "reason": null,
+        "preconditions": {
+          "expected_selection_version": 0,
+          "expected_writer_generation": 0,
+          "expected_plan_version": 0,
+          "expected_accepted_revision_id": null,
+          "expected_continuity_digest": "0000000000000000000000000000000000000000000000000000000000000002"
+        },
+        "writer": {
+          "generation": 0,
+          "occupied": false
+        },
+        "runtime_preflight": "not_performed",
+        "execution_authorized": false
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "unset",
+        "adapter": null,
+        "choice_ref": null,
+        "ready": true,
+        "reason": null,
+        "eligible_adapters": [
+          "codex-native-linux"
+        ],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": true,
+            "reason": null
+          },
+          {
+            "adapter": "bat-pm-linux-v1",
+            "ready": false,
+            "reason": "PM_WORKTREE_REQUIRED"
+          }
+        ],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      }
+    },
+    "profile": {
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "is_default": false,
+      "agent": "claude",
+      "model": null,
+      "delivery_goal": "pull_request",
+      "repository": "o/r",
+      "host": "h1",
+      "workspace_id": "ws-1",
+      "created_at": 1790000000.0,
+      "operation_id": "op_00000000000000000000000000000002",
+      "actor": "pm-owner"
+    },
+    "readiness": {
+      "contract": "work-profile-readiness/v1",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "observed_at": 1790000000.0,
+      "calls_bat": false,
+      "coding_route_ready": false,
+      "work_follow_up": {
+        "route": "bat_work_start",
+        "agent": "claude",
+        "state": "requires_attempt",
+        "reason": "owned_attempt_required",
+        "admission_checked": false
+      },
+      "configured": {
+        "agent": "claude",
+        "model": null,
+        "delivery_goal": "pull_request",
+        "binding": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "ws-1"
+        }
+      },
+      "states": {
+        "discovered": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "signed_in_or_available": {
+          "value": "unknown",
+          "reason": "auth_validity_unverified",
+          "evidence_ref": {
+            "auth_validity": "unverified"
+          },
+          "verified": null
+        },
+        "can_observe": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_start_own": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_continue_own": {
+          "value": "unknown",
+          "reason": "no_owned_session_verified",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "last_verified_execution": {
+          "value": "unknown",
+          "reason": "execution_not_verified",
+          "evidence_ref": null,
+          "verified": null
+        }
+      },
+      "smallest_gap": null,
+      "unverified": [
+        "signed_in_or_available",
+        "can_continue_own",
+        "last_verified_execution"
+      ],
+      "resume": {
+        "kind": "client_draft",
+        "stored_on_server": false
+      },
+      "pm_analysis": {
+        "pm_ready": true,
+        "native_analysis": {
+          "adapter": "codex-native-linux",
+          "contract": "codex-pm-linux-v1",
+          "required_version": "0.160.0",
+          "execution_scope": "frozen_context_only",
+          "execution_location": "connector_service",
+          "eligible_for_preflight": true,
+          "options_confirmed": false,
+          "version_verification": "per_run",
+          "auth_validity": "unverified",
+          "model_execution_verified": false,
+          "auth_file_readable": true,
+          "reason": null,
+          "action_registered": true,
+          "authorized": true
+        },
+        "bat_analysis": {
+          "adapter": "bat-pm-linux-v1",
+          "contract": "codex-pm-linux-v1",
+          "action_registered": true,
+          "authorized": true,
+          "eligible_for_preflight": false,
+          "reason": "PM_WORKTREE_REQUIRED",
+          "selected_binding": null,
+          "execution_scope": "frozen_context_only",
+          "runtime_attestation_required": true,
+          "options_confirmed": false,
+          "auth_validity": "unverified",
+          "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": true,
+          "reason": null,
+          "eligible_adapters": [
+            "codex-native-linux"
+          ],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": true,
+              "reason": null
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "PM_WORKTREE_REQUIRED"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
+        }
+      }
+    }
+  },
+  "unset_blocked": {
+    "capabilities": {
+      "features": {
+        "pm_workspaces": {
+          "version": 1,
+          "native_analysis": true,
+          "bat_analysis": true,
+          "installation_eligibility": true,
+          "workspace_adapter": {
+            "version": 1,
+            "action": "pm.workspace.adapter.select"
+          },
+          "work_profiles": {
+            "version": 1,
+            "contract": "work-profile-readiness/v1",
+            "supported": true,
+            "available": true,
+            "write_action": "pm.work_profile.save",
+            "reads": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "mcp_tools": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "routes": {
+              "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+              "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+              "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+            },
+            "required_scopes": {
+              "read": [
+                "observe"
+              ],
+              "write": [
+                "observe",
+                "manage"
+              ]
+            },
+            "reads_never_write": true,
+            "calls_bat": false,
+            "adapters": {
+              "bat": {
+                "discover": "stored_observation_only",
+                "start_owned": "not_probed"
+              }
+            }
+          }
+        }
+      },
+      "scopes": [
+        "manage",
+        "observe",
+        "start"
+      ],
+      "actions": [
+        {
+          "action": "pm.run.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one isolated native turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.run.bat.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one dedicated BAT turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.conversation.propose",
+          "scope": "manage",
+          "summary": "Prepare sourced candidate plan updates for one owner review",
+          "allowed": true
+        }
+      ]
+    },
+    "workspace": {
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "native_analysis": {
+        "adapter": "codex-native-linux",
+        "contract": "codex-pm-linux-v1",
+        "required_version": "0.160.0",
+        "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service",
+        "eligible_for_preflight": false,
+        "options_confirmed": false,
+        "version_verification": "per_run",
+        "auth_validity": "unverified",
+        "model_execution_verified": false,
+        "auth_file_readable": false,
+        "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+        "action_registered": true,
+        "authorized": true
+      },
+      "bat_analysis": {
+        "adapter": "bat-pm-linux-v1",
+        "contract": "codex-pm-linux-v1",
+        "action_registered": true,
+        "authorized": true,
+        "eligible_for_preflight": false,
+        "reason": "PM_WORKTREE_REQUIRED",
+        "selected_binding": null,
+        "execution_scope": "frozen_context_only",
+        "runtime_attestation_required": true,
+        "options_confirmed": false,
+        "auth_validity": "unverified",
+        "model_execution_verified": false
+      },
+      "structured_analysis": {
+        "version": 1,
+        "default_adapter": "codex-native-linux",
+        "actions": {
+          "pm.conversation.propose": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": false,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": false,
+                "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.follow_up.analyze": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": false,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": false,
+                "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.continuation.prepare": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": false,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": false,
+                "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.overview.assess": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": false,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": false,
+                "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": false,
+                "reason": "PM_WORKTREE_REQUIRED",
+                "selected_binding": null,
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          }
+        }
+      },
+      "workspace_adapter": {
+        "version": 1,
+        "action": "pm.workspace.adapter.select",
+        "adapters": [
+          "codex-native-linux",
+          "bat-pm-linux-v1"
+        ],
+        "choice": null,
+        "choice_ref": null,
+        "available": true,
+        "reason": null,
+        "preconditions": {
+          "expected_selection_version": 0,
+          "expected_writer_generation": 0,
+          "expected_plan_version": 0,
+          "expected_accepted_revision_id": null,
+          "expected_continuity_digest": "0000000000000000000000000000000000000000000000000000000000000002"
+        },
+        "writer": {
+          "generation": 0,
+          "occupied": false
+        },
+        "runtime_preflight": "not_performed",
+        "execution_authorized": false
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "unset",
+        "adapter": null,
+        "choice_ref": null,
+        "ready": false,
+        "reason": "no_eligible_adapter",
+        "eligible_adapters": [],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": false,
+            "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED"
+          },
+          {
+            "adapter": "bat-pm-linux-v1",
+            "ready": false,
+            "reason": "PM_WORKTREE_REQUIRED"
+          }
+        ],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      }
+    },
+    "profile": {
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "is_default": false,
+      "agent": "claude",
+      "model": null,
+      "delivery_goal": "pull_request",
+      "repository": "o/r",
+      "host": "h1",
+      "workspace_id": "ws-1",
+      "created_at": 1790000000.0,
+      "operation_id": "op_00000000000000000000000000000002",
+      "actor": "pm-owner"
+    },
+    "readiness": {
+      "contract": "work-profile-readiness/v1",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "observed_at": 1790000000.0,
+      "calls_bat": false,
+      "coding_route_ready": false,
+      "work_follow_up": {
+        "route": "bat_work_start",
+        "agent": "claude",
+        "state": "requires_attempt",
+        "reason": "owned_attempt_required",
+        "admission_checked": false
+      },
+      "configured": {
+        "agent": "claude",
+        "model": null,
+        "delivery_goal": "pull_request",
+        "binding": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "ws-1"
+        }
+      },
+      "states": {
+        "discovered": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "signed_in_or_available": {
+          "value": "unknown",
+          "reason": "auth_validity_unverified",
+          "evidence_ref": {
+            "auth_validity": "unverified"
+          },
+          "verified": null
+        },
+        "can_observe": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_start_own": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_continue_own": {
+          "value": "unknown",
+          "reason": "no_owned_session_verified",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "last_verified_execution": {
+          "value": "unknown",
+          "reason": "execution_not_verified",
+          "evidence_ref": null,
+          "verified": null
+        }
+      },
+      "smallest_gap": null,
+      "unverified": [
+        "signed_in_or_available",
+        "can_continue_own",
+        "last_verified_execution"
+      ],
+      "resume": {
+        "kind": "client_draft",
+        "stored_on_server": false
+      },
+      "pm_analysis": {
+        "pm_ready": false,
+        "native_analysis": {
+          "adapter": "codex-native-linux",
+          "contract": "codex-pm-linux-v1",
+          "required_version": "0.160.0",
+          "execution_scope": "frozen_context_only",
+          "execution_location": "connector_service",
+          "eligible_for_preflight": false,
+          "options_confirmed": false,
+          "version_verification": "per_run",
+          "auth_validity": "unverified",
+          "model_execution_verified": false,
+          "auth_file_readable": false,
+          "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED",
+          "action_registered": true,
+          "authorized": true
+        },
+        "bat_analysis": {
+          "adapter": "bat-pm-linux-v1",
+          "contract": "codex-pm-linux-v1",
+          "action_registered": true,
+          "authorized": true,
+          "eligible_for_preflight": false,
+          "reason": "PM_WORKTREE_REQUIRED",
+          "selected_binding": null,
+          "execution_scope": "frozen_context_only",
+          "runtime_attestation_required": true,
+          "options_confirmed": false,
+          "auth_validity": "unverified",
+          "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unset",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "no_eligible_adapter",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "PM_NATIVE_PLATFORM_UNSUPPORTED"
+            },
+            {
+              "adapter": "bat-pm-linux-v1",
+              "ready": false,
+              "reason": "PM_WORKTREE_REQUIRED"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
+        }
+      }
+    }
+  },
+  "choice_unreadable": {
+    "capabilities": {
+      "features": {
+        "pm_workspaces": {
+          "version": 1,
+          "native_analysis": true,
+          "bat_analysis": true,
+          "installation_eligibility": true,
+          "workspace_adapter": {
+            "version": 1,
+            "action": "pm.workspace.adapter.select"
+          },
+          "work_profiles": {
+            "version": 1,
+            "contract": "work-profile-readiness/v1",
+            "supported": true,
+            "available": true,
+            "write_action": "pm.work_profile.save",
+            "reads": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "mcp_tools": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "routes": {
+              "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+              "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+              "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+            },
+            "required_scopes": {
+              "read": [
+                "observe"
+              ],
+              "write": [
+                "observe",
+                "manage"
+              ]
+            },
+            "reads_never_write": true,
+            "calls_bat": false,
+            "adapters": {
+              "bat": {
+                "discover": "stored_observation_only",
+                "start_owned": "not_probed"
+              }
+            }
+          }
+        }
+      },
+      "scopes": [
+        "manage",
+        "observe",
+        "start"
+      ],
+      "actions": [
+        {
+          "action": "pm.run.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one isolated native turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.run.bat.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one dedicated BAT turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.conversation.propose",
+          "scope": "manage",
+          "summary": "Prepare sourced candidate plan updates for one owner review",
+          "allowed": true
+        }
+      ]
+    },
+    "workspace": {
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "native_analysis": {
+        "adapter": "codex-native-linux",
+        "contract": "codex-pm-linux-v1",
+        "required_version": "0.160.0",
+        "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service",
+        "eligible_for_preflight": true,
+        "options_confirmed": false,
+        "version_verification": "per_run",
+        "auth_validity": "unverified",
+        "model_execution_verified": false,
+        "auth_file_readable": true,
+        "reason": null,
+        "action_registered": true,
+        "authorized": true
+      },
+      "bat_analysis": {
+        "adapter": "bat-pm-linux-v1",
+        "contract": "codex-pm-linux-v1",
+        "action_registered": true,
+        "authorized": true,
+        "eligible_for_preflight": true,
+        "reason": null,
+        "selected_binding": {
+          "host": "h1",
+          "workspace_id": "ws-1",
+          "repository": "o/r"
+        },
+        "execution_scope": "frozen_context_only",
+        "runtime_attestation_required": true,
+        "options_confirmed": false,
+        "auth_validity": "unverified",
+        "model_execution_verified": false
+      },
+      "structured_analysis": {
+        "version": 1,
+        "default_adapter": "codex-native-linux",
+        "actions": {
+          "pm.conversation.propose": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.follow_up.analyze": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.continuation.prepare": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.overview.assess": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": true
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": true,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          }
+        }
+      },
+      "workspace_adapter": {
+        "version": 1,
+        "action": "pm.workspace.adapter.select",
+        "choice": null,
+        "available": false,
+        "reason": "original_sources_unavailable",
+        "preconditions": null
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "unreadable",
+        "adapter": null,
+        "choice_ref": null,
+        "ready": false,
+        "reason": "original_sources_unavailable",
+        "eligible_adapters": [],
+        "adapters": [],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      }
+    },
+    "profile": {
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "is_default": false,
+      "agent": "claude",
+      "model": null,
+      "delivery_goal": "pull_request",
+      "repository": "o/r",
+      "host": "h1",
+      "workspace_id": "ws-1",
+      "created_at": 1790000000.0,
+      "operation_id": "op_00000000000000000000000000000002",
+      "actor": "pm-owner"
+    },
+    "readiness": {
+      "contract": "work-profile-readiness/v1",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "observed_at": 1790000000.0,
+      "calls_bat": false,
+      "coding_route_ready": false,
+      "work_follow_up": {
+        "route": "bat_work_start",
+        "agent": "claude",
+        "state": "requires_attempt",
+        "reason": "owned_attempt_required",
+        "admission_checked": false
+      },
+      "configured": {
+        "agent": "claude",
+        "model": null,
+        "delivery_goal": "pull_request",
+        "binding": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "ws-1"
+        }
+      },
+      "states": {
+        "discovered": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "signed_in_or_available": {
+          "value": "unknown",
+          "reason": "auth_validity_unverified",
+          "evidence_ref": {
+            "auth_validity": "unverified"
+          },
+          "verified": null
+        },
+        "can_observe": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_start_own": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_continue_own": {
+          "value": "unknown",
+          "reason": "no_owned_session_verified",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "last_verified_execution": {
+          "value": "unknown",
+          "reason": "execution_not_verified",
+          "evidence_ref": null,
+          "verified": null
+        }
+      },
+      "smallest_gap": null,
+      "unverified": [
+        "signed_in_or_available",
+        "can_continue_own",
+        "last_verified_execution"
+      ],
+      "resume": {
+        "kind": "client_draft",
+        "stored_on_server": false
+      },
+      "pm_analysis": {
+        "pm_ready": false,
+        "native_analysis": {
+          "adapter": "codex-native-linux",
+          "contract": "codex-pm-linux-v1",
+          "required_version": "0.160.0",
+          "execution_scope": "frozen_context_only",
+          "execution_location": "connector_service",
+          "eligible_for_preflight": true,
+          "options_confirmed": false,
+          "version_verification": "per_run",
+          "auth_validity": "unverified",
+          "model_execution_verified": false,
+          "auth_file_readable": true,
+          "reason": null,
+          "action_registered": true,
+          "authorized": true
+        },
+        "bat_analysis": {
+          "adapter": "bat-pm-linux-v1",
+          "contract": "codex-pm-linux-v1",
+          "action_registered": true,
+          "authorized": true,
+          "eligible_for_preflight": true,
+          "reason": null,
+          "selected_binding": {
+            "host": "h1",
+            "workspace_id": "ws-1",
+            "repository": "o/r"
+          },
+          "execution_scope": "frozen_context_only",
+          "runtime_attestation_required": true,
+          "options_confirmed": false,
+          "auth_validity": "unverified",
+          "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "unreadable",
+          "adapter": null,
+          "choice_ref": null,
+          "ready": false,
+          "reason": "original_sources_unavailable",
+          "eligible_adapters": [],
+          "adapters": [],
+          "model_execution_verified": false,
+          "execution_authorized": false
+        }
+      }
+    }
+  },
+  "scope_missing": {
+    "capabilities": {
+      "features": {
+        "pm_workspaces": {
+          "version": 1,
+          "native_analysis": true,
+          "bat_analysis": true,
+          "installation_eligibility": true,
+          "workspace_adapter": {
+            "version": 1,
+            "action": "pm.workspace.adapter.select"
+          },
+          "work_profiles": {
+            "version": 1,
+            "contract": "work-profile-readiness/v1",
+            "supported": true,
+            "available": true,
+            "write_action": "pm.work_profile.save",
+            "reads": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "mcp_tools": [
+              "pm_work_profiles_list",
+              "pm_work_profile_get",
+              "pm_work_profile_readiness_get"
+            ],
+            "routes": {
+              "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+              "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+              "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+            },
+            "required_scopes": {
+              "read": [
+                "observe"
+              ],
+              "write": [
+                "observe",
+                "manage"
+              ]
+            },
+            "reads_never_write": true,
+            "calls_bat": false,
+            "adapters": {
+              "bat": {
+                "discover": "stored_observation_only",
+                "start_owned": "not_probed"
+              }
+            }
+          }
+        }
+      },
+      "scopes": [
+        "manage",
+        "observe"
+      ],
+      "actions": [
+        {
+          "action": "pm.run.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one isolated native turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.run.bat.analyze",
+          "scope": "manage",
+          "summary": "Analyze a frozen PM discussion in one dedicated BAT turn",
+          "allowed": true
+        },
+        {
+          "action": "pm.conversation.propose",
+          "scope": "manage",
+          "summary": "Prepare sourced candidate plan updates for one owner review",
+          "allowed": true
+        }
+      ]
+    },
+    "workspace": {
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "native_analysis": {
+        "adapter": "codex-native-linux",
+        "contract": "codex-pm-linux-v1",
+        "required_version": "0.160.0",
+        "execution_scope": "frozen_context_only",
+        "execution_location": "connector_service",
+        "eligible_for_preflight": true,
+        "options_confirmed": false,
+        "version_verification": "per_run",
+        "auth_validity": "unverified",
+        "model_execution_verified": false,
+        "auth_file_readable": true,
+        "reason": null,
+        "action_registered": true,
+        "authorized": false
+      },
+      "bat_analysis": {
+        "adapter": "bat-pm-linux-v1",
+        "contract": "codex-pm-linux-v1",
+        "action_registered": true,
+        "authorized": false,
+        "eligible_for_preflight": true,
+        "reason": null,
+        "selected_binding": {
+          "host": "h1",
+          "workspace_id": "ws-1",
+          "repository": "o/r"
+        },
+        "execution_scope": "frozen_context_only",
+        "runtime_attestation_required": true,
+        "options_confirmed": false,
+        "auth_validity": "unverified",
+        "model_execution_verified": false
+      },
+      "structured_analysis": {
+        "version": 1,
+        "default_adapter": "codex-native-linux",
+        "actions": {
+          "pm.conversation.propose": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": false
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": false,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.follow_up.analyze": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": false
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": false,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.continuation.prepare": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": false
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": false,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          },
+          "pm.overview.assess": {
+            "adapters": [
+              {
+                "adapter": "codex-native-linux",
+                "contract": "codex-pm-linux-v1",
+                "required_version": "0.160.0",
+                "execution_scope": "frozen_context_only",
+                "execution_location": "connector_service",
+                "eligible_for_preflight": true,
+                "options_confirmed": false,
+                "version_verification": "per_run",
+                "auth_validity": "unverified",
+                "model_execution_verified": false,
+                "auth_file_readable": true,
+                "reason": null,
+                "action_registered": true,
+                "authorized": false
+              },
+              {
+                "adapter": "bat-pm-linux-v1",
+                "contract": "codex-pm-linux-v1",
+                "action_registered": true,
+                "authorized": false,
+                "eligible_for_preflight": true,
+                "reason": null,
+                "selected_binding": {
+                  "host": "h1",
+                  "workspace_id": "ws-1",
+                  "repository": "o/r"
+                },
+                "execution_scope": "frozen_context_only",
+                "runtime_attestation_required": true,
+                "options_confirmed": false,
+                "auth_validity": "unverified",
+                "model_execution_verified": false
+              }
+            ]
+          }
+        }
+      },
+      "workspace_adapter": {
+        "version": 1,
+        "action": "pm.workspace.adapter.select",
+        "adapters": [
+          "codex-native-linux",
+          "bat-pm-linux-v1"
+        ],
+        "choice": {
+          "adapter": "codex-native-linux",
+          "continuity": {
+            "accepted_context_ref": null,
+            "accepted_revision_id": null,
+            "carrier_creation_operation_id": null,
+            "carrier_digest": null,
+            "plan_version": 0,
+            "source_operation_ids": []
+          },
+          "execution_authorized": false,
+          "operation_id": "op_00000000000000000000000000000003",
+          "previous_choice": {
+            "document_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "operation_id": "op_00000000000000000000000000000001",
+            "version": 1
+          },
+          "rationale": "Use this bounded PM route",
+          "recorded_at": 1790000000.0,
+          "runtime_preflight": "not_performed",
+          "selected_by": "pm-owner",
+          "successor_started": false,
+          "version": 2,
+          "workspace_id": "ws_11111111111111111111111111111111",
+          "writer_generation": 0
+        },
+        "choice_ref": {
+          "version": 2,
+          "operation_id": "op_00000000000000000000000000000003",
+          "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+        },
+        "available": false,
+        "reason": "owner_and_scopes_required",
+        "preconditions": {
+          "expected_selection_version": 2,
+          "expected_writer_generation": 1,
+          "expected_plan_version": 0,
+          "expected_accepted_revision_id": null,
+          "expected_continuity_digest": "0000000000000000000000000000000000000000000000000000000000000004"
+        },
+        "writer": {
+          "generation": 1,
+          "occupied": false
+        },
+        "runtime_preflight": "not_performed",
+        "execution_authorized": false
+      },
+      "effective_pm_route": {
+        "version": 1,
+        "scope": "workspace_selected_route",
+        "choice_source": "saved",
+        "adapter": "codex-native-linux",
+        "choice_ref": {
+          "version": 2,
+          "operation_id": "op_00000000000000000000000000000003",
+          "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+        },
+        "ready": false,
+        "reason": "scope_required",
+        "eligible_adapters": [],
+        "adapters": [
+          {
+            "adapter": "codex-native-linux",
+            "ready": false,
+            "reason": "scope_required"
+          }
+        ],
+        "model_execution_verified": false,
+        "execution_authorized": false
+      }
+    },
+    "profile": {
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "is_default": false,
+      "agent": "claude",
+      "model": null,
+      "delivery_goal": "pull_request",
+      "repository": "o/r",
+      "host": "h1",
+      "workspace_id": "ws-1",
+      "created_at": 1790000000.0,
+      "operation_id": "op_00000000000000000000000000000002",
+      "actor": "pm-owner"
+    },
+    "readiness": {
+      "contract": "work-profile-readiness/v1",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "profile_id": "wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": 1,
+      "digest": "ddb1f798456a5df8cab824894efe2c0e950b7f48d3bd1d126c741130b16ca0a8",
+      "observed_at": 1790000000.0,
+      "calls_bat": false,
+      "coding_route_ready": false,
+      "work_follow_up": {
+        "route": "bat_work_start",
+        "agent": "claude",
+        "state": "requires_attempt",
+        "reason": "owned_attempt_required",
+        "admission_checked": false
+      },
+      "configured": {
+        "agent": "claude",
+        "model": null,
+        "delivery_goal": "pull_request",
+        "binding": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "ws-1"
+        }
+      },
+      "states": {
+        "discovered": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "signed_in_or_available": {
+          "value": "unknown",
+          "reason": "auth_validity_unverified",
+          "evidence_ref": {
+            "auth_validity": "unverified"
+          },
+          "verified": null
+        },
+        "can_observe": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_start_own": {
+          "value": "unavailable",
+          "reason": "host_unknown",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "can_continue_own": {
+          "value": "unknown",
+          "reason": "no_owned_session_verified",
+          "evidence_ref": null,
+          "verified": null
+        },
+        "last_verified_execution": {
+          "value": "unknown",
+          "reason": "execution_not_verified",
+          "evidence_ref": null,
+          "verified": null
+        }
+      },
+      "smallest_gap": null,
+      "unverified": [
+        "signed_in_or_available",
+        "can_continue_own",
+        "last_verified_execution"
+      ],
+      "resume": {
+        "kind": "client_draft",
+        "stored_on_server": false
+      },
+      "pm_analysis": {
+        "pm_ready": false,
+        "native_analysis": {
+          "adapter": "codex-native-linux",
+          "contract": "codex-pm-linux-v1",
+          "required_version": "0.160.0",
+          "execution_scope": "frozen_context_only",
+          "execution_location": "connector_service",
+          "eligible_for_preflight": true,
+          "options_confirmed": false,
+          "version_verification": "per_run",
+          "auth_validity": "unverified",
+          "model_execution_verified": false,
+          "auth_file_readable": true,
+          "reason": null,
+          "action_registered": true,
+          "authorized": false
+        },
+        "bat_analysis": {
+          "adapter": "bat-pm-linux-v1",
+          "contract": "codex-pm-linux-v1",
+          "action_registered": true,
+          "authorized": false,
+          "eligible_for_preflight": true,
+          "reason": null,
+          "selected_binding": {
+            "host": "h1",
+            "workspace_id": "ws-1",
+            "repository": "o/r"
+          },
+          "execution_scope": "frozen_context_only",
+          "runtime_attestation_required": true,
+          "options_confirmed": false,
+          "auth_validity": "unverified",
+          "model_execution_verified": false
+        },
+        "effective_pm_route": {
+          "version": 1,
+          "scope": "workspace_selected_route",
+          "choice_source": "saved",
+          "adapter": "codex-native-linux",
+          "choice_ref": {
+            "version": 2,
+            "operation_id": "op_00000000000000000000000000000003",
+            "document_digest": "0000000000000000000000000000000000000000000000000000000000000003"
+          },
+          "ready": false,
+          "reason": "scope_required",
+          "eligible_adapters": [],
+          "adapters": [
+            {
+              "adapter": "codex-native-linux",
+              "ready": false,
+              "reason": "scope_required"
+            }
+          ],
+          "model_execution_verified": false,
+          "execution_authorized": false
+        }
+      }
+    }
+  }
+}

@@ -24,42 +24,48 @@ export function matchesSession(session, query) {
 export function runtimeStale(session) {
   return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
 }
-export function sessionActivity(session) {
-  if (session.pending) return {key: "pending_" + session.pending.kind, tone: "stale"};
-  if (session.api_access === "managed") {
-    const st = session.status || session.state?.status;
-    if (st === "failed" || st === "error") return {key: "op_failed", tone: "bad"};
-    if (["needs_ted", "needs_you", "needs_attention", "waiting_permission", "awaiting_approval", "uncertain", "blocked"].includes(st))
-      return {key: "workspace_needs_you", tone: "stale"};
-  }
-  if (session.state?.lifecycle === "ended") return {key: "obs_value_ended", tone: ""};
-  if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration))
-    return {key: "sessions_not_seen", tone: "stale"};
+// Independent facts from the same envelope. A pending prompt remains a fact of
+// its observation even when output evidence is stale; it grants no action rights.
+export function sessionFacets(session) {
+  const source = session || {}, pending = source.pending;
+  const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
+  const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you"
+    : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed"
+      : ["needs_ted", "needs_you", "needs_attention", "waiting_permission", "awaiting_approval", "uncertain", "blocked"].includes(managedStatus) ? "needs_you" : "none";
+  const staleness = {runtime: runtimeStale(source),
+    gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
+    missing: source.state?.enumeration === "missing"};
+  const lifecycle = source.state?.lifecycle || "unknown";
   // Stale observations must not claim that output is still arriving.
-  if (runtimeStale(session)) return {key: "sessions_stale", tone: "stale"};
-  if (session.streaming === true) return {key: "obs_value_streaming", tone: "info"};
-  if (session.streaming === false) return {key: "obs_value_not_streaming", tone: ""};
-  if (session.loaded === false || session.state?.loading === "not_loaded")
-    return {key: "sessions_not_loaded", tone: ""};
+  const activity = Object.values(staleness).some(Boolean) ? "unknown"
+    : lifecycle === "ended" ? "not_streaming"
+      : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown";
+  return {activity, attention, staleness, lifecycle, pendingKind: pending?.kind,
+    hasPending: Boolean(pending), notLoaded: source.loaded === false || source.state?.loading === "not_loaded"};
+}
+export function sessionActivity(session) {
+  const facets = sessionFacets(session);
+  if (facets.hasPending) return {key: "pending_" + facets.pendingKind, tone: "stale"};
+  if (facets.attention === "failed") return {key: "op_failed", tone: "bad"};
+  if (facets.attention === "needs_you") return {key: "workspace_needs_you", tone: "stale"};
+  if (facets.lifecycle === "ended") return {key: "obs_value_ended", tone: ""};
+  if (facets.staleness.gone || facets.staleness.missing) return {key: "sessions_not_seen", tone: "stale"};
+  if (facets.staleness.runtime) return {key: "sessions_stale", tone: "stale"};
+  if (facets.activity === "streaming") return {key: "obs_value_streaming", tone: "info"};
+  if (facets.activity === "not_streaming") return {key: "obs_value_not_streaming", tone: ""};
+  if (facets.notLoaded) return {key: "sessions_not_loaded", tone: ""};
   return {key: "sessions_activity_unknown", tone: ""};
 }
 
 // Rows and the session header show a pill only when the session needs the user, is running,
 // is out of sync, or (for managed sessions) has a failed or attention state.
 export function sessionStatus(session) {
-  if (!session) return null;
-  const kind = session.pending?.kind;
-  if (kind === "permission" || kind === "ask_user") return "asking_you";
-  if (session.pending) return "needs_you";
-  if (session.api_access === "managed") {
-    const st = session.status || session.state?.status;
-    if (st === "failed" || st === "error") return "failed";
-    if (["needs_ted", "needs_you", "needs_attention", "waiting_permission", "awaiting_approval", "uncertain", "blocked"].includes(st))
-      return "needs_you";
-  }
-  if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration) || runtimeStale(session))
-    return "stale";
-  if (session.state?.lifecycle !== "ended" && session.streaming === true) return "running";
+  const facets = sessionFacets(session);
+  // Preserve the existing single-pill order: pending, managed attention/failure,
+  // stale/gone/missing, then current streaming. This is not a new lane priority.
+  if (facets.attention !== "none") return facets.attention;
+  if (Object.values(facets.staleness).some(Boolean)) return "stale";
+  if (facets.activity === "streaming") return "running";
   return null;
 }
 

@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
+/.test-tmp/
 dist/
 desktop/dist-prototype/v1.3/
 desktop/dist-demo/

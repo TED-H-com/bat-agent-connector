@@ -15,6 +15,11 @@ from scripts.ci_complete import verify_manifests
 from scripts.ci_scope import FULL_PYTHONS, native_builds, select_scope
 from scripts.ci_sharding import collection_digest
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
+
 ROOT = Path(__file__).resolve().parents[1]
 # Captured with git diff --name-only 8a50a717^1 8a50a717 (#157).
 # Keep the real list here so shallow CI checkouts do not need historical Git objects.
@@ -91,6 +96,19 @@ def test_each_native_allowlist_entry(path):
 ])
 def test_packaged_inputs_native_fixtures_and_unknown_paths_require_builds(path):
     assert select_scope([path])[1] == "all"
+
+
+def test_desktop_version_declarations_agree():
+    desktop = ROOT / "desktop"
+    lockfile = json.loads((desktop / "package-lock.json").read_text())
+    versions = {
+        "src-tauri/Cargo.toml": tomllib.loads((desktop / "src-tauri/Cargo.toml").read_text())["package"]["version"],
+        "src-tauri/tauri.conf.json": json.loads((desktop / "src-tauri/tauri.conf.json").read_text())["version"],
+        "package.json": json.loads((desktop / "package.json").read_text())["version"],
+        "package-lock.json": lockfile["version"],
+        "package-lock.json packages root": lockfile["packages"][""]["version"],
+    }
+    assert len(set(versions.values())) == 1, versions
 
 
 @pytest.mark.parametrize("asset", ["index.html", "app.js", "app.css", "i18n.js"])

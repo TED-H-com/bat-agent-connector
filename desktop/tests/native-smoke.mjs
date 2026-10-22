@@ -2,13 +2,13 @@
 // Run a built app under xvfb-run + dbus-run-session. Pass the release binary for packaging CI.
 import { createServer } from "node:http";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import {testScratchRoot} from './test-scratch.mjs';
 import { join, resolve } from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
 
-const root = await mkdtemp(join(tmpdir(), "batc-native-smoke-"));
+const root = await mkdtemp(join(testScratchRoot(), "batc-native-smoke-"));
 const evidence = process.env.BATC_NATIVE_SMOKE_ARTIFACT_DIR
   ? resolve(process.env.BATC_NATIVE_SMOKE_ARTIFACT_DIR) : resolve("test-results/native-smoke");
 let app;
@@ -35,7 +35,7 @@ const configDir = join(root, "config", "io.betteragent.dashboard");
 await mkdir(configDir, {recursive: true});
 await writeFile(join(configDir, "central.json"), JSON.stringify({endpoint: `http://127.0.0.1:${server.address().port}/`,
   expected_actor: "fixture-operator", contract_version: "2026-10-08"}));
-const env = {...process.env, XDG_CONFIG_HOME: join(root, "config"), XDG_DATA_HOME: join(root, "data"),
+const env = {...process.env, TMPDIR: root, TEMP: root, TMP: root, XDG_CONFIG_HOME: join(root, "config"), XDG_DATA_HOME: join(root, "data"),
   BATC_DESKTOP_TOKEN: "fixture-native-token", WEBKIT_DISABLE_DMABUF_RENDERER: "1"};
 const binary = resolve(process.argv[2] || "src-tauri/target/debug/better-agent-dashboard");
 app = spawn(binary, [], {env, stdio: ["ignore", "pipe", "pipe"]});

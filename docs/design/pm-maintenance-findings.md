@@ -34,6 +34,11 @@ not prove all manifests were scanned or that the released version is unaffected.
 Read-time status separately reports missing/stale/context_changed/stopped; records
 remain immutable. Disappearing findings never become resolved implicitly.
 
+Issues closed as `not_planned` or `completed` leave this open-only profile;
+neither closure accepts a requirement or completes central Work. A closed,
+unmerged PR supplies no merge proof. A verified merge receipt remains a delivery
+fact, separate from fixed requirement acceptance and Definition of Done reviews.
+
 Findings live inside the existing immutable observation, with stable IDs derived
 from workspace, provider configuration digest, native repository ID, source kind
 and provider-native Issue/PR/alert ID. Register, overview and discussion reads

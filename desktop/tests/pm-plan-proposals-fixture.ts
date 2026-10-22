@@ -44,32 +44,38 @@ export function proposalFixture(){
 }
 export const panel=(page:Page)=>page.locator('[data-pm-plan-proposals]');
 export const editor=(page:Page,action=ADOPT)=>panel(page).locator(`[data-pm-action="${action}"]`);
-export async function mountProposal(page:Page,f:ReturnType<typeof proposalFixture>,locale='en'){
+export async function mountProposal(page:Page,f:ReturnType<typeof proposalFixture>,locale='en',options:{availability?:boolean}={}){
   page.on('pageerror',error=>{throw error;});await page.exposeFunction('proposalFixtureRequest',f.dispatch);
   await page.route('**/__proposal_src/*.js',async route=>{const file=path.basename(new URL(route.request().url()).pathname);let source=await readFile(new URL('../src/'+file,import.meta.url),'utf8');
     if(file==='pm-workspace.js')source=source.replace('function durableForm(', 'export function durableForm(');await route.fulfill({contentType:'text/javascript',body:source});});
   await unavailableBriefTransport(page,'__proposal_src');
   await page.route('**/__proposal_harness',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><div class="pm-shell"><aside aria-label="Workspace"><strong>Member access</strong><p>Idea discussion</p></aside><main class="pm-main" id="mount"></main></div>'}));
-  await page.goto('/__proposal_harness');await bootProposal(page,locale);
+  await page.goto('/__proposal_harness');await bootProposal(page,locale,options);
 }
-export async function bootProposal(page:Page,locale='en'){
-  await page.evaluate(async({locale,workspaceId,threadId})=>{
+export async function bootProposal(page:Page,locale='en',options:{availability?:boolean}={}){
+  await page.evaluate(async({locale,workspaceId,threadId,options})=>{
     const {planProposals}=await import('/__proposal_src/pm-plan-proposals.js'),{durableForm}=await import('/__proposal_src/pm-workspace.js');
     const {pmPlanProposalStrings}=await import('/__proposal_src/pm-plan-proposal-strings.js'),{pmStrings}=await import('/__proposal_src/pm-strings.js');
     const {adoptStartStrings}=await import('/__proposal_src/pm-adopt-start-strings.js');
-    const strings={...pmStrings[locale],...pmPlanProposalStrings[locale],...adoptStartStrings[locale]},t=(key:string,vars:any={})=>(strings[key]||key).replace(/\{(\w+)\}/g,(_:string,name:string)=>vars[name]??'{'+name+'}');
+    const {STRINGS}=await import('/__proposal_src/i18n.js');
+    const strings={...STRINGS[locale],...pmStrings[locale],...pmPlanProposalStrings[locale],...adoptStartStrings[locale]},t=(key:string,vars:any={})=>(strings[key]||key).replace(/\{(\w+)\}/g,(_:string,name:string)=>vars[name]??'{'+name+'}');
     const h=(tag:string,attrs:any={},...children:any[])=>{const el=document.createElement(tag);for(const[key,value]of Object.entries(attrs||{})){if(value===null||value===undefined||value===false)continue;
       if(key.startsWith('on'))el.addEventListener(key.slice(2),value as any);else el.setAttribute(key,value===true?'':String(value));}for(const child of children.flat()){if(child!==null&&child!==undefined&&child!==false)el.append(child instanceof Node?child:document.createTextNode(String(child)));}return el;};
     const win=window as any,api=async(method:string,path:string,body:any,key:any)=>{const result=await win.proposalFixtureRequest({method,path,body,idempotency_key:key});if(result.status>=400)throw Object.assign(Error(result.data.error.message),{code:result.data.error.code,status:result.status,admissionRefused:result.data.error.admission_refused});return result.data;};
     const errorBox=(error:any)=>h('p',{class:'error'},error.message),input=(label:string,{multiline=false,max=4000,required=true,value=''}:any={})=>{
       const field=h(multiline?'textarea':'input',{'aria-label':t(label),maxlength:max,required}) as HTMLInputElement;field.value=value;return field;},labelled=(key:string,field:any)=>h('label',{},t(key),field),alive=()=>{};
     let current=await api('GET','/fixture-state');
+    let capabilityError:any=null;
+    if(options.availability){try{current.capability=await api('GET',`/pm/workspaces/${workspaceId}/capabilities`);}
+      catch(error:any){capabilityError=Object.assign(error,{code:error.code||'NETWORK_ERROR',status:error.status??0});current.capability=null;}}
     const form=(options:any)=>durableForm({h,t,api,caps:()=>current.caps,guard:alive,namespace:'proposal-ui.'+current.caps.actor,errorBox,...options});
     const proposal=planProposals({h,t,api,alive,namespace:'proposal-ui.'+current.caps.actor,workspaceId,threadId,caps:()=>current.caps,thread:()=>current.thread,
+      capabilityError:()=>capabilityError,conversation:options.availability===true,
       permitted:(decide:boolean)=>current.caps.actor==='owner'&&(decide?current.thread.capabilities.decide:current.thread.capabilities.write),form,input,labelled,errorBox,refresh:async()=>{current=await api('GET','/fixture-state');proposal.update({head:current.head,capabilities:current.capability});}});
     document.getElementById('mount')!.replaceChildren(proposal.box);proposal.update({head:current.head,capabilities:current.capability});
     win.proposalRefresh=async(options={})=>{current=await api('GET','/fixture-state');proposal.update({head:current.head,capabilities:current.capability});await proposal.refresh(undefined,options);};
     win.proposalWithdraw=()=>proposal.withdraw();win.proposalDispose=()=>proposal.dispose();await proposal.refresh();
-  },{locale,workspaceId,threadId});
+    if(options.availability){const text=h('textarea',{'data-availability-proposal-draft':''});document.getElementById('mount')!.append(text,proposal.composer(text));}
+  },{locale,workspaceId,threadId,options});
 }
 export async function selectProposal(page:Page,id=proposalId){await panel(page).getByRole('combobox',{name:'Saved proposal',exact:true}).selectOption(id);await expect(editor(page)).toBeVisible();}

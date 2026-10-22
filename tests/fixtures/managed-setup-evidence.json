@@ -1,0 +1,154 @@
+{
+  "operation": {
+    "operation_id": "op_cccccccccccccccccccccccccccccccc",
+    "actor": "desktop-fixture",
+    "action": "setup.host",
+    "target": {
+      "host": "fixture"
+    },
+    "params": {
+      "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "managed_roots": [
+        "/srv/owned"
+      ],
+      "orchestrate": true,
+      "profile_id": "default",
+      "secret_ref": "setup_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "url": "wss://bat.example:9876",
+      "writes": true
+    },
+    "preconditions": {
+      "config_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "idempotency_key": "fixture-setup",
+    "status": "succeeded",
+    "created_at": 1799999990.0,
+    "updated_at": 1800000000.0,
+    "result": {
+      "configured": true,
+      "connected": true,
+      "host": "fixture",
+      "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "workspaces": [
+        {
+          "name": "demo-project",
+          "workspace_id": "ws-1"
+        },
+        {
+          "name": "other",
+          "workspace_id": "ws-2"
+        }
+      ]
+    }
+  },
+  "states": {
+    "unreachable": {
+      "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hosts": [
+        {
+          "name": "fixture",
+          "url": "wss://bat.example:9876",
+          "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "git": "ssh",
+          "git_status": {
+            "available": false,
+            "reason": "ssh_alias_missing",
+            "details": {}
+          },
+          "profile_id": "default",
+          "writes": true,
+          "orchestrate": true,
+          "shared_clone_worktrees": false,
+          "managed_roots": [
+            "/srv/owned"
+          ],
+          "connected": false,
+          "connection_status": "unreachable",
+          "connection_checked_at": 1800000600.0,
+          "token_available": true,
+          "ssh_alias": null
+        }
+      ],
+      "repositories": [],
+      "profiles": [],
+      "verification": {
+        "commands": {},
+        "timeout_s": 600
+      },
+      "profiles_error": "No complete remote BAT profiles were found",
+      "busy": false
+    },
+    "checking": {
+      "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hosts": [
+        {
+          "name": "fixture",
+          "url": "wss://bat.example:9876",
+          "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "git": "ssh",
+          "git_status": {
+            "available": false,
+            "reason": "ssh_alias_missing",
+            "details": {}
+          },
+          "profile_id": "default",
+          "writes": true,
+          "orchestrate": true,
+          "shared_clone_worktrees": false,
+          "managed_roots": [
+            "/srv/owned"
+          ],
+          "connected": null,
+          "connection_status": "checking",
+          "connection_checked_at": 1799999700.0,
+          "token_available": true,
+          "ssh_alias": null
+        }
+      ],
+      "repositories": [],
+      "profiles": [],
+      "verification": {
+        "commands": {},
+        "timeout_s": 600
+      },
+      "profiles_error": "No complete remote BAT profiles were found",
+      "busy": false
+    },
+    "connected": {
+      "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "hosts": [
+        {
+          "name": "fixture",
+          "url": "wss://bat.example:9876",
+          "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "git": "ssh",
+          "git_status": {
+            "available": false,
+            "reason": "ssh_alias_missing",
+            "details": {}
+          },
+          "profile_id": "default",
+          "writes": true,
+          "orchestrate": true,
+          "shared_clone_worktrees": false,
+          "managed_roots": [
+            "/srv/owned"
+          ],
+          "connected": true,
+          "connection_status": "connected",
+          "connection_checked_at": 1800000600.0,
+          "token_available": true,
+          "ssh_alias": null
+        }
+      ],
+      "repositories": [],
+      "profiles": [],
+      "verification": {
+        "commands": {},
+        "timeout_s": 600
+      },
+      "profiles_error": "No complete remote BAT profiles were found",
+      "busy": false
+    }
+  }
+}

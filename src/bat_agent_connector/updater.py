@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -14,7 +15,16 @@ from pathlib import Path
 
 from . import platform_files as files
 from .update_install import clean_env, digest_files, installed, package_files, run, stage
-from .update_release import EPOCH, REPOSITORY, UpdateError, commit, discover, require, version
+from .update_release import (
+    EPOCH,
+    REPOSITORY,
+    EntrypointDirectoryError,
+    UpdateError,
+    commit,
+    discover,
+    require,
+    version,
+)
 
 COMMANDS = ("batc", "bat-agent-connector-mcp", "batc-update")
 SERVICE = """[Unit]
@@ -65,7 +75,8 @@ def replace_link(path, target, expected):
     temporary = ".batc-update-" + secrets.token_hex(12)
     try:
         info = os.fstat(parent)
-        require(info.st_uid == os.getuid() and not info.st_mode & 0o022, "entrypoint_directory_not_owned")
+        if info.st_uid != os.getuid() or info.st_mode & 0o022:
+            raise EntrypointDirectoryError(path.parent)
         require(snapshot(path) == expected, "entrypoint_changed")
         os.symlink(str(target), temporary, dir_fd=parent)
         os.replace(temporary, path.name, src_dir_fd=parent, dst_dir_fd=parent)
@@ -308,13 +319,16 @@ class Updater:
     def policy(self, enabled, channel=None):
         with self.locked():
             state = self.read()
+            before = copy.deepcopy(state)
             if enabled:
                 self.reconcile(state)
             state["enabled"] = enabled
             if channel:
                 require(channel in {"stable", "preview"}, "invalid_channel")
                 state["channel"] = channel
-            self.save(state)
+            # Unchanged policy must preserve the existing state file.
+            if state != before:
+                self.save(state)
             return self.status(state)
 
     def rollback(self):
@@ -329,6 +343,16 @@ class Updater:
             self.save(state)
             self.reconcile(state)
             return self.status(state)
+
+    def rollback_preview(self, *, journal=None):
+        from .config import default_journal_path
+        from .rollback_compatibility import preview
+        # No updater lease/reconciliation: even creating a lease is a mutation.
+        # Do not resolve symlinks: the snapshot reader must still refuse them.
+        path = (Path(journal) if journal is not None else default_journal_path()).absolute()
+        result = preview(self.read(), journal=path, observed_at=timestamp())
+        result["journal"] = {"path": str(path), "source": "explicit" if journal is not None else "default"}
+        return result
 
     def schedule(self):
         with self.locked():
@@ -369,9 +393,14 @@ def main(argv=None):
     enable = commands.add_parser("enable", help="Enroll a deployment or resume automatic updates")
     enable.add_argument("--receipt", type=Path)
     enable.add_argument("--channel", choices=("stable", "preview"))
-    for name in ("status", "check", "run", "disable", "rollback", "schedule"):
+    for name in ("status", "check", "run", "disable", "schedule"):
         commands.add_parser(name)
+    rollback = commands.add_parser("rollback")
+    rollback.add_argument("--preview", action="store_true", help="Read compatibility evidence without activation")
+    rollback.add_argument("--journal", type=Path, help="Journal to observe (only with --preview)")
     args = parser.parse_args(argv)
+    if args.action == "rollback" and args.journal is not None and not args.preview:
+        parser.error("--journal requires --preview")
     try:
         updater = Updater()
         if args.action == "enable":
@@ -387,13 +416,15 @@ def main(argv=None):
             result = {"available": updater.find_release(state["channel"]), **updater.status(state)}
         elif args.action == "run":
             result = updater.apply()
+        elif args.action == "rollback" and args.preview:
+            result = updater.rollback_preview(journal=args.journal)
         else:
             result = getattr(updater, args.action)()
         print(json.dumps(result, sort_keys=True))
         return 0
     except (OSError, ValueError, KeyError, TypeError) as exc:
         code = str(exc) if isinstance(exc, UpdateError) else "update_state_or_environment_invalid"
-        print(json.dumps({"status": "failed", "code": code}), file=sys.stderr)
+        print(json.dumps({"status": "failed", **(exc.diagnostic() if isinstance(exc, EntrypointDirectoryError) else {"code": code})}), file=sys.stderr)
         return 1
 
 

@@ -18,13 +18,26 @@ import secrets
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 
-from . import platform_files
+from . import platform_files, pm_source_history
 
 # Latest allocated data step; individual backfills retain their own version gates.
 LATEST_DATA_STEP = 3
+
+
+class JournalNewerDataStep(ValueError):
+    """This Connector cannot safely write a journal advanced by a newer build."""
+
+    code = "JOURNAL_NEWER_DATA_STEP"
+
+    def __init__(self, recorded: int):
+        self.recorded = recorded
+        super().__init__(f"{self.code}: journal records data step {recorded}; "
+                         f"this Connector supports up to {LATEST_DATA_STEP}; "
+                         "reopen with the newer Connector")
+
 
 STATES = frozenset({
     "queued", "dispatching", "accepted", "running", "waiting_permission",
@@ -98,13 +111,25 @@ class Journal:
                 fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 os.close(fd)
             self.path.chmod(0o600)
-        self.db = sqlite3.connect(self.path, isolation_level=None, timeout=30)
+        try:
+            # Even closing a writable reader can checkpoint an unfamiliar WAL into
+            # the main file. Refuse through a read-only connection before any write.
+            with closing(sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True, timeout=30)) as reader:
+                recorded = reader.execute("PRAGMA user_version").fetchone()[0]
+                if recorded > LATEST_DATA_STEP:
+                    raise JournalNewerDataStep(recorded)
+            self.db = sqlite3.connect(self.path, isolation_level=None, timeout=30)
+        except BaseException:
+            if getattr(self, "_storage_directory", None):
+                self._storage_directory.close()
+            raise
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         # Intent must survive a host crash before the network dispatch begins.
         self.db.execute("PRAGMA synchronous=FULL")
         self.db.execute("PRAGMA foreign_keys=ON")
-        self.db.executescript("""
+        try:
+            self.db.executescript("""
             BEGIN IMMEDIATE;
             CREATE TABLE IF NOT EXISTS confinement_host_checks (
                 host TEXT PRIMARY KEY, evidence TEXT NOT NULL
@@ -308,7 +333,12 @@ class Journal:
                 operation_id TEXT PRIMARY KEY, result TEXT NOT NULL, applied_at REAL NOT NULL
             );
             COMMIT;
-        """)
+            """)
+        except BaseException:
+            # executescript leaves its explicit BEGIN open if schema SQL fails.
+            if self.db.in_transaction:
+                self.db.execute("ROLLBACK")
+            raise
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(tasks)")}
         for name, sql_type in (("verification_tree", "TEXT"), ("review_commit", "TEXT"),
                                ("review_tree", "TEXT"), ("review_marker", "TEXT"),
@@ -450,8 +480,11 @@ class Journal:
     @contextmanager
     def tx(self):
         nested = self.db.in_transaction
+        source_version = None if nested else pm_source_history.before_transaction(self.db)
+        source_token = None
         self.db.execute("SAVEPOINT task_effect" if nested else "BEGIN IMMEDIATE")
         try:
+            source_token = pm_source_history.begin_transaction(self.db, source_version, nested=nested)
             yield
             self.db.execute("RELEASE task_effect" if nested else "COMMIT")
         except BaseException:
@@ -459,6 +492,8 @@ class Journal:
             if nested:
                 self.db.execute("RELEASE task_effect")
             raise
+        finally:
+            pm_source_history.end_transaction(source_token)
 
     def close(self):
         self.db.close()

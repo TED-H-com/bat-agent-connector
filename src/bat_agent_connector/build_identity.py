@@ -1,4 +1,4 @@
-"""Installed build provenance, without consulting a checkout or invoking Git."""
+"""Loaded build provenance, without consulting a checkout or invoking Git."""
 from __future__ import annotations
 
 import json
@@ -14,7 +14,7 @@ def _commit(value):
     return value if isinstance(value, str) and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", value) else None
 
 
-def build_identity() -> dict:
+def _read_build_identity() -> dict:
     result = {"version": __version__, "commit": None, "source": "package"}
     try:
         if getattr(sys, "frozen", False):
@@ -28,8 +28,29 @@ def build_identity() -> dict:
             raw = distribution.read_text("direct_url.json")
             doc = json.loads(raw) if raw else {}
             vcs = doc.get("vcs_info", {})
+            embedded = Path(__file__).with_name("build-info.json")
             if vcs.get("vcs") == "git":
                 result.update(source="vcs", commit=_commit(vcs.get("commit_id")))
+                if embedded.exists():
+                    # Conflicting attribution is unknown; neither source wins.
+                    vcs_commit = result["commit"]
+                    result["commit"] = None
+                    info = json.loads(embedded.read_text(encoding="utf-8"))
+                    if _commit(info.get("commit")) == vcs_commit:
+                        result["commit"] = vcs_commit
+            elif embedded.exists():
+                info = json.loads(embedded.read_text(encoding="utf-8"))
+                result["commit"] = _commit(info.get("commit"))
     except (OSError, ValueError, TypeError, AttributeError, metadata.PackageNotFoundError):
         pass  # Missing/malformed provenance is unknown, never a guessed checkout HEAD.
     return result
+
+
+# Capture eagerly with the loaded version, even if the first caller arrives after
+# an in-place installation has replaced this directory's distribution metadata.
+_LOADED_BUILD = _read_build_identity()
+
+
+def build_identity() -> dict:
+    """This process's startup snapshot, never a fresh claim about installed bytes."""
+    return dict(_LOADED_BUILD)

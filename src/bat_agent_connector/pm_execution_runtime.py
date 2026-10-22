@@ -10,7 +10,7 @@ import json
 import time
 from contextvars import ContextVar
 
-from . import api_auth, confinement, controller_authority, pm_runtime, pm_workspace
+from . import api_auth, confinement, controller_authority, pm_read_cache, pm_runtime, pm_workspace
 from . import pm_maintenance_repair_runtime as native
 from . import pm_work_batch_evidence as evidence
 from . import pm_work_batches as batches
@@ -128,12 +128,22 @@ def origin(ops, child):
 
 def _access(ops, principal, child):
     from .pm_access import require_visible
-    ops = batches._Reader(ops.db)
-    bound = relation(ops, child)
-    if not bound or not principal.allows('observe'):
-        raise _bad('Original batch source unavailable', 'NOT_FOUND', 404)
-    batches._access(ops, principal, bound[0])
-    require_visible(ops.db, principal, child)
+    from .pm_source_reads import check, scope
+    with scope(ops.db, principal) as state:
+        ops = batches._Reader(ops.db)
+        bound = relation(ops, child)
+        if not bound or not principal.allows('observe'):
+            raise _bad('Original batch source unavailable', 'NOT_FOUND', 404)
+        selected = {key: child[key] for key in ('operation_id', 'action', 'target', 'actor') if key in child}
+        key = evidence.digest([selected, (child.get('external_refs') or {}).get('pm_work_batch_parent')])
+        def visible():
+            batches._access(ops, principal, bound[0])
+            require_visible(ops.db, principal, child)
+            return True
+        if ('execution_runtime_sources', key) in state['active']:
+            visible()
+        elif not check(ops.db, principal, 'execution_runtime_sources', key, visible):
+            raise _bad('Original batch source unavailable', 'NOT_FOUND', 404)
 
 
 def _live(ops, child):
@@ -337,6 +347,20 @@ def _pages(ops, oid, doc):
 
 
 def proof(ops, principal, child):
+    # This is historical source validation, not the native/live completion
+    # guard. Include every caller input consumed by relation, observer and
+    # visibility; the source reader still loads canonical durable receipts.
+    selected = {key: child[key] for key in ('operation_id', 'action', 'target', 'actor') if key in child}
+    refs = child.get('external_refs') or {}
+    claim = refs.get('pm_work_batch_parent') if isinstance(refs, dict) else refs
+    binding = refs.get('admission_binding') if isinstance(refs, dict) else None
+    authority = binding.get('controller_authority') if isinstance(binding, dict) else binding
+    return pm_read_cache.remember(proof, (principal, selected, claim, authority),
+        lambda: _proof_sources(ops, principal, child), cache_errors=False, cache_if=lambda value: value is not None,
+        freeze=pm_read_cache.json_snapshot, thaw=json.loads, db=ops.db)
+
+
+def _proof_sources(ops, principal, child):
     ops = batches._Reader(ops.db)
     _access(ops, principal, child)
     reader = observer(ops, child)

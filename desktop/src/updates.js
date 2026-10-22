@@ -1,10 +1,14 @@
 import {updateRequest} from "./transport/index.ts";
+import {versionProjection, versionRow} from './version-projection.js';
+import {versionFacts} from './version-facts.js';
 
-export async function mountUpdates(main, {h, t}) {
+export async function mountUpdates(main, {h, t, versionInput = () => ({desktop:true}), onVersions = () => () => {}, onRead = () => {}}) {
   const panel = h("section", {class: "panel", "aria-label": t("update_title")});
-  const content = h("div"), message = h("p", {role: "status", class: "muted"});
-  panel.append(h("h2", {}, t("update_title")), content, message); main.append(panel);
-  let disposed = false, busy = false, readable = false, value, pressed = null;
+  const content = h("div"), facts = h('div'), message = h("p", {role: "status", class: "muted"});
+  panel.append(h("h2", {}, t("update_title")), content, facts, message); main.append(panel);
+  let disposed = false, busy = false, readable = false, value, pressed = null, readAt = null;
+  const projection = () => versionProjection({...versionInput(),updater:value,updaterReadAt:readAt,updaterReadFailed:!readable});
+  const paintFacts = () => {if(active())facts.replaceChildren(versionFacts({h,t,projection:projection()}));};
   const active = () => !disposed && panel.isConnected;
   const phases = new Set(["idle", "checking", "available", "up_to_date", "check_failed", "downloading", "download_failed", "verified", "stopping_fleet", "installation_unknown"]);
   const placeFocus = key => {
@@ -24,6 +28,7 @@ export async function mountUpdates(main, {h, t}) {
   };
   const render = () => {
     if (!active()) return;
+    paintFacts();
     const focused = document.activeElement;
     const key = focused instanceof Element && content.contains(focused) ? focused.getAttribute("data-update-action") : null;
     let flying = false;
@@ -41,7 +46,7 @@ export async function mountUpdates(main, {h, t}) {
       const staticActions = !readable || !value.available || ["checking", "downloading", "stopping_fleet", "installation_unknown"].includes(value.phase);
       const candidate = value.candidate;
       content.replaceChildren(
-        h("p", {}, t("update_current", {version: value.current_version})),
+        h("p", {}, t("update_current", {version: versionRow(projection(),'desktop_update').version || t('diag_unknown')})),
         h("p", {class: "muted"}, !value.available ? t(value.code === "UPDATE_PLATFORM_UNSUPPORTED" ? "update_platform" : "update_unsigned") : t("update_phase_" + value.phase)),
         ...(candidate ? [h("dl", {class: "kv"}, h("dt", {}, t("update_candidate")), h("dd", {}, candidate.version),
           h("dt", {}, t("pub_sha")), h("dd", {class: "mono"}, candidate.source_sha))] : []),
@@ -65,12 +70,14 @@ export async function mountUpdates(main, {h, t}) {
       if (!active()) return;
       if (!next || typeof next.current_version !== "string" || typeof next.available !== "boolean" || !phases.has(next.phase)
           || next.candidate && ["candidate_id", "version", "source_sha"].some(k => typeof next.candidate[k] !== "string")) throw new Error("UPDATE_STATUS_INVALID");
-      value = next; readable = true;
+      value = next; readable = true; readAt = new Date().toISOString();
+      onRead({current_version:next.current_version}, readAt);
       if (next.code && next.available && !next.installation) message.textContent = `${t("update_problem")} ${next.code}`;
     } catch {
-      if (active()) { readable = false; message.textContent = t(input.action === "install" ? "update_unknown" : "update_read_failed"); }
+      if (active()) { readable = false; onRead(null,null); message.textContent = t(input.action === "install" ? "update_unknown" : "update_read_failed"); }
     } finally { busy = false; pressed = null; if (!active()) return; render(); }
   };
+  const offVersions = onVersions(paintFacts);
   await request({action: "status"});
-  return () => {disposed = true; panel.remove();};
+  return () => {disposed = true; offVersions(); panel.remove();};
 }

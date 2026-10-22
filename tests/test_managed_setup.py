@@ -1,23 +1,29 @@
 """Real mock BAT setup, private staging and journaled configuration recovery."""
 from __future__ import annotations
 
+import asyncio
 import json
 import time
+from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
-from bat_agent_connector import api_auth, dashboard_sync, platform_files, registry
+from bat_agent_connector import api_auth, dashboard_sync, managed_runtime, platform_files, registry
 from bat_agent_connector import managed_setup as setup
 from bat_agent_connector.channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS, WRITE_CHANNELS
-from bat_agent_connector.config import parse_config, tomllib
+from bat_agent_connector.config import load_config, parse_config, tomllib
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests.operation_helpers import settle_operations
+from tests.test_api_v1 import http, token
 
 
 @pytest.fixture
 async def installed(tmp_path, monkeypatch):
     root = tmp_path / "managed"
+    platform_files.ensure_private_directory(root)
+    installation = managed_runtime._prepare(root)
     platform_files.ensure_private_directory(root / "config")
     monkeypatch.setenv("BATC_CONFIG_DIR", str(root / "config"))
     monkeypatch.setenv("BATC_STATE_DIR", str(root / "state"))
@@ -26,9 +32,10 @@ async def installed(tmp_path, monkeypatch):
               "operator_extension": {"keep": ["one", "two"], "nested": {"enabled": True}}}
     platform_files.atomic_write(path, setup._encode(source))
     daemon = TaskDaemon(parse_config(source, path), root / "state" / "tasks.sqlite3")
-    principal = api_auth.Principal("desktop-fixture", frozenset(api_auth.SCOPES))
-    daemon.managed_installation = {"data_dir": root, "actor": principal.actor,
-                                  **dashboard_sync.identity(daemon.journal, principal)}
+    principal = api_auth.Principal(installation["actor"], frozenset(api_auth.SCOPES))
+    installation.update(dashboard_sync.identity(daemon.journal, principal), state="ready")
+    managed_runtime._write(root / managed_runtime.MANIFEST, installation)
+    daemon.managed_installation = {**installation, "data_dir": root}
     setup.install(daemon)
     yield daemon, principal, root
     if daemon._lease_fd is not None:  # restart tests already shut down this exact owner
@@ -132,6 +139,172 @@ async def test_noop_setup_keeps_active_connection_and_original_digest(installed,
     assert second["status"] == "succeeded", second
     assert second["result"]["revision"] == first["result"]["revision"]
     assert daemon.fleet.client("fixture") is client and client.connected
+
+
+async def test_existing_profile_connection_remains_one_source_across_read_only_entries(installed, mock, monkeypatch):
+    """Real setup/Config/HTTP/observation; only BAT and SSH verification are doubles."""
+    daemon, principal, root = installed
+    profiles, ssh = root / "profiles", root / "ssh" / "config"
+    profiles.mkdir(mode=0o700)
+    ssh.parent.mkdir(mode=0o700)
+    # Handwritten, verified against the readers: fleet-core's profile-index.json,
+    # credential_tests.rs::profile_store and configuration SSH fixture. No real
+    # BAT/SSH capture: IDs/endpoint/pin/token are synthetic; encrypted stores,
+    # case differences, directory fallbacks and SSH key trust are not exercised.
+    endpoint = urlsplit(mock.url)
+    (profiles / "index.json").write_text(json.dumps({"profiles": [{
+        "id": "profile-1", "type": "remote", "remoteHost": endpoint.hostname,
+        "remotePort": endpoint.port, "remoteProfileId": "default", "remoteFingerprint": mock.fingerprint}],
+        "activeProfileIds": []}))
+    store = profiles / "remote-tokens.enc.json"
+    platform_files.atomic_write(store, json.dumps({"enc": False,
+        "data": json.dumps({"tokens": {"profile-1": mock.token}})}).encode())
+    ssh_bytes = (Path(__file__).resolve().parents[1] / "desktop/fleet-core/tests/fixtures/ssh-config").read_bytes()
+    ssh.write_bytes(ssh_bytes)
+    probes = []
+
+    async def restricted_ssh(alias):
+        assert alias == "node-1-direct" and b"Host node-1-direct\n" in ssh_bytes
+        assert ssh.read_bytes() == ssh_bytes
+        probes.append(alias)
+
+    def no_second_daemon(*args, **kwargs):
+        pytest.fail("Reading or selecting an existing connection must not spawn a daemon")
+
+    monkeypatch.setattr(setup, "_probe_ssh", restricted_ssh)
+    monkeypatch.setattr(managed_runtime, "_spawn", no_second_daemon)
+    path = root / "config/hosts.toml"
+    document = tomllib.loads(path.read_text())
+    document["bat"] = {"profiles_dir": str(profiles)}
+    document["usage"] = {"interval_s": 90, "sources": []}
+    document["operator_extension"]["future_usage"] = {"preserve": ["opaque", "operator-owned"]}
+    platform_files.atomic_write(path, setup._encode(document))
+    unrelated = root / "config/other-client.toml"
+    platform_files.atomic_write(unrelated, setup._encode({"unrelated_extension": {"keep": "original"}}))
+
+    def files(paths):
+        return {p: (p.read_bytes(), p.stat().st_mtime_ns, p.stat().st_ino) for p in paths}
+
+    external = files([profiles / "index.json", store, ssh, unrelated])
+    manual = json.dumps([mock.ws_doc, mock.metas, mock.states, mock.archives], sort_keys=True)
+    bearer = token(daemon, principal.actor, *principal.scopes)
+    db = daemon.journal.db
+    principals = [tuple(row) for row in db.execute("SELECT * FROM api_principals")]
+    assert len(principals) == 1
+    identity = dashboard_sync.identity(daemon.journal, principal)
+    lease = daemon._lease_fd
+    owner = [tuple(row) for row in db.execute("SELECT * FROM daemon_owner")]
+    owner_pointer = registry.registry_path().parent / "task-service.json"
+    pointer_before = owner_pointer.read_bytes()
+    params = {"import_profile_id": "profile-1", "ssh_alias": "node-1-direct"}
+    first = await settle(installed, create(installed, "setup.host", {"host": "fixture"}, params))
+    assert first["status"] == "succeeded", first
+    assert first["result"]["host"] == "fixture" and probes == ["node-1-direct"]
+    assert files(external) == external
+    await daemon.inventory._refresh_scheduled("fixture")
+    assert daemon.inventory.hosts()[0]["reachable"] is True
+    source = [tuple(row) for row in db.execute("SELECT host,profile_id,binding FROM discovery_latest")]
+    assert len(source) == 1 and source[0][:2] == ("fixture", "default")
+    saved_config = files([path])
+    old_sessions = [tuple(row) for row in db.execute("SELECT * FROM sessions_observed ORDER BY session_id")]
+    assert {row[1] for row in old_sessions} == {
+        terminal["id"] for terminal in mock.ws_doc["terminals"] if terminal.get("agentPreset")}
+
+    def reloaded_reference():
+        config = load_config(path)
+        host = config.host("fixture")
+        raw = tomllib.loads(path.read_text())
+        assert len(config.hosts) == 1 and host.resolve_token() == mock.token
+        assert raw["operator_extension"] == document["operator_extension"]
+        assert raw["usage"] == document["usage"]
+        aliases = setup._aliases(raw)
+        assert aliases == daemon.adapter.verifier.settings.ssh_hosts == {"fixture": "node-1-direct"}
+        return (host.url, host.fingerprint, host.profile_id, host.token_ref,
+                aliases["fixture"])
+
+    reference = (mock.url.rstrip("/") + "/", mock.fingerprint, "default", "bat-profile:profile-1", "node-1-direct")
+    assert reloaded_reference() == reference
+    server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    assert port != 18796
+    responses = []
+
+    async def get(route):
+        status, response = await http(port, "GET", "/api/v1" + route, tok=bearer)
+        assert status == 200, response
+        responses.append(response)
+        return response
+
+    async def read_existing():
+        state = await get("/managed/setup")
+        assert len(state["hosts"]) == len(state["profiles"]) == 1
+        host = state["hosts"][0]
+        assert (host["name"], host["url"], host["fingerprint"], host["profile_id"], host["ssh_alias"]) == (
+            "fixture", reference[0], reference[1], reference[2], reference[4])
+        assert host["token_available"] is True
+        bootstrap = await get("/bootstrap")
+        assert {key: bootstrap["sync"][key] for key in identity} == identity
+        hosts = (await get("/hosts"))["hosts"]
+        assert hosts == bootstrap["snapshot"]["hosts"]["hosts"] and len(hosts) == 1
+        assert hosts[0]["host"] == "fixture"
+        scopes = (await get("/hosts?host=fixture&discovery=true"))["scopes"]
+        assert [(s["host"], s["profile_id"], s["binding_version"]) for s in scopes] == source
+        assert hosts[0]["discovery"] == scopes
+        workspaces = await get("/workspaces?host=fixture")
+        assert workspaces["errors"] == {}
+        assert [{"workspace_id": w["workspace_id"], "name": w["name"]} for w in workspaces["workspaces"]] == first["result"]["workspaces"]
+        assert all(w["host"] == "fixture" for w in workspaces["workspaces"])
+        sessions = (await get("/sessions?host=fixture&order=id"))["sessions"]
+        assert {s["session_id"] for s in sessions} == {row[1] for row in old_sessions}
+        assert {s["resource_id"] for s in sessions} == {"fixture/" + row[1] for row in old_sessions}
+        histories = {}
+        for session in sessions:
+            sid = session["session_id"]
+            history = await get("/sessions/fixture/" + sid + "/history")
+            assert history["events"] and history["has_more"] is False
+            histories[sid] = history["events"]
+        return state, histories
+
+    try:
+        before, histories = await read_existing()
+        client = daemon.fleet.client("fixture")
+        status, accepted = await http(port, "POST", "/api/v1/operations?wait=0", tok=bearer,
+            body={"action": "setup.host", "target": {"host": "fixture"}, "params": params,
+                  "preconditions": {"config_revision": before["revision"]}},
+            headers={"Idempotency-Key": "select-existing-connection-again"})
+        assert status == 202 and accepted["created"] is True, accepted
+        second = await settle(installed, accepted["operation"])
+        assert second["status"] == "succeeded", second
+        assert second["operation_id"] != first["operation_id"]
+        assert second["result"]["revision"] == first["result"]["revision"]
+        assert (await read_existing())[1] == histories
+        assert setup.state(daemon, principal)["revision"] == before["revision"]
+        assert reloaded_reference() == reference
+        assert daemon.fleet.client("fixture") is client and client.connected
+        assert set(probes) == {"node-1-direct"}  # Read-only re-verification may repeat the same alias.
+        assert files(external) == external
+        assert [tuple(row) for row in db.execute("SELECT host,profile_id,binding FROM discovery_latest")] == source
+        assert db.execute("SELECT COUNT(*) FROM hosts_observed").fetchone()[0] == 1
+        assert [tuple(row) for row in db.execute("SELECT * FROM api_principals")] == principals
+        assert db.execute("SELECT COUNT(*) FROM api_sync_metadata").fetchone()[0] == 1
+        assert [tuple(row) for row in db.execute("SELECT * FROM sessions_observed ORDER BY session_id")] == old_sessions
+        assert json.dumps([mock.ws_doc, mock.metas, mock.states, mock.archives], sort_keys=True) == manual
+        assert not list((root / "config/setup-secrets").glob("*"))
+        assert [p for p in (root / "config").rglob("*") if p.is_file() and mock.token.encode() in p.read_bytes()] == []
+        assert daemon._lease_fd == lease and daemon._owns_fleet()
+        assert [tuple(row) for row in db.execute("SELECT * FROM daemon_owner")] == owner
+        assert owner_pointer.read_bytes() == pointer_before
+        public = json.dumps(responses)
+        assert all(value not in public for value in (mock.token, bearer, reference[3], str(profiles)))
+        assert '"token_ref"' not in public and '"bat_profiles_dir"' not in public
+        assert not [frame for frame in mock.invokes if frame["channel"] in WRITE_CHANNELS | ORCHESTRATE_CHANNELS | GUARDED_CHANNELS]
+        # This same file also owns unrelated client/safety/usage/operator settings.
+        assert path.read_bytes() == saved_config[path][0]
+        assert path.stat().st_ino == saved_config[path][2]
+        assert path.stat().st_mtime_ns == saved_config[path][1]
+    finally:
+        server.close()
+        await server.wait_closed()
 
 
 async def test_revision_conflict_rejected_before_journaling_or_network(installed, mock):
@@ -588,6 +761,45 @@ async def test_setup_uses_observed_connectivity_after_read_only_socket_closes(in
     assert host["connection_status"] == "connected"
     assert host["connection_checked_at"] is not None
     assert len(mock.auth_frames) == before  # Reading Setup does not launch another probe.
+
+
+@pytest.fixture
+async def setup_evidence(installed, mock, monkeypatch):
+    """Real saved setup and inventory; only BAT's TLS/WebSocket peer is a double."""
+    daemon, principal, root = installed
+    profiles = root / "profiles"
+    profiles.mkdir()
+    (profiles / "index.json").write_text('{"profiles": []}')
+    monkeypatch.setattr(setup, "_profile_directory", lambda _document: profiles)
+    operation = await settle(installed, create(installed, "setup.host", {"host": "fixture"},
+        host_params(daemon, principal, mock)))
+    assert operation["status"] == "succeeded"
+    await daemon.inventory._refresh_scheduled("fixture")
+    connected = setup.state(daemon, principal)
+    await mock.stop()
+    await daemon.inventory._refresh_scheduled("fixture")
+    unreachable = setup.state(daemon, principal)
+    with daemon.journal.tx():
+        daemon.journal.db.execute("UPDATE hosts_observed SET last_attempt_at=? WHERE host=?",
+            (time.time() - daemon.inventory.settings.stale_after_s - 1, "fixture"))
+    checking = setup.state(daemon, principal)
+    # This is the same receipt in all three snapshots, not three successful setups.
+    assert daemon.ops.get(operation["operation_id"]) == operation
+    return {"operation": operation, "states": {"unreachable": unreachable, "checking": checking, "connected": connected}}
+
+
+async def test_past_setup_success_does_not_establish_present_connectivity(setup_evidence):
+    operation = setup_evidence["operation"]
+    assert operation["result"]["configured"] and operation["result"]["connected"]
+    assert operation["updated_at"] >= operation["created_at"]
+    for condition, document in setup_evidence["states"].items():
+        host = document["hosts"][0]
+        assert host["name"] == operation["target"]["host"]
+        assert host["connection_status"] == condition
+        assert host["connected"] is (None if condition == "checking" else condition == "connected")
+        assert isinstance(host["connection_checked_at"], float)
+        assert (host["connection_checked_at"] < operation["updated_at"]) is (condition == "checking")
+        assert document["revision"] == operation["result"]["revision"]
 
 
 @pytest.mark.parametrize("condition,expected", [("never", "checking"), ("failed", "unreachable"),

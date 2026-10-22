@@ -13,7 +13,7 @@ async function expectConnectedIdentity(page: Page) {
 }
 
 for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
-  test(`Connector connection wording ${locale} ${width}`, async ({browser}) => {
+  test(`Connector connection wording ${locale} ${width}`, async ({browser}, testInfo) => {
     const context = await browser.newContext({locale, colorScheme: 'light', viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage(), errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -25,7 +25,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
       : 'The Connector address and expected identity come from local configuration. Credentials stay in the native app, outside this page.');
     expect(await connection.innerText()).not.toMatch(/\bcentral\b|中央/i);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const folder = process.env.POLISH_COPY_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/polish-copy-shots`;
+    const folder = process.env.POLISH_COPY_SCREENSHOTS || testInfo.outputPath('screenshots');
     await mkdir(folder, {recursive: true});
     await page.screenshot({path: `${folder}/connection-${locale}-${width}.png`, fullPage: true});
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((call: any) =>
@@ -34,6 +34,21 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
     await context.close();
   });
 }
+
+for (const locale of ['en-US', 'zh-TW']) test(`newer journal startup refusal ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale, viewport: {width: 390, height: 844}});
+  const page = await context.newPage();
+  const diagnostic = 'JOURNAL_NEWER_DATA_STEP: journal records data step 4; this Connector supports up to 3; reopen with the newer Connector';
+  await setup(page, {setup: true, configurationSource: 'managed', startupError: diagnostic});
+  const error = page.locator('.native-connection [data-api-error]');
+  await expect(error.locator('[data-error-summary]')).toHaveText(locale === 'zh-TW'
+    ? '這份紀錄需要較新的 Connector。請使用較新的 Connector 重新開啟，既有資料已保留。'
+    : 'These records need a newer Connector. Reopen with the newer Connector; existing data is preserved.');
+  await error.locator('summary').click();
+  await expect(error.locator('[data-error-details]')).toContainText(diagnostic);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await context.close();
+});
 
 async function setup(page: any, options: any = {}) {
   await page.addInitScript((options: any) => {
@@ -157,7 +172,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
 }
 
 for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
-  test(`native credential recovery fits ${locale} ${width}`, async ({browser}) => {
+  test(`native credential recovery fits ${locale} ${width}`, async ({browser}, testInfo) => {
     const context = await browser.newContext({locale, viewport: {width, height: 900}});
     const page = await context.newPage(); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await setup(page);
@@ -166,8 +181,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await expect(page.locator('input[type=password]')).toHaveCount(0);
     await expect(page.getByRole('button', {name: locale === 'en-US' ? 'Connect' : '連線', exact: true})).toBeDisabled();
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_connect'))).toEqual([]);
-    await mkdir('/tmp/bac-credentials-after', {recursive: true});
-    await page.screenshot({path: `/tmp/bac-credentials-after/settings-${locale}-${width}.png`, fullPage: true});
+    await page.screenshot({path: testInfo.outputPath(`settings-${locale}-${width}.png`), fullPage: true});
     await add.click();
     await expectConnectedIdentity(page);
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_enroll')))

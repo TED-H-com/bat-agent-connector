@@ -1,3 +1,4 @@
+import {resultSourcesStrings} from './result-sources-strings.js';
 import {externalHistoryStrings} from './pm-external-history-strings.js';
 import {adoptStartStrings} from './pm-adopt-start-strings.js';
 import {workProfileStrings} from './pm-work-profile-strings.js';
@@ -39,6 +40,7 @@ export const STRINGS = {
   "zh-TW": {
     ...FLEET_STRINGS['zh-TW'],
     ...workbenchStrings["zh-TW"],
+    ...resultSourcesStrings["zh-TW"],
     ...externalHistoryStrings["zh-TW"],
     ...diagnosticsStrings["zh-TW"],
     ...workStartStrings["zh-TW"],
@@ -74,6 +76,7 @@ export const STRINGS = {
     ...findingNameStrings["zh-TW"],
     fleet_session_lifetime: "啟動環境不允許背景連線監控獨立執行。關閉啟動工作階段時，本機連線可能中斷。",
     managed_service_recovering: "正在重新啟動本機背景服務…",
+    managed_newer_journal: "這份紀錄需要較新的 Connector。請使用較新的 Connector 重新開啟，既有資料已保留。",
     managed_service_recovering_help: "正在重新啟動桌面的本機背景服務。既有工作與資料會保留。",
     managed_service_retry: "本機背景服務恢復失敗",
     managed_service_retry_help: "本機背景服務無法恢復，稍後會自動重試。既有資料已保留；請查看連線詳細資料。",
@@ -167,6 +170,8 @@ export const STRINGS = {
     setup_simple_help: "我們會幫你連接 BAT，完成基本設定。其他選項可以之後再調整。",
     setup_checking: "正在確認連線，請稍候…", setup_saving: "正在儲存設定，快好了…",
     setup_ready: "設定完成，可以開始使用了。", setup_loading: "正在準備設定…",
+    setup_verified_saved: "Connector 已驗證連線並儲存設定：{host} · {time}。",
+    setup_connection_checked: "連線觀察時間：{time}",
     setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
     setup_copy_label: "貼上從 BAT 複製的連線網址", setup_continue: "繼續設定",
     setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「自動設定」。",
@@ -197,7 +202,7 @@ export const STRINGS = {
     setup_busy: "目前仍有工作或操作；設定會等安全時機再變更。", setup_profiles_unavailable: "無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。",
     managed_join_existing: "加入既有的 Connector", managed_join_help: "輸入另一個 Connector 的位址與預期帳號，在原生視窗確認後，再加入該 Connector 的憑證。此電腦原有的背景工作會繼續運作。",
     managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。", managed_open_browser: "在瀏覽器開啟 Dashboard", managed_start_login: "登入電腦時啟動",
-    managed_browser_connected: "已連線至本機 Connector", managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
+    managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
     delivery_list_prs: "瀏覽 Pull Requests",
     delivery_no_prs: "找不到 PR。",
     delivery_refresh_prs: "重新整理這一頁的 PR",
@@ -1096,6 +1101,7 @@ export const STRINGS = {
   en: {
     ...FLEET_STRINGS.en,
     ...workbenchStrings.en,
+    ...resultSourcesStrings.en,
     ...externalHistoryStrings.en,
     ...diagnosticsStrings.en,
     ...workStartStrings.en,
@@ -1131,6 +1137,7 @@ export const STRINGS = {
     ...findingNameStrings.en,
     fleet_session_lifetime: "The launching environment prevents the connection monitor from running independently. Local connections may stop when the launching session ends.",
     managed_service_recovering: "Restarting local service…",
+    managed_newer_journal: "These records need a newer Connector. Reopen with the newer Connector; existing data is preserved.",
     managed_service_recovering_help: "This Dashboard is restarting its local background service. Existing work and data are retained.",
     managed_service_retry: "Local service recovery failed",
     managed_service_retry_help: "The local background service could not recover. It will retry automatically. Existing data is retained; see connection details.",
@@ -1224,6 +1231,8 @@ export const STRINGS = {
     setup_simple_help: "We’ll help you connect to BAT and get things ready. You can adjust other options later.",
     setup_checking: "Checking your connection. Please wait…", setup_saving: "Saving your settings. Almost there…",
     setup_ready: "Setup is complete. You’re ready to go.", setup_loading: "Getting setup ready…",
+    setup_verified_saved: "Connector verified the connection and saved the configuration for {host} at {time}.",
+    setup_connection_checked: "Connection observed at {time}",
     setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
     setup_copy_label: "Paste the connection link copied from BAT", setup_continue: "Continue setup",
     setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Set up automatically.",
@@ -1254,7 +1263,7 @@ export const STRINGS = {
     setup_busy: "Work or operations are still active; configuration changes wait for a safe point.", setup_profiles_unavailable: "BAT connection profiles could not be read. Paste a connection URL or enter the values manually.",
     managed_join_existing: "Join another Connector", managed_join_help: "Enter the address and expected account for another Connector, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
     managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.", managed_open_browser: "Open Dashboard in browser", managed_start_login: "Start when I sign in",
-    managed_browser_connected: "Connected to your local Connector", managed_browser_help: "This browser uses your desktop identity. After signing out, reopen Dashboard from the desktop menu.",
+    managed_browser_help: "This browser uses your desktop identity. After signing out, reopen Dashboard from the desktop menu.",
     workspace_navigation: "Projects and work", workspace_search: "Search loaded projects and work", workspace_manage: "Add / manage projects",
     workspace_all_sessions: "All sessions", workspace_tools: "Tools", workspace_connection: "Connection / Fleet",
     workspace_expand: "Expand {name}", workspace_collapse: "Collapse {name}", workspace_needs_you: "Needs you",

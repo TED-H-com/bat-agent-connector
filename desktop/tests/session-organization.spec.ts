@@ -1,6 +1,5 @@
 import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect, type Page} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 
 const caps = {actor: 'organizer', scopes: ['observe'], api_version: 1, contract_version: '2026-10-08', hosts: [], actions: [], features: {}};
 const cp = (cursor: number) => ({cursor, token: `session-page-${cursor}`});
@@ -151,13 +150,12 @@ for (const native of [false, true]) {
   });
 }
 for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
-  test(`session organization fits ${locale} ${width}`, async ({browser}) => {
+  test(`session organization fits ${locale} ${width}`, async ({browser}, testInfo) => {
     const context = await browser.newContext({locale, viewport: {width, height: 900}}), page = await context.newPage();
     const {data, dispatch} = fixture(); await mount(page, false, dispatch); await page.goto('/dashboard/#/sessions');
     await expect(page.locator('[data-resource-id]')).toHaveCount(24);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await mkdir('/tmp/bac-sessions-after', {recursive: true});
-    await page.screenshot({path: `/tmp/bac-sessions-after/sessions-${locale}-${width}.png`});
+    await page.screenshot({path: testInfo.outputPath(`sessions-${locale}-${width}.png`)});
     if (width < 901) await page.locator('.session-scope > summary').click();
     await page.locator('.session-workspaces button').filter({hasText: 'Dashboard'}).click();
     await expect(page.locator('[data-resource-id]')).toHaveCount(8);
@@ -166,7 +164,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
   });
 }
 
-for (const width of [390, 768, 1440]) test(`long workspace identities and expanded evidence fit ${width}`, async ({page}) => {
+for (const width of [390, 768, 1440]) test(`long workspace identities and expanded evidence fit ${width}`, async ({page}, testInfo) => {
   await page.setViewportSize({width, height: 900});
   const {data, dispatch} = fixture();
   const row = {...data.rows[0], title: '<img src=x onerror=alert(1)> ' + 'LongTitleWithoutSpaces'.repeat(9),
@@ -181,9 +179,8 @@ for (const width of [390, 768, 1440]) test(`long workspace identities and expand
   await expect(page.getByText(row.session_id, {exact: true})).toBeVisible();
   await expect(page.locator('.session-inventory img')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await mkdir('/tmp/bac-sessions-after', {recursive: true});
   await page.evaluate(() => scrollTo(0, 0));
-  await page.screenshot({path: `/tmp/bac-sessions-after/expanded-long-${width}.png`, fullPage: true});
+  await page.screenshot({path: testInfo.outputPath(`expanded-long-${width}.png`), fullPage: true});
 });
 
 test('same-host workspace labels disambiguate by ID while unique names stay clean', async ({page}) => {

@@ -1,5 +1,7 @@
 import {buildLine} from './diagnostics.js';
+import {versionFacts} from './version-facts.js';
 import {button} from './ui/components.js';
+import {timeLabel, timeStamp} from './ui/stamps.js';
 export function diagnosticsDialog({h, t, load, save, onClose}) {
   const origin = document.activeElement;
   const summary = h('div', {'data-diagnostics-summary':''});
@@ -52,7 +54,11 @@ export function diagnosticsDialog({h, t, load, save, onClose}) {
     if(current!==serial || !dialog.isConnected)return;
     content=JSON.stringify(bundle,null,2)+'\n';
     filename='batc-diagnostics-'+bundle.exported_at.slice(0,10).replaceAll('-','')+'-'+bundle.exported_at.slice(11,16).replace(':','')+'.json';
-    summary.append(h('div',{},h('p',{},buildLine(bundle.client,t)),
+    summary.append(h('div',{},h('p',{},buildLine(bundle.versions,t)),versionFacts({h,t,projection:bundle.versions}),
+      ...Object.entries(bundle.source_reads).map(([source, read]) => h('p', {'data-diagnostics-source':source},
+        t('diag_source_'+source), ' · ', t('diag_source_'+read.status),
+        read.http_status == null ? null : ` · HTTP ${read.http_status}`, read.code ? [' · ',h('code',{},read.code)] : null,
+        read.read_at ? [' · ',timeLabel(t,'diag_source_checked',{time:timeStamp(read.read_at)})] : null)),
       bundle.sources.hosts==='not_available' ? h('p',{},t('diag_hosts_unavailable')) : null,
       ...bundle.hosts.map(host=>h('p',{},`${host.alias} · ${t('diag_'+(host.connection_state==='unknown'?'state_unknown':host.connection_state))}${host.stale === true && host.connection_state !== 'stale' ? ' · ' + t('diag_stale') : ''}`)),
       h('p',{},t('diag_counts',{errors:t(bundle.recent_errors.length===1?'diag_errors_one':'diag_errors_many',{count:bundle.recent_errors.length}),operations:bundle.operations===null?t('diag_operations_unavailable'):t(bundle.operations.length===1?'diag_operations_one':'diag_operations_many',{count:bundle.operations.length})})),

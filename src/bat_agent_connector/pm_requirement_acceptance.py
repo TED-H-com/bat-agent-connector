@@ -135,6 +135,29 @@ def require_sources(ops, principal, wid, proof):
 
 
 def _dependencies(ops, principal, downstream_package, references, *, current):
+    if current:
+        return _dependency_sources(ops, principal, downstream_package, references, current=True)
+    from .pm_source_reads import check, scope
+    try:
+        doc = downstream_package['document']
+        key = evidence.digest([downstream_package['workspace_id'], doc['requirements'],
+            doc['context']['plan_ref'], references])
+    except (KeyError, TypeError, ValueError, RecursionError):
+        # Preserve the original validation and errors for malformed identities.
+        return _dependency_sources(ops, principal, downstream_package, references, current=False)
+    with scope(ops.db, principal) as state:
+        def visible():
+            _dependency_sources(ops, principal, downstream_package, references, current=False)
+            return True
+        if ('requirement_sources', key) in state['active']:
+            visible()
+        elif not check(ops.db, principal, 'requirement_sources', key, visible):
+            raise OperationError('NOT_FOUND', 'Original prerequisite sources unavailable', 404)
+    # Historical access never infers current applicability or acceptance.
+    return []
+
+
+def _dependency_sources(ops, principal, downstream_package, references, *, current):
     """Return proven prerequisite IDs; absent identities remain unassessed.
 
     Readiness calls this only for explicitly supplied identity references. The

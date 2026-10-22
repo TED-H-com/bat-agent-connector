@@ -1,5 +1,4 @@
 import {test, expect} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 import {startFixture, openStart, chooseWorkspace, startOperationId} from './session-start-fixture';
 const start = (form: any) => form.getByRole('button', {name: 'Start session', exact: true});
 const prompt = (form: any) => form.getByRole('textbox', {name: 'Original instructions (optional)', exact: true});
@@ -90,7 +89,7 @@ test('storage failure prevents first start request', async ({page}) => {
   };});
   await start(form).click(); await expect(form).toContainText('Storage unavailable'); expect(state.posts).toEqual([]);
 });
-for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) test(`start form fits ${locale} ${width}`, async ({browser}) => {
+for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) test(`start form fits ${locale} ${width}`, async ({browser}, testInfo) => {
   const context = await browser.newContext({locale, viewport: {width, height: 900}}), page = await context.newPage();
   const state = await startFixture(page, false); await openStart(page);
   await page.locator('[data-session-start] select').nth(0).selectOption('demo'); await expect(page.locator('[data-session-start] select').nth(1)).toBeEnabled();
@@ -98,8 +97,8 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) t
   await page.locator('textarea').fill(locale === 'zh-TW' ? '請保留我的原始指示與工作區。' : 'Keep my original instructions and workspace.');
   await page.locator('textarea').blur();
   await page.evaluate(async () => {window.scrollTo(0, 0); await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);});
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); await mkdir('/tmp/bac-start-ui-after', {recursive: true});
-  await page.screenshot({path: `/tmp/bac-start-ui-after/start-${locale}-${width}.png`, fullPage: true});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path: testInfo.outputPath(`start-${locale}-${width}.png`), fullPage: true});
   expect(state.errors).toEqual([]); expect(state.posts).toEqual([]); await context.close();
 });
 

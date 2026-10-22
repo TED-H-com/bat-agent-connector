@@ -8,6 +8,57 @@ session. It currently selects the fixed `codex-native-linux` runtime contract;
 [the native runtime contract](pm-native-runtime.md) defines its actual isolation
 and pinned protocol boundary.
 
+## Availability reasons
+
+`pmAvailability` projects existing global PM features/scopes and workspace or
+installation analysis descriptors. Settings Agents, discussion replies and plan
+proposal composers share this reason mapping. A missing reply element is never
+connection evidence; Connector connection state remains owned by
+`centralServiceStatus`.
+
+Unsupported PM and missing View scope have separate explanations and next steps.
+Failed capability reads retain the existing localized error presentation and
+code. Unchecked means a check has not run; a completed read with no usable
+descriptor is unknown, while an in-flight check is checking. Known installation
+reasons reuse `eligibilityReasons`; an unexplained `authorized: false` stays a
+generic refusal rather than an invented membership or credential diagnosis.
+
+Settings keeps its existing descriptor set and any-installation ready predicate.
+Ready is an installation hint, not model execution evidence or permission for a
+specific request. Whether that Settings summary should become workspace-scoped
+remains an owner decision; its predicate and copy are unchanged.
+
+Workspace readers use `pm_workspace_adapter.effective_route`, the single authority
+for `effective_pm_route` version 1 in workspace capabilities and profile
+`pm_analysis`. Its scope is `workspace_selected_route`; `choice_source` is
+`saved`, `unset` or `unreadable`. It retains the selected adapter and the existing
+`choice_ref` (version, operation ID and document digest). The function projects
+the already-read choice, native/BAT descriptors and principal scopes; it makes
+no installation probe, BAT request or model call.
+
+With a saved choice, only its descriptor counts. View, Manage and Start must all
+be allowed, and `action_registered`, `authorized` and `eligible_for_preflight`
+must each be explicitly true. In particular, missing authorization fails closed;
+`authorized is not False` is insufficient. Missing scopes, registration or
+authorization have separate reasons; an ineligible descriptor keeps its own
+reason. Permission to edit the saved choice is a different fact and does not
+prevent a contributor from using an otherwise eligible selected route.
+
+Without a choice, `adapter` and `choice_ref` are null. `eligible_adapters` names
+the passing alternatives, and `adapters` retains each alternative's readiness
+and reason; no passing alternative gives `no_eligible_adapter`. An unreadable
+choice fails closed with `original_sources_unavailable`, never as an unset
+choice or an invitation to use another route.
+
+Profile `pm_ready` is this facet's ready value. Work and the new-discussion
+composer consume the facet; the composer keeps its former computation only for
+servers without the facet. An unsupported facet version fails closed. The
+structured-analysis gate still checks its explicit request adapter and saved
+choice; a per-request gate may be stricter than preflight eligibility. Neither
+the facet nor its display selects an adapter, authorizes execution or verifies a
+model: `execution_authorized` and `model_execution_verified` remain false.
+Final server admission, including `PM_ADAPTER_MISMATCH`, remains authoritative.
+
 ## Admission and context
 
 The original caller needs `observe`, `manage`, and `start`, plus current write

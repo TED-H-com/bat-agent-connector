@@ -1,5 +1,4 @@
 import {test, expect, type Page} from '@playwright/test';
-import {mkdirSync} from 'node:fs';
 import {followUpFixture, openWork, WS, WI, ATTEMPT} from './work-next-turn-fixture.ts';
 
 const ui = {
@@ -155,6 +154,33 @@ for (const lang of ['en', 'zh-TW'] as const) {
     expect(f.follow.posts[1].idempotency_key).toBe(key);
     expect(f.follow.ops.size).toBe(1);
   });
+}
+
+for (const lang of ['en', 'zh-TW'] as const) {
+test(`${lang}: an acknowledgement during an admission reread frees the draft without another POST`, async ({page}) => {
+  const f = followUpFixture(lang);
+  let release = () => {};
+  f.follow.holdPost = new Promise<void>(resolve => {release = resolve;});
+  await openWork(page, f, lang);
+  await field(page).fill('Accepted while admission is being checked');
+  await send(page, lang).click();
+  await expect.poll(() => f.follow.postStarted).toBe(true);
+  f.follow.hold.result = true;
+  f.pushEvent();
+  await expect.poll(() => f.follow.held.length).toBeGreaterThan(0);
+  release();
+  await expect(receipts(page)).toHaveCount(1);
+  await expect(field(page)).toHaveValue('');
+  await expect(field(page)).toBeFocused();
+  await field(page).fill('  Keep this next draft 原文\n  ');
+  await expect(send(page, lang)).toBeDisabled();
+  expect(f.follow.posts).toHaveLength(1);
+  f.follow.hold.result = false;
+  f.follow.releaseHeld();
+  await expect(send(page, lang)).toBeEnabled();
+  await expect(field(page)).toHaveValue('  Keep this next draft 原文\n  ');
+  expect(f.follow.posts).toHaveLength(1);
+});
 }
 
 test('a held accept is not a local queue, and the field is free once the id exists', async ({page}) => {
@@ -500,7 +526,7 @@ test('a missing operate scope keeps history without a composer', async ({page}) 
   const scoped = followUpFixture('en', {operate: false});
   scoped.follow.items = [queuedReceipt()];
   await openWork(page, scoped, 'en');
-  await expect(page.locator('[data-follow-up-pill]')).toContainText('Read-only');
+  await expect(page.locator('[data-follow-up-pill]')).toHaveText('API read-only');
   await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
   await expect(receipts(page)).toHaveCount(1);
 });
@@ -773,10 +799,8 @@ test('the native shell still requires a supported follow-up capability', async (
   expect(f.follow.reads.some(row => row.includes('/inputs') || row.includes('/work-attempts/'))).toBe(false);
 });
 
-test('zh-TW layouts at 1440, 768 and 390', async ({page}) => {
+test('zh-TW layouts at 1440, 768 and 390', async ({page}, testInfo) => {
   test.setTimeout(90000);
-  const dir = `${process.env.TMPDIR || '/tmp'}/e03-next-turn`;
-  mkdirSync(dir, {recursive: true});
   const title = '改善文件搜尋在沒有結果時的提示，並保留讀者原本輸入的關鍵字、焦點與下一步指令，讓很長的中文標題在窄螢幕上仍然可以完整換行閱讀';
   const f = followUpFixture('zh-TW', {title});
   f.follow.items = [queuedReceipt('op_' + 'c'.repeat(32), {
@@ -789,7 +813,7 @@ test('zh-TW layouts at 1440, 768 and 390', async ({page}) => {
     await section(page).scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     await expect(section(page)).not.toContainText(/undefined|NaN|\bnull\b/);
-    await page.screenshot({path: `${dir}/queued-${width}.png`, animations: 'disabled'});
+    await page.screenshot({path: testInfo.outputPath(`queued-${width}.png`), animations: 'disabled'});
   }
   f.follow.items = [];
   f.follow.filtered = false;
@@ -798,7 +822,7 @@ test('zh-TW layouts at 1440, 768 and 390', async ({page}) => {
   for (const width of [1440, 390]) {
     await page.setViewportSize({width, height: width === 390 ? 844 : 900});
     await section(page).scrollIntoViewIfNeeded();
-    await page.screenshot({path: `${dir}/empty-${width}.png`, animations: 'disabled'});
+    await page.screenshot({path: testInfo.outputPath(`empty-${width}.png`), animations: 'disabled'});
   }
   f.follow.items = [{
     ...queuedReceipt('op_' + '9'.repeat(32), {state: 'unknown', text_excerpt: '這次送出的結果尚未確認。', next_allowed_actions: []}),
@@ -811,6 +835,6 @@ test('zh-TW layouts at 1440, 768 and 390', async ({page}) => {
     await page.setViewportSize({width, height: width === 390 ? 844 : 900});
     await section(page).scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
-    await page.screenshot({path: `${dir}/unknown-${width}.png`, animations: 'disabled'});
+    await page.screenshot({path: testInfo.outputPath(`unknown-${width}.png`), animations: 'disabled'});
   }
 });

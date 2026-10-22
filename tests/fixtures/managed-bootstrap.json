@@ -1,0 +1,1885 @@
+{
+  "sync": {
+    "version": 1,
+    "server_id": "fixture-server",
+    "principal_id": "fixture-principal",
+    "head_cursor": 0,
+    "retained_after": 0,
+    "checkpoint": {
+      "cursor": 0,
+      "token": "fixture-checkpoint-proof"
+    }
+  },
+  "capabilities": {
+    "managed_installation": {
+      "installation_id": "fixture-installation",
+      "runtime_version": "0.2.12",
+      "background": true
+    },
+    "desktop_identity": {
+      "server_id": "fixture-server",
+      "principal_id": "fixture-principal"
+    },
+    "actor": "fixture-operator",
+    "scopes": [
+      "observe",
+      "operate"
+    ],
+    "api_version": 1,
+    "contract_version": "2026-10-08",
+    "connector": "0.2.12",
+    "build": {
+      "version": "0.2.12",
+      "commit": null,
+      "source": "package"
+    },
+    "hosts": [],
+    "frontend": {
+      "digest": null
+    },
+    "artifacts": {
+      "limits": {
+        "max_file_bytes": 16777216,
+        "max_selection_count": 20,
+        "max_selection_bytes": 67108864,
+        "max_store_bytes": 536870912,
+        "mcp_max_file_bytes": 262144,
+        "upload_window_s": 3600,
+        "transfer_timeout_s": 300
+      },
+      "capture": {
+        "manual_single_file": true,
+        "managed_single_file": true,
+        "snapshot": false,
+        "managed_selectors": [
+          "execution_operation_id",
+          "task_command"
+        ],
+        "preview_ttl_s": 600
+      },
+      "hosts": []
+    },
+    "identity": {
+      "server_id": "fixture-server",
+      "principal_id": "fixture-principal"
+    },
+    "actions": [
+      {
+        "action": "session.permissions",
+        "scope": "operate",
+        "summary": "Set managed session permission configuration",
+        "allowed": true
+      },
+      {
+        "action": "session.send",
+        "scope": "operate",
+        "summary": "Send a message to a connector-managed session",
+        "allowed": true
+      },
+      {
+        "action": "session.answer",
+        "scope": "operate",
+        "summary": "Answer a managed session's pending question or permission prompt",
+        "allowed": true
+      },
+      {
+        "action": "session.interrupt",
+        "scope": "operate",
+        "summary": "Interrupt a managed session's running turn",
+        "allowed": true
+      },
+      {
+        "action": "github.pr.update",
+        "scope": "integrate",
+        "summary": "Update PR title/body at a reviewed metadata digest",
+        "allowed": false
+      },
+      {
+        "action": "github.pr.merge",
+        "scope": "merge",
+        "summary": "Merge a pull request at the reviewed head SHA",
+        "allowed": false
+      },
+      {
+        "action": "deployment.start",
+        "scope": "deploy",
+        "summary": "Deploy a fixed commit through a configured recipe",
+        "allowed": false
+      },
+      {
+        "action": "deployment.rollback",
+        "scope": "deploy",
+        "summary": "Redeploy a saved verified identity through its recipe",
+        "allowed": false
+      },
+      {
+        "action": "delivery.merge_and_deploy",
+        "scope": "merge",
+        "summary": "Merge a pull request, then deploy the merged commit",
+        "allowed": false
+      },
+      {
+        "action": "checkpoint.continue.revalidate",
+        "scope": "start",
+        "summary": "Confirm unchanged inputs and resume the same continuation",
+        "allowed": false
+      },
+      {
+        "action": "checkpoint.create",
+        "scope": "operate",
+        "summary": "Record a session's commit and recent conversation (read-only)",
+        "allowed": true
+      },
+      {
+        "action": "checkpoint.continue",
+        "scope": "start",
+        "summary": "Start a new managed session from a checkpoint's commit",
+        "allowed": false
+      },
+      {
+        "action": "integration.preview",
+        "scope": "integrate",
+        "summary": "Pin a PR head and chosen results, list what would enter the PR",
+        "allowed": false
+      },
+      {
+        "action": "integration.apply",
+        "scope": "integrate",
+        "summary": "Compose a reviewed preview into the PR head with one normal push",
+        "allowed": false
+      },
+      {
+        "action": "integration.handoff",
+        "scope": "integrate",
+        "summary": "Start a managed session that resolves an integration conflict",
+        "allowed": false
+      },
+      {
+        "action": "project.create",
+        "scope": "manage",
+        "summary": "Create a project (name, description, parent, repositories)",
+        "allowed": false
+      },
+      {
+        "action": "project.update",
+        "scope": "manage",
+        "summary": "Rename, describe, move, archive or restore a project",
+        "allowed": false
+      },
+      {
+        "action": "project.order",
+        "scope": "manage",
+        "summary": "Reorder the projects under one parent",
+        "allowed": false
+      },
+      {
+        "action": "project.pin",
+        "scope": "manage",
+        "summary": "Pin a project above its siblings, or unpin it",
+        "allowed": false
+      },
+      {
+        "action": "work_item.create",
+        "scope": "manage",
+        "summary": "Add a work item to a project",
+        "allowed": false
+      },
+      {
+        "action": "work_item.update",
+        "scope": "manage",
+        "summary": "Edit, move, set the state of, archive or restore a work item",
+        "allowed": false
+      },
+      {
+        "action": "work_item.order",
+        "scope": "manage",
+        "summary": "Reorder the work items under one parent",
+        "allowed": false
+      },
+      {
+        "action": "work_item.pin",
+        "scope": "manage",
+        "summary": "Pin a work item above its siblings, or unpin it",
+        "allowed": false
+      },
+      {
+        "action": "work_item.approve",
+        "scope": "approve",
+        "summary": "Accept a work item as done, for the content you read",
+        "allowed": false
+      },
+      {
+        "action": "work_item.continue",
+        "scope": "manage",
+        "summary": "Send a done claim back: the work item is not finished",
+        "allowed": false
+      },
+      {
+        "action": "work_item.link",
+        "scope": "manage",
+        "summary": "Link a work item to a session, checkpoint, operation, task or PR",
+        "allowed": false
+      },
+      {
+        "action": "task.submit",
+        "scope": "start",
+        "summary": "Submit exact words to the existing Task Service",
+        "allowed": false
+      },
+      {
+        "action": "task.pause",
+        "scope": "operate",
+        "summary": "Pause task dispatch and optionally abort its turn",
+        "allowed": true
+      },
+      {
+        "action": "task.resume",
+        "scope": "operate",
+        "summary": "Resume task dispatch after command reconciliation",
+        "allowed": true
+      },
+      {
+        "action": "task.mark_stage",
+        "scope": "manage",
+        "summary": "Record adoption, merge or deployment of a verified task",
+        "allowed": false
+      },
+      {
+        "action": "task.verify",
+        "scope": "operate",
+        "summary": "Run the trusted task verifier",
+        "allowed": true
+      },
+      {
+        "action": "task.request_ted",
+        "scope": "operate",
+        "summary": "Stop task dispatch for a human decision",
+        "allowed": true
+      },
+      {
+        "action": "task.command.reconcile",
+        "scope": "operate",
+        "summary": "Resolve the original uncertain task command",
+        "allowed": true
+      },
+      {
+        "action": "artifact.upload",
+        "scope": "manage",
+        "summary": "Upload an immutable artifact revision",
+        "allowed": false
+      },
+      {
+        "action": "session.labels.set",
+        "scope": "manage",
+        "summary": "Set Connector-only labels for a journal-known session",
+        "allowed": false
+      },
+      {
+        "action": "work_item.read",
+        "scope": "observe",
+        "summary": "Mark the displayed work-item version read for yourself",
+        "allowed": true
+      },
+      {
+        "action": "session.read",
+        "scope": "observe",
+        "summary": "Mark explicitly displayed conversation revisions read",
+        "allowed": true
+      },
+      {
+        "action": "session.position",
+        "scope": "observe",
+        "summary": "Remember a personal conversation reading position",
+        "allowed": true
+      },
+      {
+        "action": "cleanup.apply",
+        "scope": "cleanup",
+        "summary": "Apply exactly a reviewed cleanup preview",
+        "allowed": false
+      },
+      {
+        "action": "artifact.capture",
+        "scope": "manage",
+        "summary": "Capture a reviewed manual-session file",
+        "allowed": false
+      },
+      {
+        "action": "artifact.capture.managed",
+        "scope": "manage",
+        "summary": "Capture a managed execution's reviewed file",
+        "allowed": false
+      },
+      {
+        "action": "artifact.accept",
+        "scope": "approve",
+        "summary": "Accept one exact managed artifact revision",
+        "allowed": false
+      },
+      {
+        "action": "session.start",
+        "scope": "start",
+        "summary": "Start one standalone managed session",
+        "allowed": false
+      },
+      {
+        "action": "repository.continue",
+        "scope": "start",
+        "summary": "Start from a published version",
+        "allowed": false
+      },
+      {
+        "action": "session.relay",
+        "scope": "operate",
+        "summary": "Relay exact original words to one fixed managed target",
+        "allowed": true
+      },
+      {
+        "action": "fanout.plan",
+        "scope": "start",
+        "summary": "Execute a fixed fanout plan with individual start receipts",
+        "allowed": false
+      },
+      {
+        "action": "fanout.start",
+        "scope": "start",
+        "summary": "Execute a fixed fanout plan with individual start receipts",
+        "allowed": false
+      },
+      {
+        "action": "session.record_verification",
+        "scope": "operate",
+        "summary": "Record external clean-candidate testimony",
+        "allowed": true
+      },
+      {
+        "action": "session.failover",
+        "scope": "start",
+        "summary": "Continue one fixed standalone Claude source with Codex",
+        "allowed": false
+      },
+      {
+        "action": "worktree.merge",
+        "scope": "integrate",
+        "summary": "Merge one fixed managed worktree into its managed source checkout",
+        "allowed": false
+      },
+      {
+        "action": "session.approve_pending",
+        "scope": "operate",
+        "summary": "Approve a fixed reviewed set of managed permission prompts",
+        "allowed": true
+      },
+      {
+        "action": "repair.create",
+        "scope": "manage",
+        "summary": "Create or reuse repair work from fixed central evidence",
+        "allowed": false
+      },
+      {
+        "action": "preferences.models.update",
+        "scope": "observe",
+        "summary": "Save your model display preferences",
+        "allowed": true
+      },
+      {
+        "action": "project.skills.update",
+        "scope": "manage",
+        "summary": "Pin project skill selections from the reviewed host catalog",
+        "allowed": false
+      },
+      {
+        "action": "pm.workspace.create",
+        "scope": "manage",
+        "summary": "Create an independent PM workspace",
+        "allowed": false
+      },
+      {
+        "action": "pm.workspace.member.set",
+        "scope": "manage",
+        "summary": "Set or remove workspace membership",
+        "allowed": false
+      },
+      {
+        "action": "pm.ahp.observe",
+        "scope": "observe",
+        "summary": "Read a bounded configured AHP catalog and selected snapshots",
+        "allowed": true
+      },
+      {
+        "action": "pm.thread.create",
+        "scope": "manage",
+        "summary": "Save PM discussion or an explicit Planning draft",
+        "allowed": false
+      },
+      {
+        "action": "pm.thread.rename",
+        "scope": "manage",
+        "summary": "Save PM discussion or an explicit Planning draft",
+        "allowed": false
+      },
+      {
+        "action": "pm.message.append",
+        "scope": "manage",
+        "summary": "Save PM discussion or an explicit Planning draft",
+        "allowed": false
+      },
+      {
+        "action": "pm.input.record",
+        "scope": "manage",
+        "summary": "Save PM discussion or an explicit Planning draft",
+        "allowed": false
+      },
+      {
+        "action": "pm.input.confirm",
+        "scope": "manage",
+        "summary": "Save PM discussion or an explicit Planning draft",
+        "allowed": false
+      },
+      {
+        "action": "pm.thread.plan",
+        "scope": "manage",
+        "summary": "Save PM discussion or an explicit Planning draft",
+        "allowed": false
+      },
+      {
+        "action": "pm.thread.plan.revise",
+        "scope": "manage",
+        "summary": "Save PM discussion or an explicit Planning draft",
+        "allowed": false
+      },
+      {
+        "action": "pm.run.prepare",
+        "scope": "manage",
+        "summary": "Freeze a professional PM discussion work package",
+        "allowed": false
+      },
+      {
+        "action": "pm.run.analyze",
+        "scope": "manage",
+        "summary": "Analyze a frozen PM discussion in one isolated native turn",
+        "allowed": false
+      },
+      {
+        "action": "pm.run.bat.analyze",
+        "scope": "manage",
+        "summary": "Analyze a frozen PM discussion in one dedicated BAT turn",
+        "allowed": false
+      },
+      {
+        "action": "pm.plan.draft",
+        "scope": "manage",
+        "summary": "Save an immutable sourced project plan draft",
+        "allowed": false
+      },
+      {
+        "action": "pm.plan.adopt",
+        "scope": "manage",
+        "summary": "Adopt an exact project plan with verified Git evidence",
+        "allowed": false
+      },
+      {
+        "action": "pm.workspace.adapter.select",
+        "scope": "manage",
+        "summary": "Select this workspace bounded PM analysis adapter",
+        "allowed": false
+      },
+      {
+        "action": "pm.project.bind",
+        "scope": "manage",
+        "summary": "Associate existing work or capture its central evidence",
+        "allowed": false
+      },
+      {
+        "action": "pm.work.bind",
+        "scope": "manage",
+        "summary": "Associate existing work or capture its central evidence",
+        "allowed": false
+      },
+      {
+        "action": "pm.evidence.capture",
+        "scope": "manage",
+        "summary": "Associate existing work or capture its central evidence",
+        "allowed": false
+      },
+      {
+        "action": "pm.snapshot.create",
+        "scope": "manage",
+        "summary": "Freeze sourced project context for a shared Brief and documents",
+        "allowed": false
+      },
+      {
+        "action": "pm.roadmap.baseline.set",
+        "scope": "manage",
+        "summary": "Record explicit Roadmap scheduling and fixed-source observations",
+        "allowed": false
+      },
+      {
+        "action": "pm.roadmap.forecast.set",
+        "scope": "manage",
+        "summary": "Record explicit Roadmap scheduling and fixed-source observations",
+        "allowed": false
+      },
+      {
+        "action": "pm.roadmap.observe",
+        "scope": "manage",
+        "summary": "Record explicit Roadmap scheduling and fixed-source observations",
+        "allowed": false
+      },
+      {
+        "action": "pm.product_goal.revise",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.dod.revise",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.backlog.revise",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.sprint.create",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.sprint.goal.revise",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.sprint.select",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.sprint.start",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.sprint.close",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.sprint.cancel",
+        "scope": "manage",
+        "summary": "Record explicit Sprint commitments and management state",
+        "allowed": false
+      },
+      {
+        "action": "pm.meeting.create",
+        "scope": "manage",
+        "summary": "Record a sourced professional discussion without executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.meeting.context.revise",
+        "scope": "manage",
+        "summary": "Record a sourced professional discussion without executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.meeting.note",
+        "scope": "manage",
+        "summary": "Record a sourced professional discussion without executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.meeting.draft",
+        "scope": "manage",
+        "summary": "Record a sourced professional discussion without executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.meeting.complete",
+        "scope": "manage",
+        "summary": "Record a sourced professional discussion without executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.meeting.follow_up.record",
+        "scope": "manage",
+        "summary": "Record a sourced professional discussion without executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.governance.record",
+        "scope": "manage",
+        "summary": "Record sourced PM governance without execution",
+        "allowed": false
+      },
+      {
+        "action": "pm.governance.revise",
+        "scope": "manage",
+        "summary": "Record sourced PM governance without execution",
+        "allowed": false
+      },
+      {
+        "action": "pm.governance.decide",
+        "scope": "manage",
+        "summary": "Record sourced PM governance without execution",
+        "allowed": false
+      },
+      {
+        "action": "pm.governance.adoption.link",
+        "scope": "manage",
+        "summary": "Record sourced PM governance without execution",
+        "allowed": false
+      },
+      {
+        "action": "pm.follow_up.prepare",
+        "scope": "manage",
+        "summary": "Prepare a sourced Follow-up agenda without execution",
+        "allowed": false
+      },
+      {
+        "action": "pm.follow_up.analyze",
+        "scope": "manage",
+        "summary": "Analyze one fixed Follow-up intake without adopting or executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.conversation.propose",
+        "scope": "manage",
+        "summary": "Prepare sourced candidate plan updates for one owner review",
+        "allowed": false
+      },
+      {
+        "action": "pm.conversation.adopt",
+        "scope": "manage",
+        "summary": "Adopt one complete owner-reviewed conversation update",
+        "allowed": false
+      },
+      {
+        "action": "pm.continuation.prepare",
+        "scope": "manage",
+        "summary": "Prepare a sourced continuation brief without adopting decisions",
+        "allowed": false
+      },
+      {
+        "action": "pm.overview.assess",
+        "scope": "manage",
+        "summary": "Assess fixed Overview evidence without adopting or executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.work_package.create",
+        "scope": "manage",
+        "summary": "Freeze one sourced engineering work package; never start work",
+        "allowed": false
+      },
+      {
+        "action": "pm.spec.materialize",
+        "scope": "manage",
+        "summary": "Materialize one fixed package in the owned PM spec carrier",
+        "allowed": false
+      },
+      {
+        "action": "pm.execution.runtime.observe",
+        "scope": "observe",
+        "summary": "Read the original selected batch turn without sending input",
+        "allowed": false
+      },
+      {
+        "action": "pm.session.quiescence.observe",
+        "scope": "observe",
+        "summary": "Observe bounded explicitly linked manual inputs without changing the session",
+        "allowed": true
+      },
+      {
+        "action": "pm.work_batch.start",
+        "scope": "manage",
+        "summary": "Bounded selected engineering batch",
+        "allowed": false
+      },
+      {
+        "action": "pm.work_batch.evidence.record",
+        "scope": "manage",
+        "summary": "Bounded selected engineering batch",
+        "allowed": false
+      },
+      {
+        "action": "pm.lifecycle.set_stage",
+        "scope": "manage",
+        "summary": "Record an explicit workspace lifecycle decision",
+        "allowed": false
+      },
+      {
+        "action": "pm.lifecycle.pause",
+        "scope": "manage",
+        "summary": "Record an explicit workspace lifecycle decision",
+        "allowed": false
+      },
+      {
+        "action": "pm.lifecycle.close",
+        "scope": "manage",
+        "summary": "Record an explicit workspace lifecycle decision",
+        "allowed": false
+      },
+      {
+        "action": "pm.lifecycle.reopen",
+        "scope": "manage",
+        "summary": "Record an explicit workspace lifecycle decision",
+        "allowed": false
+      },
+      {
+        "action": "pm.lifecycle.retain_inflight",
+        "scope": "manage",
+        "summary": "Record an explicit workspace lifecycle decision",
+        "allowed": false
+      },
+      {
+        "action": "pm.issue.publish",
+        "scope": "manage",
+        "summary": "Publish selected issue text",
+        "allowed": false
+      },
+      {
+        "action": "pm.issue.cancel",
+        "scope": "manage",
+        "summary": "Stop this workspace's issue tracking; optionally publish a selected reason",
+        "allowed": false
+      },
+      {
+        "action": "pm.release_baseline.register",
+        "scope": "manage",
+        "summary": "Select an existing verified release baseline; never publish",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance_policy.adopt",
+        "scope": "manage",
+        "summary": "Adopt bounded maintenance policy without starting work",
+        "allowed": false
+      },
+      {
+        "action": "pm.workload.capture",
+        "scope": "manage",
+        "summary": "Capture current bounded workload evidence without executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.github.observe",
+        "scope": "manage",
+        "summary": "Observe the explicitly adopted read-only GitHub workload profile",
+        "allowed": false
+      },
+      {
+        "action": "pm.dependencies.capture",
+        "scope": "manage",
+        "summary": "Record pinned dependency evidence / 記錄固定版本相依證據",
+        "allowed": false
+      },
+      {
+        "action": "pm.dependencies.declare",
+        "scope": "manage",
+        "summary": "Record pinned dependency evidence / 記錄固定版本相依證據",
+        "allowed": false
+      },
+      {
+        "action": "pm.dependencies.retract",
+        "scope": "manage",
+        "summary": "Record pinned dependency evidence / 記錄固定版本相依證據",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance.check",
+        "scope": "manage",
+        "summary": "Run one bounded policy-authorized maintenance observation",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance_review.prepare",
+        "scope": "manage",
+        "summary": "Record a sourced maintenance review without adopting or executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance_review.note",
+        "scope": "manage",
+        "summary": "Record a sourced maintenance review without adopting or executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance_review.candidate.record",
+        "scope": "manage",
+        "summary": "Record a sourced maintenance review without adopting or executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance_review.complete",
+        "scope": "manage",
+        "summary": "Record a sourced maintenance review without adopting or executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance_review.follow_up.record",
+        "scope": "manage",
+        "summary": "Record a sourced maintenance review without adopting or executing work",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance.repair.runtime.observe",
+        "scope": "observe",
+        "summary": "Read the original owned repair turn; no new input",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance.repair",
+        "scope": "start",
+        "summary": "Execute an explicit fixed adopted maintenance repair rule",
+        "allowed": false
+      },
+      {
+        "action": "pm.maintenance.repair.evidence.record",
+        "scope": "manage",
+        "summary": "Execute an explicit fixed adopted maintenance repair rule",
+        "allowed": false
+      },
+      {
+        "action": "pm.quality.review.create",
+        "scope": "manage",
+        "summary": "Review original acceptance and Definition of Done",
+        "allowed": false
+      },
+      {
+        "action": "pm.quality.review.record",
+        "scope": "manage",
+        "summary": "Review original acceptance and Definition of Done",
+        "allowed": false
+      },
+      {
+        "action": "pm.quality.review.revoke",
+        "scope": "manage",
+        "summary": "Review original acceptance and Definition of Done",
+        "allowed": false
+      },
+      {
+        "action": "pm.execution.verify",
+        "scope": "operate",
+        "summary": "Verify the exact owned execution with its configured trusted runner",
+        "allowed": true
+      },
+      {
+        "action": "github.pr.publish",
+        "scope": "integrate",
+        "summary": "Publish an exact owned result as a new pull request",
+        "allowed": false
+      },
+      {
+        "action": "pm.work_profile.save",
+        "scope": "manage",
+        "summary": "Append one PM work profile revision",
+        "allowed": false
+      },
+      {
+        "action": "work.start",
+        "scope": "start",
+        "summary": "Start one bound Work item in its own managed BAT worktree and session",
+        "allowed": false
+      },
+      {
+        "action": "work.adopt_and_start",
+        "scope": "start",
+        "summary": "Adopt the reviewed plan and start the selected existing Works",
+        "allowed": false
+      },
+      {
+        "action": "pm.work_input.defer",
+        "scope": "manage",
+        "summary": "Retain an unsent Work instruction as an Idea",
+        "allowed": false
+      }
+    ],
+    "operation_statuses": [
+      "accepted",
+      "running",
+      "waiting_checks",
+      "waiting_external",
+      "needs_attention",
+      "uncertain",
+      "succeeded",
+      "failed",
+      "cancelled"
+    ],
+    "cleanup": {
+      "preview_ttl_s": 900,
+      "max_items": 500,
+      "restore": false,
+      "scopes": [
+        "cleanup",
+        "cleanup_discard"
+      ],
+      "retention": {
+        "retained_refs": "keep",
+        "history_retention": "forever",
+        "permanent_delete": false
+      },
+      "read_deadline_s": 20.0,
+      "serialize_previews": true,
+      "preview": true,
+      "apply": false,
+      "discard": false,
+      "hosts": []
+    },
+    "features": {
+      "dashboard_sync": {
+        "version": 1,
+        "bootstrap": "/api/v1/bootstrap",
+        "checkpoint_replay": true
+      },
+      "controller_isolation": {
+        "version": 1,
+        "identity": "server_actor",
+        "unproven_legacy": "read_only",
+        "admin_takeover": false
+      },
+      "pm_overview": {
+        "version": 1,
+        "read_only": true
+      },
+      "pm_resources": {
+        "version": 1,
+        "adapters": [
+          "codex-rollout-v1",
+          "claude-transcript-v1"
+        ],
+        "collection": "explicit_local_files",
+        "recurring": true,
+        "remote_collection": false,
+        "forecast": false,
+        "dispatch": false,
+        "buckets": {
+          "granularity": "day"
+        }
+      },
+      "external_history": {
+        "version": 1,
+        "grant": "explicit_local_file_and_readers",
+        "read_history": true,
+        "observe_live": false,
+        "start_owned": false,
+        "send_owned": false,
+        "read_results": false,
+        "cross_adapter_alias": false
+      },
+      "pm_schedule": {
+        "version": 1,
+        "read_only": true,
+        "forecast": "recorded_revision_only",
+        "critical_path": false,
+        "token_attribution": false,
+        "phases": false,
+        "drag_proposal": false
+      },
+      "pm_register": {
+        "version": 1,
+        "read_only": true,
+        "types": [
+          "risk",
+          "issue",
+          "action",
+          "change",
+          "decision"
+        ],
+        "source_kinds": [
+          "governance",
+          "finding",
+          "repair",
+          "follow_up",
+          "proposal",
+          "issue_mapping",
+          "meeting",
+          "plan_revision",
+          "requirement",
+          "work_item"
+        ],
+        "timeline_steps": [
+          "finding",
+          "action",
+          "work",
+          "evidence",
+          "review",
+          "proposal",
+          "decision",
+          "revision"
+        ],
+        "dispatch": false,
+        "writes": false,
+        "summary": "complete_visible_scan_only",
+        "time": "iso8601_utc",
+        "row_id": "kind.ident",
+        "cursor": "opaque_base64url_sequence",
+        "max_roots_per_page": 64
+      },
+      "pm_dependencies": {
+        "version": 1,
+        "actions": [
+          "pm.dependencies.capture",
+          "pm.dependencies.declare",
+          "pm.dependencies.retract"
+        ],
+        "relations": [
+          "runtime",
+          "build",
+          "test",
+          "contract",
+          "reference"
+        ],
+        "kinds": [
+          "runtime_library",
+          "api_schema",
+          "build_test_toolchain",
+          "external_service"
+        ],
+        "source": "existing_pm_pinned_git",
+        "max_files": 128,
+        "max_bytes": 640000,
+        "capture_executes_code": false
+      },
+      "pm_github_observation": {
+        "version": 1,
+        "profiles": [
+          "github_open_prs_and_actions_v1"
+        ],
+        "read_only": true,
+        "traversals": 2,
+        "automatic_maintenance": false,
+        "full_github_repository_coverage": false,
+        "outside_scope": [
+          "issues",
+          "third_party_ci_outside_open_pr_heads",
+          "unpublished_or_local_work",
+          "completed_actions_outside_open_pr_heads",
+          "provider_changes_between_reads"
+        ],
+        "maintenance_findings": {
+          "version": 1,
+          "policy_field": "observation.maintenance_sources",
+          "sources": [
+            "issues",
+            "dependabot_pull_requests",
+            "dependabot_alerts"
+          ],
+          "permissions": {
+            "issues": "issues:read",
+            "dependabot_pull_requests": "pull_requests:read",
+            "dependabot_alerts": "dependabot_alerts:read"
+          },
+          "read_only": true,
+          "automatic_repair": false,
+          "release_applicability": "unknown",
+          "manifest_scan_completeness": "unknown",
+          "states": [
+            "disabled",
+            "missing",
+            "complete",
+            "incomplete",
+            "stale",
+            "context_changed",
+            "stopped"
+          ]
+        },
+        "required_ci": {
+          "version": 1,
+          "profiles": [
+            "github_required_status_checks_v1"
+          ],
+          "policy_field": "observation.required_ci_profile",
+          "read_only": true,
+          "permissions": [
+            "metadata:read",
+            "administration:read",
+            "checks:read",
+            "statuses:read",
+            "pull_requests:read"
+          ],
+          "coverage": "active_applied_branch_rules_and_legacy_required_status_checks",
+          "unsupported": [
+            "required_workflows",
+            "merge_queue",
+            "ambiguous_404",
+            "implicit_app_identity"
+          ],
+          "fresh_current_exact_head_required": true,
+          "empty_required_set_passes": false
+        },
+        "limits": {
+          "pages": 128,
+          "rows": 4096,
+          "bytes": 8000000,
+          "seconds": 60
+        }
+      },
+      "pm_workspaces": {
+        "version": 1,
+        "ahp_observation": {
+          "contract": "ahp_observer_v1",
+          "protocol_version": "1.0.0",
+          "protocol_versions": [
+            "1.0.0",
+            "0.10.0"
+          ],
+          "decoder_profiles": {
+            "1.0.0": "ahp_1_0_observer_v1",
+            "0.10.0": "vscode_0_10_observer_v1"
+          },
+          "spec_commit": "5f16d81bb7045b66d7bc768d244feab75002d943",
+          "offline_wire_sources": [
+            {
+              "distribution": "microsoft/vscode",
+              "version": "1.141.0",
+              "commit": "2a59476c9bfcb90b3ddc372c36762471b7dfad1c",
+              "protocol_version": "0.10.0"
+            }
+          ],
+          "implemented_subset": [
+            "initialize",
+            "listSessions",
+            "reconnect",
+            "subscribe"
+          ],
+          "observation": "supported",
+          "create_own": "unsupported",
+          "send": "unsupported",
+          "cancel": "unsupported",
+          "close": "unsupported",
+          "pm_writer": "unsupported",
+          "adapter_switch": "unsupported",
+          "manual_foreign_access": "read_only",
+          "tested_host_versions": [],
+          "live_host_verified": false,
+          "changesets": "static_advertised_snapshots_only",
+          "transcript": "unsupported",
+          "limits": {
+            "seconds": 30,
+            "bytes": 4194304,
+            "sessions": 200,
+            "selected_sessions": 8,
+            "changesets": 16,
+            "reconnects": 1
+          }
+        },
+        "executable_modes": [
+          "idea",
+          "planning"
+        ],
+        "runner": false,
+        "context_packages": true,
+        "accepted_context_bundle": {
+          "schema": "pm_context_bundle_v1",
+          "context_version": 2,
+          "max_utf8_bytes": 262144,
+          "explicit_selection": true,
+          "complete_files_only": true
+        },
+        "installation_eligibility": true,
+        "native_analysis": true,
+        "bat_analysis": true,
+        "workspace_adapter": {
+          "version": 1,
+          "action": "pm.workspace.adapter.select"
+        },
+        "runtime_reason": "external_tool_policy_unverified",
+        "plan_drafting": true,
+        "plan_adoption": true,
+        "work_evidence": true,
+        "brief_snapshots": true,
+        "roadmap": true,
+        "lifecycle": {
+          "version": 1,
+          "gated_actions": [
+            "pm.backlog.revise",
+            "pm.continuation.prepare",
+            "pm.conversation.adopt",
+            "pm.conversation.propose",
+            "pm.dependencies.capture",
+            "pm.dependencies.declare",
+            "pm.dependencies.retract",
+            "pm.dod.revise",
+            "pm.execution.verify",
+            "pm.follow_up.analyze",
+            "pm.follow_up.prepare",
+            "pm.governance.decide",
+            "pm.governance.record",
+            "pm.governance.revise",
+            "pm.input.confirm",
+            "pm.issue.cancel",
+            "pm.issue.publish",
+            "pm.maintenance.check",
+            "pm.maintenance.repair",
+            "pm.maintenance_policy.adopt",
+            "pm.meeting.context.revise",
+            "pm.meeting.create",
+            "pm.meeting.draft",
+            "pm.overview.assess",
+            "pm.plan.adopt",
+            "pm.plan.draft",
+            "pm.product_goal.revise",
+            "pm.project.bind",
+            "pm.release_baseline.register",
+            "pm.roadmap.baseline.set",
+            "pm.roadmap.forecast.set",
+            "pm.run.analyze",
+            "pm.run.bat.analyze",
+            "pm.run.prepare",
+            "pm.spec.materialize",
+            "pm.sprint.create",
+            "pm.sprint.goal.revise",
+            "pm.sprint.select",
+            "pm.sprint.start",
+            "pm.thread.create",
+            "pm.thread.plan",
+            "pm.thread.plan.revise",
+            "pm.work.bind",
+            "pm.work_batch.start",
+            "pm.work_input.defer",
+            "pm.work_package.create",
+            "pm.work_profile.save"
+          ],
+          "record_actions": [
+            "pm.ahp.observe",
+            "pm.evidence.capture",
+            "pm.execution.runtime.observe",
+            "pm.github.observe",
+            "pm.governance.adoption.link",
+            "pm.input.record",
+            "pm.maintenance.repair.evidence.record",
+            "pm.maintenance.repair.runtime.observe",
+            "pm.maintenance_review.candidate.record",
+            "pm.maintenance_review.complete",
+            "pm.maintenance_review.follow_up.record",
+            "pm.maintenance_review.note",
+            "pm.maintenance_review.prepare",
+            "pm.meeting.complete",
+            "pm.meeting.follow_up.record",
+            "pm.meeting.note",
+            "pm.message.append",
+            "pm.quality.review.create",
+            "pm.quality.review.record",
+            "pm.quality.review.revoke",
+            "pm.roadmap.observe",
+            "pm.session.quiescence.observe",
+            "pm.snapshot.create",
+            "pm.sprint.cancel",
+            "pm.sprint.close",
+            "pm.thread.rename",
+            "pm.work_batch.evidence.record",
+            "pm.workload.capture",
+            "pm.workspace.adapter.select",
+            "pm.workspace.member.set"
+          ],
+          "record_variants": {
+            "pm.issue.cancel": {
+              "absent_params": [
+                "public_reason"
+              ]
+            }
+          }
+        },
+        "sprints": true,
+        "governance": true,
+        "release_baselines": {
+          "version": 1,
+          "sources": [
+            "github_release",
+            "deployment"
+          ],
+          "github_release_channels": [
+            "stable",
+            "prerelease"
+          ],
+          "package_registry": "unsupported",
+          "primary_baselines_per_workspace": 1,
+          "automatic_maintenance": false,
+          "source_choices": true,
+          "source_preview": true,
+          "external_discovery": "explicit_read_only_request"
+        },
+        "maintenance_policy": {
+          "version": 1,
+          "sources": [
+            "dependencies",
+            "documentation",
+            "issues",
+            "pull_requests",
+            "research"
+          ],
+          "work_kinds": [
+            "bug_fix",
+            "dependency_fix",
+            "documentation"
+          ],
+          "policy_adoption": true,
+          "scheduler_available": true,
+          "repair_dispatch_available": true,
+          "after_release_policies": [
+            "maintain_when_idle",
+            "continue_development",
+            "manual"
+          ]
+        },
+        "maintenance_checks": {
+          "version": 1,
+          "action": "pm.maintenance.check",
+          "required_scopes": [
+            "manage",
+            "observe"
+          ],
+          "server_schedule": true,
+          "missed_windows": "coalesce_latest",
+          "automatic_repairs": false,
+          "automatic_lifecycle_transition": true,
+          "weekly_review_execution": true,
+          "cost_coverage": {
+            "model_requests": "none",
+            "provider_billing": "unmeasured"
+          },
+          "retry_behavior": "original_child_receipts_only"
+        },
+        "maintenance_review": {
+          "version": 1,
+          "actions": [
+            "pm.maintenance_review.prepare",
+            "pm.maintenance_review.note",
+            "pm.maintenance_review.candidate.record",
+            "pm.maintenance_review.complete",
+            "pm.maintenance_review.follow_up.record"
+          ],
+          "deterministic_report": true,
+          "model_required": false,
+          "planning_candidate_source": {
+            "version": 1,
+            "kind": "maintenance_review_candidate",
+            "initial_status": "unresolved"
+          },
+          "period_max_seconds": 2678400,
+          "automatic_scope_adoption": false,
+          "automatic_meetings": false,
+          "research_verification": "attributed_source_claims_only"
+        },
+        "maintenance_repairs": {
+          "version": 1,
+          "actions": [
+            "pm.maintenance.repair",
+            "pm.maintenance.repair.evidence.record"
+          ],
+          "policy_field": "repair_rules",
+          "sources": [
+            "issues"
+          ],
+          "engine": "repository.continue",
+          "automatic_new_work_item": false,
+          "automatic_pr_creation": true,
+          "alert_applicability_supported": false,
+          "cost_coverage": "model_provider_unmeasured",
+          "hard_cost_ceiling_supported": false,
+          "automatic_semantic_acceptance": false,
+          "automatic_release": false,
+          "available": true
+        },
+        "execution_verification": {
+          "version": 1,
+          "action": "pm.execution.verify",
+          "profile": "observed_runner_v1",
+          "required_scopes": [
+            "observe",
+            "operate"
+          ],
+          "caller_commands": false,
+          "new_task_or_session": false,
+          "unknown_process_resend": false,
+          "reference_fields": [
+            "verification_operation_id",
+            "candidate_commit",
+            "tree_hash"
+          ]
+        },
+        "quality_reviews": {
+          "actions": [
+            "pm.quality.review.create",
+            "pm.quality.review.record",
+            "pm.quality.review.revoke"
+          ],
+          "version": 1,
+          "verification_profiles": [
+            "github_reported_checks_v1",
+            "observed_runner_v1"
+          ],
+          "discussion_contexts": [
+            "quality_assessment"
+          ],
+          "max_criteria": 200,
+          "max_assessments": 32,
+          "max_records": 33,
+          "responsibility": "owner_appointed_original_reviewer",
+          "verification_alone_is_acceptance": false,
+          "execution_authorized": false
+        },
+        "pr_publication": {
+          "available": true,
+          "contract": "owned_pr_creation_v1",
+          "action": "github.pr.publish",
+          "scope": "integrate",
+          "required_scopes": [
+            "integrate",
+            "manage",
+            "observe"
+          ],
+          "creation_only": true,
+          "unknown_post_resend": false,
+          "max_commits": 200,
+          "max_files": 500,
+          "max_response_bytes": 256000
+        },
+        "engineering_delivery": {
+          "contract": "pm-engineering-delivery/v1",
+          "read_only": true
+        },
+        "spec_materialization": {
+          "version": 1,
+          "action": "pm.spec.materialize",
+          "immutable": true,
+          "owned_git_chain": true,
+          "max_generated_bytes": 512000,
+          "openspec_cli_compatibility": "not_claimed",
+          "execution_authorized": false
+        },
+        "work_batches": {
+          "version": 1,
+          "actions": [
+            "pm.work_batch.start",
+            "pm.work_batch.evidence.record"
+          ],
+          "profiles": [
+            "accepted_requirements_v1",
+            "github_reported_checks_v1",
+            "observed_runner_v1"
+          ],
+          "max_entries": 16,
+          "max_parallel": 8,
+          "max_retries": 3,
+          "max_deadline_seconds": 86400,
+          "semantic_acceptance": "explicit_original_qualified_assessment",
+          "intrinsic_requirement_dependencies": "explicit_original_refs_required",
+          "execution_engine": "repository.continue",
+          "cost_coverage": "start_count_only_model_provider_cost_unmeasured"
+        },
+        "work_start": {
+          "version": 1,
+          "supported": true,
+          "available": true,
+          "action": "work.start",
+          "preview_read": "pm_work_start_preview",
+          "attempts_reads": [
+            "pm_work_attempts_list",
+            "pm_work_attempt_get"
+          ],
+          "reads": [
+            "pm_work_start_preview",
+            "pm_work_attempts_list",
+            "pm_work_attempt_get"
+          ],
+          "mcp_tools": [
+            "pm_work_start_preview",
+            "pm_work_attempts_list",
+            "pm_work_attempt_get"
+          ],
+          "routes": {
+            "preview": "/api/v1/pm/workspaces/{workspace_id}/work/{work_item_id}/start-preview",
+            "attempts_list": "/api/v1/pm/workspaces/{workspace_id}/work/{work_item_id}/attempts",
+            "attempt_get": "/api/v1/pm/workspaces/{workspace_id}/work-attempts/{attempt_id}"
+          },
+          "composition_profile": "work_start_thin_v1",
+          "required_scopes": [
+            "manage",
+            "observe",
+            "start"
+          ],
+          "child_actions": [
+            "pm.work.bind",
+            "pm.work_package.create",
+            "repository.continue"
+          ],
+          "delivery_goals": [
+            "pull_request",
+            "reviewable_changes"
+          ],
+          "agents": [
+            "claude",
+            "codex"
+          ],
+          "existing_sessions": "continue_under_original_authority"
+        },
+        "work_adopt_and_start": {
+          "version": 1,
+          "supported": true,
+          "available": true,
+          "action": "work.adopt_and_start",
+          "preview_read": "pm_work_adopt_and_start_preview",
+          "reads": [
+            "pm_work_adopt_and_start_preview"
+          ],
+          "mcp_tools": [
+            "pm_work_adopt_and_start_preview"
+          ],
+          "routes": {
+            "preview": "/api/v1/pm/workspaces/{workspace_id}/threads/{thread_id}/adopt-and-start-preview",
+            "operations": "/api/v1/operations"
+          },
+          "required_scopes": [
+            "manage",
+            "observe",
+            "start"
+          ],
+          "preview_required_scopes": [
+            "observe"
+          ],
+          "max_selected_works": 10,
+          "child_actions": [
+            "pm.conversation.adopt",
+            "work.start"
+          ],
+          "delivery_goals": [
+            "pull_request",
+            "reviewable_changes"
+          ],
+          "agents": [
+            "claude",
+            "codex"
+          ],
+          "existing_sessions": "continue_under_original_authority"
+        },
+        "work_profiles": {
+          "version": 1,
+          "contract": "work-profile-readiness/v1",
+          "supported": true,
+          "available": true,
+          "write_action": "pm.work_profile.save",
+          "reads": [
+            "pm_work_profiles_list",
+            "pm_work_profile_get",
+            "pm_work_profile_readiness_get"
+          ],
+          "mcp_tools": [
+            "pm_work_profiles_list",
+            "pm_work_profile_get",
+            "pm_work_profile_readiness_get"
+          ],
+          "routes": {
+            "list": "/api/v1/pm/workspaces/{workspace_id}/work-profiles",
+            "get": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}",
+            "readiness": "/api/v1/pm/workspaces/{workspace_id}/work-profiles/{profile_id}/readiness"
+          },
+          "required_scopes": {
+            "read": [
+              "observe"
+            ],
+            "write": [
+              "observe",
+              "manage"
+            ]
+          },
+          "reads_never_write": true,
+          "calls_bat": false,
+          "adapters": {
+            "bat": {
+              "discover": "stored_observation_only",
+              "start_owned": "not_probed"
+            }
+          }
+        },
+        "work_attempt_results": {
+          "version": 1,
+          "contract": "pm-work-attempt-result/v1",
+          "routes": {
+            "result": "/api/v1/pm/workspaces/{workspace_id}/work-attempts/{attempt_id}/result",
+            "changes": "/api/v1/pm/workspaces/{workspace_id}/work-attempts/{attempt_id}/changes",
+            "diff": "/api/v1/pm/workspaces/{workspace_id}/work-attempts/{attempt_id}/diff"
+          },
+          "reads": [
+            "pm_work_attempt_result_get",
+            "pm_work_attempt_changes_get",
+            "pm_work_attempt_diff_get"
+          ],
+          "mcp_tools": [
+            "pm_work_attempt_result_get",
+            "pm_work_attempt_changes_get",
+            "pm_work_attempt_diff_get"
+          ],
+          "adapters": {
+            "bat": {
+              "read_results": true
+            }
+          },
+          "wait_ms_max": 10000,
+          "reads_never_write": true
+        },
+        "operation_loop": {
+          "version": 1
+        },
+        "work_follow_up": {
+          "version": 1,
+          "supported": true,
+          "available": true,
+          "action": "session.send",
+          "target_keys": [
+            "workspace_id",
+            "work_item_id"
+          ],
+          "schedules": [
+            "after_current",
+            "now"
+          ],
+          "default_schedule": "after_current",
+          "queue_param_accepted": false,
+          "steer_supported": false,
+          "codex_supported": false,
+          "cancel_while_states": [
+            "queued"
+          ],
+          "reconcile_on_states": [
+            "unknown"
+          ],
+          "states": [
+            "queued",
+            "sending",
+            "sent",
+            "unknown",
+            "failed",
+            "cancelled"
+          ],
+          "reads": [
+            "pm_work_inputs_list"
+          ],
+          "mcp_tools": [
+            "operation_submit",
+            "pm_work_inputs_list"
+          ],
+          "routes": {
+            "send": "/api/v1/operations",
+            "inputs_list": "/api/v1/pm/workspaces/{workspace_id}/work/{work_item_id}/inputs",
+            "operation": "/api/v1/operations/{operation_id}",
+            "cancel": "/api/v1/operations/{operation_id}/cancel",
+            "resume": "/api/v1/operations/{operation_id}/resume"
+          },
+          "required_scopes": [
+            "observe",
+            "operate"
+          ],
+          "requires_workspace_membership": true,
+          "requires_writer_for_send": true,
+          "requires_same_controller": true
+        },
+        "work_input_idea": {
+          "version": 1,
+          "available": true
+        },
+        "workload": {
+          "version": 1,
+          "capture": "saved_central_sources",
+          "network_refresh": false,
+          "automatic_maintenance": false,
+          "full_github_repository_coverage": false,
+          "classification": [
+            "development",
+            "unknown",
+            "idle_candidate"
+          ]
+        },
+        "work_package_prepare": true,
+        "issue_mapping": true,
+        "package_handoff": {
+          "action": "repository.continue",
+          "contract": "pm-engineering-handoff/v1",
+          "available": true,
+          "code_basis_required": true,
+          "source_materialization": "bounded_full_prompt_or_fixed_spec_artifact",
+          "materialization_action": "pm.spec.materialize",
+          "requirement_acceptance_profiles": [
+            "accepted_requirements_v1"
+          ]
+        },
+        "follow_up_analysis": true,
+        "overview_assessment": true,
+        "conversation_proposals": {
+          "version": 1,
+          "actions": [
+            "pm.conversation.propose",
+            "pm.conversation.adopt"
+          ],
+          "analysis_scopes": [
+            "observe",
+            "manage",
+            "start"
+          ],
+          "adoption_scopes": [
+            "observe",
+            "manage",
+            "start"
+          ],
+          "adoption_role": "owner",
+          "automatic_adoption": false,
+          "execution_authorized": false,
+          "max_candidates": 20,
+          "max_requirements": 20
+        },
+        "brief_export": {
+          "formats": [
+            "markdown",
+            "html",
+            "svg"
+          ],
+          "locales": [
+            "en",
+            "zh-TW"
+          ],
+          "renderer_version": 4
+        },
+        "follow_up_prepare": true,
+        "kanban": true,
+        "spec_sources": true,
+        "meetings": true,
+        "dispatch": false
+      },
+      "project_dispatch": {
+        "version": 1,
+        "artifacts": true,
+        "model": true
+      },
+      "execution_delivery": {
+        "version": 1,
+        "source_kinds": [
+          "execution",
+          "task_command"
+        ]
+      },
+      "work_item_reads": {
+        "version": 1
+      },
+      "session_reading": {
+        "version": 1,
+        "counts": "observed_history"
+      },
+      "host_preferences": {
+        "version": 1,
+        "model_catalog": true,
+        "usage": true,
+        "personal_models": true
+      },
+      "project_skills": {
+        "version": 1,
+        "pinned_selection": true,
+        "application": false
+      },
+      "work_item_results": {
+        "version": 1
+      },
+      "project_navigation": {
+        "version": 1
+      },
+      "managed_repairs": {
+        "version": 1,
+        "fixed_evidence": true,
+        "auto_launch": false
+      },
+      "session_instructions": {
+        "version": 1,
+        "live_queue": false,
+        "per_message_cancel": false
+      },
+      "repository_sync": [],
+      "worktree_merge": {
+        "strategy": "merge",
+        "requires_verifier_ssh": true,
+        "requires_bat_git_context": true,
+        "hosts": []
+      },
+      "cleanup": true,
+      "cleanup_task": true,
+      "inventory": true,
+      "session_history": true,
+      "session_observation": {
+        "read": true,
+        "wait": true,
+        "max_wait_s": 1800
+      },
+      "resource_relations": true,
+      "discovery_scope": true,
+      "worktree_history": {
+        "known_bindings_only": true
+      },
+      "history": {
+        "source": "journal",
+        "legacy_transitions": "may_be_incomplete",
+        "optional_adapters": [
+          "delivery_part_a",
+          "delivery_part_b"
+        ],
+        "observed_event_kinds": []
+      },
+      "events_stream": true,
+      "operations": true,
+      "work_items": true,
+      "github": false,
+      "deploy": false,
+      "deployment_history": true,
+      "environment_generation": true,
+      "runtime_check": true,
+      "rollback_readiness": true,
+      "metadata_update": false,
+      "merge_scope_preview": false,
+      "checkpoints": [],
+      "integration": []
+    },
+    "repositories": [],
+    "deploy_recipes": []
+  },
+  "snapshot": {
+    "hosts": {
+      "hosts": []
+    },
+    "sessions": {
+      "sessions": [],
+      "count": 0,
+      "next_cursor": null,
+      "as_of": 0,
+      "hosts": [],
+      "coverage": {
+        "source": "journal",
+        "paging": "keyset",
+        "relation_scope": "history"
+      }
+    },
+    "projects": {
+      "projects": [],
+      "archived": []
+    },
+    "work_items": {
+      "work_items": [],
+      "next_cursor": null
+    },
+    "operations": {
+      "operations": [],
+      "next_before": null
+    }
+  },
+  "pagination": {
+    "atomic": false,
+    "session_order": "id"
+  }
+}

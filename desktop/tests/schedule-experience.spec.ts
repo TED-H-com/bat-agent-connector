@@ -1,4 +1,3 @@
-import {mkdirSync} from 'node:fs';
 import {test, expect, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
@@ -45,9 +44,9 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
 function item(page: Page, id: string) {return page.locator(`.schedule-chart [data-schedule-select="${id}"]`);}
 async function noOverflow(page: Page) {expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);}
 async function shot(page: Page, name: string) {
+  const testInfo = test.info();
   if (!process.env.BATC_SCHEDULE_SCREENSHOTS) return;
-  const dir = `${process.env.TMPDIR}/shots`; mkdirSync(dir, {recursive: true});
-  await page.screenshot({path: `${dir}/${name}.png`});
+  await page.screenshot({path: testInfo.outputPath(`${name}.png`)});
 }
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`schedule reading, inspector and keyboard ${locale} ${width}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({locale, baseURL, viewport: {width, height: width === 390 ? 844 : 900}}), page = await context.newPage();

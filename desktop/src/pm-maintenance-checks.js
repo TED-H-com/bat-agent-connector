@@ -22,7 +22,7 @@ export function maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,perm
     PM_MAINTENANCE_PARENT_STOPPED:'stopped',PARENT_STOPPED:'stopped',SOURCE_COVERAGE_INCOMPLETE:'coverage',PM_MAINTENANCE_CONTEXT_CHANGED:'changed',
     PM_MAINTENANCE_CHILD_UNSETTLED:'unsettled'}[code]||'unknown'));
   const request=async(...args)=>{const ticket=epoch;try{return await api(...args);}catch(error){
-    if(valid(ticket)&&[401,403,404].includes(error.status))failure(error);throw error;
+    if(valid(ticket)&&[401,403,404].includes(error.status))failure(error, {sourceRefresh:false});throw error;
   }};
   const editor=form({action:'pm.maintenance.check',target:{workspace_id:workspaceId},fields:{},api:request,
     params:()=>({policy_id:policy.policy_id}),preconditions:()=>({expected_policy_version:policy.revision,
@@ -85,7 +85,7 @@ export function maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,perm
     context.hidden=Boolean(schedule?.blocked_reason&&context.textContent===blocker(schedule.blocked_reason));editor.update();
   }
   function withdraw(){epoch++;ready=false;policy=null;baseline=null;lifecycle=null;schedule=null;historyLoaded=false;cursor=null;filtered=false;facts.replaceChildren();history.replaceChildren();status.replaceChildren();context.replaceChildren();update();}
-  function failure(error){withdraw();status.append(errorBox(error,{summary:t('pmc_unavailable'), within:status}));}
+  function failure(error, options = {}){withdraw();status.append(errorBox(error,{...options, summary:t('pmc_unavailable'), within:status}));}
   async function readHistory(append){
     const ticket=epoch,after=append?cursor:0;
     try{

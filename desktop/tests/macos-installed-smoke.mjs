@@ -1,4 +1,5 @@
 // Real DMG -> installed .app -> WKWebView. Only disposable GitHub-hosted Macs.
+import {testScratchRoot} from './test-scratch.mjs';
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
@@ -22,12 +23,12 @@ const statePaths = [join(homedir(), "Library/Application Support", id),
   join(homedir(), "Library/Saved Application State", `${id}.savedState`),
   // Pinned single-instance plugin uses this fixed disk-backed Unix socket on macOS.
   // Refuse an existing socket and remove only the one this isolated fixture creates.
-  "/tmp/io_betteragent_dashboard_si.sock"];
+  "/tmp/io_betteragent_dashboard_si.sock"]; // tmpfs-path-allow: pinned product socket, not test scratch.
 for (const path of [...statePaths, `/Applications/Better Agent Dashboard.app`,
   join(homedir(), "Applications/Better Agent Dashboard.app")]) {
   await assert.rejects(lstat(path), { code: "ENOENT" }, `Refusing pre-existing app/state: ${path}`);
 }
-const root = await mkdtemp(join(process.env.RUNNER_TEMP, "dashboard-macos-"));
+const root = await mkdtemp(join(testScratchRoot(), "dashboard-macos-"));
 const helper = join(root, "window-fixture");
 const mount = join(root, "mounted");
 const installed = join(root, "Installed Apps", "Better Agent Dashboard.app");

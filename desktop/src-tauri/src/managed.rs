@@ -22,12 +22,34 @@ const MAX_REPLY: u64 = 16384;
 struct Manifest {
     protocol: u8,
     runtime_version: String,
+    #[serde(default, rename = "build_commit")]
+    _build_commit: Option<String>,
     platform: String,
     architecture: String,
     executable: String,
     payload_sha256: String,
     sha256: String,
     size: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RuntimeIdentity {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub commit: Option<String>,
+    #[serde(default)]
+    pub build_source: Option<String>,
+    pub source: String,
+    pub observed_at: f64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeDifference {
+    Same,
+    Differs,
+    Unknown,
 }
 
 // No Debug / Serialize: this value contains a bearer credential.
@@ -41,6 +63,12 @@ pub struct Launch {
     pub principal_id: String,
     pub token: Zeroizing<String>,
     pub runtime_version: String,
+    #[serde(default)]
+    pub bundled_runtime: Option<RuntimeIdentity>,
+    #[serde(default)]
+    pub running_runtime: Option<RuntimeIdentity>,
+    #[serde(default)]
+    pub runtime_difference: Option<RuntimeDifference>,
 }
 impl Launch {
     fn validate(&self, version: &str) -> Result<(), String> {
@@ -85,6 +113,36 @@ pub struct Status {
     pub principal_id: Option<String>,
     pub error: Option<String>,
     pub login_enabled: bool,
+    pub bundled_runtime: Option<RuntimeIdentity>,
+    pub running_runtime: Option<RuntimeIdentity>,
+    pub runtime_difference: Option<RuntimeDifference>,
+}
+
+#[derive(Clone, Default)]
+struct RuntimeFacts {
+    bundled: Option<RuntimeIdentity>,
+    running: Option<RuntimeIdentity>,
+    difference: Option<RuntimeDifference>,
+}
+
+impl RuntimeFacts {
+    fn from_launch(launch: &Launch) -> Self {
+        Self {
+            bundled: launch.bundled_runtime.clone(),
+            running: launch.running_runtime.clone(),
+            difference: Some(
+                launch
+                    .runtime_difference
+                    .unwrap_or(RuntimeDifference::Unknown),
+            ),
+        }
+    }
+
+    fn apply(&self, status: &mut Status) {
+        status.bundled_runtime = self.bundled.clone();
+        status.running_runtime = self.running.clone();
+        status.runtime_difference = self.difference;
+    }
 }
 
 pub struct Managed {
@@ -92,6 +150,7 @@ pub struct Managed {
     data_dir: PathBuf,
     status: Status,
     pub serial: Mutex<()>,
+    runtime_facts: Mutex<RuntimeFacts>,
 }
 
 impl Managed {
@@ -108,8 +167,12 @@ impl Managed {
                 principal_id: None,
                 error: None,
                 login_enabled: false,
+                bundled_runtime: None,
+                running_runtime: None,
+                runtime_difference: None,
             },
             serial: Mutex::new(()),
+            runtime_facts: Mutex::new(RuntimeFacts::default()),
         };
         // An advanced central always remains the selected client binding. Only an
         // already saved installation can additionally recover its background service;
@@ -144,6 +207,7 @@ impl Managed {
             state.status.ready = true;
             state.status.server_id = Some(launch.server_id.clone());
             state.status.principal_id = Some(launch.principal_id.clone());
+            state.remember_runtime(&launch);
             Ok::<_, String>(launch)
         })();
         match result {
@@ -177,11 +241,22 @@ impl Managed {
         {
             return Err("MANAGED_RECOVERY_IDENTITY_CHANGED".into());
         }
+        self.remember_runtime(&launch);
         Ok(launch)
+    }
+
+    // Identification is observational: it never changes reuse/readiness gates.
+    fn remember_runtime(&self, launch: &Launch) {
+        if let Ok(mut facts) = self.runtime_facts.lock() {
+            *facts = RuntimeFacts::from_launch(launch);
+        }
     }
 
     pub fn status(&self) -> Status {
         let mut status = self.status.clone();
+        if let Ok(facts) = self.runtime_facts.lock() {
+            facts.apply(&mut status);
+        }
         match crate::managed_login::enabled() {
             Ok(enabled) => status.login_enabled = enabled,
             Err(error) => status.error = Some(error),
@@ -285,11 +360,31 @@ impl Managed {
             }
             std::thread::sleep(Duration::from_millis(20));
         };
-        if !result.success() || bytes.len() as u64 > MAX_REPLY {
+        if bytes.len() as u64 > MAX_REPLY {
             return Err("MANAGED_RUNTIME_START_FAILED".into());
+        }
+        if !result.success() {
+            return Err(journal_startup_failure(&bytes)
+                .unwrap_or_else(|| "MANAGED_RUNTIME_START_FAILED".into()));
         }
         Ok(bytes)
     }
+}
+
+fn journal_startup_failure(bytes: &[u8]) -> Option<String> {
+    // Reconstruct the one public diagnostic; never forward child messages or paths.
+    let failure: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    if failure.get("protocol")?.as_u64()? != 1
+        || failure.get("error")?.as_str()? != "JOURNAL_NEWER_DATA_STEP"
+    {
+        return None;
+    }
+    let recorded = failure.get("recorded_data_step")?.as_u64()?;
+    let supported = failure.get("supported_data_step")?.as_u64()?;
+    if recorded > i32::MAX as u64 || supported > i32::MAX as u64 {
+        return None;
+    }
+    Some(format!("JOURNAL_NEWER_DATA_STEP: journal records data step {recorded}; this Connector supports up to {supported}; reopen with the newer Connector"))
 }
 
 fn regular(path: &Path) -> Result<fs::Metadata, String> {
@@ -450,6 +545,98 @@ fn materialize(resources: &Path, app_data: &Path) -> Result<(PathBuf, String), S
 mod tests {
     use super::*;
 
+    #[test]
+    fn produced_manifest_has_optional_build_identity_and_rejects_unknown_fields() {
+        let mut document: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/runtime-manifest.json"
+        ))
+        .unwrap();
+        let current: Manifest = serde_json::from_value(document.clone()).unwrap();
+        assert_eq!(current._build_commit, Some("0".repeat(40)));
+        document.as_object_mut().unwrap().remove("build_commit");
+        let legacy: Manifest = serde_json::from_value(document.clone()).unwrap();
+        assert_eq!(legacy._build_commit, None);
+        document["unrecognized"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<Manifest>(document).is_err());
+    }
+
+    fn identity_golden() -> serde_json::Value {
+        // Generated by real same-version VCS installs and Python _verify().
+        serde_json::from_str(include_str!(
+            "../../../tests/fixtures/managed-runtime-identity.json"
+        ))
+        .unwrap()
+    }
+
+    fn identity_status() -> Status {
+        Status {
+            mode: "managed",
+            ready: true,
+            background: true,
+            runtime_version: None,
+            server_id: None,
+            principal_id: None,
+            error: None,
+            login_enabled: false,
+            bundled_runtime: None,
+            running_runtime: None,
+            runtime_difference: None,
+        }
+    }
+
+    #[test]
+    fn launch_and_status_preserve_python_runtime_identity_facts() {
+        for reply in identity_golden().as_object().unwrap().values() {
+            let launch: Launch = serde_json::from_value(reply.clone()).unwrap();
+            let mut status = identity_status();
+            RuntimeFacts::from_launch(&launch).apply(&mut status);
+            let serialized = serde_json::to_value(&status).unwrap();
+            for field in ["bundled_runtime", "running_runtime", "runtime_difference"] {
+                assert_eq!(serialized[field], reply[field], "{field}");
+            }
+            // Availability is independent of a same-version build difference.
+            assert!(status.ready);
+        }
+    }
+
+    #[test]
+    fn old_launch_without_identity_fields_still_parses() {
+        let mut reply = identity_golden()["same"].clone();
+        for field in ["bundled_runtime", "running_runtime", "runtime_difference"] {
+            reply.as_object_mut().unwrap().remove(field);
+        }
+        let launch: Launch = serde_json::from_value(reply.clone()).unwrap();
+        assert!(launch.bundled_runtime.is_none());
+        assert!(launch.running_runtime.is_none());
+        assert!(launch.runtime_difference.is_none());
+        assert_eq!(
+            RuntimeFacts::from_launch(&launch).difference,
+            Some(RuntimeDifference::Unknown)
+        );
+        reply["unexpected"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<Launch>(reply).is_err());
+    }
+
+    #[test]
+    fn refreshed_runtime_facts_replace_the_previous_observation() {
+        let golden = identity_golden();
+        let managed = Managed {
+            executable: None,
+            data_dir: PathBuf::new(),
+            status: identity_status(),
+            serial: Mutex::new(()),
+            runtime_facts: Mutex::new(RuntimeFacts::default()),
+        };
+        for name in ["same", "differs", "unknown_running"] {
+            let launch: Launch = serde_json::from_value(golden[name].clone()).unwrap();
+            managed.remember_runtime(&launch);
+            let mut status = managed.status.clone();
+            managed.runtime_facts.lock().unwrap().apply(&mut status);
+            assert_eq!(status.runtime_difference, launch.runtime_difference);
+            assert_eq!(status.running_runtime, launch.running_runtime);
+        }
+    }
+
     fn fixture(root: &Path, bytes: &[u8]) -> PathBuf {
         let resources = root.join("resources");
         fs::create_dir_all(&resources).unwrap();
@@ -565,6 +752,26 @@ mod tests {
     }
 
     #[test]
+    fn journal_startup_diagnostic_has_only_the_registered_code_and_numbers() {
+        let mut failure = serde_json::json!({"protocol": 1, "error": "JOURNAL_NEWER_DATA_STEP",
+            "recorded_data_step": 4, "supported_data_step": 3,
+            "message": "private-provider-diagnostic"});
+        assert_eq!(journal_startup_failure(&serde_json::to_vec(&failure).unwrap()).unwrap(),
+            "JOURNAL_NEWER_DATA_STEP: journal records data step 4; this Connector supports up to 3; reopen with the newer Connector");
+        for invalid in [
+            serde_json::json!(true),
+            serde_json::json!(-1),
+            serde_json::json!(2147483648_u64),
+        ] {
+            failure["recorded_data_step"] = invalid;
+            assert!(journal_startup_failure(&serde_json::to_vec(&failure).unwrap()).is_none());
+        }
+        failure["recorded_data_step"] = serde_json::json!(4);
+        failure["error"] = serde_json::json!("UNKNOWN_FAILURE");
+        assert!(journal_startup_failure(&serde_json::to_vec(&failure).unwrap()).is_none());
+    }
+
+    #[test]
     fn launch_reply_is_loopback_and_identity_bound() {
         let mut reply = Launch {
             protocol: 1,
@@ -574,6 +781,9 @@ mod tests {
             principal_id: "fixture-principal".into(),
             token: Zeroizing::new("fixture-token".into()),
             runtime_version: "fixture-1".into(),
+            bundled_runtime: None,
+            running_runtime: None,
+            runtime_difference: None,
         };
         reply.validate("fixture-1").unwrap();
         assert!(reply.validate("other-version").is_err());

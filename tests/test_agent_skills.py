@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,19 @@ from bat_agent_connector.mcp_server import build_server
 from scripts import generate_agent_skills as generator
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def workflow_cases():
+    header = (ROOT / generator.SOURCE).read_text().split("\n---\n", 1)[0]
+    canonical = generator.match(r'^  workflow_version: "([0-9.-]+)"$', header, "workflow_version")
+    cases = []
+    for line in (ROOT / "tests/fixtures/workflow-versions.tsv").read_text().splitlines():
+        if not line or line.startswith("#"):
+            continue
+        verdict, value, label = line.split("\t")
+        assert verdict in {"accept", "reject"}
+        cases.append(pytest.param(verdict == "accept", canonical if value == "@canonical" else value, id=label))
+    return cases
 
 
 @pytest.fixture
@@ -33,7 +47,22 @@ def run_generator(root, *args):
                           capture_output=True, text=True, check=False)
 
 
-def test_all_adapters_preserve_exact_canonical_workflow_and_digest():
+@pytest.mark.parametrize("accepted,workflow", workflow_cases())
+def test_shared_workflow_cases_use_real_generator_validation(bundle_repo, accepted, workflow):
+    source = bundle_repo / generator.SOURCE
+    changed, count = re.subn(r'^  workflow_version: "[^"]*"$',
+                            lambda _: f'  workflow_version: "{workflow}"', source.read_text(),
+                            flags=re.MULTILINE)
+    assert count == 1
+    source.write_text(changed)
+    if accepted:
+        assert generator.render(bundle_repo)
+    else:
+        with pytest.raises(ValueError, match="workflow_version"):
+            generator.render(bundle_repo)
+
+
+def test_all_adapters_preserve_exact_canonical_workflow_and_digest(clean_wheel):
     source = (ROOT / generator.SOURCE).read_bytes()
     body = source.decode().split("\n---\n", 1)[1]
     for relative, expected in generator.render(ROOT).items():
@@ -45,8 +74,9 @@ def test_all_adapters_preserve_exact_canonical_workflow_and_digest():
         assert f'canonical_source: "{generator.SOURCE.as_posix()}"' in text
         assert "GENERATED" in text
     # The generic package continues to ship this same file, not an adapter.
-    assert '"skills/bat-agent-connector/SKILL.md" = "bat_agent_connector/skill/SKILL.md"' in (
-        ROOT / "pyproject.toml").read_text()
+    _, _, _, wheel = clean_wheel
+    with zipfile.ZipFile(wheel) as archive:
+        assert archive.read("bat_agent_connector/skill/SKILL.md") == source
 
 
 def test_generation_is_deterministic_and_check_never_repairs_drift(bundle_repo):

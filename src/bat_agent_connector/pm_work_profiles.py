@@ -811,17 +811,14 @@ def _execution(db, principal, row, agent, bat_workspace):
 
 
 def _pm_analysis(ops, principal, workspace_id: str) -> dict:
-    from . import pm_bat_operations, pm_native_capabilities
+    from . import pm_bat_operations, pm_native_capabilities, pm_workspace_adapter
     workspace = require_member(ops.db, principal, workspace_id)
     native = pm_native_capabilities.read(ops, principal, workspace)
     bat = pm_bat_operations.capabilities(ops, principal, workspace)
-    permitted = all(principal.allows(scope) for scope in ("observe", "manage", "start"))
-    pm_ready = permitted and any(
-        isinstance(item, dict) and item.get("eligible_for_preflight") is True
-        and item.get("action_registered") is True and item.get("authorized") is not False
-        for item in (native, bat)
-    )
-    return {"pm_ready": pm_ready, "native_analysis": native, "bat_analysis": bat}
+    choice = pm_workspace_adapter.read(ops, principal, workspace_id) if pm_workspace_adapter.ACTION in ops.actions else None
+    effective = pm_workspace_adapter.effective_route(choice, native, bat,
+        [scope for scope in pm_workspace_adapter.SCOPES if principal.allows(scope)])
+    return {"pm_ready": effective["ready"], "native_analysis": native, "bat_analysis": bat, "effective_pm_route": effective}
 
 
 def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:

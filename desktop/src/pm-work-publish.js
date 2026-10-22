@@ -1,3 +1,5 @@
+import {clientActionReason} from './central-service-status.js';
+
 // Publish one pull request from the fixed Result entry. The client copies the
 // offered target, prefilled commit and base, and preconditions. It does not
 // invent a provider, account, base, or GitHub URL.
@@ -243,7 +245,7 @@ export function createWorkPublish({h, t, form, namespace, caps, errorBox}) {
     if (status === 'needs_attention' || code === 'UNCERTAIN_UNRESOLVED') return t('wpub_needs_attention');
     if (HOST_CODES[code]) return t(HOST_CODES[code]);
     if (SETUP_CODES.has(code)) return t(readCaps(caps)?.managed_installation ? 'wpub_blocked_github_managed' : 'wpub_blocked_github_plain');
-    if (!code || QUIET_CODES.has(code)) return '';
+    if (!code || clientActionReason(code) || QUIET_CODES.has(code)) return '';
     if (status === 'failed' || status === 'cancelled' || error?.admissionRefused === true || error?.status) return t('error_generic');
     return '';
   }
@@ -452,7 +454,7 @@ export function createWorkPublish({h, t, form, namespace, caps, errorBox}) {
         const statusBox = editor?.box.querySelector(':scope > [role="status"]');
         if (!statusBox) return false;
         statusBox.hidden = false;
-        const presented = errorBox ? errorBox(error, {summary: sentence, within: statusBox}) : h('p', {}, sentence);
+        const presented = errorBox ? errorBox(error, {sourceRefresh:false, summary: sentence, within: statusBox}) : h('p', {}, sentence);
         statusBox.replaceChildren(presented);
         if (error?.code === 'PR_AUTHORITY_UNAVAILABLE' || (SETUP_CODES.has(error?.code) && readCaps(caps)?.managed_installation)) {
           statusBox.append(h('p', {}, h('a', {href: '#/settings?section=connection'}, t('paths_setup'))));

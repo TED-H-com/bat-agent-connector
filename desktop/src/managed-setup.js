@@ -1,4 +1,5 @@
 import {operationStatusLabel} from './global-labels.js';
+import {timeLabel, timeStamp} from './ui/stamps.js';
 // BAT v3.2.15 renderer/src/utils/connection-url.ts grammar. Trust comes from
 // BAT's own copied fingerprint, never a network probe or a loopback assumption.
 export function normalizeSetupFingerprint(value) {
@@ -33,6 +34,19 @@ export const validSetupHostId = value => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.tes
 export function setupConnectionStatus(host) {
   return ['connected', 'checking', 'unreachable'].includes(host.connection_status) ? host.connection_status
     : host.connected === true ? 'connected' : 'checking';
+}
+// A successful receipt records past verification, not current reachability.
+export function setupStatusLine({busy = false, operation = null, hosts = [], readReady = false}) {
+  if (busy) return {key: 'setup_checking'};
+  if (operation?.status === 'succeeded' && operation.action === 'setup.host') {
+    const host = hosts.find(row => row.name === operation.target?.host);
+    if (readReady && host && setupConnectionStatus(host) === 'connected') return {key: 'setup_ready'};
+    // updated_at is the succeeded receipt's completion time, not the inventory time.
+    return {key: 'setup_verified_saved', verifiedAt: operation.updated_at};
+  }
+  if (readReady && hosts.length && hosts.every(row => setupConnectionStatus(row) === 'connected')) return {key: 'setup_ready'};
+  if (operation) return {key: ['succeeded', 'failed', 'cancelled'].includes(operation.status) ? 'setup_failed_operation' : 'setup_saving'};
+  return {key: !readReady ? 'setup_loading' : hosts.length ? '' : 'setup_waiting'};
 }
 // Keep native HTML constraints, but use the chosen UI language for their messages.
 export function setupFormValidity(form, t) {
@@ -128,7 +142,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         // An accidentally pasted credential URL must never enter a draft.
         saved[name] = name === 'url' && /[?@#]/.test(node.value) ? '' : node.value;
         if (["url", "fingerprint", "profile_id"].includes(name)) {saved.import_profile_id = ""; profile.value = "";}
-        try {persist();} catch (error) {message.replaceChildren(errorBox(error, {within:message}));}
+        try {persist();} catch (error) {message.replaceChildren(errorBox(error, {sourceRefresh:false, within:message}));}
       }
       unsaved.hidden = false;
       if (!composing.has(name)) fieldError(name, null);
@@ -151,7 +165,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     node.addEventListener("change", () => {
       if (!alive() || saved.intent || busy) return;
       saved[name] = node.checked;
-      try {persist(); unsaved.hidden = false;} catch (error) {showError(error);}
+      try {persist(); unsaved.hidden = false;} catch (error) {showError(error, {sourceRefresh:false});}
     });
     fields.set(name, node);
     return h("label", {}, node, " ", t(label));
@@ -168,7 +182,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     if (selected) for (const name of ["url", "fingerprint", "profile_id"]) {
       fields.get(name).value = selected[name] || ""; saved[name] = fields.get(name).value;
     }
-    try {persist(); unsaved.hidden = false;} catch (error) {showError(error);}
+    try {persist(); unsaved.hidden = false;} catch (error) {showError(error, {sourceRefresh:false});}
   });
   const manual = h('details', {'data-setup-manual': ''}, h('summary', {}, t('setup_enter_manually')),
     profileField,
@@ -226,7 +240,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       fields.get(name).value = value; saved[name] = value;
     }
     saved.verification_base = null; seedVerificationBase();
-    try {persist(); unsaved.hidden = false; update();} catch (error) {showError(error);}
+    try {persist(); unsaved.hidden = false; update();} catch (error) {showError(error, {sourceRefresh:false});}
   }
   const retry = h("button", {class: "secondary", hidden: true, onclick: () => recover().catch(showError)}, t("setup_recover"));
   const next = h("button", {class: "secondary", hidden: true, onclick: () => {
@@ -235,7 +249,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     saved = {...saved, intent: null};
     if (operation?.status === "succeeded" && previous.intent.request.action === "setup.verification") saved.verification_base = null;
     try {persist(); operation = null; hostDisclosure.open = true; update(); refresh().catch(showError);}
-    catch (error) {saved = previous; showError(error);}
+    catch (error) {saved = previous; showError(error, {sourceRefresh:false});}
   }}, t("setup_next_change"));
   const sessions = h('a', {href: '#/sessions', class: 'ui-button primary', hidden: true, 'data-setup-sessions': ''}, t('setup_view_sessions'));
   const actions = h('div', {class: 'actions', hidden: true, 'data-setup-actions': ''}, sessions, retry, next);
@@ -249,7 +263,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   connectionChoice.addEventListener('change', () => {
     if (!alive() || busy || saved.intent) return;
     saved.import_profile_id = '';
-    try {persist();} catch (error) {showError(error);}
+    try {persist();} catch (error) {showError(error, {sourceRefresh:false});}
   });
   const choiceField = h('label', {class: 'setup-field', hidden: true}, t('setup_choose_connection'), connectionChoice);
   const copyInput = h('input', {type: 'password', autocomplete: 'off', maxlength: 8192,
@@ -263,7 +277,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     if (!parsed) return;
     copyInput.value = ''; // Split immediately, just like the existing advanced paste field.
     try {applyConnection(parsed); copyReady = true; copyRead.hidden = false;}
-    catch (error) {showError(error);}
+    catch (error) {showError(error, {sourceRefresh:false});}
   }
   copyInput.addEventListener('input', event => {
     copyReady = false; copyRead.hidden = true; copyError.hidden = true;
@@ -347,7 +361,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     const parsed = parseBatConnectionUrl(node.value);
     if (!parsed) {if (reportError) fieldError('connection_url', 'setup_invalid_connection_url'); return;}
     node.value = ''; fieldError('connection_url', null);
-    try {applyConnection(parsed);} catch (error) {showError(error);}
+    try {applyConnection(parsed);} catch (error) {showError(error, {sourceRefresh:false});}
   }
   fields.get('connection_url').addEventListener('input', () => consumeConnectionUrl(false));
   for (const event of ['change', 'blur']) fields.get('connection_url').addEventListener(event, () => consumeConnectionUrl());
@@ -402,10 +416,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     connectionChoice.disabled = !!locked || !allowed('host');
     simple.hidden = !!snapshot?.hosts?.length;
     connectionStatus.hidden = !readReady;
-    automaticStatus.textContent = busy ? t('setup_checking')
-      : operation?.status === 'succeeded' && operation.action === 'setup.host' || snapshot?.hosts?.some(row => setupConnectionStatus(row) === 'connected') ? t('setup_ready')
-      : operation && !terminal() ? t('setup_saving') : operation && terminal() ? t('setup_failed_operation')
-      : snapshot?.hosts?.length ? '' : !readReady ? t('setup_loading') : t('setup_waiting');
+    const status = setupStatusLine({busy, operation, hosts: snapshot?.hosts || [], readReady});
+    automaticStatus.replaceChildren(status.key === 'setup_verified_saved'
+      ? timeLabel(t, status.key, {host: operation.target.host, time: timeStamp(status.verifiedAt)})
+      : status.key ? t(status.key) : '');
     automaticStatus.hidden = !automaticStatus.textContent;
     const base = saved.verification_base;
     const stale = base && base.revision !== snapshot?.revision;
@@ -447,8 +461,9 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   async function recover() {
     if (!alive() || busy || !saved.intent || damaged) return;
     busy = true; update();
-    try {await sendOriginal(); await refresh();}
-    catch (error) {handleSubmissionError(error, saved.intent?.request.action.split('.')[1]);}
+    let sourceRefresh = false;
+    try {await sendOriginal(); sourceRefresh = true; await refresh();}
+    catch (error) {handleSubmissionError(error, saved.intent?.request.action.split('.')[1], {sourceRefresh});}
     finally {busy = false; if (alive()) update();}
   }
   async function run(kind, defaults = false) {
@@ -456,6 +471,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     if (!alive() || busy || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) ||
         kind === 'host' && !validateHost(undefined, defaults) || !setupFormValidity(form, t)) return;
     busy = true; update(); message.replaceChildren();
+    let sourceRefresh = false;
     try {
       if (kind === "verification" && saved.verification_base &&
           (!validVerification(saved.verification_base) || !/^[0-9a-f]{64}$/.test(saved.verification_base.revision)))
@@ -487,19 +503,19 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       saved.intent = {key: crypto.randomUUID(), request: {action: `setup.${kind}`,
         target: kind === "host" ? {host: value("host")} : kind === "repository" ? {repository: value("repository")} : {}, params,
         preconditions: {config_revision: kind === "verification" ? saved.verification_base?.revision || snapshot.revision : snapshot.revision}}};
-      persist(); automaticStatus.textContent = t('setup_saving'); await sendOriginal(); await refresh();
+      persist(); automaticStatus.textContent = t('setup_saving'); await sendOriginal(); sourceRefresh = true; await refresh();
     } catch (error) {
-      handleSubmissionError(error, kind);
+      handleSubmissionError(error, kind, {sourceRefresh});
     }
     finally {busy = false; if (alive()) update();}
   }
-  function handleSubmissionError(error, kind) {
+  function handleSubmissionError(error, kind, options = {sourceRefresh:false}) {
     if (!alive()) return;
     let field;
     if (saved.intent && !saved.intent.operation_id && error.admissionRefused === true) {
       const previous = saved.intent;
       delete saved.intent;
-      try {persist();} catch (storageError) {saved.intent = previous; showError(storageError); return;}
+      try {persist();} catch (storageError) {saved.intent = previous; showError(storageError, {sourceRefresh:false}); return;}
       const hostFields = {INVALID_TARGET: 'host', INVALID_HOST: 'url', HOST_IDENTITY_CHANGED: 'host',
         INVALID_CONFIGURATION: 'fingerprint', CREDENTIAL_REQUIRED: 'bat_secret', INVALID_SECRET: 'bat_secret',
         MANAGED_ROOT_REQUIRED: 'managed_roots', SSH_NOT_VERIFIED: 'ssh_alias', PROFILE_UNAVAILABLE: 'profile_id', PROFILE_NOT_FOUND: 'profile_id'};
@@ -510,7 +526,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     } else if (saved.intent && !saved.intent.operation_id && ['CONFIGURATION_CHANGED', 'SETUP_BUSY', 'PRECONDITION_REQUIRED'].includes(error.code)) {
       saved.intent.problemCode = error.code; persist();
     }
-    showError(error, field ? {summary: t('setup_refused')} : undefined);
+    showError(error, {...options, ...(field ? {summary: t('setup_refused')} : {})});
     if (field) {
       fieldError(field, `error_code_${error.code}`);
       // Submission's finally unlocks the field before focus is restored.
@@ -563,6 +579,8 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     connectionStatus.replaceChildren(...(result.hosts || []).map(row => {
       const status = setupConnectionStatus(row);
       return h('div', {'data-setup-host-state': status}, h('p', {}, h('strong', {}, row.name), ' · ', t(`setup_connection_${status}`)),
+        row.connection_checked_at == null ? null : h('p', {class: 'muted'},
+          timeLabel(t, 'setup_connection_checked', {time: timeStamp(row.connection_checked_at)})),
         status === 'connected' ? null : h('p', {class: 'muted'}, t(status === 'unreachable' ? 'setup_connection_action' : 'setup_connection_checking_help')));
     }));
     summary.replaceChildren(h("p", {}, t("setup_counts", {hosts, repositories,

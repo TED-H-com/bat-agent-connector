@@ -1,4 +1,4 @@
-import {workbenchEnabled} from './workbench-mode.js';
+import {layoutDecision} from './workbench-mode.js';
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
 import {button, iconButton, menu, trapFocus} from './ui/components.js';
@@ -7,7 +7,9 @@ import {lastWorkspace, lastProjectView, rememberWorkspace, forgetWorkspace, avai
 import {projectNavigation} from './project-navigation.js';
 
 export function dashboardShell({navigation, namespace, caps, api, guard, onEvents, errorBox}) {
-  const candidate = workbenchEnabled();
+  const candidate = layoutDecision.layout === 'workbench';
+  Object.assign(document.body.dataset, {layout: layoutDecision.layout, layoutSource: layoutDecision.source,
+    layoutStatus: layoutDecision.status, layoutReason: layoutDecision.reason || ''});
   const aside = navigation.box, main = document.getElementById('main'), top = document.querySelector('.top');
   const toggle = document.getElementById('workspace-menu'), crumb = document.getElementById('nav');
   const workspaceBlock = h('div', {class: 'shell-workspace-block'}), projectNav = h('div', {class: 'shell-project-nav'});
@@ -83,7 +85,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   const countBadge = () => h('span', {class: 'shell-count', hidden: true, 'data-pending-count': ''});
   const pendingCounts = [countBadge(), countBadge()];
   const pending = h('a', {href: '#/home', class: 'ui-button ghost shell-pending', 'aria-label': t('ui_pending'), title: t('ui_pending')}, icon('inbox'), pendingCounts[0]);
-  const right = h('div', {class: 'shell-top-actions'}, pending, document.getElementById('live')); top.append(right);
+  const right = h('div', {class: 'shell-top-actions'}, pending, document.getElementById('central-service-status')); top.append(right);
   const layoutUrl = new URL(location.href); layoutUrl.searchParams.set('workbench', candidate ? '0' : '1');
   const tools = menu({button: button({variant: 'ghost', icon: 'wrench', label: t('ui_tools'), 'data-shell-tools':''}), items: [
     ['operations', 'nav_operations'], ['delivery', 'nav_delivery'], ['artifact-review', 'ar_nav'], ['cleanup', 'nav_cleanup'], ['sessions', 'nav_sessions'],
@@ -208,6 +210,6 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     dispose() {disposed = true; serial++; off(); menus.forEach(control => control.dispose()); tools.dispose(); closeDrawer(false);
       document.removeEventListener('keydown', keydown, true); media.removeEventListener('change', resize); scrim.remove();
       // The static connection control belongs to the application, not this namespace.
-      top.append(document.getElementById('live')); right.remove(); listLink.remove(); creator = null; contextList.remove(); document.body.classList.remove('workbench-preview', 'wc-has-list', 'wc-list-page');},
+      top.append(document.getElementById('central-service-status')); right.remove(); listLink.remove(); creator = null; contextList.remove(); document.body.classList.remove('workbench-preview', 'wc-has-list', 'wc-list-page');},
   };
 }

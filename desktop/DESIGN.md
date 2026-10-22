@@ -560,7 +560,7 @@ controls follow the durable create form's gates and lock with its original inten
 An already open rename stays editable through a background lifecycle withdrawal:
 the draft, caret and focus remain, and Save still commits the local title. A closed
 rename stays gated, and an admitted intent still locks the field.
-An access reset clears the page immediately, including while that field is focused.
+Access reset follows the [shared resnapshot contract](../docs/design/two-service-isolation.md#managed-crashrebind-followed-by-a-producer-reset-m07m08).
 The open rename is remembered only as a UI preference and reopens on the rebuilt
 draft with the same text, caret and focus. Save still commits the local title.
 Cancel, a completed Save, or sending the discussion closes that remembered rename.

@@ -1,5 +1,6 @@
 // Used only by disposable installed-app fixtures. Never writes or logs credentials.
 import assert from 'node:assert/strict';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFile, readdir, lstat, open, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -53,10 +54,25 @@ export async function probeManagedOnce(dataRoot) {
     assert.equal(installation.state, 'ready');
     phase = 'service_pointer';
     const pointer = JSON.parse(await readFile(join(root, 'state/task-service.json'), 'utf8'));
+    assert(typeof pointer.endpoint === 'string' && pointer.endpoint.length > 0);
     const endpoint = new URL(pointer.endpoint);
     assert.equal(endpoint.hostname, '127.0.0.1');
     assert.equal(endpoint.protocol, 'http:');
     assert.equal(endpoint.pathname, '/rpc');
+    // Disposable managed cores use port zero; never probe an operator's fixed port.
+    assert(endpoint.port && endpoint.port !== '18796');
+    phase = 'owner_identity';
+    const challenge = randomBytes(32).toString('hex');
+    const proofResponse = await fetch(`${endpoint.origin}/api/v1/managed/identity?challenge=${challenge}`, {
+      redirect: 'error', signal: AbortSignal.timeout(3000),
+    });
+    assert.equal(proofResponse.status, 200);
+    const proof = (await proofResponse.json()).proof;
+    const key = await readFile(join(root, 'installation.key'));
+    const expected = createHmac('sha256', key)
+      .update(JSON.stringify([1, challenge, endpoint.origin, installation.server_id])).digest('hex');
+    assert(typeof proof === 'string' && /^[a-f0-9]{64}$/.test(proof));
+    assert(timingSafeEqual(Buffer.from(proof, 'hex'), Buffer.from(expected, 'hex')));
     phase = 'credential';
     const token = (await readFile(join(root, 'identity.token'), 'utf8')).trim();
     phase = 'bootstrap';
