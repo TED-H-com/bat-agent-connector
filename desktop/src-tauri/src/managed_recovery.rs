@@ -37,6 +37,9 @@ impl Backoff {
     }
 }
 
+// Keep the loop's visible announcement independently testable.
+pub(super) fn announce(_bridge: &Bridge, _current: u64, _managed: &Managed) {}
+
 pub fn start(bridge: Arc<Bridge>, managed: Arc<Managed>) {
     tauri::async_runtime::spawn(async move {
         let mut backoff = Backoff::default();
@@ -58,6 +61,7 @@ pub fn start(bridge: Arc<Bridge>, managed: Arc<Managed>) {
             if !backoff.due(Instant::now(), reachable) {
                 continue;
             }
+            announce(&bridge, current, &managed);
             let result = bridge.recover_managed(current, managed.clone()).await;
             match result {
                 Ok(()) => {

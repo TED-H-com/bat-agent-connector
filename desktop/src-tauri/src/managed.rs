@@ -869,27 +869,153 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn status_reads_an_external_stop_hold_without_another_ensure() {
+    fn status_observes_an_external_stop_only_after_recovery_ensure() {
         let root = tempfile::tempdir().unwrap();
         let resources = startup_fixture(root.path());
         let data = root.path().join("app");
         let (managed, _) = Managed::prepare(&resources, &data, &root.path().join("config"));
         managed.select_role(Role::Provider, 0).unwrap();
         fs::write(data.join("managed-central/held"), b"hold").unwrap();
+        assert_eq!(
+            crate::managed_status(&managed)
+                .unwrap()
+                .lifecycle
+                .unwrap()
+                .state,
+            "running"
+        );
+        assert_eq!(managed.recover().err().unwrap(), "SERVICE_STOPPED");
         for _ in 0..3 {
             assert_eq!(
-                managed.read_status().unwrap().lifecycle.unwrap().state,
+                crate::managed_status(&managed)
+                    .unwrap()
+                    .lifecycle
+                    .unwrap()
+                    .state,
                 "stopped"
             );
         }
         assert_eq!(
             fs::read(data.join("managed-central/ensure-count")).unwrap(),
-            b"ensure\n"
+            b"ensure\nensure\n"
+        );
+        assert_eq!(
+            fs::read(data.join("managed-central/launcher-count")).unwrap(),
+            b"ensure\nensure\n"
         );
         assert_eq!(
             fs::read(data.join("managed-central/service-count")).unwrap(),
             b"service\n"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn status_is_concurrent_and_never_spawns_a_launcher() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let (managed, _) = Managed::prepare(&resources, &data, &root.path().join("config"));
+        managed.select_role(Role::Provider, 0).unwrap();
+        let barrier = std::sync::Barrier::new(2);
+        let results = std::thread::scope(|threads| {
+            let first = threads.spawn(|| {
+                barrier.wait();
+                crate::managed_status(&managed)
+            });
+            let second = threads.spawn(|| {
+                barrier.wait();
+                crate::managed_status(&managed)
+            });
+            (first.join().unwrap(), second.join().unwrap())
+        });
+        assert!(
+            results.0.is_ok() && results.1.is_ok(),
+            "both Status calls must succeed"
+        );
+        assert_eq!(
+            fs::read(data.join("managed-central/launcher-count")).unwrap(),
+            b"ensure\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn status_succeeds_while_serial_is_held_and_makes_no_launcher_call() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let (managed, _) = Managed::prepare(&resources, &data, &root.path().join("config"));
+        managed.select_role(Role::Provider, 0).unwrap();
+        let _serial = managed.serial.lock().unwrap();
+        assert!(crate::managed_status(&managed).is_ok());
+        assert_eq!(
+            fs::read(data.join("managed-central/launcher-count")).unwrap(),
+            b"ensure\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn real_recovery_announces_and_cached_hold_stays_quiet_without_a_launcher() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let config = root.path().join("config");
+        let (managed, _) = Managed::prepare(&resources, &data, &config);
+        let launch = managed.select_role(Role::Provider, 0).unwrap().unwrap();
+        let bridge = crate::bridge::Bridge::managed(
+            &config,
+            launch.config(),
+            launch.token.clone(),
+            launch.identity(),
+        );
+        crate::managed_recovery::announce(&bridge, 0, &managed);
+        assert_eq!(
+            bridge.status().managed_recovery.as_deref(),
+            Some("MANAGED_RECOVERING")
+        );
+        fs::write(data.join("managed-central/held"), b"hold").unwrap();
+        assert_eq!(managed.recover().err().unwrap(), "SERVICE_STOPPED");
+        bridge.managed_hold(Some(0));
+        assert!(bridge.status().managed_recovery.is_none());
+        crate::managed_recovery::announce(&bridge, 1, &managed);
+        assert!(bridge.status().managed_recovery.is_none());
+        assert_eq!(managed.recover().err().unwrap(), "SERVICE_STOPPED");
+        assert_eq!(
+            fs::read(data.join("managed-central/launcher-count")).unwrap(),
+            b"ensure\nensure\n"
+        );
+    }
+
+    #[test]
+    fn unknown_busy_text_is_typed_without_forwarding_unlisted_text() {
+        let bytes = br#"{"protocol":1,"error":"SERVICE_BUSY","message":"unlisted private text"}"#;
+        assert_eq!(
+            lifecycle_failure(bytes).map(|v| v.0).as_deref(),
+            Some("SERVICE_BUSY")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn launcher_results_and_refusals_refresh_cached_lifecycle() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let (managed, _) = Managed::prepare(&resources, &data, &root.path().join("config"));
+        managed.select_role(Role::Provider, 0).unwrap();
+        let runtime = data.join("managed-central");
+        fs::write(runtime.join("reply-stop"), br#"{"protocol":1,"stopped":false,"lifecycle":{"state":"stop_pending","requested_at":1800000000,"stopped_at":null}}"#).unwrap();
+        managed.request("stop").unwrap();
+        assert_eq!(managed.status().lifecycle.unwrap().state, "stop_pending");
+        for code in ["SERVICE_BUSY", "SERVICE_STOP_REFUSED"] {
+            fs::write(runtime.join("reply-stop"), serde_json::to_vec(&serde_json::json!({"protocol":1,"error":code,
+                "message":"unlisted private text", "lifecycle":{"state":"running","requested_at":null,"stopped_at":null}})).unwrap()).unwrap();
+            fs::write(runtime.join("fail-stop"), b"fail").unwrap();
+            assert_eq!(managed.request("stop").err().unwrap(), code);
+            assert_eq!(managed.status().lifecycle.unwrap().state, "running");
+        }
     }
 
     #[test]
@@ -939,7 +1065,15 @@ mod tests {
         let script = br##"#!/bin/sh
 set -eu
 root="$3"
+mkdir -p "$root"
+printf '%s\n' "$1" >> "$root/launcher-count"
+if [ -f "$root/reply-$1" ]; then
+ cat "$root/reply-$1"
+ if [ -f "$root/fail-$1" ]; then exit 1; fi
+ exit 0
+fi
 if [ "$1" = status ]; then
+ sleep 0.1
  if [ -f "$root/held" ]; then
   printf '%s' '{"protocol":1,"lifecycle":{"state":"stopped","requested_at":1800000000,"stopped_at":1800000001}}'
  else

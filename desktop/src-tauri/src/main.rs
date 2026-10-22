@@ -44,6 +44,15 @@ enum ManagedRequest {
 
 struct ManagedBrowserMenu(MenuItem<tauri::Wry>);
 
+// One snapshot path, also exercised without constructing a platform WebView.
+fn managed_status(state: &managed::Managed) -> Result<managed::Status, String> {
+    let _serial = state
+        .serial
+        .try_lock()
+        .map_err(|_| "MANAGED_SERVICE_BUSY")?;
+    state.read_status()
+}
+
 #[tauri::command]
 async fn managed_control(
     window: WebviewWindow,
@@ -70,13 +79,16 @@ async fn managed_control(
         return result;
     }
     tokio::task::spawn_blocking(move || {
+        if matches!(input, ManagedRequest::Status) {
+            return managed_status(&state);
+        }
         let _serial = state
             .serial
             .try_lock()
             .map_err(|_| "MANAGED_SERVICE_BUSY")?;
         match input {
             ManagedRequest::Stop | ManagedRequest::Start => unreachable!(),
-            ManagedRequest::Status => state.read_status(),
+            ManagedRequest::Status => unreachable!(),
             ManagedRequest::SetLogin { enabled } => state.set_login(enabled),
             ManagedRequest::OpenBrowser => {
                 let path = state.browser_file()?;
