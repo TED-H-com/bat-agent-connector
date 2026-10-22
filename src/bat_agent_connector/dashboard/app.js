@@ -10447,8 +10447,31 @@ var init_i18n = __esmMin((() => {
 			setup_language: "顯示語言",
 			setup_language_en: "English",
 			setup_language_zh: "繁體中文",
+			setup_review_connection: "預覽連線",
+			setup_reviewing_connection: "正在預覽連線",
+			setup_apply_connection: "套用連線",
+			setup_applying_connection: "正在套用連線",
+			setup_review_changed: "設定已變更，請重新預覽",
+			setup_review_unsupported: "此 Connector 尚不支援連線預覽，請先更新再繼續。",
+			error_code_SETUP_REVIEW_CHANGED: "設定已變更，請重新預覽。",
+			setup_review_back: "返回",
+			setup_review_cancel: "取消",
+			setup_review_field: "設定",
+			setup_review_before: "目前",
+			setup_review_after: "套用後",
+			setup_review_git: "Git 傳輸",
+			setup_review_unset: "未設定",
+			setup_review_yes: "允許",
+			setup_review_no: "不允許",
+			setup_review_source_bat_profile: "來源：BAT 設定檔 {reference}",
+			setup_review_source_staged_secret: "來源：已暫存的憑證參照 {reference}",
+			setup_review_source_existing_connection: "來源：既有連線 {reference}",
+			setup_review_source_available: "憑證參照可用；尚未測試連線。",
+			setup_review_source_unavailable: "憑證參照無法使用，套用時仍須通過驗證。",
+			setup_review_no_changes: "連線設定沒有變更。",
+			setup_review_effects: "預覽不儲存連線、不建立操作，也不測試 BAT 或 SSH。套用會先執行唯讀驗證，再儲存設定；不會啟動工作或服務。",
+			setup_review_staged: "貼上的憑證已先存入此安裝的私密暫存。取消不會儲存連線；未使用的參照依既有到期清理規則處理。",
 			setup_advanced: "進階設定",
-			setup_automatic: "自動設定",
 			setup_simple_help: "我們會幫你連接 BAT，完成基本設定。其他選項可以之後再調整。",
 			setup_checking: "正在確認連線，請稍候…",
 			setup_saving: "正在儲存設定，快好了…",
@@ -10459,7 +10482,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
 			setup_copy_label: "貼上從 BAT 複製的連線網址",
 			setup_continue: "繼續設定",
-			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「自動設定」。",
+			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「預覽連線」。",
 			setup_connection_choice: "要使用的連線",
 			setup_choose_placeholder: "請選擇連線",
 			setup_failed_operation: "設定尚未完成，請查看詳細資料。",
@@ -10497,7 +10520,7 @@ var init_i18n = __esmMin((() => {
 			setup_verification_invalid: "請輸入有效專案、執行程式、最多 63 個非空參數，以及 1–3600 秒逾時。",
 			setup_scope_required: "目前 Connector 帳號無權修改此設定。",
 			setup_roots_help: "指定專供新受管工作使用的遠端目錄；人工專案保持唯讀。Git 同步與成果操作使用你選擇的 SSH 連線。",
-			setup_save_host: "驗證並儲存主機",
+			setup_save_host: "預覽連線",
 			setup_repository_title: "2. 連結 GitHub 儲存庫",
 			setup_repository_help: "將儲存庫明確連結到選定主機與工作區。驗證只讀取資料，不會建立 PR 或推送。",
 			setup_repository: "GitHub 儲存庫",
@@ -12154,8 +12177,31 @@ var init_i18n = __esmMin((() => {
 			setup_language: "Language",
 			setup_language_en: "English",
 			setup_language_zh: "繁體中文",
+			setup_review_connection: "Review connection",
+			setup_reviewing_connection: "Reviewing connection",
+			setup_apply_connection: "Apply connection",
+			setup_applying_connection: "Applying connection",
+			setup_review_changed: "Settings changed; review again",
+			setup_review_unsupported: "This Connector does not support connection review. Update it before continuing.",
+			error_code_SETUP_REVIEW_CHANGED: "Settings changed; review again.",
+			setup_review_back: "Back",
+			setup_review_cancel: "Cancel",
+			setup_review_field: "Setting",
+			setup_review_before: "Current",
+			setup_review_after: "After applying",
+			setup_review_git: "Git transport",
+			setup_review_unset: "Not set",
+			setup_review_yes: "Allowed",
+			setup_review_no: "Not allowed",
+			setup_review_source_bat_profile: "Source: BAT profile {reference}",
+			setup_review_source_staged_secret: "Source: staged credential reference {reference}",
+			setup_review_source_existing_connection: "Source: existing connection {reference}",
+			setup_review_source_available: "Credential reference available; connection not tested yet.",
+			setup_review_source_unavailable: "Credential reference unavailable; Apply must still pass verification.",
+			setup_review_no_changes: "No connection settings will change.",
+			setup_review_effects: "Review does not save the connection, create an operation or probe BAT or SSH. Apply performs read-only verification before saving settings; it starts no work or service.",
+			setup_review_staged: "The pasted credential was already staged in this installation’s private storage. Cancel does not save the connection; unused references follow the existing expiry and cleanup rules.",
 			setup_advanced: "Advanced",
-			setup_automatic: "Set up automatically",
 			setup_simple_help: "We’ll help you connect to BAT and get things ready. You can adjust other options later.",
 			setup_checking: "Checking your connection. Please wait…",
 			setup_saving: "Saving your settings. Almost there…",
@@ -12166,7 +12212,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
 			setup_copy_label: "Paste the connection link copied from BAT",
 			setup_continue: "Continue setup",
-			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Set up automatically.",
+			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Review connection.",
 			setup_connection_choice: "Connection to use",
 			setup_choose_placeholder: "Choose a connection",
 			setup_failed_operation: "Setup hasn’t finished. See details for more information.",
@@ -12204,7 +12250,7 @@ var init_i18n = __esmMin((() => {
 			setup_verification_invalid: "Enter a valid project, executable, at most 63 nonempty arguments and a 1–3600 second timeout.",
 			setup_scope_required: "Your Connector identity is not permitted to change this setting.",
 			setup_roots_help: "Choose remote directories dedicated to new managed work; human projects remain read-only. Git synchronization and artifact actions use your selected SSH connection.",
-			setup_save_host: "Verify and save host",
+			setup_save_host: "Review connection",
 			setup_repository_title: "2. Bind a GitHub repository",
 			setup_repository_help: "Bind the repository to an exact host and workspace. Verification only reads data; it creates no PR and pushes nothing.",
 			setup_repository: "GitHub repository",
@@ -56204,6 +56250,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	const key = `batc.managed.setup.${namespace}`;
 	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
 	const stagedSecrets = new Map();
+	let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
 	try {
 		saved = JSON.parse(localStorage.getItem(key) || "{}");
 	} catch {}
@@ -56311,6 +56358,14 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		if (!secret) node.value = typeof saved[name] === "string" ? saved[name] : "";
 		node.addEventListener("input", () => {
 			if (!alive() || saved.intent || busy) return;
+			if (!name.startsWith("verification_") && ![
+				"repository",
+				"repository_host",
+				"workspace_id",
+				"remote_url",
+				"github_secret"
+			].includes(name)) invalidateReview();
+			if (name === "bat_secret") stagedSecrets.delete("host");
 			if ([
 				"url",
 				"fingerprint",
@@ -56365,6 +56420,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		node.checked = saved[name] === true;
 		node.addEventListener("change", () => {
 			if (!alive() || saved.intent || busy) return;
+			invalidateReview();
 			saved[name] = node.checked;
 			try {
 				persist();
@@ -56389,6 +56445,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}, h("span", {}, t("setup_profile")), profile, profilesError);
 	profile.addEventListener("change", () => {
 		if (!alive() || saved.intent) return;
+		invalidateReview();
+		stagedSecrets.delete("host");
 		const selected = snapshot?.profiles?.find((row) => row.id === profile.value);
 		if (selected) clearPasteRead();
 		saved.import_profile_id = selected?.id || "";
@@ -56439,7 +56497,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	})), manual, h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("button", {
 		type: "submit",
 		class: "primary"
-	}, t("setup_save_host")));
+	}, t("setup_review_connection")));
 	const repoForm = h("form", {
 		novalidate: true,
 		"data-setup-repository": "",
@@ -56584,10 +56642,13 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		class: "primary setup-automatic",
 		disabled: true,
 		onclick: () => automatic().catch(showError)
-	}, t("setup_automatic"));
+	}, t("setup_review_connection"));
 	const connectionChoice = h("select", { "aria-label": t("setup_connection_choice") });
 	connectionChoice.addEventListener("change", () => {
 		if (!alive() || busy || saved.intent) return;
+		invalidateReview();
+		stagedSecrets.delete("host");
+		fields.get("bat_secret").value = "";
 		saved.import_profile_id = "";
 		try {
 			persist();
@@ -56657,10 +56718,20 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}, t("setup_continue")));
 	const simple = h("div", { "data-setup-simple": "" }, h("p", {}, t("setup_simple_help")), choiceField, automaticButton, copyForm);
 	const advanced = h("details", { "data-setup-advanced": "" }, h("summary", {}, t("setup_advanced")), hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm));
+	const applyReview = h("button", {
+		type: "button",
+		class: "primary",
+		onclick: () => applyConnectionReview()
+	}, t("setup_apply_connection"));
+	const reviewBox = h("section", {
+		hidden: true,
+		"data-setup-review": "",
+		"aria-label": t("setup_review_connection")
+	});
 	const box = h("section", {
 		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, reviewBox, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
 	function defaultHost() {
 		if (fields.get("host").value || saved.intent) return;
 		const names = new Set((snapshot?.hosts || []).map((row) => row.name));
@@ -56677,6 +56748,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		fields.get("host").value = saved.host = name;
 	}
 	function applyConnection(parsed) {
+		invalidateReview();
 		fields.get("connection_url").value = "";
 		for (const [name, value] of Object.entries({
 			url: parsed.endpoint,
@@ -56837,8 +56909,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 			scope.hidden = !!allowed(kind);
 		}
-		automaticButton.disabled = !!locked || !allowed("host");
+		const supported = snapshot?.preview_contract_version === 1;
+		hostForm.querySelector("button[type=submit]").disabled ||= !supported || reviewing;
+		automaticButton.disabled = !!locked || !allowed("host") || !supported || reviewing;
+		automaticButton.hidden = !!review;
 		for (const field of copyForm.querySelectorAll("input,button")) field.disabled = !!locked || !allowed("host");
+		copyForm.querySelector("button").disabled ||= !supported || reviewing;
 		connectionChoice.disabled = !!locked || !allowed("host");
 		simple.hidden = !!snapshot?.hosts?.length;
 		connectionStatus.hidden = !readReady;
@@ -56848,7 +56924,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			hosts: snapshot?.hosts || [],
 			readReady
 		});
-		automaticStatus.replaceChildren(status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
+		const reviewStatus = !saved.intent && (!supported && snapshot ? "setup_review_unsupported" : reviewing ? "setup_reviewing_connection" : reviewChanged ? "setup_review_changed" : null);
+		automaticStatus.replaceChildren(reviewStatus ? t(reviewStatus) : busy && saved.intent?.request.action === "setup.host" ? t("setup_applying_connection") : status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
 			host: operation.target.host,
 			time: timeStamp(status.verifiedAt)
 		}) : status.key ? t(status.key) : "");
@@ -56873,6 +56950,104 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		sessions.hidden = !snapshot?.hosts?.length;
 		actions.hidden = sessions.hidden && retry.hidden && next.hidden;
 		hostForm.querySelector("button[type=submit]").className = sessions.hidden ? "primary" : "secondary";
+		reviewBox.hidden = !review;
+		applyReview.disabled = !!locked || !review || !supported;
+	}
+	function invalidateReview() {
+		reviewSerial++;
+		reviewChanged = !!review || reviewing;
+		review = null;
+		if (typeof reviewBox !== "undefined") {
+			reviewBox.hidden = true;
+			update();
+		}
+	}
+	function showReview(preview, request) {
+		if (preview?.contract_version !== 1 || preview.action !== "setup.host" || !equal(preview.target, request.target) || preview.config_revision !== request.preconditions.config_revision || !/^[a-f0-9]{64}$/.test(preview.review_digest) || !/^[a-f0-9]{64}$/.test(preview.after_revision) || !Array.isArray(preview.changes) || !preview.source || ![
+			"bat_profile",
+			"staged_secret",
+			"existing_connection"
+		].includes(preview.source.kind) || typeof preview.source.reference !== "string" || typeof preview.source.available !== "boolean" || !preview.effects || preview.effects.configuration_written !== false || preview.effects.operation_created !== false || preview.effects.probe_started !== false) throw Error(t("setup_receipt_mismatch"));
+		const labels = {
+			url: "setup_host_url",
+			fingerprint: "setup_fingerprint",
+			profile_id: "setup_workspace_profile",
+			git: "setup_review_git",
+			writes: "setup_allow_messages",
+			orchestrate: "setup_allow_start",
+			shared_clone_worktrees: "setup_shared_clone",
+			managed_roots: "setup_managed_roots",
+			ssh_alias: "setup_ssh_alias"
+		};
+		if (preview.changes.length > Object.keys(labels).length || preview.changes.some((row) => !labels[row.field])) throw Error(t("setup_receipt_mismatch"));
+		const value = (item) => item == null ? t("setup_review_unset") : typeof item === "boolean" ? t(item ? "setup_review_yes" : "setup_review_no") : Array.isArray(item) ? item.join("; ") || t("setup_review_unset") : String(item);
+		review = {
+			request: structuredClone(request),
+			digest: preview.review_digest
+		};
+		reviewChanged = false;
+		reviewBox.replaceChildren(h("h3", {}, t("setup_review_connection")), h("p", {}, t(`setup_review_source_${preview.source.kind}`, { reference: preview.source.reference })), h("p", {}, t(preview.source.available ? "setup_review_source_available" : "setup_review_source_unavailable")), preview.changes.length ? h("table", {}, h("thead", {}, h("tr", {}, ...[
+			"field",
+			"before",
+			"after"
+		].map((key) => h("th", {}, t(`setup_review_${key}`))))), h("tbody", {}, ...preview.changes.map((row) => h("tr", {}, h("th", {}, t(labels[row.field])), h("td", {}, value(row.before)), h("td", {}, value(row.after)))))) : h("p", {}, t("setup_review_no_changes")), h("p", {}, t("setup_review_effects")), preview.effects.credential_staged ? h("p", { class: "note" }, t("setup_review_staged")) : null, h("div", { class: "actions" }, applyReview, h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				invalidateReview();
+				update();
+				focusField("host");
+			}
+		}, t("setup_review_back")), h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				invalidateReview();
+				reviewChanged = false;
+				update();
+			}
+		}, t("setup_review_cancel"))));
+		update();
+		applyReview.focus();
+	}
+	async function applyConnectionReview() {
+		if (!alive() || busy || reviewing || !review || saved.intent || !readReady || snapshot.busy || !allowed("host")) return;
+		if (review.request.preconditions.config_revision !== snapshot.revision) {
+			invalidateReview();
+			update();
+			return;
+		}
+		busy = true;
+		update();
+		message.replaceChildren();
+		let sourceRefresh = false;
+		try {
+			saved.intent = {
+				key: crypto.randomUUID(),
+				request: {
+					...structuredClone(review.request),
+					preconditions: {
+						...review.request.preconditions,
+						review_digest: review.digest
+					}
+				}
+			};
+			try {
+				persist();
+			} catch (error) {
+				delete saved.intent;
+				throw error;
+			}
+			review = null;
+			await sendOriginal();
+			sourceRefresh = true;
+			await refresh();
+		} catch (error) {
+			handleSubmissionError(error, "host", { sourceRefresh });
+		} finally {
+			busy = false;
+			if (alive()) update();
+		}
 	}
 	function accept(candidate) {
 		const intent = saved.intent;
@@ -56911,8 +57086,13 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	async function run(kind, defaults = false) {
 		const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
-		if (!alive() || busy || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
-		busy = true;
+		if (!alive() || busy || reviewing || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && snapshot.preview_contract_version !== 1 || kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
+		const serial = ++reviewSerial;
+		if (kind === "host") {
+			reviewing = true;
+			review = null;
+			reviewChanged = false;
+		} else busy = true;
 		update();
 		message.replaceChildren();
 		let sourceRefresh = false;
@@ -56929,6 +57109,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 					value: tokenField.value
 				});
 				guard();
+				if (kind === "host" && serial !== reviewSerial) return;
 				secretRef = staged.secret_ref;
 				tokenField.value = "";
 				stagedSecrets.set(kind, {
@@ -56965,14 +57146,22 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			};
 			if (kind === "verification" && !validVerification(params)) throw Error(t("setup_verification_invalid"));
 			if (secretRef) params.secret_ref = secretRef;
+			const request = {
+				action: `setup.${kind}`,
+				target: kind === "host" ? { host: value("host") } : kind === "repository" ? { repository: value("repository") } : {},
+				params,
+				preconditions: { config_revision: kind === "verification" ? saved.verification_base?.revision || snapshot.revision : snapshot.revision }
+			};
+			if (kind === "host") {
+				const response = await api("POST", "/managed/setup/preview", request);
+				guard();
+				if (serial !== reviewSerial || disposed || request.preconditions.config_revision !== snapshot?.revision) return;
+				showReview(response.preview, request);
+				return;
+			}
 			saved.intent = {
 				key: crypto.randomUUID(),
-				request: {
-					action: `setup.${kind}`,
-					target: kind === "host" ? { host: value("host") } : kind === "repository" ? { repository: value("repository") } : {},
-					params,
-					preconditions: { config_revision: kind === "verification" ? saved.verification_base?.revision || snapshot.revision : snapshot.revision }
-				}
+				request
 			};
 			persist();
 			automaticStatus.textContent = t("setup_saving");
@@ -56980,9 +57169,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
+			if (kind === "host" && serial !== reviewSerial) return;
 			handleSubmissionError(error, kind, { sourceRefresh });
 		} finally {
 			busy = false;
+			reviewing = false;
 			if (alive()) update();
 		}
 	}
@@ -57067,6 +57258,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			guard();
 		} catch (error) {
 			if (alive() && serial === readSerial) {
+				invalidateReview();
 				readReady = false;
 				if ([403, 404].includes(error.status)) {
 					snapshot = null;
@@ -57093,6 +57285,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				timeout_s: 600
 			};
 		}
+		if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1)) invalidateReview();
 		snapshot = result;
 		readReady = true;
 		if (!hostDisclosureReady) {

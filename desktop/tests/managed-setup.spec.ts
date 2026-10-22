@@ -1,5 +1,5 @@
 import {test, expect, type Page} from '@playwright/test';
-import {managedSetupFixture, openSetupAdvanced} from './managed-setup-fixture.ts';
+import {managedSetupFixture, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
 import {STRINGS} from '../src/i18n.js';
 import {readFileSync} from 'node:fs';
 const setupEvidence = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url), 'utf8'));
@@ -56,7 +56,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       await form.getByLabel(copy('setup_bat_token'), {exact:false}).fill('private-bat-secret');
       await page.locator('#main > .ui-page-header').getByRole('button', {name: copy('pm_refresh'), exact: true}).click();
       await expect(form.getByLabel(copy('setup_host_name'),{exact:true})).toHaveValue('demo');
-      await form.getByRole('button',{name:copy('setup_save_host')}).click();
+      await form.getByRole('button',{name:copy('setup_save_host')}).click(); await applySetupReview(page);
       await expect(panel).toContainText(copy('error_generic'));
       expect(state.posts).toHaveLength(1);expect(state.staged).toHaveLength(1);
       expect(state.posts[0].body.params).toMatchObject({secret_ref:'setup_'+'b'.repeat(32),writes:false,orchestrate:false});
@@ -79,12 +79,12 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       await form.locator('[data-setup-manual] > summary').click();
       await form.getByLabel(copy('setup_profile'),{exact:true}).selectOption('profile-demo');
       await form.getByLabel(copy('setup_host_name'),{exact:true}).fill('demo');
-      await form.getByRole('button',{name:copy('setup_save_host')}).click();
+      await form.getByRole('button',{name:copy('setup_save_host')}).click(); await applySetupReview(page);
       await expect(panel).toContainText(copy('error_code_CONFIGURATION_CHANGED'));
       await expect(page.locator('[data-setup-operation]')).toHaveCount(0);
       state.revision='d'.repeat(64);state.refused=false;
       await page.locator('#main > .ui-page-header').getByRole('button', {name: copy('pm_refresh'), exact: true}).click();
-      await form.getByRole('button',{name:copy('setup_save_host')}).click();
+      await form.getByRole('button',{name:copy('setup_save_host')}).click(); await applySetupReview(page);
       await expectSetupOperation(page);
       expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
       expect(state.posts[1].body.preconditions.config_revision).toBe(state.revision);
@@ -174,7 +174,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       await expect(shared).not.toBeChecked(); await shared.check(); await expect(form).toContainText(copy('setup_shared_clone_help'));
       await form.locator('[data-setup-manual] > summary').click();
       await form.getByLabel(copy('setup_profile'), {exact: true}).selectOption('profile-demo');
-      await form.getByLabel(copy('setup_host_name'), {exact: true}).fill('demo'); await form.getByRole('button', {name: copy('setup_save_host'), exact: true}).click();
+      await form.getByLabel(copy('setup_host_name'), {exact: true}).fill('demo'); await form.getByRole('button', {name: copy('setup_save_host'), exact: true}).click(); await applySetupReview(page);
       await expectSetupOperation(page);
       expect(state.posts[0].body.params).toMatchObject({shared_clone_worktrees: true, writes: false, orchestrate: false});
     });
