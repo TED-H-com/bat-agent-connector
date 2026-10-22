@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import hashlib
 import json
 import os
@@ -139,7 +138,15 @@ class Updater:
         return state
 
     def save(self, state):
-        files.atomic_write(self.root / "state.json", (json.dumps(state, sort_keys=True, indent=2) + "\n").encode())
+        path = self.root / "state.json"
+        encoded = (json.dumps(state, sort_keys=True, indent=2) + "\n").encode()
+        try:
+            current = files.read_private(path)
+        except FileNotFoundError:
+            current = None
+        # Preserve state.json when its serialized bytes are already persisted.
+        if current != encoded:
+            files.atomic_write(path, encoded)
 
     def outcome(self, pending):
         path = self.root / "receipts" / (pending["id"] + ".json")
@@ -321,16 +328,13 @@ class Updater:
     def policy(self, enabled, channel=None):
         with self.locked():
             state = self.read()
-            before = copy.deepcopy(state)
             if enabled:
                 self.reconcile(state)
             state["enabled"] = enabled
             if channel:
                 require(channel in {"stable", "preview"}, "invalid_channel")
                 state["channel"] = channel
-            # Unchanged policy must preserve the existing state file.
-            if state != before:
-                self.save(state)
+            self.save(state)
             return self.status(state)
 
     def rollback(self):
@@ -382,12 +386,10 @@ class Updater:
                     write_unit(path, text)
             env = clean_env(self.home)
             env["XDG_RUNTIME_DIR"] = "/run/user/" + str(os.getuid())
-            before = copy.deepcopy(state)
             self.command(["/usr/bin/systemctl", "--user", "daemon-reload"], env=env, timeout=30)
             self.command(["/usr/bin/systemctl", "--user", "enable", "--now", "batc-update.timer"], env=env, timeout=30)
             state["schedule_complete"] = True
-            if state != before:
-                self.save(state)
+            self.save(state)
             return self.status(state)
 
 
