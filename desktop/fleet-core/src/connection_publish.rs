@@ -12,6 +12,12 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 
+mod recovery;
+pub use recovery::{
+    AbandonDecision, ArtifactObservation, ArtifactState, AuthorizationPoint, DecisionBoundary,
+    FrozenPlanRef, Inspection, FROZEN_PLAN_LIMIT,
+};
+
 const JOURNAL_LIMIT: usize = 32768;
 const ARTIFACTS: [Artifact; 4] = [
     Artifact::Inventory,
@@ -26,6 +32,9 @@ pub enum Error {
     Ownership { artifact: Artifact },
     UnfinishedPlan { review_digest: String },
     InvalidPlan,
+    Authorization { code: &'static str },
+    AbandonedPlan { review_digest: String },
+    DecisionConflict,
     ReceiptConflict,
     Gate(&'static str),
 }
@@ -280,6 +289,24 @@ impl Publisher {
         crate::publication_state::verify(path)?;
         Ok(())
     }
+    fn read_journal(&self, p: &mut impl Platform, path: &Path) -> Result<(Journal, Vec<u8>)> {
+        let bytes = read(path, JOURNAL_LIMIT)?.ok_or(Error::ReceiptConflict)?;
+        let journal: Journal = serde_json::from_value(strict_json::parse(&bytes, JOURNAL_LIMIT)?)
+            .map_err(|_| Error::ReceiptConflict)?;
+        if !journal.valid()
+            || path
+                != self
+                    .directory
+                    .join(format!("{}.json", journal.review_digest))
+        {
+            return Err(Error::ReceiptConflict);
+        }
+        let owner = &journal.steps[0].owner;
+        self.gates(p, owner)?;
+        self.private(p, &self.directory, owner)?;
+        self.private(p, path, owner)?;
+        Ok((journal, bytes))
+    }
     fn journals(
         &self,
         p: &mut impl Platform,
@@ -305,30 +332,20 @@ impl Publisher {
             {
                 continue;
             }
-            let bytes = read(&path, JOURNAL_LIMIT)?.ok_or(Error::ReceiptConflict)?;
-            let journal: Journal =
-                serde_json::from_value(strict_json::parse(&bytes, JOURNAL_LIMIT)?)
-                    .map_err(|_| Error::ReceiptConflict)?;
-            if !journal.valid()
-                || path
-                    != self
-                        .directory
-                        .join(format!("{}.json", journal.review_digest))
-            {
-                return Err(Error::ReceiptConflict);
-            }
-            let owner = &journal.steps[0].owner;
-            self.gates(p, owner)?;
-            self.private(p, &self.directory, owner)?;
-            self.private(p, &path, owner)?;
+            let (journal, bytes) = self.read_journal(p, &path)?;
             if journal.review_digest == plan.review_digest {
                 if journal.steps != plan.steps
                     || journal.generator_version != plan.generator_version
                 {
                     return Err(Error::ReceiptConflict);
                 }
+                if self.has_decision(p, &journal, &bytes)? {
+                    return Err(Error::AbandonedPlan {
+                        review_digest: journal.review_digest,
+                    });
+                }
                 found = Some((journal, bytes));
-            } else if !journal.complete() {
+            } else if !journal.complete() && !self.has_decision(p, &journal, &bytes)? {
                 return Err(Error::UnfinishedPlan {
                     review_digest: journal.review_digest,
                 });
@@ -393,12 +410,7 @@ impl Publisher {
         *saved = Some(bytes);
         Ok(())
     }
-    pub fn publish(
-        &self,
-        plan: &PublicationPlan,
-        p: &mut impl Platform,
-        boundary: &mut impl FnMut(Boundary, Artifact) -> crate::Result<()>,
-    ) -> Result<()> {
+    fn validate_plan(&self, plan: &PublicationPlan) -> Result<()> {
         if !plan.matches_review()
             || plan.generator_version != GENERATOR_VERSION
             || !hash_valid(&plan.review_digest)
@@ -414,7 +426,30 @@ impl Publisher {
         {
             return Err(Error::InvalidPlan);
         }
-        ancestors(&plan.root)?;
+        for path in [&plan.root, &self.pointer, &self.startup, &self.user] {
+            ancestors(path)?;
+        }
+        Ok(())
+    }
+    /// Unfenced native use only. Deadline-bound callers must use publish_authorized.
+    pub fn publish(
+        &self,
+        plan: &PublicationPlan,
+        p: &mut impl Platform,
+        boundary: &mut impl FnMut(Boundary, Artifact) -> crate::Result<()>,
+    ) -> Result<()> {
+        self.publish_authorized(plan, p, &mut |_, _| Ok(()), boundary)
+    }
+    /// Authorization covers configuration effects only. Evidence remains writable
+    /// after refusal; all callbacks execute under the existing installation guards.
+    pub fn publish_authorized(
+        &self,
+        plan: &PublicationPlan,
+        p: &mut impl Platform,
+        authorize: &mut impl FnMut(AuthorizationPoint, Artifact) -> crate::Result<()>,
+        boundary: &mut impl FnMut(Boundary, Artifact) -> crate::Result<()>,
+    ) -> Result<()> {
+        self.validate_plan(plan)?;
         let _launcher = p.launcher_guard()?;
         let _monitor = p.monitor_guard()?;
         // Reject an unowned later step before even the first receipt/directory write.
@@ -461,8 +496,12 @@ impl Publisher {
             if self.prove(plan, p, step)? != current {
                 return Err(Error::ThirdBytes { artifact: a });
             }
+            authorize(AuthorizationPoint::BeforeDirectory, a)
+                .map_err(|code| Error::Authorization { code })?;
             std::fs::create_dir_all(path.parent().ok_or(Error::InvalidPlan)?)
                 .map_err(|_| Error::Gate("PUBLICATION_IO"))?;
+            authorize(AuthorizationPoint::BeforeArtifact, a)
+                .map_err(|code| Error::Authorization { code })?;
             compare_replace::replace(
                 &path,
                 current.as_deref(),
@@ -476,7 +515,8 @@ impl Publisher {
                     if a == Artifact::Installation {
                         self.kit(plan)?;
                     }
-                    Ok(())
+                    authorize(AuthorizationPoint::ReplacementGuard, a)
+                        .map_err(|code| Error::Authorization { code })
                 }),
             )?;
             boundary(Boundary::AfterReplace, a)?;

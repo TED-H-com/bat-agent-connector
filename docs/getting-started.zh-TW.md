@@ -4,16 +4,16 @@
 
 ## 選擇相符的安裝包
 
-2026 年 10 月 19 日核對的已發布版本為 [v0.2.12](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)：Connector **0.2.12**、desktop **0.1.8**，來源為 `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`。下載相符套件及 `release-manifest.json`、`SHA256SUMS`；後續版本須核對自己的 tag、來源清單與平台套件。v0.2.12 原始碼已包含驗證安裝器，一行安裝與收據流程見[英文安裝說明](getting-started.md#2-install-connector)。CI 與安裝 fixture 不代表實機驗收。
+2026 年 10 月 22 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)仍為 Connector **0.2.12**／desktop **0.1.8**，來源 `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
-這個安裝包尚未包含 #315 路線喚醒、#316 本機服務復原與 #319 首次設定／狀態修正。重裝同一包不會取得這些修正；來源、發布與安裝證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述已發布套件，主線介面改動不代表安裝版已更新。
+穩定版尚未包含路線喚醒、本機服務復原及首次設定／狀態變更；預覽版已包含。#399–#403 在預覽版來源之後才合併，不在這個套件內。已合併、已發布、已安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.12；下載較新套件不代表已安裝或實機驗收。
 
-| 平台 | Release 資產 | 格式 |
-| --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `.deb` |
+| 平台 | 穩定版 0.1.8 資產 | 預覽版 0.1.9 資產 | 格式 |
+| --- | --- | --- | --- |
+| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Windows 包未正式簽署，Mac 採 ad-hoc 簽署。正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
 
@@ -188,7 +188,23 @@ Dashboard 登入欄位不能填 BAT remote token。
 
 ### 2. 安裝 Connector
 
-在中央主機使用 `uv` 安裝。正式版本選定前，固定一個已檢視 commit，避免不知情跟著 `main` 變動。請將 `REVIEWED_COMMIT` 換成與選定桌面／中央部署相符、已檢視的來源 commit：
+兩個已發布版本都含驗證安裝器；啟動腳本與安裝須使用同一 tag。穩定版：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.12/scripts/install.sh | sh -s -- --tag v0.2.12 --channel-check stable
+```
+
+預覽版：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.13-preview.20261022/scripts/install.sh | sh -s -- --tag v0.2.13-preview.20261022 --channel-check preview
+```
+
+`--channel-check stable` 拒絕預覽版；預設 `preview` 可接受穩定版與預覽版。
+Linux 加上 `--enable-updates` 才會登記所選通道並啟用使用者排程，取得該通道符合條件的較新版本；
+否則依印出的收據、登記與排程指令操作。安裝前提及收據流程見[英文安裝說明](getting-started.md#2-install-connector)，通道與回退見[更新指南](connector-updates.md)。
+
+也可在中央主機使用 `uv` 安裝開發來源，固定已檢視 commit，避免不知情跟著 `main` 變動。請將 `REVIEWED_COMMIT` 換成與選定桌面／中央部署相符、已檢視的來源 commit：
 
 ```bash
 uv tool install 'git+https://github.com/TED-H-com/bat-agent-connector@REVIEWED_COMMIT'

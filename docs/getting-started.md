@@ -4,16 +4,16 @@
 
 ## Choose the matching package
 
-As checked on October 19, 2026, the published package is [v0.2.12](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12): Connector **0.2.12** and desktop **0.1.8**, from `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`. Download the matching asset with `release-manifest.json` and `SHA256SUMS`. For later packages, match their own tag, manifest and source; installation fixtures and CI are separate from native or live acceptance.
+As checked on October 22, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12) remains Connector **0.2.12** / desktop **0.1.8**, from `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
 
-This package predates the route wake-up, managed-service recovery and first-run/status fixes in #315, #316 and #319. Reinstalling this same package does not add those fixes. See [delivery status](product/implementation-status.md) for source versus released/installed evidence. The first-launch steps below describe the published package; newer main-source UI is not an installed update.
+The stable package predates the route wake-up, managed-service recovery and first-run/status changes now included in the preview. #399–#403 merged after the preview source and are not in that package. See [delivery status](product/implementation-status.md) for merged, published, installed and live-tested evidence. The first-launch steps below describe stable 0.2.12; downloading a newer package does not establish installation or live acceptance.
 
-| Platform | Release asset | Package |
-| --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `.deb` |
+| Platform | Stable 0.1.8 asset | Preview 0.1.9 asset | Package |
+| --- | --- | --- | --- |
+| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 Use the platform asset on the release page. Separate GitHub Actions candidates may require sign-in and expire. Windows packages are unsigned; Mac bundles use ad-hoc signing. Formal signing, Mac notarization, production update channels and a Linux persistent native credential vault are outside this delivery. GitHub's release label does not establish real-device stability.
 
@@ -242,31 +242,38 @@ It creates a private version directory under
 
 For an existing uv tool installation, see [adoption and restoration](connector-updates.md#adopting-an-existing-uv-tool-installation).
 
-The installer scripts and module are included in the published **v0.2.12** source.
-Pin the same published tag for both the bootstrap and the installation (never `main`):
+Both published versions include the installer. Pin the same tag for the bootstrap
+and installation. For stable **v0.2.12**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.12/scripts/install.sh | sh -s -- --tag v0.2.12
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.12/scripts/install.sh | sh -s -- --tag v0.2.12 --channel-check stable
+```
+
+For prerelease **v0.2.13-preview.20261022**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.13-preview.20261022/scripts/install.sh | sh -s -- --tag v0.2.13-preview.20261022 --channel-check preview
 ```
 
 Add `~/.local/bin` to PATH. `--dry-run` verifies release metadata without writes;
 `--verify-only` verifies an existing installation and its receipt without writes.
-`--channel-check stable` refuses previews (default: `preview`).
+`--channel-check stable` refuses previews; the default `preview` accepts stable releases
+and prereleases. The updater uses that channel to offer eligible newer versions.
 `--root /absolute/private/version-directory` selects a new version directory.
 Root requires `--allow-root`. Existing entrypoints/skills and update-managed
 installations are refused; configuration, credentials and device identity are
 never overwritten. Failed installs retain their private directory for inspection;
 they do not issue a successful rollout receipt. Use a new empty root for a retry.
 
-On Linux, `--enable-updates` also enrolls and schedules the user systemd timer.
-Otherwise run the printed `batc-update enable --channel preview --receipt ...`
-and `batc-update schedule` commands yourself. macOS supports installation and
+On Linux, `--enable-updates` enrolls the selected channel and schedules the user
+systemd timer. Otherwise follow the printed enrollment and schedule commands
+for that channel; installation alone does not enable updates. macOS supports installation and
 verification; the current automatic updater requires Linux.
 GitHub HTTPS/release authority is the trust boundary; checksums are not an
 independent signature. The bootstrap optionally uses `GH_TOKEN` for the release
 API only and never prints it.
 
-Install with `uv` on the central host. Until a formal release is selected, pin a reviewed commit instead of silently following changing `main`. Replace `REVIEWED_COMMIT` with the reviewed source commit matching your chosen desktop / service deployment:
+Install with `uv` on the central host. For a development source installation, pin a reviewed commit instead of silently following changing `main`. Replace `REVIEWED_COMMIT` with the reviewed source commit matching your chosen desktop / service deployment:
 
 ```bash
 uv tool install 'git+https://github.com/TED-H-com/bat-agent-connector@REVIEWED_COMMIT'

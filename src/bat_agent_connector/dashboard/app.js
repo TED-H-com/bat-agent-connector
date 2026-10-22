@@ -59294,9 +59294,13 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			if (alive()) indicator();
 		}
 	};
-	const onScroll = () => {
+	const observePosition = () => {
+		if (!viewport.clientHeight) return;
 		if (initialized && !resizing && viewport.scrollTop !== scrollPosition) pinned = atBottom();
 		scrollPosition = viewport.scrollTop;
+	};
+	const onScroll = () => {
+		observePosition();
 		indicator();
 	};
 	viewport.addEventListener("scroll", onScroll, { passive: true });
@@ -59350,6 +59354,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 	const countCaption = (count, more) => count === 1 && !more ? t("message_window_one") : more ? t("message_window_latest", { count }) : t("message_window_count", { count });
 	const update = (messages, state = null) => {
 		if (!alive()) return;
+		observePosition();
 		last = {
 			messages,
 			state

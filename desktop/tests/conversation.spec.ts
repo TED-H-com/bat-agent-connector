@@ -92,17 +92,45 @@ for (const native of [false,true]) {
     data.fail=false; await expect.poll(()=>saved(page),{timeout:10000}).toEqual(checkpoint(2));
     expect(data.writes).toEqual([]);
   });
-  test(`reader movement during a delayed response wins over the previous position (${platform})`, async ({page}) => {
+  for (const locale of ['en-US', 'zh-TW']) test(`reader movement during a delayed response wins over the previous position (${platform}, ${locale})`, async ({page}, info) => {
     const {data,dispatch}=conversationFixture(); let release!:()=>void, waiting=false;
     const gate=new Promise<void>(resolve=>release=resolve);
+    await page.addInitScript(language=>Object.defineProperty(navigator,'language',{value:language}),locale);
     await mountConversation(page,native,async input=>{if(data.cursor && input.path.includes('/messages')) {waiting=true;await gate;} return dispatch(input);});
     await page.goto('/dashboard/#/session/demo/session-1'); await expect(page.locator('.msg')).toHaveCount(12);
+    await expect.poll(()=>bottom(page)).toBeLessThanOrEqual(1);
     data.cursor++; await expect.poll(()=>waiting).toBe(true);
-    await page.locator('.conversation-scroll').evaluate(el=>el.scrollTop=100);
+    await page.locator('.conversation-scroll').evaluate(el=>{
+      // Withhold scroll delivery to the reader until the response has rendered.
+      // This controls the browser's asynchronous event order without a delay.
+      const delivery = {held: 0, delivered: 0, release: () => {}};
+      const hold = (event: Event) => {
+        if (event.target === el) {delivery.held++; event.stopImmediatePropagation();}
+      };
+      window.addEventListener('scroll', hold, true);
+      el.addEventListener('scroll', () => delivery.delivered++);
+      delivery.release = () => {
+        window.removeEventListener('scroll', hold, true);
+        el.dispatchEvent(new Event('scroll'));
+      };
+      (window as any).readerScrollDelivery = delivery;
+      el.scrollTop = 100;
+    });
     data.messages.at(-1)!.text+='\nnew output'; release();
     await expect.poll(()=>saved(page)).toEqual(checkpoint(1));
+    const rendered = await page.locator('.conversation-scroll').evaluate(el=>({
+      scrollTop: el.scrollTop, bottom: el.scrollHeight-el.clientHeight,
+      held: (window as any).readerScrollDelivery.held, delivered: (window as any).readerScrollDelivery.delivered,
+      output: el.lastElementChild!.textContent!.includes('new output'),
+    }));
+    await info.attach('response-before-scroll-delivery', {body: JSON.stringify(rendered), contentType: 'application/json'});
+    expect(rendered.output).toBe(true);
+    expect(rendered.delivered).toBe(0);
+    expect(rendered.scrollTop).toBe(100);
+    await page.evaluate(()=>(window as any).readerScrollDelivery.release());
     expect(await page.locator('.conversation-scroll').evaluate(el=>el.scrollTop)).toBe(100);
-    await expect(page.getByRole('button',{name:'New messages',exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:locale==='zh-TW'?'新訊息':'New messages',exact:true})).toBeVisible();
+    expect(data.writes).toEqual([]);
   });
   test(`messages without IDs preserve duplicate rows and a retained anchor when older rows leave (${platform})`, async ({page}) => {
     const {data,dispatch}=conversationFixture();

@@ -141,6 +141,27 @@ filesystem IO with synthetic native ownership/lock authorities. Windows CI's
 **Fleet contracts and owned Windows fixtures** additionally exercises real DACL,
 owner/reparse and replacement behavior; Linux tests do not prove those semantics.
 
+Recovery remains native-only: `publish_authorized` checks caller authority before
+artifact directory creation, each artifact effect and both replacement guards;
+`Authorization { code }` stops effects while private evidence remains writable.
+`inspect` reads all four states without modifying artifacts or journals.
+`abandon_remaining` creates one immutable decision under
+`fleet-publication-decisions/<review>/`, binding the journal hash, native scope,
+caller reference/time and observations; the original journal stays unchanged.
+A valid decision permits a fresh review, still subject to ownership and byte checks.
+Older publishers ignore this sibling directory and keep blocking: safe mixed-version
+behavior. `export_plan`/`load_plan` use private, create-only `fleet-publication-plans`
+snapshots (version 1, at most 32 MiB), retaining complete original generator inputs.
+Reload verifies the saved file hash, supported generator, input hash, review and
+rebuilt outputs before recovering the seal. These files never enter frontend diagnostics.
+
+**復原摘要：** 授權回呼在建目錄、逐檔效果及替換 guards 內檢查，拒絕後仍可記錄
+私有證據；inspect 完全唯讀。放棄決策綁定原 journal 雜湊、native 範圍、呼叫端
+參照／時間及觀察，另存不可覆寫的 sibling 記錄，不改原 journal 或第三種內容。
+有效決策才允許新審閱，仍須重證 ownership；舊版忽略該目錄並繼續阻擋。
+私有 frozen plan 上限 32 MiB，保存完整原輸入；重載須核對檔案與輸入雜湊、支援的
+generator、review 及重建輸出，不能由公開欄位取得 seal，也不提供給前端診斷。
+
 **繁體中文摘要：** 發布核心沿用既有安裝／遷移 guards 與 pending gate，持鎖重查
 建立證據、owner 和目前位元組，逐檔寫入 intended／published 回執。第三種內容立即
 停止；同 plan 依磁碟恢復，未完成 plan 阻擋另一份審閱。三個 kit 檔讀回並通過既有
