@@ -620,6 +620,36 @@ fn materialize(resources: &Path, app_data: &Path) -> Result<(PathBuf, String), S
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    #[test]
+    fn startup_hold_is_settled_and_does_not_spawn_another_ensure() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let config = root.path().join("config");
+        startup_role::select(&data, &config, Role::Provider, 0).unwrap();
+        fs::create_dir_all(data.join("managed-central")).unwrap();
+        fs::write(data.join("managed-central/held"), b"hold").unwrap();
+        let (managed, launch) = Managed::prepare(&resources, &data, &config);
+        assert!(launch.is_none());
+        let value = serde_json::to_value(managed.status()).unwrap();
+        assert_eq!(value["lifecycle"]["state"], "stopped");
+        assert_eq!(value["error"], serde_json::Value::Null);
+        assert_eq!(fs::read(data.join("managed-central/ensure-count")).unwrap(), b"ensure\n");
+        assert!(!data.join("managed-central/service-count").exists());
+    }
+
+    #[test]
+    fn status_serialization_keeps_all_existing_fields_and_adds_lifecycle() {
+        let value = serde_json::to_value(identity_status()).unwrap();
+        for key in ["mode", "ready", "background", "runtime_version", "server_id", "principal_id",
+            "error", "login_enabled", "bundled_runtime", "running_runtime", "runtime_difference", "lifecycle"] {
+            assert!(value.get(key).is_some(), "{key}");
+        }
+        assert_eq!(value["ready"], true);
+        assert_eq!(value["background"], true);
+    }
+
     #[test]
     fn clean_install_waits_for_role_before_touching_runtime_or_python_data() {
         let root = tempfile::tempdir().unwrap();
@@ -647,6 +677,10 @@ set -eu
 root="$3"
 mkdir -p "$root/state"
 printf 'ensure\n' >> "$root/ensure-count"
+if [ -f "$root/held" ]; then
+ printf '%s' '{"protocol":1,"error":"SERVICE_STOPPED","lifecycle":{"state":"stopped","requested_at":1800000000,"stopped_at":1800000001}}'
+ exit 1
+fi
 if [ ! -f "$root/installation.json" ]; then
   printf 'original-manifest' > "$root/installation.json"
   printf 'original-identity' > "$root/identity.token"

@@ -970,3 +970,14 @@ fn main() {
             }
         });
 }
+
+#[cfg(test)]
+mod managed_stop_tests {
+    use super::*;
+    #[test]
+    fn existing_managed_command_accepts_stop_and_start() {
+        for action in ["stop", "start"] {
+            assert!(serde_json::from_value::<ManagedRequest>(serde_json::json!({"action": action})).is_ok());
+        }
+    }
+}
