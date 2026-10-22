@@ -1,6 +1,6 @@
 /* Session workspace. Scoped so other views keep their own layout. */
 .session-workspace { min-width: 0; }
-main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: auto; }
+main.session-view { display: flex; flex-direction: column; height: calc(100dvh - var(--shell-header-height, 48px)); overflow: auto; }
 main.session-view > .workspace-session-heading { flex: none; }
 main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-items: stretch; }
 .session-workspace .workspace-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
@@ -10,8 +10,12 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-back { margin: 0 0 var(--space-2); }
 .session-back a { color: var(--text-2); font-size: var(--fs-small); text-decoration: none; }
 .session-back a:hover { color: var(--text); }
-.session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: 160px; display: flex; flex-direction: column; }
+.session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: auto; display: flex; flex-direction: column; }
+/* Keep controls in flow; the transcript yields space, then the session scrolls. */
+.session-workspace .conversation > :not(.conversation-scroll) { flex: none; }
 .session-workspace .conversation-scroll { flex: 1 1 auto; min-height: 120px; height: auto; max-width: 760px; }
+/* Only the conversation column starts at the reading minimum and fills its available space. */
+.session-workspace .conversation > .conversation-scroll { height: 120px; }
 .session-workspace .conversation-scroll > .msg,
 .session-workspace .workspace-conversation .conversation-scroll > .msg.user {
   display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 8px; row-gap: var(--space-1);

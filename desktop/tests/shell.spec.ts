@@ -31,6 +31,73 @@ function fixture() {
   };
   return {pm, work, state, dispatch, publish};
 }
+for (const locale of ['en', 'zh-TW']) for (const width of [390, 768]) {
+  test(`wrapped health keeps shell content and navigation below the header ${locale} ${width}`, async ({browser, baseURL}, testInfo) => {
+    const context = await browser.newContext({baseURL, locale, viewport: {width, height: 480}}), page = await context.newPage();
+    const f = fixture();
+    f.work.data.session.workspace = 'A selected workspace with a long display name that wraps the installation summary across several lines';
+    try {
+      await mountConversation(page, false, async input => {
+        const hosts = [{host: 'other', reachable: false, error: 'CONNECTION_FAILED',
+          last_attempt_at: new Date().toISOString(), last_success_at: null,
+          valid_until: null, stale: true, stale_reason: 'host_unreachable'}];
+        if (input.path.split('?')[0] === '/hosts') return {status: 200, data: {hosts}};
+        const result = await f.dispatch(input);
+        if (input.path.split('?')[0] === '/sessions') result.data.hosts = hosts;
+        return result;
+      });
+      await page.goto('/dashboard/#/sessions');
+      await expect(page.locator('[data-health-other]')).toBeVisible();
+      for (const path of [route, '/dashboard/#/session/demo/search-results']) {
+        await page.goto(path);
+        await expect(page.locator(path.includes('/session/') ? '.conversation' : '.pm-shell')).toBeVisible();
+        await page.evaluate(() => window.scrollTo(0, 0));
+        const health = page.locator('#installation-health');
+        await expect(health).toBeVisible();
+        await expect(page.locator('.workspace-nav')).toBeHidden();
+        await expect.poll(async () => page.evaluate(() => {
+          const health = document.querySelector('#installation-health')!.getBoundingClientRect();
+          return Math.abs(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shell-header-height')) - health.bottom);
+        })).toBeLessThan(1);
+        const content = await page.evaluate(() => {
+          const health = document.querySelector('#installation-health')!.getBoundingClientRect();
+          const workspace = document.querySelector('#workspace')!;
+          const pm = document.querySelector('.pm-shell');
+          return {header: health.bottom, workspaceTop: workspace.getBoundingClientRect().top,
+            workspaceMinimum: parseFloat(getComputedStyle(workspace).minHeight),
+            pmMinimum: pm ? parseFloat(getComputedStyle(pm).minHeight) : null};
+        });
+        expect(content.workspaceTop).toBeGreaterThanOrEqual(content.header);
+        expect(content.workspaceMinimum).toBeCloseTo(480 - content.header, 0);
+        if (content.pmMinimum !== null) expect(content.pmMinimum).toBeCloseTo(480 - content.header, 0);
+        await page.locator('#workspace-menu').click();
+        const nav = page.locator('.workspace-nav');
+        await expect(nav).toBeVisible();
+        const geometry = await nav.evaluate(node => {
+          const rect = (el: Element) => el.getBoundingClientRect().toJSON();
+          return {nav: rect(node), scrim: rect(document.querySelector('.shell-scrim')!),
+            rows: Array.from(node.children).filter(el => el.getClientRects().length && getComputedStyle(el).position !== 'absolute').map(rect)};
+        });
+        await testInfo.attach(`shell-${path.includes('/session/') ? 'session' : 'pm'}`, {body: JSON.stringify({content, geometry}, null, 2), contentType: 'application/json'});
+        for (const bounds of [geometry.nav, geometry.scrim]) {
+          expect(bounds.top).toBeCloseTo(content.header, 0);
+          expect(bounds.bottom).toBeCloseTo(480, 0);
+        }
+        for (let i = 1; i < geometry.rows.length; i++) expect(geometry.rows[i - 1].bottom).toBeLessThanOrEqual(geometry.rows[i].top + 1);
+        const footer = nav.locator('.workspace-nav-footer > a').last();
+        await footer.scrollIntoViewIfNeeded();
+        expect(await footer.evaluate(node => {
+          const box = node.getBoundingClientRect();
+          return node.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+        })).toBe(true);
+        await page.mouse.click(width - 5, content.header + 10);
+        await expect(nav).toBeHidden();
+        await page.evaluate(() => window.scrollTo(0, 200));
+        expect((await health.boundingBox())!.y).toBeCloseTo(48, 0);
+      }
+    } finally {await context.close();}
+  });
+}
 for (const width of [390,1440]) test(`workspace switcher keeps its chevron after the label at ${width}`, async ({page}) => {
   await page.setViewportSize({width,height:900});
   const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
