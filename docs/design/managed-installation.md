@@ -186,9 +186,7 @@ Multiple matching old ports are **not** merged or ranked, even when their values
 look identical or one port only has orphan drafts/tab preferences without a
 checkpoint. Existing destination data, missing old checkpoint keys, legacy
 keys without server/principal proof, unrecognized legacy key envelopes, ambiguous namespace boundaries, non-loopback
-endpoints and different identities are left in place. These cases require explicit
-review/export of the retained data; there is no automatic picker or recovery UI in
-this change. Reverting to the old frontend can still read original old-port keys
+endpoints and different identities are left in place. Reverting to the old frontend can still read original old-port keys
 when connected at that original endpoint, but later edits in the new scope are not
 copied back automatically.
 
@@ -199,12 +197,61 @@ journal also retains its `server_id` while its cursor regresses; the B02 backend
 test covers both regression and divergent reuse of a sequence. Thus even a
 unique highest saved cursor does not prove the latest namespace. This migration
 deliberately leaves all such sources untouched. A user with several old scopes
-gets an empty new scope; their old drafts remain available for explicit local
-inspection/export. Recovery requires reviewing the matching identity and choosing
-the intended complete source, including its original operation keys and pending
-requests, after backing up both old and new data. This change supplies no tool
-for that selection or import; copying draft text alone must not replay a pending
-request. Do not clear storage or guess a source from its port or cursor.
+gets an empty new scope. The text recovery panel below makes matching old drafts
+readable without selecting or importing a namespace. Original operation keys and
+pending requests stay in their original scope. Do not clear storage or guess a
+source from its port or cursor.
+
+#### Reading drafts from earlier local addresses
+
+After native managed bootstrap verification, an optional deferred scan finds old
+loopback HTTP port scopes with the exact verified server, principal and actor.
+It uses the same canonical endpoint rules and exact checkpoint-key boundaries
+as migration. Orphan scopes without a checkpoint and overlapping dotted-actor
+boundaries are excluded. Browser clients and external native connections do not
+scan. A completed migration receipt excludes its source, even if the migrated
+draft has subsequently been consumed. No cursor ranks drafts.
+
+When recoverable text exists, **Settings → About → Drafts from earlier local
+addresses** appears. A non-blocking notice links there the first time that
+verified identity has recoverable text. Each entry shows its localized form name,
+original loopback address and read-only text. The audited writers do not store a
+draft-edit timestamp; checkpoint cursors, operation receipt times and dates typed
+inside a form are not presented as an edit time.
+
+**Copy text** copies only that entry's text to the clipboard. If clipboard access
+is unavailable, the text is selected for manual copying. **Hide** writes a local
+marker scoped to the verified identity and a digest of the original key/field.
+It survives relaunch and never deletes the original. The notice has its own local
+marker. Nothing is sent, resubmitted, loaded into a current form, merged or
+automatically deleted. Current drafts, operation keys and checkpoints are untouched.
+Unreadable storage is skipped with a content-free console diagnostic, without an
+error dialog or error summary. The scan yields between batches and never gates
+view activation; connection changes invalidate its result and controls.
+
+The recovery reader uses explicit fields from each producer, rather than walking
+arbitrary JSON. The inventory below is separate from the complete-scope migration
+inventory: migration still preserves all original bytes together.
+
+| Key family (without `batc.`) | Text recovery decision |
+| --- | --- |
+| `draft` | Raw session `send` text; `answer.answers`; checkpoint continuation `text`; Work edit `fields.title/goal/request/acceptance`; published/dispatch attachment `text`. Queue flags, attachments, frozen submissions and agent choices are excluded. Identical published/dispatch prompts mirrored in the corresponding form appear once; orphan or differing attachment text remains recoverable. |
+| `create` | Project `values.name/description/task_project`; Work `values.title/goal/request/acceptance/steps`. Repository, ancestry and state selectors are excluded. |
+| `pm.<scope>.<action>.<target>` (including nested form scopes) | Allowlisted editable fields for discussion messages/titles, Work instructions/follow-ups, plan text, analysis purposes, input values/references, rationale/reasons, governance prose, product goals/definition of done, sprint goals/capacity notes, meeting notes/output, maintenance review prose, PR title/body and handoff prompts. Per-criterion review reasons and authored text within meeting decisions/follow-ups/outcomes, maintenance follow-ups/public sources and roadmap milestones are extracted field by field. Hidden versions, source references, model/adapter choices, IDs, policy configuration, selected receipts, structured plan snapshots and every intent/request are excluded. New action/field shapes require an explicit reader update. |
+| `pm.<scope>.discussion-send` | Handoff `content` only; thread identity is excluded. |
+| Other `pm` keys | Exclude discussion origins/indexes, follow-up/assessment pointers, adopt/start landing records, adapter/profile-return/release selectors and all nested selection/navigation/verifier keys. They contain provenance or navigation, not authored drafts. |
+| `start`, `published`, `dispatch` | `title` and `prompt` only. Targets, agent/model/source choices, previews and intents are excluded. |
+| `orchestrate` | `message` and each item's `title/prompt` only; host, session/workspace, queue, agent, limits and intent are excluded. |
+| `labels` | Editable `text` only; base version and intent are excluded. |
+| `artifact-review` | `reviewText` only; paths, selected evidence, previews and intents are excluded. |
+| `managed.setup`, `repair`, `capture`, `task-control`, `session-bat`, `permissions`, `approvals` | Exclude configuration, credentials, paths/identifiers, resource choices, previews, control flags and durable request/recovery data. |
+| `model-preferences`, `project-skills`, `cleanup.draft/pending/intent` | Exclude preferences, skill selections and cleanup selections/receipts. |
+| `key`, `sync`, `tree`, `sessions`, `attention`, `composer-shortcut`, sessionStorage `delivery` | Exclude operation identity, checkpoint proof, navigation, filters and preferences. |
+| Globals, credentials, Fleet bindings and in-memory view state | Outside the verified legacy envelope; never read or copied by recovery. |
+
+All panel text, form labels and clipboard fallback text are available in English
+and Traditional Chinese. This is local text inspection only; it does not prove
+native installation, real BAT/model behavior or physical-mobile acceptance.
 
 The namespace audit covers these durable families uniformly (names below omit
 `batc.`); memory-only consumers use the same verified namespace:

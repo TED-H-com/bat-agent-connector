@@ -14,14 +14,14 @@ function keys(storage: Storage): string[] {
 
 // Namespace-bearing keys share this envelope, including nested PM selector
 // prefixes and form suffixes. Globals, credentials and Fleet bindings do not.
-function rebase(key: string, source: string, target: string): string | null {
+export function rebase(key: string, source: string, target: string): string | null {
   const prefix = key.match(/^(batc\.[a-z.-]+\.)(?=https?%3A%2F%2F|managed:v1:)/)?.[1];
   if (!prefix) return null;
   const rest = key.slice(prefix.length);
   return rest === source || rest.startsWith(source + '.') ? prefix + target + rest.slice(source.length) : null;
 }
 
-function legacyIdentity(scope: string): StorageIdentity | null {
+export function legacyIdentity(scope: string): StorageIdentity | null {
   try {
     const parts = scope.split(':');
     if (parts.length !== 4) return null;

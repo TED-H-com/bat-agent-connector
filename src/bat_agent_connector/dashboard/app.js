@@ -308,6 +308,55 @@ var init_result_sources_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/earlier-drafts-strings.js
+var earlierDraftStrings;
+var init_earlier_drafts_strings = __esmMin((() => {
+	earlierDraftStrings = {
+		en: {
+			earlier_title: "Drafts from earlier local addresses",
+			earlier_notice: "Drafts from an earlier local address are available.",
+			earlier_help: "Review and copy text you want to keep. Hide only dismisses an entry here; the original stays in local storage.",
+			earlier_address: "Written at {address}",
+			earlier_copy: "Copy text",
+			earlier_hide: "Hide",
+			earlier_copied: "Text copied.",
+			earlier_copy_manual: "Select and copy the text manually.",
+			earlier_session: "Session message",
+			earlier_answers: "Session answers",
+			earlier_work: "Work form",
+			earlier_project: "Project form",
+			earlier_continue: "Continue from checkpoint",
+			earlier_discussion: "PM discussion",
+			earlier_pm: "PM form",
+			earlier_start: "Start work",
+			earlier_orchestration: "Orchestration form",
+			earlier_labels: "Session labels",
+			earlier_review: "Artifact review"
+		},
+		"zh-TW": {
+			earlier_title: "先前本機位址的草稿",
+			earlier_notice: "找到先前本機位址留下的草稿。",
+			earlier_help: "檢視並複製想保留的文字。隱藏只會收起此處的項目，原始資料仍保留在本機儲存空間。",
+			earlier_address: "撰寫時的位址：{address}",
+			earlier_copy: "複製文字",
+			earlier_hide: "隱藏",
+			earlier_copied: "已複製文字。",
+			earlier_copy_manual: "請選取文字並手動複製。",
+			earlier_session: "工作階段訊息",
+			earlier_answers: "工作階段回答",
+			earlier_work: "工作表單",
+			earlier_project: "專案表單",
+			earlier_continue: "從檢查點接續",
+			earlier_discussion: "PM 討論",
+			earlier_pm: "PM 表單",
+			earlier_start: "開始工作",
+			earlier_orchestration: "協作編排表單",
+			earlier_labels: "工作階段標籤",
+			earlier_review: "成品審閱"
+		}
+	};
+}));
+//#endregion
 //#region src/pm-external-history-strings.js
 var externalHistoryStrings;
 var init_pm_external_history_strings = __esmMin((() => {
@@ -9900,6 +9949,7 @@ function t(key, vars = {}) {
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
 	init_result_sources_strings();
+	init_earlier_drafts_strings();
 	init_pm_external_history_strings();
 	init_pm_adopt_start_strings();
 	init_pm_work_profile_strings();
@@ -9943,6 +9993,7 @@ var init_i18n = __esmMin((() => {
 			...resultSourcesStrings["zh-TW"],
 			...externalHistoryStrings["zh-TW"],
 			...diagnosticsStrings["zh-TW"],
+			...earlierDraftStrings["zh-TW"],
 			...workStartStrings["zh-TW"],
 			...workProfileStrings["zh-TW"],
 			...workResultStrings["zh-TW"],
@@ -11635,6 +11686,7 @@ var init_i18n = __esmMin((() => {
 			...resultSourcesStrings.en,
 			...externalHistoryStrings.en,
 			...diagnosticsStrings.en,
+			...earlierDraftStrings.en,
 			...workStartStrings.en,
 			...workProfileStrings.en,
 			...workResultStrings.en,
@@ -17082,6 +17134,9 @@ var WORK_STATUS = {
 	done: "done",
 	awaiting_approval: "in_review"
 };
+function actionMessageKey(action) {
+	return ACTIONS[action] || "";
+}
 function humanizeAction(action) {
 	const words = String(action || "").split(/[._]+/).filter(Boolean);
 	if (!words.length) return "";
@@ -30221,7 +30276,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 var ADOPT_START = "work.adopt_and_start";
 var wi = (value) => typeof value === "string" && /^wi_[0-9a-f]{20}$/.test(value);
 var opId$6 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
-var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$6 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var same$9 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var copy$1 = (value) => structuredClone(value);
 var workKeys = [
@@ -30241,15 +30296,15 @@ var planKeys = [
 	"expected_accepted_revision_id",
 	"expected_proposal_digest"
 ];
-var exact = (value, keys) => record$5(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+var exact = (value, keys) => record$6(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 var landingPrefix = (namespace, workspaceId) => `batc.pm.${namespace}.adopt-start-landing.${workspaceId}.`;
 var landingNavigationKey = (namespace, workspaceId, id) => `batc.pm.${namespace}.adopt-start-live.${workspaceId}.${id}`;
 function checkedAdoptPreview(value, body, target, baseline) {
-	if (!record$5(value) || value.workspace_id !== target.workspace_id || value.thread_id !== target.thread_id || value.proposal_id !== body.proposal_id || typeof value.adoptable !== "boolean" || !Array.isArray(value.works) || value.works.length !== body.works.length || !exact(value.preconditions, [...planKeys, "works"]) || !Array.isArray(value.preconditions.works) || value.preconditions.works.length !== body.works.length || planKeys.some((key) => value.preconditions[key] !== baseline[key])) throw Error("loop_preview_mismatch");
+	if (!record$6(value) || value.workspace_id !== target.workspace_id || value.thread_id !== target.thread_id || value.proposal_id !== body.proposal_id || typeof value.adoptable !== "boolean" || !Array.isArray(value.works) || value.works.length !== body.works.length || !exact(value.preconditions, [...planKeys, "works"]) || !Array.isArray(value.preconditions.works) || value.preconditions.works.length !== body.works.length || planKeys.some((key) => value.preconditions[key] !== baseline[key])) throw Error("loop_preview_mismatch");
 	const works = [], conditions = [];
 	value.works.forEach((row, index) => {
 		const selected = body.works[index], pre = value.preconditions.works[index];
-		if (!record$5(row) || row.work_item_id !== selected.work_item_id || !same$9(row.requirement_ids, selected.requirement_ids) || typeof row.readiness?.ready !== "boolean") throw Error("loop_preview_mismatch");
+		if (!record$6(row) || row.work_item_id !== selected.work_item_id || !same$9(row.requirement_ids, selected.requirement_ids) || typeof row.readiness?.ready !== "boolean") throw Error("loop_preview_mismatch");
 		if (!row.readiness.ready) return;
 		if (!exact(pre, ["work_item_id", ...workKeys]) || pre.work_item_id !== row.work_item_id || !["claude", "codex"].includes(row.agent) || !["pull_request", "reviewable_changes"].includes(row.delivery) || typeof row.instruction !== "string" || !row.instruction.trim() || row.instruction.length > 4e3 || selected.instruction !== void 0 && row.instruction !== selected.instruction || row.model != null && (typeof row.model !== "string" || !row.model.trim() || row.model.length > 128) || !exact(row.code_target, [
 			"repository",
@@ -30297,7 +30352,7 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 	const draft = () => {
 		try {
 			const value = JSON.parse(request?.values().selection || "null");
-			return record$5(value) && Array.isArray(value.works) ? value : {
+			return record$6(value) && Array.isArray(value.works) ? value : {
 				proposal_id: null,
 				works: [],
 				drafts: {}
@@ -30701,7 +30756,7 @@ var defaults = {
 	conflict: "conflicting",
 	excluded: "not_applicable"
 };
-var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
 var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
@@ -30719,7 +30774,7 @@ function cyclic(requirements) {
 	return [...graph.keys()].some(visit);
 }
 function validRequirements(values, included) {
-	if (!Array.isArray(values) || values.length > 20 || values.some((row) => !record$4(row) || !key$1(row.id, 80))) return false;
+	if (!Array.isArray(values) || values.length > 20 || values.some((row) => !record$5(row) || !key$1(row.id, 80))) return false;
 	const ids = new Set(values.map((row) => row.id));
 	return ids.size === values.length && values.every((row) => included.has(row.source_key) && refs$1(row.acceptance_keys, included) && [
 		"must",
@@ -30964,10 +31019,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		choose(picker.value);
 	});
 	function checked(value) {
-		if (value?.workspace_id !== workspaceId || !record$4(value.proposal)) throw fail();
+		if (value?.workspace_id !== workspaceId || !record$5(value.proposal)) throw fail();
 		const p = value.proposal, c = p.context;
-		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !record$4(c) || !Number.isInteger(c.thread_version) || !record$4(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$4(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
-		for (const ref of Object.values(c.source_references)) if (!record$4(ref) || typeof ref.quote !== "string" || !ref.quote || typeof ref.id !== "string" || !/^[0-9a-f]{64}$/.test(ref.digest)) throw fail();
+		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !record$5(c) || !Number.isInteger(c.thread_version) || !record$5(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$5(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
+		for (const ref of Object.values(c.source_references)) if (!record$5(ref) || typeof ref.quote !== "string" || !ref.quote || typeof ref.id !== "string" || !/^[0-9a-f]{64}$/.test(ref.digest)) throw fail();
 		if (p.validation.status === "needs_review") {
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
@@ -30975,7 +31030,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$5(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -30998,13 +31053,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		if (!active || !record$5(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$5(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$5(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
 		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
-		if (value.requirements.every((row) => record$4(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
+		if (value.requirements.every((row) => record$5(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
 		if (!validRequirements(value.requirements, included) || !Array.isArray(value.removed_requirement_ids) || !same$8([...value.removed_requirement_ids].sort(), removed(active, value.requirements).sort())) return "pcp_missing";
 		return null;
 	}
@@ -31190,7 +31245,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		let saved = original();
 		if (saved?.proposal_id !== p.proposal_id) {
 			if (adopt.locked()) throw fail();
-			const drafts = { ...record$4(saved?.drafts) ? saved.drafts : {} };
+			const drafts = { ...record$5(saved?.drafts) ? saved.drafts : {} };
 			if (saved?.proposal_id) drafts[saved.proposal_id] = {
 				review: saved.review,
 				preconditions: saved.preconditions,
@@ -31560,7 +31615,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 					const [list, plans] = await Promise.all([api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`), api("GET", base + "/plans?limit=1")]);
 					alive();
 					if (own !== ticket) return;
-					if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
+					if (plans.workspace_id !== workspaceId || !record$5(plans.head)) throw fail();
 					head = plans.head;
 					visible = true;
 					box.hidden = false;
@@ -57783,7 +57838,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 //#region src/project-skills.js
 var digest$4 = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 var refs = (value) => Array.isArray(value) && value.length <= 20 && value.every((ref) => ref && typeof ref.skill_id === "string" && digest$4(ref.digest)) && new Set(value.map((ref) => ref.skill_id)).size === value.length;
-var record$3 = (value) => value && refs(value.selected) && Number.isInteger(value.revision) && value.revision >= 0 && digest$4(value.digest);
+var record$4 = (value) => value && refs(value.selected) && Number.isInteger(value.revision) && value.revision >= 0 && digest$4(value.digest);
 var key = (host, workspace) => JSON.stringify([host, workspace]);
 var same$1 = (a, b) => a.skill_id === b.skill_id && a.digest === b.digest;
 function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storageKey, onEvents, errorBox }) {
@@ -58044,13 +58099,13 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			if (next.version !== 1 || next.project_id !== projectId || next.host !== selectedHost || next.workspace_id !== selectedWorkspace || !Array.isArray(next.catalog?.skills) || !refs(next.selection?.selected) || !Number.isInteger(next.selection.revision)) throw Error(t("skills_invalid"));
 			doc = next;
 			const draftKey = key(selectedHost, selectedWorkspace), stored = saved.drafts[draftKey];
-			draft = record$3(stored) ? stored : {
+			draft = record$4(stored) ? stored : {
 				selected: next.selection.host === selectedHost && next.selection.workspace_id === selectedWorkspace ? structuredClone(next.selection.selected) : [],
 				revision: next.selection.revision,
 				digest: next.catalog.catalog_digest,
 				intent: null
 			};
-			if (draft.intent && !record$3(draft.intent)) draft.intent = null;
+			if (draft.intent && !record$4(draft.intent)) draft.intent = null;
 			saved.drafts[draftKey] = draft;
 			if (draft.revision !== next.selection.revision || draft.digest !== next.catalog.catalog_digest) status.textContent = t("skills_conflict");
 			clearError();
@@ -61177,12 +61232,12 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 }
 //#endregion
 //#region src/capture.js
-var record$2 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$3 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var digest$2 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 var operationId$2 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var previewId = (value) => typeof value === "string" && /^acpv_[0-9a-f]{32}$/.test(value);
 var previewToken = (value) => typeof value === "string" && value.length > 0 && value.length <= 24576;
-var validPreview$3 = (doc) => record$2(doc) && record$2(doc.source) && record$2(doc.evidence) && [
+var validPreview$3 = (doc) => record$3(doc) && record$3(doc.source) && record$3(doc.evidence) && [
 	doc.relative_path,
 	doc.source.host,
 	doc.source.session_id,
@@ -61195,8 +61250,8 @@ function restore$2(value, source) {
 		...source,
 		relative_path: ""
 	} };
-	if (!record$2(value)) return saved;
-	if (record$2(value.input)) {
+	if (!record$3(value)) return saved;
+	if (record$3(value.input)) {
 		for (const key of [
 			"host",
 			"session_id",
@@ -62191,7 +62246,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 }
 //#endregion
 //#region src/permissions.js
-var record$1 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$2 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var modeValue = (value) => ["default", "allow_all"].includes(value);
 var operationId$1 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var terminal$5 = (operation) => [
@@ -62207,9 +62262,9 @@ var admissionRefusals$2 = new Set([
 ]);
 function restore$1(value, target) {
 	const saved = { mode: modeValue(value?.mode) ? value.mode : "default" };
-	if (!record$1(value) || !value.intent) return saved;
+	if (!record$2(value) || !value.intent) return saved;
 	const intent = value.intent, request = intent.request;
-	const valid = request?.action === "session.permissions" && request.target?.host === target.host && request.target?.session_id === target.session_id && modeValue(request.params?.mode) && record$1(request.preconditions) && Object.keys(request.preconditions).length === 0 && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
+	const valid = request?.action === "session.permissions" && request.target?.host === target.host && request.target?.session_id === target.session_id && modeValue(request.params?.mode) && record$2(request.preconditions) && Object.keys(request.preconditions).length === 0 && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
 	saved.intent = {
 		key: valid ? intent.key : null,
 		request: valid ? {
@@ -64978,8 +65033,8 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 }
 //#endregion
 //#region src/artifact-review.js
-var record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-var ordered = (value) => record(value) ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, ordered(value[k])])) : Array.isArray(value) ? value.map(ordered) : value;
+var record$1 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var ordered = (value) => record$1(value) ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, ordered(value[k])])) : Array.isArray(value) ? value.map(ordered) : value;
 var stable = (value) => JSON.stringify(ordered(value));
 var equal = (a, b) => stable(a ?? null) === stable(b ?? null);
 var digest = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
@@ -65002,7 +65057,7 @@ var executions = [
 ];
 var managedCaptureExecution = (op) => oid(op?.operation_id) && op.status === "succeeded" && executions.includes(op.action) && (op.action !== "session.start" || op.result?.started === true && op.result.prompt_sent === true && op.result.message_id === `batc-${op.operation_id}`) && (op.action !== "repository.continue" || op.result?.message_id === `batc-${op.operation_id}` && sha40(op.result.source_sha));
 var safePath = (path) => typeof path === "string" && path && new TextEncoder().encode(path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(path) && path.split("/").every((p) => p && p !== "." && p !== ".." && p.toLowerCase() !== ".git");
-var selectorValid = (s) => record(s) && (equal(Object.keys(s).sort(), ["execution_operation_id"]) && oid(s.execution_operation_id) || equal(Object.keys(s).sort(), ["command_id", "task_id"]) && tid(s.task_id) && commandId(s.command_id));
+var selectorValid = (s) => record$1(s) && (equal(Object.keys(s).sort(), ["execution_operation_id"]) && oid(s.execution_operation_id) || equal(Object.keys(s).sort(), ["command_id", "task_id"]) && tid(s.task_id) && commandId(s.command_id));
 var validRef = (ref) => aid(ref?.artifact_id) && Number.isSafeInteger(ref.revision) && ref.revision > 0 && ref.revision <= 999999999 && digest(ref.digest);
 var refOf = (value) => ({
 	artifact_id: value.artifact_id,
@@ -65011,11 +65066,11 @@ var refOf = (value) => ({
 });
 var sourceFromOperation = (op) => op.action === "session.send" ? op.external_refs?.resolved_target || op.target : op.result;
 function validPreview(doc, input) {
-	return record(doc) && /^acpv_[0-9a-f]{32}$/.test(doc.preview_id) && typeof doc.preview_token === "string" && doc.preview_token.length > 0 && doc.preview_token.length <= 24576 && digest(doc.fingerprint) && doc.snapshot === false && Number.isFinite(doc.expires_at) && doc.source?.provenance === "connector_managed" && doc.source.host === input.host && doc.source.session_id === input.session_id && equal(doc.source.selector, input.selector) && doc.relative_path === input.relative_path && typeof doc.source.root === "string" && typeof doc.source.repository_root === "string" && record(doc.source.lineage) && digest(doc.evidence?.digest) && /^[0-9a-f]{40}$/.test(doc.evidence.head_sha) && Number.isSafeInteger(doc.evidence.size_bytes) && doc.evidence.size_bytes >= 0;
+	return record$1(doc) && /^acpv_[0-9a-f]{32}$/.test(doc.preview_id) && typeof doc.preview_token === "string" && doc.preview_token.length > 0 && doc.preview_token.length <= 24576 && digest(doc.fingerprint) && doc.snapshot === false && Number.isFinite(doc.expires_at) && doc.source?.provenance === "connector_managed" && doc.source.host === input.host && doc.source.session_id === input.session_id && equal(doc.source.selector, input.selector) && doc.relative_path === input.relative_path && typeof doc.source.root === "string" && typeof doc.source.repository_root === "string" && record$1(doc.source.lineage) && digest(doc.evidence?.digest) && /^[0-9a-f]{40}$/.test(doc.evidence.head_sha) && Number.isSafeInteger(doc.evidence.size_bytes) && doc.evidence.size_bytes >= 0;
 }
 function validArtifact(row, expected) {
 	const proof = row?.source;
-	return validRef(row) && row.state === "ready" && record(proof) && proof.kind === "managed_capture" && oid(proof.operation_id) && row.operation_id === proof.operation_id && digest(proof.fingerprint) && proof.source?.provenance === "connector_managed" && record(proof.source.lineage) && selectorValid(proof.source.selector) && safePath(proof.relative_path) && proof.evidence?.digest === row.digest && proof.evidence.size_bytes === row.size_bytes && /^[0-9a-f]{40}$/.test(proof.evidence.head_sha) && (!expected || equal(refOf(row), expected));
+	return validRef(row) && row.state === "ready" && record$1(proof) && proof.kind === "managed_capture" && oid(proof.operation_id) && row.operation_id === proof.operation_id && digest(proof.fingerprint) && proof.source?.provenance === "connector_managed" && record$1(proof.source.lineage) && selectorValid(proof.source.selector) && safePath(proof.relative_path) && proof.evidence?.digest === row.digest && proof.evidence.size_bytes === row.size_bytes && /^[0-9a-f]{40}$/.test(proof.evidence.head_sha) && (!expected || equal(refOf(row), expected));
 }
 function restore(raw) {
 	const saved = {
@@ -65023,14 +65078,14 @@ function restore(raw) {
 		selector: null,
 		reviewText: ""
 	};
-	if (!record(raw)) return saved;
+	if (!record$1(raw)) return saved;
 	if (typeof raw.relative_path === "string") saved.relative_path = raw.relative_path;
 	if (selectorValid(raw.selector)) saved.selector = raw.selector;
 	if (typeof raw.reviewText === "string") saved.reviewText = raw.reviewText;
-	if (record(raw.preview)) saved.preview = raw.preview;
+	if (record$1(raw.preview)) saved.preview = raw.preview;
 	for (const kind of ["capture", "accept"]) if (raw[kind]) {
 		const intent = raw[kind];
-		const usable = record(intent.request) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200 && typeof intent.actor === "string" && record(intent.request.target) && record(intent.request.params) && record(intent.request.preconditions) && intent.request.action === (kind === "capture" ? "artifact.capture.managed" : "artifact.accept");
+		const usable = record$1(intent.request) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200 && typeof intent.actor === "string" && record$1(intent.request.target) && record$1(intent.request.params) && record$1(intent.request.preconditions) && intent.request.action === (kind === "capture" ? "artifact.capture.managed" : "artifact.accept");
 		saved[kind] = {
 			request: usable ? intent.request : null,
 			key: usable ? intent.key : null,
@@ -65937,6 +65992,313 @@ function migrateManagedStorage(identity, local, session) {
 	}
 }
 //#endregion
+//#region src/state/earlier-drafts.ts
+var diagnostic = (code) => console.debug(code);
+var problem$1 = "draft_recovery_unreadable";
+var record = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+var pmText = {};
+function forms(actions, fields) {
+	for (const action of actions.split(" ")) pmText[action] = fields.split(" ");
+}
+forms("session.send", "text");
+forms("work.start", "instruction");
+forms("pm.message.append", "content");
+forms("pm.thread.create", "title content");
+forms("pm.thread.rename pm.snapshot.create", "title");
+forms("pm.workspace.create", "name");
+forms("pm.input.record", "value reference");
+forms("pm.plan.draft", "title markdown");
+forms("pm.run.prepare pm.run.analyze pm.run.bat.analyze pm.follow_up.analyze pm.conversation.propose pm.continuation.prepare", "purpose");
+forms("pm.thread.plan pm.thread.plan.revise pm.input.confirm pm.plan.adopt pm.conversation.adopt pm.workspace.adapter.select pm.work.bind pm.project.bind", "rationale");
+forms("pm.work_input.defer", "reason");
+forms("github.pr.publish github.pr.update", "public_title public_body");
+forms("pm.issue.publish pm.issue.update", "title body");
+forms("pm.issue.cancel", "reason publicReason");
+forms("pm.dependencies.declare", "name ecosystem version path url note");
+forms("pm.roadmap.baseline.set", "title rationale");
+forms("pm.roadmap.forecast.set", "date rationale");
+forms("pm.product_goal.revise pm.dod.revise", "text rationale");
+forms("pm.backlog.revise pm.sprint.select pm.sprint.start pm.sprint.close pm.sprint.cancel", "rationale");
+forms("pm.sprint.create", "title goal capacity_note rationale");
+forms("pm.sprint.goal.revise", "goal rationale");
+forms("pm.meeting.create", "title rationale");
+forms("pm.meeting.note pm.maintenance_review.note", "content rationale");
+forms("pm.meeting.complete", "discussion_summary rationale");
+forms("pm.meeting.context.revise", "rationale");
+forms("pm.meeting.follow_up.record pm.maintenance_review.follow_up.record", "result rationale");
+forms("pm.governance.record pm.governance.revise", "title description rationale trigger response alternatives distinction");
+forms("pm.governance.decide pm.governance.adoption.link", "rationale");
+forms("pm.lifecycle.set_stage pm.lifecycle.pause pm.lifecycle.close pm.lifecycle.reopen pm.lifecycle.retain_inflight", "reason");
+forms("pm.maintenance_review.prepare", "title");
+forms("pm.maintenance_review.candidate.record", "title problem goal_relation expected_effect options hypotheses rationale");
+forms("pm.maintenance_review.complete", "discussion_summary direction_rationale next_observation_focus rationale");
+forms("pm.release_baseline.register", "rationale limitations");
+forms("pm.work_batch.start pm.work_batch.evidence.record pm.quality.review.create pm.quality.review.record pm.maintenance_policy.adopt", "rationale");
+forms("pm.quality.review.revoke", "reason");
+forms("repository.continue", "basis prompt title");
+forms("pm.meeting.draft", "why delivery_approach capacity_discussion dependency_notes goal_review feedback environment_changes next_steps observations previous_improvement_review no_improvement_rationale unresolved_questions rationale");
+var collections = {
+	"pm.meeting.draft": {
+		decisions: ["text", "rationale"],
+		follow_ups: [
+			"text",
+			"expected_effect",
+			"verification"
+		],
+		outcomes: ["observation"]
+	},
+	"pm.maintenance_review.complete": { follow_ups: [
+		"text",
+		"expected_effect",
+		"verification"
+	] },
+	"pm.maintenance_review.candidate.record": { public_sources: [
+		"url",
+		"title",
+		"claim"
+	] },
+	"pm.roadmap.baseline.set": { milestones: ["title", "baseline_date"] }
+};
+function draftText(family, suffix, raw) {
+	const result = [];
+	const add = (field, value, label, action) => {
+		if (typeof value === "string" && value.trim()) result.push({
+			field,
+			text: value,
+			label,
+			action
+		});
+	};
+	if (family === "draft" && /^send\..+/.test(suffix) && !suffix.endsWith(".queue")) {
+		add("text", raw, "earlier_session");
+		return result;
+	}
+	if (![
+		"draft",
+		"pm",
+		"create",
+		"start",
+		"published",
+		"dispatch",
+		"orchestrate",
+		"labels",
+		"artifact-review"
+	].includes(family)) return result;
+	const action = family === "pm" ? suffix.match(/(?:^|\.)(pm\.[a-z_.]+|session\.send|work\.start|repository\.continue|github\.pr\.(?:publish|update))\.\{/)?.[1] : void 0;
+	if (family === "pm" && !action && !/^discussion-send\./.test(suffix)) return result;
+	const value = JSON.parse(raw);
+	if (!record(value)) return result;
+	const fields = (names, source, label, action) => {
+		if (record(source)) for (const name of names) add(name, source[name], label, action);
+	};
+	if (family === "draft") {
+		if (/^answer\./.test(suffix) && Array.isArray(value.answers)) value.answers.forEach((answer, index) => add(`answers.${index}`, answer, "earlier_answers"));
+		else if (/^wi\.edit\./.test(suffix)) fields([
+			"title",
+			"goal",
+			"request",
+			"acceptance"
+		], value.fields, "earlier_work");
+		else if (/^continue\./.test(suffix)) add("text", value.text, "earlier_continue");
+		else if (suffix === "published" || /^dispatch\./.test(suffix)) add("text", value.text, "earlier_start");
+	} else if (family === "pm") {
+		if (/^discussion-send\./.test(suffix)) add("content", value.content, "earlier_discussion");
+		else if (value.version === 1 && record(value.values)) {
+			if (action && Object.hasOwn(pmText, action)) {
+				fields(pmText[action], value.values, "earlier_pm", action);
+				if (action === "pm.quality.review.record") fields(Object.keys(value.values).filter((name) => /^reason_\d+$/.test(name)), value.values, "earlier_pm", action);
+				for (const [name, names] of Object.entries(collections[action] || {})) {
+					if (!value.values[name]) continue;
+					const rows = JSON.parse(value.values[name]);
+					if (Array.isArray(rows)) rows.forEach((row, index) => {
+						if (record(row)) for (const field of names) add(`${name}.${index}.${field}`, row[field], "earlier_pm", action);
+					});
+				}
+			}
+		}
+	} else if (family === "create" && value.version === 1) {
+		if (/^project\./.test(suffix)) fields([
+			"name",
+			"description",
+			"task_project"
+		], value.values, "earlier_project");
+		else if (/^work_item\./.test(suffix)) fields([
+			"title",
+			"goal",
+			"request",
+			"acceptance",
+			"steps"
+		], value.values, "earlier_work");
+	} else if ([
+		"start",
+		"published",
+		"dispatch"
+	].includes(family)) fields(["title", "prompt"], value, "earlier_start");
+	else if (family === "orchestrate") {
+		fields(["message"], value, "earlier_orchestration");
+		if (Array.isArray(value.items)) value.items.forEach((item, index) => {
+			if (record(item)) for (const field of ["title", "prompt"]) add(`items.${index}.${field}`, item[field], "earlier_orchestration");
+		});
+	} else if (family === "labels") add("text", value.text, "earlier_labels");
+	else if (family === "artifact-review") add("reviewText", value.reviewText, "earlier_review");
+	return result;
+}
+var marker = (identity, id) => `batc.earlier-drafts.${managedStorageScope(identity)}.${id}`;
+async function entryId(key, field) {
+	const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([key, field])));
+	return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+async function earlierDrafts(identity, local, report = diagnostic) {
+	let keys, migrated;
+	try {
+		keys = Array.from({ length: local.length }, (_, index) => local.key(index)).filter(Boolean).sort();
+		const receipt = JSON.parse(local.getItem(`batc.storage-migration.${managedStorageScope(identity)}`) || "null");
+		if (receipt?.version === 1 && receipt.target === managedStorageScope(identity) && receipt.status === "complete") migrated = receipt.source;
+	} catch {
+		report(problem$1);
+		return [];
+	}
+	const candidates = keys.filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
+	const sources = candidates.filter((source) => {
+		const old = legacyIdentity(source);
+		return source !== migrated && old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor && !candidates.some((other) => other !== source && (other.startsWith(source + ".") || source.startsWith(other + ".")));
+	});
+	const entries = [];
+	for (const [index, key] of keys.entries()) {
+		if (index % 32 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+		const source = sources.find((source) => rebase(key, source, source) !== null);
+		if (!source) continue;
+		const boundary = key.indexOf(source), family = key.slice(5, boundary - 1), suffix = key.slice(boundary + source.length + 1);
+		try {
+			const raw = local.getItem(key);
+			if (raw === null) continue;
+			for (const field of draftText(family, suffix, raw)) {
+				if (family === "draft" && (suffix === "published" || suffix.startsWith("dispatch."))) {
+					const formKey = suffix === "published" ? `batc.published.${source}` : `batc.dispatch.${source}.${suffix.slice(9)}`;
+					let mirrored = false;
+					try {
+						mirrored = JSON.parse(local.getItem(formKey) || "null")?.prompt === field.text;
+					} catch {
+						report(problem$1);
+					}
+					if (mirrored) continue;
+				}
+				const id = await entryId(key, field.field);
+				if (local.getItem(marker(identity, id)) !== null) continue;
+				entries.push({
+					id,
+					text: field.text,
+					label: field.label,
+					action: field.action,
+					address: decodeURIComponent(source.split(":")[0])
+				});
+			}
+		} catch {
+			report(problem$1);
+		}
+	}
+	return entries;
+}
+function hideEarlierDraft(identity, local, entry, report = diagnostic) {
+	try {
+		local.setItem(marker(identity, entry.id), "hidden");
+		return true;
+	} catch {
+		report(problem$1);
+		return false;
+	}
+}
+function firstEarlierDraftNotice(identity, local, report = diagnostic) {
+	try {
+		const key = marker(identity, "noticed");
+		if (local.getItem(key) !== null) return false;
+		local.setItem(key, "shown");
+		return true;
+	} catch {
+		report(problem$1);
+		return false;
+	}
+}
+//#endregion
+//#region src/earlier-drafts.js
+function earlierDraftPanel({ h, t, entries, current, hide, expanded = false }) {
+	const root = h("details", {
+		"data-earlier-drafts": "",
+		class: "earlier-drafts",
+		open: expanded
+	}, h("summary", {}, t("earlier_title")), h("p", { class: "muted" }, t("earlier_help")));
+	let position = 0, rendering = false;
+	function append(entry) {
+		const name = t(actionMessageKey(entry.action) || entry.label);
+		const text = h("textarea", {
+			readonly: true,
+			rows: 4,
+			"aria-label": name
+		});
+		text.value = entry.text;
+		const status = h("span", {
+			role: "status",
+			class: "muted"
+		});
+		const row = h("article", {
+			"data-earlier-draft": "",
+			class: "panel"
+		}, h("h3", {}, name), h("p", { class: "muted" }, t("earlier_address", { address: entry.address })), text);
+		row.append(h("div", { class: "actions" }, h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: async () => {
+				if (!current()) return;
+				try {
+					await navigator.clipboard.writeText(entry.text);
+					if (current() && row.isConnected) status.textContent = t("earlier_copied");
+				} catch {
+					if (current() && row.isConnected) {
+						status.textContent = t("earlier_copy_manual");
+						text.focus();
+						text.select();
+					}
+				}
+			}
+		}, t("earlier_copy")), h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				if (!current() || !hide(entry)) return;
+				const next = row.nextElementSibling?.querySelector("button") || row.previousElementSibling?.querySelector("button") || root.querySelector("summary");
+				row.remove();
+				next?.focus();
+				if (position === entries.length && !root.querySelector("[data-earlier-draft]")) root.remove();
+			}
+		}, t("earlier_hide")), status));
+		root.append(row);
+	}
+	function render() {
+		if (!current() || !root.isConnected || !root.open) {
+			rendering = false;
+			return;
+		}
+		const first = position === 0;
+		const end = Math.min(position + 16, entries.length);
+		while (position < end) append(entries[position++]);
+		if (first && expanded) {
+			root.scrollIntoView({ block: "start" });
+			root.querySelector("summary").focus({ preventScroll: true });
+		}
+		if (position < entries.length) setTimeout(render, 0);
+		else rendering = false;
+	}
+	const schedule = () => {
+		if (!rendering && root.open && position < entries.length) {
+			rendering = true;
+			setTimeout(render, 0);
+		}
+	};
+	root.addEventListener("toggle", schedule);
+	schedule();
+	return root;
+}
+//#endregion
 //#region src/observed-resource.js
 init_i18n();
 var say = (key, values) => observedText(t, key, values);
@@ -66430,7 +66792,65 @@ async function openDiagnostics() {
 		}
 	});
 }
+var earlierEntries = [];
+var earlierIdentity = null;
+var earlierScan = 0;
+function clearEarlierDrafts() {
+	earlierScan++;
+	earlierEntries = [];
+	earlierIdentity = null;
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+	document.querySelector("[data-earlier-drafts]")?.remove();
+}
+function paintEarlierDrafts() {
+	const slot = document.querySelector("[data-earlier-drafts-slot]");
+	if (!slot) return;
+	slot.replaceChildren();
+	if (!earlierIdentity || !earlierEntries.length) return;
+	const identity = earlierIdentity, scan = earlierScan, epoch = state.epoch;
+	const current = () => scan === earlierScan && epoch === state.epoch && identity === earlierIdentity && !!state.token;
+	slot.append(earlierDraftPanel({
+		h,
+		t,
+		entries: earlierEntries,
+		current,
+		expanded: new URLSearchParams(location.hash.split("?")[1] || "").get("drafts") === "earlier",
+		hide: (entry) => {
+			if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
+			earlierEntries = earlierEntries.filter((row) => row.id !== entry.id);
+			if (!earlierEntries.length) document.querySelector("[data-earlier-drafts-notice]")?.remove();
+			return true;
+		}
+	}));
+}
+function scanEarlierDrafts(identity) {
+	const scan = earlierScan;
+	setTimeout(async () => {
+		try {
+			if (scan !== earlierScan) return;
+			const entries = await earlierDrafts(identity, localStorage);
+			if (scan !== earlierScan || !state.token) return;
+			earlierIdentity = identity;
+			earlierEntries = entries;
+			paintEarlierDrafts();
+			if (entries.length && firstEarlierDraftNotice(identity, localStorage)) {
+				const notice = h("aside", {
+					"data-earlier-drafts-notice": "",
+					class: "earlier-drafts-notice",
+					role: "status"
+				}, h("span", {}, t("earlier_notice")), " ", h("a", {
+					href: "#/settings?section=about&drafts=earlier",
+					onclick: () => notice.remove()
+				}, t("earlier_title")));
+				document.getElementById("live")?.closest("header")?.after(notice);
+			}
+		} catch {
+			console.debug("draft_recovery_unreadable");
+		}
+	}, 0);
+}
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
+	clearEarlierDrafts();
 	withdrawDiagnostics();
 	recentErrors.clear();
 	const retained = retainView ? {
@@ -66474,6 +66894,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 			if (Number.isSafeInteger(saved?.cursor) && saved.cursor >= 0 && typeof saved.token === "string" && saved.token) state.sync = saved;
 		} catch {}
 		state.lastEvent = state.sync.cursor;
+		if (managed) scanEarlierDrafts(identity);
 	} else {
 		state.scopeIdentity = null;
 		state.namespace = storageScope(endpoint, caps.actor);
@@ -66494,6 +66915,7 @@ function saveCursor() {
 	} catch {}
 }
 function disconnect() {
+	clearEarlierDrafts();
 	if (state.token === "managed-browser-session") forgetBrowserSession()?.catch(() => {});
 	withdrawDiagnostics();
 	recentErrors.clear();
@@ -71474,6 +71896,8 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 		"data-export-diagnostics": ""
 	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
 	main.append(languageSwitch(), frame.root);
+	frame.panel("about").append(h("div", { "data-earlier-drafts-slot": "" }));
+	paintEarlierDrafts();
 	const identityEpoch = state.epoch;
 	const paintBuild = () => {
 		if (!frame.root.isConnected || identityEpoch !== state.epoch) {
@@ -71778,6 +72202,7 @@ async function nativeTransition(kind, config = null) {
 	const attempt = ++state.nativeAttempt;
 	const previousOnline = state.online;
 	const previousToken = state.token;
+	clearEarlierDrafts();
 	state.nativeBusy = true;
 	state.epoch++;
 	state.online = false;

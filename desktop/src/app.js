@@ -69,6 +69,8 @@ import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.
 import {retiredRead, readThroughResume, retiredReadError} from "./state/retired-read.ts";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 import {managedStorageScope, migrateManagedStorage} from './state/storage-identity.ts';
+import {earlierDrafts, hideEarlierDraft, firstEarlierDraftNotice} from './state/earlier-drafts.ts';
+import {earlierDraftPanel} from './earlier-drafts.js';
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
 import {observedText} from "./observed-resource-strings.js";
 
@@ -149,7 +151,45 @@ async function openDiagnostics() {
     setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }});
 }
+let earlierEntries = [], earlierIdentity = null, earlierScan = 0;
+function clearEarlierDrafts() {
+  earlierScan++; earlierEntries = []; earlierIdentity = null;
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+  document.querySelector('[data-earlier-drafts]')?.remove();
+}
+function paintEarlierDrafts() {
+  const slot = document.querySelector('[data-earlier-drafts-slot]');
+  if (!slot) return;
+  slot.replaceChildren();
+  if (!earlierIdentity || !earlierEntries.length) return;
+  const identity = earlierIdentity, scan = earlierScan, epoch = state.epoch;
+  const current = () => scan === earlierScan && epoch === state.epoch && identity === earlierIdentity && !!state.token;
+  slot.append(earlierDraftPanel({h, t, entries: earlierEntries, current,
+    expanded: new URLSearchParams(location.hash.split('?')[1] || '').get('drafts') === 'earlier', hide: entry => {
+    if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
+    earlierEntries = earlierEntries.filter(row => row.id !== entry.id);
+    if (!earlierEntries.length) document.querySelector('[data-earlier-drafts-notice]')?.remove();
+    return true;
+  }}));
+}
+function scanEarlierDrafts(identity) {
+  const scan = earlierScan;
+  setTimeout(async () => {
+    try {
+      if (scan !== earlierScan) return;
+      const entries = await earlierDrafts(identity, localStorage);
+      if (scan !== earlierScan || !state.token) return;
+      earlierIdentity = identity; earlierEntries = entries; paintEarlierDrafts();
+      if (entries.length && firstEarlierDraftNotice(identity, localStorage)) {
+        const notice = h('aside', {'data-earlier-drafts-notice': '', class: 'earlier-drafts-notice', role: 'status'},
+          h('span', {}, t('earlier_notice')), ' ', h('a', {href: '#/settings?section=about&drafts=earlier', onclick: () => notice.remove()}, t('earlier_title')));
+        document.getElementById('live')?.closest('header')?.after(notice);
+      }
+    } catch {console.debug('draft_recovery_unreadable');}
+  }, 0);
+}
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
+  clearEarlierDrafts();
   withdrawDiagnostics(); recentErrors.clear();
   const retained = retainView ? {namespace: state.namespace, ready: state.viewReady} : null;
   // A same-identity resnapshot can retain an editing view and its guarded reads.
@@ -186,6 +226,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
       } catch { /* use the bootstrap checkpoint */ }
     }
     state.lastEvent = state.sync.cursor;
+    if (managed) scanEarlierDrafts(identity);
   } else {
     state.scopeIdentity = null;
     state.namespace = storageScope(endpoint, caps.actor);
@@ -204,6 +245,7 @@ function saveCursor() {
   }
 }
 function disconnect() {
+  clearEarlierDrafts();
   if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
   withdrawDiagnostics(); recentErrors.clear();
   state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
@@ -3428,6 +3470,8 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
   main.append(languageSwitch(), frame.root);
+  frame.panel('about').append(h('div', {'data-earlier-drafts-slot': ''}));
+  paintEarlierDrafts();
   const identityEpoch = state.epoch;
   const paintBuild = () => {
     if(!frame.root.isConnected || identityEpoch !== state.epoch){versionPainters.delete(paintBuild);return;}
@@ -3577,6 +3621,7 @@ async function nativeTransition(kind, config = null) {
   const attempt = ++state.nativeAttempt;
   const previousOnline = state.online;
   const previousToken = state.token;
+  clearEarlierDrafts();
   state.nativeBusy = true; state.epoch++; state.online = false;
   state.connectionError = null; state.connectionNotice = null;
   try {
