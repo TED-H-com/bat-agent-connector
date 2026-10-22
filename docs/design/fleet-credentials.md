@@ -23,6 +23,22 @@ Other file encodings are conservatively unsupported. Names use the existing 1–
 alphanumeric/underscore/hyphen rule, starting with an alphanumeric character. Unknown reference kinds,
 including `env`, are not in the reviewed inventory schema and remain refused.
 
+BAT entries in the inventory's `credentials` table may additionally carry
+`source_policy: 1`, for example `{kind:"bat-profile-token", profile_id:"remote-1",
+source_policy:1}`. The host's `bat.credential_ref` remains its existing logical
+table key. Absence preserves the legacy resolver above, including case-insensitive
+lookup, BOM handling and `CREDENTIAL_MISSING` errors; reading never adds the field
+or rewrites inventory bytes. Any present value other than integer `1` is invalid,
+including null, booleans, strings and floating-point values. DPAPI entries do not
+accept the field. No generator writes it yet.
+
+Policy-bound resolution uses [BAT admission](bat-source-catalog.md), with an exact
+decoded token key and its fixed `TOKEN_*` reason codes. A case-only change after
+admission fails with `TOKEN_KEY_MISMATCH`; it cannot fall through to legacy lookup.
+Unreadable files report `TOKEN_STORE_UNREADABLE`. Neither path searches another
+store or retries with another credential. Existing inventories and the legacy
+Fleet vector test remain unchanged.
+
 Kit's writer protects UTF-16LE bytes using Windows DPAPI CurrentUser, no additional entropy, then
 hex-encodes the blob. The reader uses `CryptUnprotectData` with no entropy or prompt and with
 `CRYPTPROTECT_UI_FORBIDDEN`, then strictly decodes UTF-16LE. These semantics match the
@@ -46,7 +62,9 @@ The runtime must keep blocking filesystem/DPAPI work off its UI thread.
 Owned file buffers, retained parsed secret strings, UTF-16 buffers, tokens and Windows plaintext
 allocations are zeroed on drop; allocated Windows output is then freed. Parser failure internals,
 OS/crypto internals and later transport libraries may make temporary copies outside this guarantee.
-Errors expose only fixed missing/invalid-reference codes, never paths, profile names, credential
+Serde JSON's success-path unescape scratch can also retain the decoded `data` briefly
+and is freed without zeroing; scrubbing the retained tree does not erase that copy.
+Errors expose only fixed missing/invalid-reference or admission reason codes, never paths, profile names, credential
 contents or OS exception text. The resolver never changes a credential file.
 
 Linux tests use synthetic JSON and temporary files, including missing, malformed, oversized, linked,

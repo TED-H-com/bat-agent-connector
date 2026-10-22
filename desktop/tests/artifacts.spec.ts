@@ -62,13 +62,13 @@ async function fixture(page: Page, native: boolean) {
   if (native) {
     await page.exposeFunction("artifactFixture", dispatch);
     await page.addInitScript(() => {
-      Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any, options: any) => {
-        if (command === "native_status") return {endpoint: "https://central.example/", credential_available: true};
+      Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
+        if (command === "native_status") return {endpoint: "https://central.example/", credential_available: true, file_transfers: true};
+        if (command === "native_files_status") return {supported: true, transfers: [], drop_error: null};
+        if (command === "fleet_availability") return {configured: false, platform_supported: false};
         if (command === "connector_connect") return (await (window as any).artifactFixture({method: "GET", path: "/capabilities"})).data;
         if (command === "connector_disconnect") return null;
         if (command === "connector_request") return (window as any).artifactFixture(args.input);
-        if (command === "connector_upload_artifact") return (window as any).artifactFixture({method: "BINARY",
-          path: "/artifacts/uploads/" + options.headers["x-batc-upload-operation"] + "/content", bytes: [...new Uint8Array(args)]});
         throw new Error(`Unexpected command: ${command}`);
       }}});
     });
@@ -86,24 +86,32 @@ async function fixture(page: Page, native: boolean) {
 }
 
 for (const native of [false, true]) {
-  test(`artifact bytes and lost work-item reply (${native ? "native" : "browser"})`, async ({page}) => {
+  test(`artifact ${native ? "reference" : "bytes"} and lost work-item reply (${native ? "native" : "browser"})`, async ({page}) => {
     const state = await fixture(page, native);
     await page.goto("/dashboard/#/item/" + wid);
     await page.getByRole("button", {name: "More", exact: true}).click();
-    await page.locator('input[type="file"]').setInputFiles({name: "binary-fixture.dat", mimeType: "application/octet-stream", buffer: binary});
+    if (native) {
+      // Native attachments use opaque receipts or existing refs, never a WebView File upload.
+      await page.getByRole('combobox', {name: 'Uploaded attachment'}).selectOption(aid + ':1');
+      await page.getByRole('button', {name: 'Add attachment', exact: true}).click();
+    } else await page.locator('input[type="file"]').setInputFiles({name: "binary-fixture.dat", mimeType: "application/octet-stream", buffer: binary});
     await expect(page.locator(".attachment-list")).toContainText(aid);
-    expect(state.bytes).toEqual([...binary]);
-    expect(state.writes[0].body.params).toEqual({display_name: "binary-fixture.dat", media_type: "application/octet-stream", size_bytes: binary.length, expected_digest: digest});
+    if (native) {expect(state.bytes).toEqual([]); expect(state.writes).toEqual([]);}
+    else {
+      expect(state.bytes).toEqual([...binary]);
+      expect(state.writes[0].body.params).toEqual({display_name: "binary-fixture.dat", media_type: "application/octet-stream", size_bytes: binary.length, expected_digest: digest});
+    }
+    const firstSave = native ? 0 : 1;
     await page.getByRole("button", {name: "Save", exact: true}).click();
     await expectErrorDetails(page, "Lost apply reply", "LOST");
     await page.reload();
     await page.getByRole("button", {name: "More", exact: true}).click();
     await expect(page.locator(".attachment-list")).toContainText(aid);
     await page.getByRole("button", {name: "Save", exact: true}).click();
-    await expect.poll(() => state.writes.length).toBe(3);
-    expect(state.writes[1].idempotency_key).toBe(state.writes[2].idempotency_key);
-    expect(state.writes[1].body).toEqual(state.writes[2].body);
-    expect(state.writes[2].body.params.attachments).toEqual([{...ref, role: "input"}]);
+    await expect.poll(() => state.writes.length).toBe(firstSave + 2);
+    expect(state.writes[firstSave].idempotency_key).toBe(state.writes[firstSave + 1].idempotency_key);
+    expect(state.writes[firstSave].body).toEqual(state.writes[firstSave + 1].body);
+    expect(state.writes[firstSave + 1].body.params.attachments).toEqual([{...ref, role: "input"}]);
     expect(state.errors).toEqual([]);
   });
 
@@ -136,7 +144,8 @@ for (const native of [false, true]) {
   });
 }
 
-for (const native of [false, true]) {
+// Native picker/account-switch coverage lives in native-files.spec.ts.
+for (const native of [false]) {
   test(`delayed file read cannot upload under a reconnected account (${native ? "native" : "browser"})`, async ({page}) => {
     const state = await fixture(page, native);
     await page.addInitScript(() => {

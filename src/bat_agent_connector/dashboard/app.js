@@ -2132,6 +2132,7 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "This attachment action needs Manage access. Ask the Connector administrator for Manage access, then try again.",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "Attachments are unavailable on this connection. Ask the Connector administrator to check attachment support.",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "Attachment uploads are not allowed on this connection. Ask the Connector administrator to allow uploads, then try again.",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -2237,6 +2238,7 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "此附件操作需要管理權限。請向 Connector 管理員申請管理權限，再試一次。",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "目前連線無法使用附件。請聯絡 Connector 管理員確認附件支援。",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "目前連線未允許附件上傳。請聯絡 Connector 管理員開放上傳，再試一次。",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -11462,6 +11464,10 @@ var init_i18n = __esmMin((() => {
 			fleet_start: "啟動連線監控",
 			fleet_quit: "停止本機連線監控",
 			fleet_status_details: "詳細資料",
+			fleet_route_direct: "路徑：Tailscale 直連",
+			fleet_route_lan: "路徑：區域網路",
+			fleet_route_cf: "路徑：Cloudflare",
+			fleet_route_configured: "路徑：已設定的 SSH",
 			fleet_monitor_running: "監控執行中",
 			fleet_monitor_stopped: "監控已停止",
 			fleet_ready: "就緒",
@@ -13200,6 +13206,10 @@ var init_i18n = __esmMin((() => {
 			fleet_start: "Start connection monitor",
 			fleet_quit: "Stop local connection monitor",
 			fleet_status_details: "Details",
+			fleet_route_direct: "Route: Tailscale direct",
+			fleet_route_lan: "Route: LAN",
+			fleet_route_cf: "Route: Cloudflare",
+			fleet_route_configured: "Route: Configured SSH",
 			fleet_monitor_running: "Monitor running",
 			fleet_monitor_stopped: "Monitor stopped",
 			fleet_ready: "Ready",
@@ -14057,6 +14067,10 @@ function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	};
 }
 function clientActionGate(facts, requirements) {
+	if (requirements.paste && facts.nativeDesktop) return {
+		allowed: false,
+		reason: "native_paste_unsupported"
+	};
 	const ready = requirements.post || requirements.attachment;
 	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
 		allowed: true,
@@ -14076,7 +14090,8 @@ var clientReasons = [
 	"view_not_ready",
 	"manage_required",
 	"attachments_unavailable",
-	"uploads_not_allowed"
+	"uploads_not_allowed",
+	"native_paste_unsupported"
 ];
 var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
@@ -14384,7 +14399,32 @@ function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState, now =
 		"data-fleet-diagnosis": entry.name,
 		"data-fleet-state": state,
 		"data-freshness": fact.freshness
-	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
+	}, h("p", { class: "fleet-diagnosis-title" }, healthLabel(fact, t)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details, ...fleetRoute(row, {
+		h,
+		t,
+		snapshot,
+		readable,
+		entry,
+		now
+	}));
+}
+function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
+	const route = row?.route;
+	if (!route || ![
+		"direct",
+		"lan",
+		"cf",
+		"configured"
+	].includes(route.kind) || !readable || row.selected !== true || ["off", "down"].includes(row.level) || snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable" || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+	const fact = displayFact({
+		key: "fleet_route_" + route.kind,
+		observed_at: route.observed_at
+	}, { now });
+	return [h("p", {
+		class: "muted",
+		"data-fleet-route": entry.name,
+		"data-freshness": fact.freshness
+	}, healthLabel(fact, t))];
 }
 var codeReason, layerReason, layerStep, lookup;
 var init_fleet_status = __esmMin((() => {
@@ -25233,11 +25273,8 @@ async function connectorRequest(method, path, body, key, browserToken, signal) {
 	};
 }
 async function connectorUploadArtifact(operationId, bytes, browserToken) {
+	if (nativeDesktop) throw new Error("Native uploads require the native file manager.");
 	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-	if (nativeDesktop) {
-		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
-	}
 	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
 		method: "POST",
 		redirect: "error",
@@ -69584,7 +69621,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		...state,
 		manageAllowed: may("manage"),
 		attachmentsSupported: supported,
-		uploadsAllowed: nativeUploadAllowed
+		uploadsAllowed: nativeUploadAllowed,
+		nativeDesktop
 	}, requirements);
 	const refuseAttachment = (reason) => {
 		if (!supported) {
@@ -69943,6 +69981,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		e.preventDefault();
 		const gate = attachmentGate({
 			attachment: true,
+			paste: true,
 			supported: true,
 			manage: true,
 			uploads: nativeFiles

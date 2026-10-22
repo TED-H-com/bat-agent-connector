@@ -81,6 +81,7 @@ struct Host<C> {
     credential: Option<String>,
     worker: Option<Work>,
     observation: Option<ProbeObservation>,
+    route: Option<crate::route::RouteObservation>,
     owned: Option<Owned<C>>,
     failure: Option<(&'static str, Layer)>,
     next_probe: u64,
@@ -92,6 +93,7 @@ impl<C> Host<C> {
         }
         self.policy.stop_wake().await;
         self.observation = None;
+        self.route = None;
         self.next_probe = 0;
     }
 }
@@ -233,6 +235,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     credential: None,
                     worker: None,
                     observation: None,
+                    route: None,
                     owned: None,
                     failure: None,
                     next_probe: 0,
@@ -468,6 +471,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
     async fn reconcile_records(&mut self, now: u64) -> Result<HashMap<String, &'static str>> {
         let scan = files::scan(&self.options.roaming, &self.lease)?;
         let mut blocked = HashMap::new();
+        let mut confirmed = Vec::new();
         // Check every record, including removed/unselected hosts in the old directory.
         for file in scan.owners {
             let matching = self
@@ -481,12 +485,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                 let h = self.hosts.get_mut(&file.name).unwrap();
                 let owned = h.owned.as_ref().unwrap();
                 let record = &owned.launch.record;
-                let ended = origin_state(
+                let process = origin_state(
                     record.process.pid,
                     &record.process.created,
                     &self.effects.state(record.process.pid),
-                ) == ProcessState::Dead;
-                if ended {
+                );
+                if process == ProcessState::Dead {
                     h.invalidate().await;
                     if let Some(run) = h.owned.as_ref().and_then(|o| o.run.as_ref()) {
                         h.policy.exited(run, now, false)?;
@@ -513,8 +517,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                         if let Some(run) = &owned.run {
                             h.policy.observed_alive(run, now)?;
                         }
+                        let in_use =
+                            matches!(process, ProcessState::Live { .. }) && owned.run.is_some();
                         if let Err(error) = self.clear_launch_intent(&file) {
                             blocked.insert(file.name.clone(), error);
+                        } else if in_use {
+                            confirmed.push(file.name.clone());
                         }
                     }
                 }
@@ -537,6 +545,16 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     != Some(&owned.launch.record_bytes)
                 {
                     blocked.insert(name.clone(), "OWNER_UNPROVEN");
+                }
+            }
+        }
+        // Renew only after every ownership/intent/receipt check for this host
+        // has passed. Unknown liveness keeps the previous confirmation time.
+        for name in confirmed {
+            if !blocked.contains_key(&name) {
+                let host = self.hosts.get_mut(&name).unwrap();
+                if let Some(route) = &mut host.route {
+                    route.confirm_use(&host.generation, now);
                 }
             }
         }
@@ -711,6 +729,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                 }
                 Work::Route(handle) => match handle.await {
                     Ok(Ok(choice)) => {
+                        host.route = None;
                         let alias = choice.alias(&host.policy, &host.generation, now)?;
                         self.verify()?;
                         let plan = Plan::new(
@@ -730,6 +749,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                         match self.effects.launch(&context, &plan) {
                             Ok(launch) => {
                                 let run = host.policy.started(&choice, &host.generation, now);
+                                host.route = run.as_ref().ok().map(|_| choice.observation(now));
                                 host.owned = Some(Owned {
                                     launch,
                                     run: run.ok(),
@@ -750,6 +770,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                         }
                     }
                     _ => {
+                        host.route = None;
                         host.failure = Some(("ROUTE_UNAVAILABLE", Layer::Tunnel));
                         host.next_probe = now.saturating_add(15000);
                     }
@@ -826,7 +847,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     (name, &h.label),
                     h.selected,
                     h.kind,
-                    h.observation.as_ref(),
+                    (h.observation.as_ref(), h.route.as_ref()),
                     &h.generation,
                     now,
                     if h.policy.waking() {
@@ -916,7 +937,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     (name, &h.label),
                     h.selected,
                     h.kind,
-                    None,
+                    (None, None),
                     &h.generation,
                     now,
                     if h.policy.waking() {

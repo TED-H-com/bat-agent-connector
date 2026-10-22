@@ -150,21 +150,7 @@ impl Context {
         )
         .ok()
         .flatten();
-        let mut hosts = Vec::new();
-        let mut connector = Value::Null;
-        if let Some(snapshot) = &snapshot {
-            for row in &snapshot.entries {
-                let value = serde_json::to_value(row).map_err(|_| "STATUS_UNPROVEN")?;
-                if row.name == "connector" {
-                    connector = value;
-                } else {
-                    hosts.push(value);
-                }
-            }
-        }
-        let fresh = snapshot
-            .as_ref()
-            .is_some_and(|s| s.is_fresh(now).unwrap_or(false) && s.lifecycle == "running");
+        let readiness = crate::fleet::native_readiness(snapshot.as_ref(), now)?;
         self.verify(self.configuration.binding())?;
         // A status read cannot combine an old owner with a replacement owner's readiness.
         let current = discovery::discover(&self.discovery, &WindowsMonitorObservation)?;
@@ -180,8 +166,7 @@ impl Context {
                     && o.instance.is_some())},
             "selection":{"revision":selected.revision,"connections":selected.preferences().connections,
                 "applied_revision":snapshot.as_ref().map(|s| &s.applied_selection_revision)},
-            "readiness":{"state":if fresh{"fresh"}else if snapshot.is_some(){"stale"}else{"unavailable"},
-                "observed_at":snapshot.as_ref().map(|s| &s.observed_at),"hosts":hosts,"connector":connector}}))
+            "readiness":readiness}))
     }
     fn ensure(&self, launcher: &LauncherMutex, ticket: &Ticket) -> Result<()> {
         verify_no_migration(&self.installation)?;
