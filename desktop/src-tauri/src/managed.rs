@@ -20,6 +20,10 @@ use zeroize::Zeroizing;
 const MAX_RUNTIME: u64 = 512 * 1024 * 1024;
 const MAX_REPLY: u64 = 16384;
 
+fn spawn_runtime<T>(mut spawn: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    spawn()
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
@@ -368,7 +372,7 @@ impl Managed {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000); // CREATE_NO_WINDOW; serve detaches itself.
         }
-        let mut child = command.spawn().map_err(|error| {
+        let mut child = spawn_runtime(|| command.spawn()).map_err(|error| {
             #[cfg(test)]
             {
                 eprintln!("managed launcher spawn: {error}");
@@ -678,6 +682,140 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
         )
         .unwrap();
         resources
+    }
+
+    #[cfg(unix)]
+    fn spawn_fixture_runtime(
+        executable: &Path,
+        data: &Path,
+        mut observed: impl FnMut(&std::io::Result<std::process::Child>),
+    ) -> std::io::Result<std::process::Child> {
+        let mut command = Command::new(executable);
+        command
+            .args(["ensure", "--data-dir"])
+            .arg(data)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        spawn_runtime(|| {
+            let result = command.spawn();
+            observed(&result);
+            result
+        })
+    }
+
+    #[cfg(target_os = "linux")]
+    fn busy_runtime_fixture(root: &Path) -> (Managed, File) {
+        use std::os::unix::fs::PermissionsExt;
+        let resources = startup_fixture(root);
+        let data = root.join("app");
+        let (managed, _) = Managed::prepare(&resources, &data, &root.join("config"));
+        let (executable, _) = materialize(&resources.join("managed-runtime"), &data).unwrap();
+        // A forked child's CLOEXEC copy has the same effect as this held writer.
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        let writer = OpenOptions::new().write(true).open(&executable).unwrap();
+        *managed.executable.lock().unwrap() = Some(executable);
+        (managed, writer)
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn runtime_spawn_busy_held_returns_bounded_error_without_running_runtime() {
+        let root = tempfile::tempdir().unwrap();
+        let (managed, writer) = busy_runtime_fixture(root.path());
+        assert_eq!(
+            managed.request("ensure").unwrap_err(),
+            "MANAGED_RUNTIME_START_FAILED"
+        );
+        assert!(!managed.data_dir.join("ensure-count").exists());
+        let executable = managed.executable.lock().unwrap().clone().unwrap();
+        let mut attempts = 0;
+        let error = spawn_fixture_runtime(&executable, &managed.data_dir, |result| {
+            attempts += 1;
+            assert_eq!(
+                result.as_ref().unwrap_err().raw_os_error(),
+                Some(libc::ETXTBSY)
+            );
+        })
+        .unwrap_err();
+        assert_eq!(error.raw_os_error(), Some(libc::ETXTBSY));
+        assert_eq!(attempts, 6);
+        assert!(!managed.data_dir.join("ensure-count").exists());
+        assert!(!managed.data_dir.join("installation.json").exists());
+        drop(writer);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn runtime_spawn_busy_released_after_first_error_runs_runtime_exactly_once() {
+        let root = tempfile::tempdir().unwrap();
+        let (managed, writer) = busy_runtime_fixture(root.path());
+        let executable = managed.executable.lock().unwrap().clone().unwrap();
+        let (release, held) = std::sync::mpsc::channel();
+        let mut first_error = None;
+        let mut attempts = 0;
+        let result = std::thread::scope(|threads| {
+            threads.spawn(move || {
+                held.recv().unwrap();
+                std::thread::sleep(Duration::from_millis(20));
+                drop(writer);
+            });
+            spawn_fixture_runtime(&executable, &managed.data_dir, |result| {
+                attempts += 1;
+                if attempts == 1 {
+                    first_error = result.as_ref().err().and_then(std::io::Error::raw_os_error);
+                    // Release cannot start until a real exec has failed with the writer held.
+                    release.send(()).unwrap();
+                }
+            })
+        });
+        assert_eq!(first_error, Some(libc::ETXTBSY));
+        assert!(result.unwrap().wait().unwrap().success());
+        assert!((2..=6).contains(&attempts));
+        assert_eq!(
+            fs::read(managed.data_dir.join("ensure-count")).unwrap(),
+            b"ensure\n"
+        );
+        assert_eq!(
+            fs::read(managed.data_dir.join("service-count")).unwrap(),
+            b"service\n"
+        );
+    }
+
+    #[test]
+    fn runtime_spawn_never_retries_other_errors() {
+        for code in [1, 2, 13, 16, 22, 24, 27] {
+            let mut attempts = 0;
+            let result = spawn_runtime(|| {
+                attempts += 1;
+                Err::<(), _>(std::io::Error::from_raw_os_error(code))
+            });
+            assert_eq!(result.unwrap_err().raw_os_error(), Some(code));
+            assert_eq!(attempts, 1);
+        }
+        for kind in [
+            std::io::ErrorKind::Interrupted,
+            std::io::ErrorKind::WouldBlock,
+        ] {
+            let mut attempts = 0;
+            let result = spawn_runtime(|| {
+                attempts += 1;
+                Err::<(), _>(std::io::Error::from(kind))
+            });
+            assert_eq!(result.unwrap_err().kind(), kind);
+            assert_eq!(attempts, 1);
+        }
+    }
+
+    #[test]
+    fn runtime_spawn_success_does_not_make_an_extra_attempt() {
+        let mut attempts = 0;
+        let result = spawn_runtime(|| {
+            attempts += 1;
+            Ok::<_, std::io::Error>("started")
+        });
+        assert_eq!(result.unwrap(), "started");
+        assert_eq!(attempts, 1);
     }
 
     #[cfg(unix)]
