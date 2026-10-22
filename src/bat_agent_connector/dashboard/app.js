@@ -57,7 +57,8 @@ async function managedServiceControls(root, { h, t, managedControl, errorBox, gu
 			} catch {}
 			const code = String(error?.message || error);
 			if (code.includes("SERVICE_STILL_STOPPING")) errors.replaceChildren(h("p", {}, t("managed_still_stopping")));
-			else if (code.includes("SERVICE_BUSY") && !code.includes("SERVICE_BUSY:")) errors.replaceChildren(h("p", {}, t("managed_busy")));
+			else if (code === "MANAGED_SERVICE_BUSY") errors.replaceChildren(h("p", {}, t("managed_action_busy")));
+			else if (code === "SERVICE_BUSY") errors.replaceChildren(h("p", {}, t("managed_busy")));
 			else if (code.includes("SERVICE_STOPPED")) errors.replaceChildren(h("p", {}, t(status?.lifecycle?.state === "stop_pending" ? "managed_stopping" : "managed_stopped")));
 			else errors.replaceChildren(errorBox(error, {
 				sourceRefresh: false,
@@ -10806,6 +10807,7 @@ var init_i18n = __esmMin((() => {
 			managed_stopping: "背景服務停止中",
 			managed_still_stopping: "背景服務仍在停止中。你可以等待，或再次選擇停止服務。",
 			managed_busy: "背景服務目前忙碌，請先完成或核對目前工作，再停止服務。",
+			managed_action_busy: "另一個背景服務操作仍在進行中，請等它完成後再試。",
 			managed_stop_local: "本機 Connector 會停止。",
 			managed_stop_hold: "在你選擇啟動之前，開啟程式、登入電腦、自動恢復或在瀏覽器開啟都不會重新啟動。",
 			managed_stop_busy: "尚未完成或核對的工作會阻擋停止。",
@@ -12569,6 +12571,7 @@ var init_i18n = __esmMin((() => {
 			managed_stopping: "Background service stopping",
 			managed_still_stopping: "The background service is still stopping. You can wait or stop it again.",
 			managed_busy: "The background service is busy. Finish or reconcile current work before stopping.",
+			managed_action_busy: "Another background service action is still running. Try again when it finishes.",
 			managed_stop_local: "The local Connector will stop.",
 			managed_stop_hold: "App open, sign-in, recovery and Open in browser will not restart it until you choose Start.",
 			managed_stop_busy: "Unsettled work blocks stopping.",

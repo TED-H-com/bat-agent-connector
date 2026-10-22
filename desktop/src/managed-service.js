@@ -21,7 +21,8 @@ export async function managedServiceControls(root, {h, t, managedControl, errorB
       try {status = await managedControl({action: 'status'}); guard();} catch { /* retain the last observation */ }
       const code = String(error?.message || error);
       if (code.includes('SERVICE_STILL_STOPPING')) errors.replaceChildren(h('p', {}, t('managed_still_stopping')));
-      else if (code.includes('SERVICE_BUSY') && !code.includes('SERVICE_BUSY:')) errors.replaceChildren(h('p', {}, t('managed_busy')));
+      else if (code === 'MANAGED_SERVICE_BUSY') errors.replaceChildren(h('p', {}, t('managed_action_busy')));
+      else if (code === 'SERVICE_BUSY') errors.replaceChildren(h('p', {}, t('managed_busy')));
       else if (code.includes('SERVICE_STOPPED')) errors.replaceChildren(h('p', {}, t(status?.lifecycle?.state === 'stop_pending' ? 'managed_stopping' : 'managed_stopped')));
       else errors.replaceChildren(errorBox(error, {sourceRefresh: false, within: errors}));
     } finally {busy = false; paint();}
