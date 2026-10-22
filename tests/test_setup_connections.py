@@ -664,18 +664,27 @@ async def _r2_waiting(installed, request, source, *, connection=None):
 
 
 @pytest.mark.parametrize("outcome", ["applied", "unchanged", "refused", "uncertain"])
-async def test_r2_a_late_first_receipt(installed, served_setup, source, tmp_path, outcome):
+@pytest.mark.parametrize("after_budget", [False, True])
+async def test_r2_a_late_first_receipt(installed, served_setup, source, tmp_path, outcome, after_budget):
     from bat_agent_connector import connection_handoff
+    from bat_agent_connector.operations import UNCERTAIN_RETRY_S
     daemon, _, _ = installed
     _, ident = await _r2_waiting(installed, served_setup, source)
     native = await _r2_dispatch(served_setup, ident)
     participant = DiskParticipant(tmp_path / "participant.json")
     receipt = participant.effect(native, outcome=outcome)  # Effect/evidence precedes laptop sleep.
     with patch.object(connection_handoff, "now", return_value=native["expires_at"] + 1):
+        if after_budget:
+            for _ in range(len(UNCERTAIN_RETRY_S) + 1):
+                daemon.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
+                await settle_operations(daemon.ops)
+            assert daemon.ops.get(ident)["status"] == "needs_attention"
         status, response = await served_setup("POST", RECEIPT, receipt)
     assert status == 200, response
     await settle_operations(daemon.ops)
     expected = {"applied": "succeeded", "unchanged": "succeeded", "refused": "failed", "uncertain": "uncertain"}
+    if after_budget and outcome == "uncertain":
+        expected[outcome] = "needs_attention"
     assert daemon.ops.get(ident)["status"] == expected[outcome]
     assert participant.writes <= 1
 
