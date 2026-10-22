@@ -3,7 +3,7 @@ import {button} from './ui/components.js';
 import {fleetAvailability, fleetRequest} from "./transport/index.ts";
 
 // Local Fleet state never shares the central event cursor, principal or operation journal.
-export async function mountFleet(main, {h, t}) {
+export async function mountFleet(main, {h, t, onStatus = () => {}}) {
   if (!main.isConnected) return () => {};
   const panel = h("section", {class: "panel", "aria-label": t("fleet_title")});
   const content = h("div"), message = h("p", {class: "muted", role: "status"});
@@ -115,6 +115,7 @@ export async function mountFleet(main, {h, t}) {
       } catch { /* Invalid local draft cannot authorize any native action. */ }
     }
     snapshot = value; readable = true;
+    onStatus(value);
     // A lost reply may already have saved the exact requested set. Read it back; never resend automatically.
     if (draft && same(draft.connections, value.selection.connections)) {draft = null; save();}
   };
@@ -150,7 +151,7 @@ export async function mountFleet(main, {h, t}) {
       message.textContent = t(!availability.platform_supported ? "fleet_windows" : "fleet_setup");
     } else if (availability.native_controls === true) {
       const {mountFleetDesktop} = await import("./fleet-desktop.js");
-      if (alive()) {panel.remove(); nativeCleanup = await mountFleetDesktop(main, {h, t});
+      if (alive()) {panel.remove(); nativeCleanup = await mountFleetDesktop(main, {h, t, onStatus});
         if (availability.bootstrap_controls === true && !disposed && main.isConnected) {
           const {mountFleetBootstrap} = await import("./fleet-bootstrap.js");
           bootstrapCleanup = await mountFleetBootstrap(main, {h, t});

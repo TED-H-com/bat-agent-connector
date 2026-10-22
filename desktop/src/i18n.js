@@ -1,3 +1,4 @@
+import {healthStrings} from './health-strings.js';
 import {resultSourcesStrings} from './result-sources-strings.js';
 import {externalHistoryStrings} from './pm-external-history-strings.js';
 import {adoptStartStrings} from './pm-adopt-start-strings.js';
@@ -38,6 +39,7 @@ import {FLEET_STRINGS} from './fleet-strings.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 export const STRINGS = {
   "zh-TW": {
+    ...healthStrings['zh-TW'],
     ...FLEET_STRINGS['zh-TW'],
     ...workbenchStrings["zh-TW"],
     ...resultSourcesStrings["zh-TW"],
@@ -1099,6 +1101,7 @@ export const STRINGS = {
     integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。",
   },
   en: {
+    ...healthStrings.en,
     ...FLEET_STRINGS.en,
     ...workbenchStrings.en,
     ...resultSourcesStrings.en,

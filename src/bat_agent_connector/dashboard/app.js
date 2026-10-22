@@ -88,6 +88,317 @@ var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
+//#region src/state/sessions.js
+var text$6 = (value) => typeof value === "string" ? value : "";
+function workspaceGroup(session) {
+	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
+	return {
+		key: JSON.stringify([
+			host,
+			id ? "id" : name ? "label" : "unknown",
+			id || name
+		]),
+		host,
+		id,
+		name
+	};
+}
+function groupedSessions(sessions) {
+	const groups = new Map();
+	for (const session of sessions) {
+		const group = workspaceGroup(session);
+		if (!groups.has(group.key)) groups.set(group.key, {
+			...group,
+			sessions: []
+		});
+		groups.get(group.key).sessions.push(session);
+	}
+	return [...groups.values()].sort((a, b) => a.host.localeCompare(b.host) || (a.name || a.id).localeCompare(b.name || b.id) || a.key.localeCompare(b.key));
+}
+function matchesSession(session, query) {
+	const haystack = [
+		session.title,
+		session.session_id,
+		session.host,
+		session.workspace,
+		session.workspace_id,
+		session.agent_kind,
+		session.model,
+		session.worktree_branch,
+		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
+	].map(text$6).join("\n").toLocaleLowerCase();
+	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
+}
+function runtimeStale(session) {
+	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
+}
+function sessionFacets(session) {
+	const source = session || {}, pending = source.pending;
+	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
+	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
+		"needs_ted",
+		"needs_you",
+		"needs_attention",
+		"waiting_permission",
+		"awaiting_approval",
+		"uncertain",
+		"blocked"
+	].includes(managedStatus) ? "needs_you" : "none";
+	const staleness = {
+		runtime: runtimeStale(source),
+		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
+		missing: source.state?.enumeration === "missing"
+	};
+	const lifecycle = source.state?.lifecycle || "unknown";
+	return {
+		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
+		attention,
+		staleness,
+		lifecycle,
+		pendingKind: pending?.kind,
+		hasPending: Boolean(pending),
+		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
+	};
+}
+function sessionActivity(session) {
+	const facets = sessionFacets(session);
+	if (facets.hasPending) return {
+		key: "pending_" + facets.pendingKind,
+		tone: "stale"
+	};
+	if (facets.attention === "failed") return {
+		key: "op_failed",
+		tone: "bad"
+	};
+	if (facets.attention === "needs_you") return {
+		key: "workspace_needs_you",
+		tone: "stale"
+	};
+	if (facets.lifecycle === "ended") return {
+		key: "obs_value_ended",
+		tone: ""
+	};
+	if (facets.staleness.gone || facets.staleness.missing) return {
+		key: "sessions_not_seen",
+		tone: "stale"
+	};
+	if (facets.staleness.runtime) return {
+		key: "sessions_stale",
+		tone: "stale"
+	};
+	if (facets.activity === "streaming") return {
+		key: "obs_value_streaming",
+		tone: "info"
+	};
+	if (facets.activity === "not_streaming") return {
+		key: "obs_value_not_streaming",
+		tone: ""
+	};
+	if (facets.notLoaded) return {
+		key: "sessions_not_loaded",
+		tone: ""
+	};
+	return {
+		key: "sessions_activity_unknown",
+		tone: ""
+	};
+}
+function sessionStatus(session) {
+	const facets = sessionFacets(session);
+	if (facets.attention !== "none") return facets.attention;
+	if (Object.values(facets.staleness).some(Boolean)) return "stale";
+	if (facets.activity === "streaming") return "running";
+	return null;
+}
+function sessionPill(session) {
+	const status = sessionStatus(session);
+	if (status === "asking_you" || status === "needs_you") return {
+		key: "sessions_pill_waiting",
+		tone: "stale",
+		status
+	};
+	if (status === "failed") return {
+		key: "op_failed",
+		tone: "bad",
+		status
+	};
+	if (status === "stale") return {
+		key: "sessions_pill_stale",
+		tone: "stale",
+		status
+	};
+	if (status === "running") return {
+		key: "sessions_pill_running",
+		tone: "info",
+		status
+	};
+	return null;
+}
+//#endregion
+//#region src/health-display.js
+var time$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
+var revision = (caps) => JSON.stringify([
+	caps?.connector,
+	caps?.build?.version,
+	caps?.build?.commit,
+	caps?.build?.source,
+	caps?.contract_version
+]);
+function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
+	const observed = time$1(fact.observed_at), deadline = time$1(fact.valid_until);
+	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
+	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : !Number.isFinite(observed) ? "unknown" : now - observed >= 6e4 ? "stale" : "current";
+	return {
+		...fact,
+		freshness,
+		ageSeconds
+	};
+}
+function compactHealth({ attention, stale, unknown, activity }) {
+	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
+}
+function runtimeSummary$1(selected, sessions, complete, now) {
+	const rows = selected ? sessions.filter((row) => row.host === selected.host && (selected.workspaceId ? row.workspace_id === selected.workspaceId : row.session_id === selected.sessionId)) : [];
+	if (!selected) return null;
+	const facts = rows.map((row) => {
+		const facets = sessionFacets(row);
+		const evidence = row.state?.evidence?.activity;
+		const activity = displayFact({
+			value: row.state?.activity ?? facets.activity,
+			observed_at: evidence ? evidence.observed_at : row.observed_at,
+			valid_until: evidence?.valid_until,
+			stale: Object.values(facets.staleness).some(Boolean)
+		}, { now });
+		return {
+			attention: facets.attention !== "none" || row.api_access === "managed" && [
+				"blocked",
+				"failed",
+				"error",
+				"needs_attention",
+				"awaiting_approval"
+			].includes(row.runtime_status),
+			activity,
+			working: ["streaming", "starting"].includes(activity.value),
+			idle: ["not_streaming", "ended"].includes(activity.value)
+		};
+	});
+	const connection = rows.filter((row) => row.state?.connection).map((row) => displayFact({
+		value: row.state.connection,
+		...row.state.evidence?.connection
+	}, { now })).sort((a, b) => (time$1(b.observed_at) || 0) - (time$1(a.observed_at) || 0))[0] || null;
+	const attention = facts.some((row) => row.attention) || connection?.value === "not_connected";
+	const stale = facts.some((row) => row.activity.freshness === "stale") || connection?.freshness === "stale";
+	const unknown = !facts.length || Boolean(selected.workspaceId && !complete) || facts.some((row) => row.activity.freshness === "unknown" || !row.idle && !row.working) || connection?.freshness === "unknown";
+	const activity = facts.some((row) => row.working && row.activity.freshness === "current") ? "working" : !facts.length || selected.workspaceId && !complete || facts.some((row) => !row.idle || row.activity.freshness !== "current") ? "unknown" : "idle";
+	return {
+		selected,
+		attention,
+		stale,
+		unknown,
+		activity,
+		connection,
+		compact: compactHealth({
+			attention,
+			stale,
+			unknown,
+			activity
+		}),
+		facts
+	};
+}
+function otherMachines(health, now) {
+	if (health.hostsLoaded) return countFact(health.hosts.filter((row) => row.host !== health.selected?.host && (row.error || row.reachable === false && row.last_attempt_at)).map((row) => ({
+		observed_at: row.last_attempt_at,
+		stale: row.stale
+	})), now);
+	return countFact((health.selected ? [] : health.fleet?.readiness?.hosts || []).filter((row) => row.selected === true && row.level !== "off" && row.code && ![
+		"PROBE_PENDING",
+		"PROBE_STALE",
+		"TAILSCALE_WAKING"
+	].includes(row.code) && displayFact({ observed_at: row.observed_at }, { now }).freshness !== "unknown").map((row) => ({
+		observed_at: row.observed_at,
+		stale: row.stale || health.fleet.readiness.state !== "fresh"
+	})), now);
+}
+function countFact(rows, now) {
+	const observed = rows.map((row) => time$1(row.observed_at));
+	return displayFact({
+		value: rows.length,
+		observed_at: observed.length ? Math.min(...observed) : null,
+		stale: rows.some((row) => row.stale)
+	}, { now });
+}
+function healthDisplay(input, now = Date.now()) {
+	const health = input.health || {};
+	const status = centralServiceStatus(input);
+	const pollAt = typeof input.pollHealth === "object" ? input.pollHealth?.at : input.pollHealth === "connected" && input.lastPoll?.namespace === input.namespace ? input.lastPoll.at : health.bootstrapAt;
+	const connection = {
+		...status,
+		...displayFact({
+			value: status.key,
+			observed_at: status.recoveryKey ? input.managedObservedAt : pollAt,
+			valid_until: typeof input.pollHealth === "object" ? input.pollHealth?.valid_until : input.lastPoll?.valid_until
+		}, { now })
+	};
+	if (!input.token && !status.recoveryKey) connection.freshness = "unconfigured";
+	const receipt = health.capabilities;
+	const capabilities = displayFact({
+		value: receipt?.data,
+		static: true,
+		bootstrap: receipt?.bootstrap,
+		version: revision(receipt?.data)
+	}, {
+		now,
+		bootstrap: health.bootstrap,
+		version: revision(health.currentCaps || input.caps)
+	});
+	if (!receipt) capabilities.freshness = "unknown";
+	const other = otherMachines(health, now);
+	return {
+		connection,
+		capabilities,
+		summary: runtimeSummary$1(health.selected, health.sessions || [], health.sessionsComplete, now),
+		otherAttention: other.value,
+		other
+	};
+}
+function rememberHealthRead(health, path, data) {
+	const pathname = path.split("?")[0];
+	if (Array.isArray(data.hosts) && (pathname === "/hosts" || pathname === "/sessions")) {
+		health.hosts = data.hosts;
+		health.hostsLoaded = true;
+	}
+	if (/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) {
+		const rows = data.sessions || (data.session ? [data.session] : []);
+		const params = new URLSearchParams(path.split("?")[1] || "");
+		const complete = Array.isArray(data.sessions) && data.next_cursor === null && [...params.keys()].every((key) => key === "limit");
+		if (Array.isArray(data.sessions)) health.sessionsComplete = complete;
+		const sessions = new Map((complete ? [] : health.sessions || []).map((row) => [`${row.host}/${row.session_id}`, row]));
+		for (const row of rows) sessions.set(`${row.host}/${row.session_id}`, row);
+		health.sessions = [...sessions.values()].slice(-500);
+		const selected = health.selected;
+		const row = selected && health.sessions.find((row) => row.host === selected.host && row.session_id === selected.sessionId);
+		if (row) health.selected = {
+			...selected,
+			workspaceId: row.workspace_id || void 0,
+			label: row.workspace || row.host
+		};
+	}
+}
+function healthLabel(fact, t) {
+	const label = t(fact.key || fact.value);
+	if (fact.freshness === "stale") return t("health_stale_value", {
+		value: label,
+		age: fact.ageSeconds === null ? t("health_age_unknown") : t("health_age", { seconds: fact.ageSeconds }),
+		checking: t("health_checking")
+	});
+	if (["unknown", "invalidated"].includes(fact.freshness) && fact.key !== "ui_connecting") return t("health_unknown_value", {
+		value: label,
+		checking: t("health_checking")
+	});
+	return label;
+}
+//#endregion
 //#region src/workbench-mode.js
 function decideLayout({ search = "", policy } = {}) {
 	const requested = new URLSearchParams(search).get("workbench");
@@ -288,6 +599,57 @@ function parseDiscussRefs(query) {
 		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
 	};
 }
+//#endregion
+//#region src/health-strings.js
+var healthStrings;
+var init_health_strings = __esmMin((() => {
+	healthStrings = {
+		en: {
+			health_checking: "Checking",
+			health_age: "{seconds}s ago",
+			health_age_unknown: "Age unknown",
+			health_connection_problem: "Connection needs attention",
+			health_stale_value: "{value} · {age} · {checking}",
+			health_unknown_value: "{value} · {checking}",
+			health_other_machines: "{count} other machines need attention",
+			health_selected_work: "Selected work",
+			health_selected_workspace: "Selected workspace",
+			health_attention: "Needs attention",
+			health_stale: "Stale · Checking",
+			health_unknown: "Unknown · Checking",
+			health_working: "Working",
+			health_idle: "Idle",
+			health_activity: "Output activity",
+			health_attention_label: "Needs attention",
+			health_freshness: "Freshness",
+			health_current: "Current",
+			health_none: "None observed",
+			health_capabilities_checking: "Capabilities changed · Checking"
+		},
+		"zh-TW": {
+			health_checking: "檢查中",
+			health_age: "{seconds} 秒前",
+			health_age_unknown: "時間未知",
+			health_connection_problem: "連線需要處理",
+			health_stale_value: "{value} · {age} · {checking}",
+			health_unknown_value: "{value} · {checking}",
+			health_other_machines: "另有 {count} 台機器需要處理",
+			health_selected_work: "所選工作",
+			health_selected_workspace: "所選工作區",
+			health_attention: "需要處理",
+			health_stale: "已過期 · 檢查中",
+			health_unknown: "未知 · 檢查中",
+			health_working: "工作中",
+			health_idle: "閒置",
+			health_activity: "輸出活動",
+			health_attention_label: "需要處理",
+			health_freshness: "資料時效",
+			health_current: "目前有效",
+			health_none: "未觀察到",
+			health_capabilities_checking: "能力資料已變更 · 檢查中"
+		}
+	};
+}));
 //#endregion
 //#region src/result-sources-strings.js
 var resultSourcesStrings;
@@ -9899,6 +10261,7 @@ function t(key, vars = {}) {
 }
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
+	init_health_strings();
 	init_result_sources_strings();
 	init_pm_external_history_strings();
 	init_pm_adopt_start_strings();
@@ -9938,6 +10301,7 @@ var init_i18n = __esmMin((() => {
 	init_fleet_strings();
 	STRINGS = {
 		"zh-TW": {
+			...healthStrings["zh-TW"],
 			...FLEET_STRINGS["zh-TW"],
 			...workbenchStrings$1["zh-TW"],
 			...resultSourcesStrings["zh-TW"],
@@ -11630,6 +11994,7 @@ var init_i18n = __esmMin((() => {
 			integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 		},
 		en: {
+			...healthStrings.en,
 			...FLEET_STRINGS.en,
 			...workbenchStrings$1.en,
 			...resultSourcesStrings.en,
@@ -14586,153 +14951,6 @@ function viewState(namespace, workspaceId, view) {
 	states$2.set(key, value);
 	if (states$2.size > 40) states$2.delete(states$2.keys().next().value);
 	return value;
-}
-//#endregion
-//#region src/state/sessions.js
-var text$6 = (value) => typeof value === "string" ? value : "";
-function workspaceGroup(session) {
-	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
-	return {
-		key: JSON.stringify([
-			host,
-			id ? "id" : name ? "label" : "unknown",
-			id || name
-		]),
-		host,
-		id,
-		name
-	};
-}
-function groupedSessions(sessions) {
-	const groups = new Map();
-	for (const session of sessions) {
-		const group = workspaceGroup(session);
-		if (!groups.has(group.key)) groups.set(group.key, {
-			...group,
-			sessions: []
-		});
-		groups.get(group.key).sessions.push(session);
-	}
-	return [...groups.values()].sort((a, b) => a.host.localeCompare(b.host) || (a.name || a.id).localeCompare(b.name || b.id) || a.key.localeCompare(b.key));
-}
-function matchesSession(session, query) {
-	const haystack = [
-		session.title,
-		session.session_id,
-		session.host,
-		session.workspace,
-		session.workspace_id,
-		session.agent_kind,
-		session.model,
-		session.worktree_branch,
-		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$6).join("\n").toLocaleLowerCase();
-	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
-}
-function runtimeStale(session) {
-	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
-}
-function sessionFacets(session) {
-	const source = session || {}, pending = source.pending;
-	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
-	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
-		"needs_ted",
-		"needs_you",
-		"needs_attention",
-		"waiting_permission",
-		"awaiting_approval",
-		"uncertain",
-		"blocked"
-	].includes(managedStatus) ? "needs_you" : "none";
-	const staleness = {
-		runtime: runtimeStale(source),
-		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
-		missing: source.state?.enumeration === "missing"
-	};
-	const lifecycle = source.state?.lifecycle || "unknown";
-	return {
-		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
-		attention,
-		staleness,
-		lifecycle,
-		pendingKind: pending?.kind,
-		hasPending: Boolean(pending),
-		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
-	};
-}
-function sessionActivity(session) {
-	const facets = sessionFacets(session);
-	if (facets.hasPending) return {
-		key: "pending_" + facets.pendingKind,
-		tone: "stale"
-	};
-	if (facets.attention === "failed") return {
-		key: "op_failed",
-		tone: "bad"
-	};
-	if (facets.attention === "needs_you") return {
-		key: "workspace_needs_you",
-		tone: "stale"
-	};
-	if (facets.lifecycle === "ended") return {
-		key: "obs_value_ended",
-		tone: ""
-	};
-	if (facets.staleness.gone || facets.staleness.missing) return {
-		key: "sessions_not_seen",
-		tone: "stale"
-	};
-	if (facets.staleness.runtime) return {
-		key: "sessions_stale",
-		tone: "stale"
-	};
-	if (facets.activity === "streaming") return {
-		key: "obs_value_streaming",
-		tone: "info"
-	};
-	if (facets.activity === "not_streaming") return {
-		key: "obs_value_not_streaming",
-		tone: ""
-	};
-	if (facets.notLoaded) return {
-		key: "sessions_not_loaded",
-		tone: ""
-	};
-	return {
-		key: "sessions_activity_unknown",
-		tone: ""
-	};
-}
-function sessionStatus(session) {
-	const facets = sessionFacets(session);
-	if (facets.attention !== "none") return facets.attention;
-	if (Object.values(facets.staleness).some(Boolean)) return "stale";
-	if (facets.activity === "streaming") return "running";
-	return null;
-}
-function sessionPill(session) {
-	const status = sessionStatus(session);
-	if (status === "asking_you" || status === "needs_you") return {
-		key: "sessions_pill_waiting",
-		tone: "stale",
-		status
-	};
-	if (status === "failed") return {
-		key: "op_failed",
-		tone: "bad",
-		status
-	};
-	if (status === "stale") return {
-		key: "sessions_pill_stale",
-		tone: "stale",
-		status
-	};
-	if (status === "running") return {
-		key: "sessions_pill_running",
-		tone: "info",
-		status
-	};
-	return null;
 }
 //#endregion
 //#region src/workbench-projection.js
@@ -59784,7 +60002,7 @@ var __vitePreload = function preload(baseModule, deps, importerUrl) {
 //#endregion
 //#region src/fleet-desktop.js
 var fleet_desktop_exports = __exportAll({ mountFleetDesktop: () => mountFleetDesktop });
-async function mountFleetDesktop(main, { h, t }) {
+async function mountFleetDesktop(main, { h, t, onStatus = () => {} }) {
 	const panel = h("section", {
 		class: "panel fleet-desktop",
 		"aria-label": t("fleet_desktop_title")
@@ -59889,6 +60107,7 @@ async function mountFleetDesktop(main, { h, t }) {
 		}
 		snapshot = value;
 		readable = true;
+		onStatus(value);
 		const automatic = value.login_launch;
 		if (!launch && automatic?.configuration_binding === binding && validId(automatic.preview_id) && validSummary(automatic.summary, automatic.preview_id)) {
 			launch = {
@@ -60500,7 +60719,7 @@ var init_fleet_bootstrap = __esmMin((() => {
 //#region src/fleet.js
 init_fleet_status();
 init_transport();
-async function mountFleet(main, { h, t }) {
+async function mountFleet(main, { h, t, onStatus = () => {} }) {
 	if (!main.isConnected) return () => {};
 	const panel = h("section", {
 		class: "panel",
@@ -60699,6 +60918,7 @@ async function mountFleet(main, { h, t }) {
 		}
 		snapshot = value;
 		readable = true;
+		onStatus(value);
 		if (draft && same(draft.connections, value.selection.connections)) {
 			draft = null;
 			save();
@@ -60760,7 +60980,8 @@ async function mountFleet(main, { h, t }) {
 				panel.remove();
 				nativeCleanup = await mountFleetDesktop(main, {
 					h,
-					t
+					t,
+					onStatus
 				});
 				if (availability.bootstrap_controls === true && !disposed && main.isConnected) {
 					const { mountFleetBootstrap } = await __vitePreload(async () => {
@@ -66285,6 +66506,7 @@ function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = s
 		data,
 		at
 	};
+	if (key === "capabilities" && data && state.health) state.health.currentCaps = data;
 	paintVersions();
 }
 async function readNativeVersions() {
@@ -66433,6 +66655,10 @@ async function openDiagnostics() {
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
 	withdrawDiagnostics();
 	recentErrors.clear();
+	const previousHealthScope = {
+		namespace: state.namespace,
+		selected: state.health?.selected
+	};
 	const retained = retainView ? {
 		namespace: state.namespace,
 		ready: state.viewReady
@@ -66443,6 +66669,11 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 	state.online = false;
 	state.pollHealth = "initial";
 	state.viewReady = false;
+	state.health = {
+		bootstrap: (state.health?.bootstrap || 0) + 1,
+		sessions: [],
+		hosts: []
+	};
 	state.caps = caps;
 	state.endpoint = endpoint;
 	state.sync = null;
@@ -66487,6 +66718,16 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 		}
 	}
 	state.online = true;
+	state.health.sessions = [];
+	state.health.hosts = [];
+	state.health.hostsLoaded = false;
+	if (state.namespace === previousHealthScope.namespace) state.health.selected = previousHealthScope.selected;
+	state.health.bootstrapAt = Date.now();
+	state.health.capabilities = {
+		data: state.caps,
+		bootstrap: state.health.bootstrap
+	};
+	state.health.currentCaps = state.caps;
 }
 function saveCursor() {
 	if (state.sync) try {
@@ -66504,6 +66745,7 @@ function disconnect() {
 	state.lastEvent = 0;
 	state.lastEventAt = 0;
 	state.scopeIdentity = null;
+	state.health = null;
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
@@ -66624,6 +66866,7 @@ async function api(method, path, body, key, collectReceipt) {
 	try {
 		const data = await apiRequest(method, path, body, key, collectReceipt);
 		if (epoch === state.epoch && method === "GET") {
+			if (state.health) rememberHealthRead(state.health, path, data);
 			if (path === "/capabilities" || path === "/bootstrap") rememberVersionRead("capabilities", path === "/bootstrap" ? data.capabilities : data, void 0, epoch);
 			if (/^\/pm\/(?:installation-capabilities|workspaces\/[^/?]+\/capabilities)(?:\?|$)/.test(path)) rememberVersionRead("adapter", { native_analysis: { required_version: data.native_analysis?.required_version } }, void 0, epoch);
 			if (/^\/pm\/workspaces\/[^/?]+\/runs\/[^/?]+(?:\?|$)/.test(path) && data.run) rememberVersionRead("adapterRun", {
@@ -66679,7 +66922,15 @@ async function api(method, path, body, key, collectReceipt) {
 				401,
 				403,
 				404
-			].includes(error.status)) withdrawDiagnostics();
+			].includes(error.status)) {
+				withdrawDiagnostics();
+				if (state.health) {
+					state.health.sessions = [];
+					state.health.hosts = [];
+					state.health.hostsLoaded = false;
+					state.health.selected = null;
+				}
+			}
 		}
 		throw error;
 	}
@@ -67493,13 +67744,23 @@ function updateOnline(value) {
 	for (const fn of onlineListeners) fn();
 }
 var connectionPainters = new Set();
+var connectionPaintFlags = [false, false];
 function paintConnection(waiting = false, paused = false) {
+	connectionPaintFlags = [waiting, paused];
 	const live = document.getElementById("live");
-	const { key, tone, connection: status, recoveryKey } = centralServiceStatus(state);
+	const projection = healthDisplay(state);
+	const { key, tone, connection: status, recoveryKey, freshness } = projection.connection;
+	const label = healthLabel(projection.connection, t);
 	live.dataset.connection = status;
-	live.className = "live tone-" + tone;
-	live.replaceChildren(h("span", { class: "central-service-state" }, t(key)));
-	const scoped = t("ui_connector_status", { status: t(key) });
+	live.dataset.freshness = freshness;
+	live.className = "live tone-" + (["stale", "unknown"].includes(freshness) ? "neutral" : tone);
+	let labelNode = live.querySelector(".central-service-state");
+	if (!labelNode) {
+		labelNode = h("span", { class: "central-service-state" });
+		live.append(labelNode);
+	}
+	if (labelNode.textContent !== label) labelNode.textContent = label;
+	const scoped = t("ui_connector_status", { status: label });
 	live.setAttribute("aria-label", scoped);
 	const central = document.getElementById("central-service-status");
 	central.title = scoped;
@@ -67521,8 +67782,66 @@ function paintConnection(waiting = false, paused = false) {
 	}
 	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : key === "ui_connection_refused" ? "error_code_CLIENT_ACTION_REFUSED" : key === "ui_service_error" ? "error_code_CLIENT_ACTION_SERVICE_ERROR" : key === "ui_invalid_response" ? "error_code_CLIENT_ACTION_INVALID_RESPONSE" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
 	live.title = scoped + " — " + t(helpKey);
+	paintHealthSummary(projection);
 	for (const paint of [...connectionPainters]) paint();
 	paintVersions();
+}
+function healthSummaryContent(projection) {
+	const summary = projection.summary;
+	return [
+		summary ? h("span", {
+			"data-health-selected": "",
+			class: "health-selected"
+		}, h("span", {}, t(summary.selected.workspaceId ? "health_selected_workspace" : "health_selected_work") + ": " + (summary.selected.label || summary.selected.host)), h("span", {
+			class: "ui-pill",
+			"data-health-compact": summary.compact
+		}, t("health_" + summary.compact)), summary.connection ? h("span", { class: "health-installation-connection" }, healthLabel({
+			...summary.connection,
+			key: summary.connection.value === "connected" ? "ui_connected" : summary.connection.value === "not_connected" ? "health_connection_problem" : "health_unknown"
+		}, t)) : null, h("span", { class: "health-facets" }, `${t("health_attention_label")}: ${t(summary.attention ? "health_attention" : "health_none")} · `, `${t("health_activity")}: ${t("health_" + summary.activity)} · `, `${t("health_freshness")}: ${t(summary.stale ? "health_stale" : summary.unknown ? "health_unknown" : "health_current")}`), ...summary.facts.filter((row) => row.activity.freshness === "stale").map((row) => h("span", { class: "health-last-value" }, healthLabel({
+			...row.activity,
+			key: ["streaming", "starting"].includes(row.activity.value) ? "health_working" : row.activity.value === "not_streaming" ? "health_idle" : "health_unknown"
+		}, t)))) : null,
+		projection.capabilities.freshness === "invalidated" ? h("span", {}, t("health_capabilities_checking")) : null,
+		projection.otherAttention ? h("a", {
+			href: "#/settings?section=fleet",
+			"data-health-other": ""
+		}, healthLabel({
+			...projection.other,
+			key: "health_other_machines"
+		}, (key, vars) => t(key, {
+			count: projection.otherAttention,
+			...vars
+		}))) : null
+	].filter(Boolean);
+}
+function paintHealthSummary(projection) {
+	let summary = document.getElementById("installation-health");
+	if (!summary) {
+		summary = h("header", {
+			id: "installation-health",
+			class: "health-summary",
+			"aria-label": t("health_selected_work")
+		});
+		document.querySelector("header.top").after(summary);
+	}
+	const content = healthSummaryContent(projection);
+	summary.hidden = !content.length;
+	const signature = content.map((node) => node.outerHTML).join("");
+	if (summary.dataset.signature !== signature) {
+		const focusedOther = summary.querySelector("[data-health-other]") === document.activeElement;
+		summary.replaceChildren(...content);
+		summary.dataset.signature = signature;
+		if (focusedOther) summary.querySelector("[data-health-other]")?.focus();
+	}
+}
+function rememberFleetHealth(snapshot) {
+	state.health ||= {
+		sessions: [],
+		hosts: []
+	};
+	state.health.fleet = snapshot;
+	paintConnection();
 }
 var managedStatusAt = 0;
 async function refreshManagedRecovery() {
@@ -67533,6 +67852,7 @@ async function refreshManagedRecovery() {
 		const status = await nativeStatus();
 		if (epoch !== state.epoch) return;
 		state.managedRecovery = status.managed_recovery || null;
+		state.managedObservedAt = Date.now();
 		if (status.configuration_source === "managed" && status.endpoint) state.endpoint = status.endpoint;
 		paintConnection();
 		if (status.configuration_source === "managed" && Number.isSafeInteger(status.managed_rebind) && status.managed_rebind > (state.managedRebind || 0)) {
@@ -71344,13 +71664,17 @@ function fleetEmpty() {
 }
 function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
-	const stateCell = h("dd");
+	const statePill = h("span", { class: "ui-pill" }), stateCell = h("dd", {}, statePill);
 	const eventCell = h("dd", { "data-last-event": "" });
 	const pollCell = h("dd", { "data-last-successful-poll": "" });
+	const summaryCell = h("div", { "data-health-settings": "" });
 	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("ui_last_poll")), pollCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
-		const { key, tone } = centralServiceStatus(state);
-		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
+		const projection = healthDisplay(state);
+		const { tone, freshness } = projection.connection;
+		statePill.className = `ui-pill tone-${freshness === "current" ? tone : "neutral"}`;
+		statePill.textContent = healthLabel(projection.connection, t);
+		summaryCell.replaceChildren(...healthSummaryContent(projection));
 		eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
 		eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : "";
 		const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
@@ -71366,7 +71690,7 @@ function connectionFacts() {
 		render();
 	};
 	connectionPainters.add(paint);
-	return dl;
+	return h("div", {}, dl, summaryCell);
 }
 function connectionAccess() {
 	const known = [
@@ -71754,7 +72078,8 @@ async function viewManagedSettings(main) {
 		}
 		disposeFleet = await mountFleet(fleetRoot, {
 			h,
-			t
+			t,
+			onStatus: rememberFleetHealth
 		});
 		disposeTailscale = await fleetTailscale(fleetRoot, guard);
 	} else {
@@ -72005,7 +72330,8 @@ async function viewNativeSettings(main) {
 	frame.show("desktop");
 	const disposeFleet = await mountFleet(fleetRoot, {
 		h,
-		t
+		t,
+		onStatus: rememberFleetHealth
 	});
 	if (mine !== generation || !main.isConnected) {
 		disposeFleet?.();
@@ -74095,6 +74421,10 @@ var generation = 0;
 async function route() {
 	diagnosticsPreview?.close();
 	let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split("?")[0].replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
+	if (state.health && nextName !== "settings") state.health.selected = nextName === "session" ? {
+		host: nextWorkspace,
+		sessionId: nextView
+	} : null;
 	if (nextName === "pm") {
 		if (nextView?.startsWith("pmt_")) {
 			nextThread = nextView;
@@ -74282,6 +74612,7 @@ async function start() {
 		}
 	}
 	await route();
+	setInterval(() => paintConnection(...connectionPaintFlags), 1e3);
 	streamEvents();
 }
 start();

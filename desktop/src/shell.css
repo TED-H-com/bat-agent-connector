@@ -9,6 +9,13 @@
 .central-service-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .live { display: inline-flex; align-items: center; gap: var(--space-1); margin: 0; width: auto; text-decoration: none; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface-2); padding: 2px var(--space-2); border-radius: var(--r-pill); white-space: nowrap; }
 .central-service-status .live { min-width: 0; }
+.health-summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); background: var(--surface); border-bottom: 1px solid var(--line); font-size: var(--fs-caption); }
+.health-summary[hidden] { display: none; }
+.health-selected { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+.health-facets, .health-last-value { color: var(--text-2); }
+.health-summary a { display: inline-flex; align-items: center; min-height: 44px; }
+[data-health-settings] { display: grid; gap: var(--space-2); }
+@media (max-width: 767px) { .health-summary .health-facets { display: none; } }
 .live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); flex: none; }
 .live.tone-ok::before { content: ''; background: var(--ok); }
 .live.tone-warn::before { background: var(--warn); }

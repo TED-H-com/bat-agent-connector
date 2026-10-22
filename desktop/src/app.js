@@ -1,4 +1,5 @@
-import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
+import {clientActionGate, pollFailure} from "./central-service-status.js";
+import {healthDisplay, healthLabel, rememberHealthRead} from './health-display.js';
 import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -87,6 +88,7 @@ function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = s
   if(epoch !== state.epoch)return;
   if(versionReads.epoch !== epoch)versionReads = {epoch};
   versionReads[key] = {data,at};
+  if (key === 'capabilities' && data && state.health) state.health.currentCaps = data;
   paintVersions();
 }
 async function readNativeVersions() {
@@ -151,6 +153,7 @@ async function openDiagnostics() {
 }
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
   withdrawDiagnostics(); recentErrors.clear();
+  const previousHealthScope = {namespace: state.namespace, selected: state.health?.selected};
   const retained = retainView ? {namespace: state.namespace, ready: state.viewReady} : null;
   // A same-identity resnapshot can retain an editing view and its guarded reads.
   // A different namespace still invalidates every old callback before mounting.
@@ -158,6 +161,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
   if (!retained) state.observations = new Map();
   state.connectionError = null;
   state.online = false; state.pollHealth = 'initial'; state.viewReady = false;
+  state.health = {bootstrap: (state.health?.bootstrap || 0) + 1, sessions: [], hosts: []};
   state.caps = caps; state.endpoint = endpoint; state.sync = null;
   let bootstrap;
   try { bootstrap = await api("GET", "/bootstrap"); }
@@ -197,6 +201,11 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
     else {state.epoch++; state.observations = new Map();}
   }
   state.online = true;
+  state.health.sessions = []; state.health.hosts = []; state.health.hostsLoaded = false;
+  if (state.namespace === previousHealthScope.namespace) state.health.selected = previousHealthScope.selected;
+  state.health.bootstrapAt = Date.now();
+  state.health.capabilities = {data: state.caps, bootstrap: state.health.bootstrap};
+  state.health.currentCaps = state.caps;
 }
 function saveCursor() {
   if (state.sync) {
@@ -208,6 +217,7 @@ function disconnect() {
   withdrawDiagnostics(); recentErrors.clear();
   state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
   state.scopeIdentity = null;
+  state.health = null;
   state.online = false; state.viewReady = false; state.sync = null;
 }
 
@@ -298,6 +308,7 @@ async function api(method, path, body, key, collectReceipt) {
   try {
     const data=await apiRequest(method,path,body,key,collectReceipt);
     if(epoch===state.epoch && method==='GET') {
+      if (state.health) rememberHealthRead(state.health, path, data);
       if(path==='/capabilities' || path==='/bootstrap')rememberVersionRead('capabilities',path==='/bootstrap'?data.capabilities:data,undefined,epoch);
       if(/^\/pm\/(?:installation-capabilities|workspaces\/[^/?]+\/capabilities)(?:\?|$)/.test(path))
         rememberVersionRead('adapter',{native_analysis:{required_version:data.native_analysis?.required_version}},undefined,epoch);
@@ -332,7 +343,10 @@ async function api(method, path, body, key, collectReceipt) {
     if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
       if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
-      if([401,403,404].includes(error.status))withdrawDiagnostics();
+      if([401,403,404].includes(error.status)) {
+        withdrawDiagnostics();
+        if (state.health) {state.health.sessions = []; state.health.hosts = []; state.health.hostsLoaded = false; state.health.selected = null;}
+      }
     }
     throw error;
   }
@@ -869,13 +883,20 @@ function updateOnline(value) {
 }
 // Transport health is independent of view readiness and mutation gates.
 const connectionPainters = new Set();
+let connectionPaintFlags = [false, false];
 function paintConnection(waiting = false, paused = false) {
+  connectionPaintFlags = [waiting, paused];
   const live = document.getElementById('live');
-  const {key, tone, connection: status, recoveryKey} = centralServiceStatus(state);
+  const projection = healthDisplay(state);
+  const {key, tone, connection: status, recoveryKey, freshness} = projection.connection;
+  const label = healthLabel(projection.connection, t);
   live.dataset.connection = status;
-  live.className = 'live tone-' + tone;
-  live.replaceChildren(h('span', {class: 'central-service-state'}, t(key)));
-  const scoped = t('ui_connector_status', {status: t(key)});
+  live.dataset.freshness = freshness;
+  live.className = 'live tone-' + (['stale', 'unknown'].includes(freshness) ? 'neutral' : tone);
+  let labelNode = live.querySelector('.central-service-state');
+  if (!labelNode) {labelNode = h('span', {class: 'central-service-state'}); live.append(labelNode);}
+  if (labelNode.textContent !== label) labelNode.textContent = label;
+  const scoped = t('ui_connector_status', {status: label});
   live.setAttribute('aria-label', scoped);
   const central = document.getElementById('central-service-status');
   central.title = scoped;
@@ -901,8 +922,48 @@ function paintConnection(waiting = false, paused = false) {
     : key === 'ui_invalid_response' ? 'error_code_CLIENT_ACTION_INVALID_RESPONSE'
     : paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : 'desktop_polling';
   live.title = scoped + ' — ' + t(helpKey);
+  paintHealthSummary(projection);
   for (const paint of [...connectionPainters]) paint();
   paintVersions();
+}
+function healthSummaryContent(projection) {
+  const summary = projection.summary;
+  return [summary ? h('span', {'data-health-selected': '', class: 'health-selected'},
+    h('span', {}, t(summary.selected.workspaceId ? 'health_selected_workspace' : 'health_selected_work') + ': ' + (summary.selected.label || summary.selected.host)),
+    h('span', {class: 'ui-pill', 'data-health-compact': summary.compact}, t('health_' + summary.compact)),
+    summary.connection ? h('span', {class: 'health-installation-connection'}, healthLabel({...summary.connection,
+      key: summary.connection.value === 'connected' ? 'ui_connected' : summary.connection.value === 'not_connected' ? 'health_connection_problem' : 'health_unknown'}, t)) : null,
+    h('span', {class: 'health-facets'},
+      `${t('health_attention_label')}: ${t(summary.attention ? 'health_attention' : 'health_none')} · `,
+      `${t('health_activity')}: ${t('health_' + summary.activity)} · `,
+      `${t('health_freshness')}: ${t(summary.stale ? 'health_stale' : summary.unknown ? 'health_unknown' : 'health_current')}`),
+    ...summary.facts.filter(row => row.activity.freshness === 'stale').map(row => h('span', {class: 'health-last-value'},
+      healthLabel({...row.activity, key: ['streaming', 'starting'].includes(row.activity.value) ? 'health_working'
+        : row.activity.value === 'not_streaming' ? 'health_idle' : 'health_unknown'}, t)))) : null,
+    projection.capabilities.freshness === 'invalidated' ? h('span', {}, t('health_capabilities_checking')) : null,
+    projection.otherAttention ? h('a', {href: '#/settings?section=fleet', 'data-health-other': ''},
+      healthLabel({...projection.other, key: 'health_other_machines'}, (key, vars) => t(key, {count: projection.otherAttention, ...vars}))) : null].filter(Boolean);
+}
+function paintHealthSummary(projection) {
+  let summary = document.getElementById('installation-health');
+  if (!summary) {
+    summary = h('header', {id: 'installation-health', class: 'health-summary', 'aria-label': t('health_selected_work')});
+    document.querySelector('header.top').after(summary);
+  }
+  const content = healthSummaryContent(projection);
+  summary.hidden = !content.length;
+  const signature = content.map(node => node.outerHTML).join('');
+  if (summary.dataset.signature !== signature) {
+    const focusedOther = summary.querySelector('[data-health-other]') === document.activeElement;
+    summary.replaceChildren(...content); summary.dataset.signature = signature;
+    if (focusedOther) summary.querySelector('[data-health-other]')?.focus();
+  }
+}
+function rememberFleetHealth(snapshot) {
+  // Native Fleet status belongs to its own configuration, not a Connector token.
+  state.health ||= {sessions: [], hosts: []};
+  state.health.fleet = snapshot;
+  paintConnection();
 }
 let managedStatusAt = 0;
 async function refreshManagedRecovery() {
@@ -913,6 +974,7 @@ async function refreshManagedRecovery() {
     const status = await nativeStatus();
     if (epoch !== state.epoch) return;
     state.managedRecovery = status.managed_recovery || null;
+    state.managedObservedAt = Date.now();
     if (status.configuration_source === 'managed' && status.endpoint) state.endpoint = status.endpoint;
     paintConnection();
     if (status.configuration_source === 'managed' && Number.isSafeInteger(status.managed_rebind)
@@ -3353,9 +3415,10 @@ function fleetEmpty() {
 }
 function connectionFacts() {
   const endpoint = state.endpoint || (state.token ? location.origin : "");
-  const stateCell = h("dd");
+  const statePill = h('span', {class: 'ui-pill'}), stateCell = h("dd", {}, statePill);
   const eventCell = h("dd", {'data-last-event': ''});
   const pollCell = h("dd", {'data-last-successful-poll': ''});
+  const summaryCell = h('div', {'data-health-settings': ''});
   const dl = h("dl", {class: "kv global-connection-facts"},
     h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"),
     h("dt", {}, t("global_state")), stateCell,
@@ -3363,8 +3426,11 @@ function connectionFacts() {
     h("dt", {}, t("ui_last_poll")), pollCell,
     h("dt", {}, t("connection_access")), connectionAccess());
   const render = () => {
-    const {key, tone} = centralServiceStatus(state);
-    stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
+    const projection = healthDisplay(state);
+    const {tone, freshness} = projection.connection;
+    statePill.className = `ui-pill tone-${freshness === 'current' ? tone : 'neutral'}`;
+    statePill.textContent = healthLabel(projection.connection, t);
+    summaryCell.replaceChildren(...healthSummaryContent(projection));
     eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
     eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : '';
     const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
@@ -3377,7 +3443,7 @@ function connectionFacts() {
     render();
   };
   connectionPainters.add(paint);
-  return dl;
+  return h('div', {}, dl, summaryCell);
 }
 function connectionAccess() {
   const known = ['observe', 'operate', 'manage', 'start', 'approve', 'cleanup', 'cleanup_discard', 'deploy', 'integrate', 'merge'];
@@ -3561,7 +3627,7 @@ async function viewManagedSettings(main) {
         frame.show("desktop");
       }
     } catch (error) {if (connection.generation === generation) status.append(errorBox(error, {within:status}));}
-    disposeFleet = await mountFleet(fleetRoot, {h, t});
+    disposeFleet = await mountFleet(fleetRoot, {h, t, onStatus: rememberFleetHealth});
     disposeTailscale = await fleetTailscale(fleetRoot, guard);
   } else {
     local.append(h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")));
@@ -3736,7 +3802,7 @@ async function viewNativeSettings(main) {
     return () => disposeUpdates?.();
   }
   frame.show("desktop");
-  const disposeFleet = await mountFleet(fleetRoot, {h, t});
+  const disposeFleet = await mountFleet(fleetRoot, {h, t, onStatus: rememberFleetHealth});
   if (mine !== generation || !main.isConnected) { disposeFleet?.(); disposeUpdates?.(); return; }
   const disposeTailscale = await fleetTailscale(fleetRoot, () => {
     if (mine !== generation || !main.isConnected) throw new Error('VIEW_CHANGED');
@@ -4926,6 +4992,8 @@ let generation = 0;
 async function route() {
   diagnosticsPreview?.close();
   let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split('?')[0].replace(/^#\//, '') || 'home').split('/').map(decodeURIComponent);
+  if (state.health && nextName !== 'settings') state.health.selected = nextName === 'session'
+    ? {host: nextWorkspace, sessionId: nextView} : null;
   if (nextName === 'pm') {
     if (nextView?.startsWith('pmt_')) {nextThread = nextView; nextView = 'discussions';
       history.replaceState(null, '', `#/pm/${encodeURIComponent(nextWorkspace)}/discussions/${encodeURIComponent(nextThread)}`);}
@@ -5042,6 +5110,8 @@ async function start() {
     }
   }
   await route();
+  // Expire display observations even while a read is pending. No extra probe.
+  setInterval(() => paintConnection(...connectionPaintFlags), 1000);
   streamEvents();
 }
 start();
