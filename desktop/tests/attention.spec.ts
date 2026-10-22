@@ -50,6 +50,8 @@ for (const native of [false, true]) {
     await expect.poll(() => fixture.data.writes.length).toBe(1);
     await expect(mark).toBeEnabled(); await expect(page.locator('.reading-state')).toContainText('Unread update');
     expect(fixture.data.writes[0].body.preconditions).toEqual({expected_version: 1});
+    // The first explicit mark produced the only event; wait for its full ACK.
+    await expect.poll(()=>fixture.data.reads.some(path=>/^\/events\?.*after=1(?:&|$)/.test(path))).toBe(true);
     await mark.click(); await expect(mark).toBeDisabled();
     await expect(page.locator('.reading-state')).toContainText('This version is read');
     expect(fixture.data.writes[1].body.preconditions).toEqual({expected_version: 2});
