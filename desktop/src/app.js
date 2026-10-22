@@ -1,3 +1,4 @@
+import {boardGitHubPanel} from './board-github.js';
 import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
 import {browserCredentialRefusals, isCredentialRefusal, BROWSER_TOKEN_KEY as TOKEN_KEY} from './credential-refusals.js';
 import {layoutDecision} from './workbench-mode.js';
@@ -4073,7 +4074,14 @@ async function viewProject(main, pid) {
   const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, create.actions, create.box, items, archived)});
   itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
   const note = manageNote(); if (note) note.hidden = true;
-  main.append(note || "", out, head, work, itemCard);
+  const github = boardGitHubPanel({t, api, alive: () => assertView(connection), caps: () => state.caps,
+    form: options => pmDurableForm({h, t, api, caps: () => state.caps, namespace: connection.namespace,
+      guard: () => assertView(connection), errorBox, ...options,
+      canSend: () => state.online && !state.nativeBusy && state.viewReady,
+      clientGate: () => clientActionGate(state, {post: true})}),
+    permitted: () => may('manage'), projectId: pid, onSaved: () => render()});
+  const offGitHubOnline = onOnline(() => {try {assertView(connection); github.update();} catch { /* retired view */ }});
+  main.append(note || "", out, head, github.element, work, itemCard);
   const rememberEditors = () => {
     if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
     for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden)
@@ -4117,6 +4125,7 @@ async function viewProject(main, pid) {
     rememberEditors(); workEditors = new Map();
     freshPage();
     const p = data.project;
+    await github.refresh(data);
     if (note) note.hidden = false;
     itemCard.hidden = false;
     const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed !== false;
@@ -4213,7 +4222,8 @@ async function viewProject(main, pid) {
   };
   showArchived.onchange = () => render();
   await render();
-  return liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
+  const off = liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
+  return () => {off?.(); offGitHubOnline(); github.dispose();};
 }
 
 function linkTarget(l) {
@@ -4277,7 +4287,7 @@ async function viewWorkItem(main, wid) {
   let draft = null; // the edit form's values after a stale save, put back into the reloaded form
   // Fields made once and moved into each render: a re-render never throws away what is being typed.
   const newStep = h("input", { placeholder: t("new_step"), maxlength: 300 });
-  const kind = h("select", {}, ...["session", "checkpoint", "operation", "task", "pull_request"].map(k =>
+  const kind = h("select", {}, ...["session", "checkpoint", "operation", "task", "pull_request", "github_source"].map(k =>
     h("option", { value: k }, t("link_" + k))));
   const ref = h("input", { placeholder: t("link_ref_hint") });
   kind.onchange = () => { ref.placeholder = t("link_ref_" + kind.value); };
@@ -4535,11 +4545,11 @@ function workItemRow(w, open) {
     w.reading?.unread ? t("reading_unread") : ""]);
   return inboxRow({
     h, key, title, href, meta,
-    pill: statusPill(workStatusKey(w.completion?.display_state)),
+    pill: statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
     action: h("a", {class: "ui-button secondary ui-sm", href}, t("global_review")),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
-      statusPill(workStatusKey(w.completion?.display_state)),
+      statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
       meta ? h("p", {}, meta) : null,
       w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
       disclosure({label: t("global_details"), body: h("dl", {class: "kv"},

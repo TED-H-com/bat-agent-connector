@@ -31,6 +31,10 @@ from pathlib import Path
 
 from managed_runtime_assertions import stable_launch
 
+continuity = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'tests/upgrade_continuity_helpers.py'))
+snapshot_rows = continuity['snapshot_rows']
+assert_rows_preserved = continuity['assert_rows_preserved']
+
 # Intel's longest observed progress gap is 10.903s before fixture setup:
 # round 1.5 * 10.903 up to 5s => 20s of inactivity. Stack samples are not progress.
 # Round the slowest whole case (50.545s) + 20s up to 5s => a 75s seed ceiling.
@@ -211,16 +215,23 @@ def wait_operation(launch, operation):
     return operation
 
 
+def history_queries(operation_id):
+    return {table: ('WHERE operation_id=?', (operation_id,))
+            for table in ('operations', 'operation_steps', 'pm_workspaces')} | {
+        'api_events': ("WHERE (resource_type='operation' AND resource_id=?) OR body LIKE ?",
+                       (operation_id, '%' + operation_id + '%'))}
+
+
 def history(data, operation_id):
     with contextlib.closing(sqlite3.connect(data / 'state' / 'tasks.sqlite3')) as db:
-        return {
-            'operation': db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone(),
-            'steps': db.execute('SELECT * FROM operation_steps WHERE operation_id=? ORDER BY name', (operation_id,)).fetchall(),
-            'workspace': db.execute('SELECT * FROM pm_workspaces WHERE operation_id=?', (operation_id,)).fetchall(),
-            'events': db.execute("""SELECT seq,resource_type,resource_id,kind,body,actor FROM api_events
-                WHERE (resource_type='operation' AND resource_id=?) OR body LIKE ? ORDER BY seq""",
-                (operation_id, '%' + operation_id + '%')).fetchall(),
-        }
+        return {table: snapshot_rows(db, table, where=where, args=args)
+                for table, (where, args) in history_queries(operation_id).items()}
+
+
+def assert_history(data, operation_id, saved):
+    with contextlib.closing(sqlite3.connect(data / 'state' / 'tasks.sqlite3')) as db:
+        for table, (where, args) in history_queries(operation_id).items():
+            assert_rows_preserved(db, table, saved[table], where=where, args=args)
 
 
 def idle_upgrade(previous, current, old_manifest, new_manifest, root, env):
@@ -235,9 +246,11 @@ def idle_upgrade(previous, current, old_manifest, new_manifest, root, env):
         operation = wait_operation(original, accepted['operation'])
         wid = operation['result']['workspace']['workspace_id']
         saved = history(data, operation['operation_id'])
-        assert saved['workspace'] and saved['events']
+        assert saved['pm_workspaces']['rows'] and saved['api_events']['rows']
         assert {'operation.accepted', 'operation.succeeded'} <= {
-            row[3] for row in saved['events'] if row[1] == 'operation' and row[2] == operation['operation_id']}
+            row['kind'] for row in (dict(zip(saved['api_events']['columns'], values, strict=True))
+                for values in saved['api_events']['rows'])
+            if row['resource_type'] == 'operation' and row['resource_id'] == operation['operation_id']}
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as workers:
             replies = list(workers.map(lambda _: command(current, data, env), range(3)))
         upgraded = replies[0]
@@ -248,7 +261,7 @@ def idle_upgrade(previous, current, old_manifest, new_manifest, root, env):
         assert request(upgraded, '/api/v1/pm/workspaces/' + wid)['workspace']['workspace_id'] == wid
         replay = request(upgraded, '/api/v1/operations', body=body, key='original-workspace')['operation']
         assert replay['operation_id'] == operation['operation_id'] and replay['result'] == operation['result']
-        assert history(data, operation['operation_id']) == saved
+        assert_history(data, operation['operation_id'], saved)
         command(previous, data, env, refused=True)
         assert stable_launch(command(current, data, env)) == stable_launch(upgraded)
         assert command(current, data, env, action='stop')['stopped'] is True
@@ -257,7 +270,7 @@ def idle_upgrade(previous, current, old_manifest, new_manifest, root, env):
         stopped = False
         assert identity(restarted) == identity(original)
         assert restarted['runtime_version'] == new_manifest['runtime_version']
-        assert history(data, operation['operation_id']) == saved
+        assert_history(data, operation['operation_id'], saved)
     finally:
         if not stopped and (data / 'installation.json').exists():
             assert command(current, data, env, action='stop')['stopped'] is True
@@ -309,7 +322,7 @@ def busy_refusal(previous, current, old_manifest, root, env):
         assert child.poll() is None
         retained = command(previous, data, env)
         assert identity(retained) == identity(original) and retained['runtime_version'] == old_manifest['runtime_version']
-        assert history(data, oid) == saved
+        assert_history(data, oid, saved)
     finally:
         terminate_owned(child)
         assert command(previous, data, env, action='stop')['stopped'] is True
@@ -429,7 +442,7 @@ existing packaged workspace/identity checks; its publication path remains open.
         assert info['handlers'] == handlers and info['effects'] == {'create_pull': 1, 'push': 1}
         assert info['producer_version'] == original['runtime_version']
         assert Path(info['producer_root']) == (previous_source / 'src').resolve()
-        assert info['rows']['work_attempts'] and info['rows']['session_results']
+        assert info['rows']['work_attempts']['rows'] and info['rows']['session_results']['rows']
         options = {'start_new_session': True}
         with (root / 'publication-core.log').open('wb') as log:
             child = subprocess.Popen([str(current), 'serve', '--data-dir', str(data)], env={**env, **info['provider_environment']},  # noqa: S603 - digest-verified fixture
@@ -449,17 +462,11 @@ existing packaged workspace/identity checks; its publication path remains open.
                 key=info['request']['idempotency_key'])
             assert replay['created'] is False and replay['operation']['operation_id'] == done['operation_id']
             with contextlib.closing(sqlite3.connect((data / 'state/tasks.sqlite3').as_uri() + '?mode=ro', uri=True)) as db:
-                queries = {'work_items': 'SELECT * FROM work_items ORDER BY rowid',
-                    'work_attempts': 'SELECT * FROM work_attempts ORDER BY rowid',
-                    'session_results': 'SELECT * FROM session_results ORDER BY rowid',
-                    'pr_creation_receipts': 'SELECT * FROM pr_creation_receipts ORDER BY rowid'}
-                for table, query in queries.items():
+                for table in ('work_items', 'work_attempts', 'session_results', 'pr_creation_receipts'):
                     expected = info['receipt'] if table == 'pr_creation_receipts' else info['rows'][table]
-                    actual = [list(row) for row in db.execute(query)]
-                    assert actual == expected, table
-                events = [list(row) for row in db.execute('SELECT * FROM api_events WHERE resource_id=? ORDER BY rowid',
-                    (done['operation_id'],))]
-                assert events[:len(info['operation_events'])] == info['operation_events']
+                    assert_rows_preserved(db, table, expected)
+                assert_rows_preserved(db, 'api_events', info['operation_events'],
+                    where='WHERE resource_id=?', args=(done['operation_id'],), allow_append=True)
             attempt = info['attempt']
             work = request(peer, '/api/v1/work-items/' + attempt['work_item_id'])
             result = request(peer, '/api/v1/pm/workspaces/' + attempt['workspace_id'] +
@@ -526,8 +533,7 @@ if os.environ.get('BATC_UPGRADE_SEED_MODE') == '1':
     async def test_publication_seed(start_ready, mock, monkeypatch):
         record('seed.producer.start')
         print('[publication-seed] start_ready complete; entering Work/Result/publication producer', flush=True)
-        helper = Path(__file__).resolve().parents[2] / 'tests/upgrade_continuity_helpers.py'
-        producer = runpy.run_path(str(helper))['seed_publication']
+        producer = continuity['seed_publication']
         info = await producer(start_ready, mock, monkeypatch, Path(os.environ['BATC_UPGRADE_SEED_DATA']))
         print('[publication-seed] original 201 receipt committed; releasing journal', flush=True)
         start_ready['server'].close()

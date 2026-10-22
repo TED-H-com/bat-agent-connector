@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,6 +15,18 @@ from bat_agent_connector.update_install import package_files
 from bat_agent_connector.update_release import EPOCH, EntrypointDirectoryError, UpdateError, manifest
 from scripts import install_connector as bootstrap
 from tests.test_connector_updates import SKILL, make_package, publication, release
+
+
+def tree_snapshot(home):
+    """Ignore access times, which traversal and ordinary reads change."""
+    snapshot = {}
+    for path in home.rglob('*'):
+        info = path.lstat()
+        snapshot[path] = (
+            info.st_mode, info.st_ino, info.st_uid, info.st_gid, info.st_nlink,
+            info.st_size, info.st_mtime_ns, info.st_ctime_ns,
+        )
+    return snapshot
 
 
 @pytest.fixture
@@ -448,14 +461,19 @@ def test_config_directory_error_names_directory_without_chmod(installation, veri
     directory = home / '.config'
     directory.mkdir()
     directory.chmod(mode)
-    before = {p: p.lstat() for p in home.rglob('*')}
+    # Force traversal to update directory access times on relatime mounts.
+    for path in list(home.rglob('*')):
+        if path.is_dir():
+            info = path.stat()
+            os.utime(path, ns=(0, info.st_mtime_ns))
+    before = tree_snapshot(home)
     with pytest.raises(EntrypointDirectoryError) as caught:
         finalize(verify_only=verify_only)
     assert caught.value.diagnostic() == {
         'code': 'entrypoint_directory_not_owned', 'directory': str(directory),
         'hint': 'chmod g-w,o-w ' + str(directory),
     }
-    assert {p: p.lstat() for p in home.rglob('*')} == before
+    assert tree_snapshot(home) == before
 
 
 @pytest.mark.parametrize('mode', [None, 0o700, 0o755])
