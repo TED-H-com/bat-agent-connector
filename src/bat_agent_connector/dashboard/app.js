@@ -67918,7 +67918,7 @@ async function streamEvents() {
 				continue;
 			}
 		}
-		if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === "hidden") {
+		if (state.nativeBusy || !state.token || !state.namespace || !state.viewReady || document.visibilityState === "hidden") {
 			paintConnection(true);
 			await waitForEventPoll(1e3);
 			continue;

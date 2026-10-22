@@ -1025,7 +1025,7 @@ async function streamEvents() {
         await waitForEventPoll(1000); continue;
       }
     }
-    if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === 'hidden') {
+    if (state.nativeBusy || !state.token || !state.namespace || !state.viewReady || document.visibilityState === 'hidden') {
       paintConnection(true);
       await waitForEventPoll(1000); continue;
     }
