@@ -1,4 +1,5 @@
 import {test, expect, type Page} from "@playwright/test";
+import {selectedReceipt} from './native-receipt-fixture';
 import {STRINGS} from '../src/i18n.js';
 import {serveGateBaseline} from './action-gate-baseline';
 const wid="wi_"+"d".repeat(20), oid="op_"+"a".repeat(32), aid="art_"+"b".repeat(32), digest="c".repeat(64);
@@ -14,9 +15,10 @@ async function fixture(page:Page) {
     if(command==="native_files_status")return{supported:true,transfers:state.available?state.receipts.filter(r=>r.owner===state.actor):[],drop_error:null};
     if(command==="native_files_drop_target")return null;
     if(command==="native_files_pick"){
-      const receipt={transfer_id:"file_"+String(state.receipts.length+1).padStart(32,"0"),direction:"upload",draft_id:args.draftId,
-        display_name:"review-notes-檔案.html",size_bytes:1024,digest,media_type:"text/plain",stage:"selected",transferred_bytes:0,error:null,
-        operation_id:null,operation_status:null,artifact:null,intent_key:"fixed-native-intent",owner:state.actor};
+      const receipt={...selectedReceipt(args.draftId, {
+        transfer_id:"file_"+String(state.receipts.length+1).padStart(32,"0"),
+        display_name:"review-notes-檔案.html", digest, media_type:"text/plain",
+      }), owner:state.actor};
       state.receipts.push(receipt);
       if(state.held)await new Promise<void>(resolve=>{state.release=resolve;});
       return[receipt];
@@ -61,6 +63,26 @@ async function open(page:Page,locale="en-US"){
   await expect(page.getByRole("button",{name:locale==="en-US"?"Choose files":"選擇檔案",exact:true})).toBeVisible();
 }
 async function choose(page:Page){await page.getByRole("button",{name:"Choose files",exact:true}).click();await expect(page.getByRole("progressbar")).toBeVisible();}
+
+for (const locale of ['en-US', 'zh-TW']) test(`native picker failure stays in its notice ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  const state = await fixture(page);
+  try {
+    await open(page, locale);
+    await page.evaluate(() => {
+      const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
+      // Match native_files_pick's string rejection when its dialog is interrupted.
+      bridge.invoke = (command: string, args: any) => command === 'native_files_pick'
+        ? Promise.reject('File dialog interrupted') : invoke(command, args);
+    });
+    await page.getByRole('button', {name: locale === 'zh-TW' ? '選擇檔案' : 'Choose files', exact: true}).click();
+    await expect(page.locator('.native-files > [role="status"]')).toHaveText('File dialog interrupted');
+    await expect(page.getByText('File dialog interrupted', {exact: true}).and(page.locator(':visible'))).toHaveCount(1);
+    await expect(page.locator('.attachments [data-api-error]')).toHaveCount(0);
+    expect(state.calls.some(call => call.command === 'native_files_upload')).toBe(false);
+    expect(state.errors).toEqual([]);
+  } finally {await context.close();}
+});
 
 for (const locale of ['en-US', 'zh-TW']) test(`native picker rechecks the view reason before uploading ${locale}`, async ({browser}) => {
   const context = await browser.newContext({locale}), page = await context.newPage();

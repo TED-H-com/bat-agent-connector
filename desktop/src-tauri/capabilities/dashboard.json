@@ -25,6 +25,8 @@
     "allow-tailscale-control",
     "allow-native-files-status",
     "allow-native-files-pick",
+    "allow-native-files-paste-arm",
+    "allow-native-files-paste",
     "allow-native-files-drop-target",
     "allow-native-files-upload",
     "allow-native-files-save",

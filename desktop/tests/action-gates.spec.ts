@@ -18,11 +18,11 @@ async function imageEvent(page: Page, kind: 'paste' | 'drop') {
 for (const locale of ['en-US', 'zh-TW']) {
   const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
   for (const reason of ['manage_required', 'attachments_unavailable', 'uploads_not_allowed']) {
-    for (const kind of reason === 'uploads_not_allowed' ? ['paste'] as const : ['paste', 'drop'] as const) {
-      test(`real ${kind} explains ${reason === 'uploads_not_allowed' ? 'native paste refusal even without upload permission' : reason} while Connector is Connected ${locale}`, async ({browser}) => {
+    for (const native of reason === 'uploads_not_allowed' ? [true] : [false, true]) {
+      for (const kind of reason === 'uploads_not_allowed' ? ['paste'] as const : (native ? ['paste'] : ['paste', 'drop']) as ('paste' | 'drop')[]) {
+      test(`real ${kind} explains ${reason} while Connector is Connected ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({browser}) => {
         const context = await browser.newContext({locale}), page = await context.newPage();
         await serveGateBaseline(page);
-        const native = reason === 'uploads_not_allowed';
         const state = await publishedFixture(page, native, {dispatch: true, bindings: [selected],
           scopes: reason === 'manage_required' ? ['observe', 'start'] : ['observe', 'start', 'manage'],
           extendCaps: (caps: any) => {
@@ -37,17 +37,16 @@ for (const locale of ['en-US', 'zh-TW']) {
           await form.locator('details').evaluateAll(nodes => nodes.forEach(el => { (el as HTMLDetailsElement).open = true; }));
           await expect(page.locator('#live')).toHaveAccessibleName(copy.ui_connector_status.replace('{status}', copy.ui_connected));
           await imageEvent(page, kind);
-          const message = native ? locale === 'zh-TW'
-            ? '桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。'
-            : 'Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.'
-            : copy[`error_code_CLIENT_ACTION_${reason.toUpperCase()}`];
+          const message = copy[`error_code_CLIENT_ACTION_${reason.toUpperCase()}`];
           await expect(form.getByText(message, {exact: true})).toBeVisible();
           await expect(form).not.toContainText(copy.offline_actions_paused);
+          expect(state.invokes.filter(call => ['native_files_paste_arm', 'native_files_paste', 'native_files_upload'].includes(call.command))).toEqual([]);
           expect(state.posts).toHaveLength(0);
           expect(state.uploaded).toBe(false);
           expect(state.errors).toEqual([]);
         } finally { await context.close(); }
       });
+      }
     }
   }
 

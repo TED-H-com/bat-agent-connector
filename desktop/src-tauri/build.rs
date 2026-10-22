@@ -7,6 +7,8 @@ fn main() {
             "desktop_update",
             "native_files_status",
             "native_files_pick",
+            "native_files_paste_arm",
+            "native_files_paste",
             "native_files_drop_target",
             "native_files_upload",
             "native_files_save",
