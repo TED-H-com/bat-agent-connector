@@ -38,7 +38,8 @@ their existing namespaces. No display state authorizes work or changes final gat
 | Workspace membership used for the selected summary | Explicit session `host` + `workspace_id`; without a workspace ID only the explicitly selected session can be summarized. PM workspace `server_id` belongs to the activated Connector installation, not a Fleet alias. | Current scoped source read; discard on a new bootstrap or access withdrawal. No path/name matching. |
 | Native Fleet machine attention | Existing native `Entry::observed` readiness, through `fleet::sanitize_result` / `readiness_row`, consumed by the existing Fleet status/overview read. | Row `observed_at` and readiness stale state. Native aliases are a separate identity domain; never join them to central host names. |
 | Route kind, observation time, optional measured latency | Native route-selection observation, once the sanitized contract below exists. | Producer observation time/deadline and route generation. No new probes. |
-| Desktop, runtime and MCP versions | Existing native `app_build`, managed status and adapter/version producers; each remains its own version fact. | Bootstrap/version/build invalidation. Installed and running versions are separate; installing does not prove a long-running process loaded the new code. |
+| Desktop and managed runtime versions | Existing native `app_build` and managed status producers; each remains its own version fact. | Bootstrap/version/build invalidation. Installed and launch-observed versions are separate. |
+| Loaded MCP process version (required, not built) | Missing process-owned MCP runtime identity producer; see the lifecycle follow-up below. Existing adapter/version facts cannot establish this identity. | The future observation must bind loaded version/build to process generation. Installing does not prove an existing process loaded new code. |
 
 ## Summary and compact presentation
 
