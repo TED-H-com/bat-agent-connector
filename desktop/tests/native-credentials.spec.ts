@@ -1,6 +1,26 @@
 import {test, expect, type Page} from '@playwright/test';
 import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {mkdir, readFile} from 'node:fs/promises';
+import {STRINGS} from '../src/i18n.js';
+
+for (const locale of ['en-US', 'zh-TW']) test(`successful polling preserves a refused native replacement message ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  try {
+    await setup(page, {available: true, saved: true, fail: true});
+    await page.getByRole('button', {name: copy.desktop_replace_credential, exact: true}).click();
+    await expectClientError(page, 'Fixture identity mismatch; previous credential retained');
+    const polls = () => page.evaluate(() => (window as any).__credentialFixture.calls
+      .filter((call: any) => call.command === 'connector_request' && call.args.input.path.startsWith('/events')).length);
+    const before = await polls();
+    await expect.poll(polls).toBeGreaterThan(before);
+    await page.evaluate(() => {location.hash = '#/home';});
+    await expect(page.locator('.native-connection')).toHaveCount(0);
+    await page.evaluate(() => {location.hash = '#/settings';});
+    await expectClientError(page, 'Fixture identity mismatch; previous credential retained');
+    await expectConnectedIdentity(page);
+  } finally {await context.close();}
+});
 
 async function expectConnectedIdentity(page: Page) {
   const access = page.locator('[data-connection-access]');

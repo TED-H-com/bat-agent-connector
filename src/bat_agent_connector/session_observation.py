@@ -158,9 +158,9 @@ async def client_request(method: str, *, token: str | None, entry: str, **params
         raise BatError(f"central session observation unavailable ({type(exc).__name__}); no local fallback") from None
 
 
-def authorizer(daemon, token: str, principal):
+def authorizer(daemon, token: str, principal, *, browser_session: bool = False):
     def check():
-        current = api_auth.authenticate(daemon.journal.db, token, daemon._admin_token)
+        current = api_auth.authenticate(daemon.journal.db, token, daemon._admin_token, browser_session=browser_session)
         return (current is not None and current.allows("observe") and current == principal
                 and current.credential_id == principal.credential_id)
     return check

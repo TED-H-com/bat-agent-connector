@@ -39,7 +39,7 @@ Scopes：`observe`（讀目錄、操作、事件、政策）、`operate`（驅�
 
 Controller 由持久 `server_id` 與已認證 actor 產生；同 actor 的多 client、換 token 與重啟維持身分。Session reservation 保存 `controller_authority` 與 `controller_incarnation`；BAT `workspace_id` 和可選 `pm_workspace_id` 分開。新操作受理及最後 BAT frame 都核對原建立者，背景 task／reviewer／failover／清理沿用持久 authority。缺少建立證據的舊資源維持唯讀；已送出但不明的舊效果仍可回查，不重新認領或重送。`features.controller_isolation` 宣告此契約，inventory 的 `api_access` 依目前 caller 計算，`provenance` 保留客觀來源。
 
-瀏覽器防護：Host 必須是 loopback（擋 DNS rebinding）；有 Origin 時須是 loopback 或 `[api] allowed_origins`；只接受 bearer token，不用 cookie，所以沒有 CSRF 面。只有列在 `allowed_origins` 的 Origin 會收到 CORS 標頭（含 `OPTIONS` preflight）；Dashboard 與 API 同源，不需要它。
+瀏覽器防護：Host 必須是 loopback（擋 DNS rebinding）；有 Origin 時須是 loopback 或 `[api] allowed_origins`。API token 透過 bearer 驗證；managed browser session 僅接受 cookie 路徑，並核對來源、fetch metadata 與 CSRF，不接受作為 HTTP 或 `/rpc` bearer。既有 cookie session、拒絕後的連線恢復與同 host 不同埠限制見 [Managed installation](managed-installation.md#credentials-and-browser-connections)。只有列在 `allowed_origins` 的 Origin 會收到 CORS 標頭（含 `OPTIONS` preflight）；Dashboard 與 API 同源，不需要它。
 
 MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confirm=true`，而且只以 `BATC_API_TOKEN` 的主體執行，不退回本機 admin token：這個 client 能做什麼由它自己的 token scopes 決定，不是由 MCP server 啟動時的主機 tier 決定。PM 及共用 operation／event 讀取也要求 `BATC_API_TOKEN`；legacy Fleet 觀察保留原本唯讀方式。
 

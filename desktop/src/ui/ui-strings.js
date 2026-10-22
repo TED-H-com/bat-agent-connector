@@ -131,6 +131,8 @@ export const reasonLabels = Object.freeze({
   never_observed: ['Not observed yet', '尚未觀測'],
   SOURCE_MOVED: ['Source moved', '來源已移動'],
   SOURCE_UNAVAILABLE: ['Source unavailable', '來源無法取得'],
+  CHECKPOINT_STAGING_RETAINED: ['Earlier copy kept', '已保留先前副本'],
+  CHECKPOINT_DESTINATION_APPEARED: ['Destination appeared; copy kept', '目的地已出現，副本已保留'],
   invalid_proposal: ['Needs review', '待審閱'],
   adopted: ['Update adopted', '已採用更新'],
   content_changed: ['Discussion changed', '討論內容已變更'],

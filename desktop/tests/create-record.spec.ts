@@ -271,6 +271,12 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
       await expect(form.getByRole('button',{name:'Edit a new creation request',exact:true})).toBeHidden();
       await expect(form.getByRole('button',{name:'Check original creation request',exact:true})).toBeEnabled();
       await page.reload();
+      if (!native && status===401) {
+        await expect(page.getByRole('alert')).toContainText('Token not accepted.');
+        await page.getByRole('button',{name:'Retry remembered token',exact:true}).click();
+        await expect(page).toHaveURL(/#\/home$/);
+        await page.evaluate(()=>{location.hash='#/projects';});
+      }
       await expect(form.getByLabel('New project name',{exact:true})).toBeDisabled();
       await expect(form.getByRole('button',{name:'Edit a new creation request',exact:true})).toBeHidden();
       f.state.reject=null; f.state.wrongReceipt=false;

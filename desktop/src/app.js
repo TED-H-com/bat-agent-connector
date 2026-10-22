@@ -1,6 +1,7 @@
 import {boardGitHubPanel} from './board-github.js';
 import {clientActionGate, pollFailure} from "./central-service-status.js";
 import {healthDisplay, healthLabel, healthAge, healthRevision, rememberHealthRead, withdrawHealthRead, selectHealthSession, resetHealthBootstrap, takeHealthRenewal} from './health-display.js';
+import {browserCredentialRefusals, isCredentialRefusal, BROWSER_TOKEN_KEY as TOKEN_KEY} from './credential-refusals.js';
 import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -31,7 +32,7 @@ import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel, setupFormValidity} from "./managed-setup.js";
 import {ApiError, errorPresentation, clientActionError, sessionErrorLine} from "./error-presentation.js";
 import {managedControl, fleetAvailability} from "./transport/index.ts";
-import {restoreBrowserSession, browserSessionToken, forgetBrowserSession} from "./transport/index.ts";
+import {restoreBrowserSession, browserSessionToken, forgetBrowserSession, browserCredentialError} from "./transport/index.ts";
 import {setupSidebarResizer, setupMobileSessionLayout} from "./workspace-layout.js";
 import {observeViewport} from './ui/viewport.js';
 import {attentionView} from "./attention.js";
@@ -71,10 +72,11 @@ import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.
 import {retiredRead, readThroughResume, retiredReadError} from "./state/retired-read.ts";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 import {managedStorageScope, migrateManagedStorage} from './state/storage-identity.ts';
+import {earlierDrafts, hideEarlierDraft, firstEarlierDraftNotice, markEarlierDraftNotice} from './state/earlier-drafts.ts';
+import {earlierDraftPanel} from './earlier-drafts.js';
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
 import {observedText} from "./observed-resource-strings.js";
 
-const TOKEN_KEY = "batc.dashboard.token";
 const isWorkbench = layoutDecision.layout === 'workbench';
 
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll: null, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
@@ -152,6 +154,70 @@ async function openDiagnostics() {
     setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }});
 }
+let earlierEntries = [], earlierIdentity = null, earlierScan = 0, earlierPanel = null, earlierPanelLocale = null;
+let earlierScanState = nativeDesktop ? 'waiting' : 'skipped', earlierJump = false;
+function clearEarlierDrafts(status = nativeDesktop ? 'waiting' : 'skipped') {
+  earlierScan++; earlierEntries = []; earlierIdentity = null; earlierPanel = null; earlierJump = false; earlierScanState = status;
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+  document.querySelector('[data-earlier-drafts]')?.remove();
+  paintEarlierDrafts();
+}
+function acknowledgeEarlierDrafts() {
+  if (!earlierIdentity) return;
+  markEarlierDraftNotice(earlierIdentity, localStorage);
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+}
+function paintEarlierNotice() {
+  document.querySelector('[data-earlier-drafts-notice]')?.remove();
+  if (!state.token || !earlierIdentity || !earlierEntries.length || !firstEarlierDraftNotice(earlierIdentity, localStorage)) return;
+  document.getElementById('main')?.prepend(h('aside', {'data-earlier-drafts-notice': '', class: 'earlier-drafts-notice', role: 'status'},
+    h('span', {}, t('earlier_notice')), ' ', h('a', {href: '#/settings?section=about&drafts=earlier', onclick: () => {
+      earlierJump = false; acknowledgeEarlierDrafts();
+    }}, t('earlier_title'))));
+}
+function paintEarlierDrafts() {
+  const slot = document.querySelector('[data-earlier-drafts-slot]');
+  if (!slot) return;
+  slot.dataset.scanState = earlierScanState;
+  if (!earlierIdentity || !earlierEntries.length) {slot.replaceChildren(); return;}
+  const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
+  const current = () => earlierScanState === 'complete' && !!state.token && !state.nativeBusy && state.namespace === scope
+    && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
+  if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
+    const expanded = earlierPanel?.open || false;
+    earlierPanel = earlierDraftPanel({h, t, entries: earlierEntries, current, expanded, opened: acknowledgeEarlierDrafts,
+      emptyFocus: () => {const heading = document.querySelector('[data-settings-panel="about"] h2'); if (heading) {heading.tabIndex = -1; heading.focus({preventScroll: true});}},
+      hide: entry => {
+        if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
+        earlierEntries = earlierEntries.filter(row => row.id !== entry.id);
+        earlierPanel.signature = JSON.stringify(earlierEntries);
+        if (!earlierEntries.length) document.querySelector('[data-earlier-drafts-notice]')?.remove();
+        return true;
+      }});
+    earlierPanel.signature = signature; earlierPanelLocale = locale;
+  }
+  if (earlierPanel.parentElement !== slot) slot.replaceChildren(earlierPanel);
+  earlierPanel.resume();
+  if (!earlierJump && new URLSearchParams(location.hash.split('?')[1] || '').get('drafts') === 'earlier') {
+    earlierJump = true;
+    const panel = earlierPanel;
+    setTimeout(() => {if (panel === earlierPanel && panel.isConnected && current()) panel.reveal();}, 0);
+  }
+}
+function scanEarlierDrafts(identity) {
+  const scan = earlierScan; earlierScanState = 'scanning'; paintEarlierDrafts();
+  setTimeout(async () => {
+    try {
+      if (scan !== earlierScan) return;
+      const entries = await earlierDrafts(identity, localStorage);
+      if (scan !== earlierScan || !state.token || state.namespace !== managedStorageScope(identity)) return;
+      earlierIdentity = identity; earlierEntries = entries; earlierScanState = 'complete'; paintEarlierDrafts(); paintEarlierNotice();
+    } catch {
+      console.debug('draft_recovery_unreadable');
+      if (scan === earlierScan) {earlierScanState = 'failed'; paintEarlierDrafts();}
+    }
+  }, 0);
+}
 function validateHealthBootstrap(caps, bootstrap) {
   const sync = bootstrap?.sync;
   if (sync?.version !== 1 || !sync.server_id || !sync.principal_id ||
@@ -161,6 +227,8 @@ function validateHealthBootstrap(caps, bootstrap) {
     throw new Error('Invalid central bootstrap identity');
 }
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false, verifiedBootstrap) {
+  if (reset && earlierIdentity) {earlierScan++; earlierScanState = 'waiting'; paintEarlierDrafts();}
+  else clearEarlierDrafts();
   withdrawDiagnostics(); recentErrors.clear();
   const previousHealthScope = {namespace: state.namespace, health: state.health};
   const retained = retainView ? {namespace: state.namespace, ready: state.viewReady} : null;
@@ -185,6 +253,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
     // route treats a random loopback port as transport rather than storage identity.
     const identity = {actor: caps.actor, server_id: sync.server_id, principal_id: sync.principal_id};
     const managed = nativeDesktop && configurationSource === 'managed';
+    if (!managed || earlierIdentity && managedStorageScope(earlierIdentity) !== managedStorageScope(identity)) clearEarlierDrafts(managed ? 'waiting' : 'skipped');
     if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
     state.scopeIdentity = {...identity, configurationSource};
     state.namespace = managed ? managedStorageScope(identity) : storageScope(endpoint, caps.actor, sync.server_id, sync.principal_id);
@@ -197,7 +266,9 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
       } catch { /* use the bootstrap checkpoint */ }
     }
     state.lastEvent = state.sync.cursor;
+    if (managed) scanEarlierDrafts(identity);
   } else {
+    clearEarlierDrafts('skipped');
     state.scopeIdentity = null;
     state.namespace = storageScope(endpoint, caps.actor);
     // A legacy central has no continuity proof; always read current views after reconnect.
@@ -216,28 +287,75 @@ function saveCursor() {
     try { localStorage.setItem(`batc.sync.${state.namespace}`, JSON.stringify(state.sync)); } catch { /* unavailable */ }
   }
 }
-function disconnect() {
-  if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
+function resetConnection() {
+  clearEarlierDrafts();
   withdrawDiagnostics(); recentErrors.clear();
-  state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
+  state.epoch++; state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
   state.scopeIdentity = null;
   state.health = null;
   state.online = false; state.viewReady = false; state.sync = null;
+  state.namespace = ""; state.endpoint = ""; state.lastPoll = null;
+  state.pollHealth = 'initial'; state.connectionError = null; state.refreshCycle = null;
+}
+function disconnect() {
+  if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
+  clearToken(); resetConnection();
+}
+async function connectBrowserToken(token) {
+  resetConnection();
+  browserCredentialRefusals.prepare(token);
+  browserCredentialRefusals.retry(token);
+  state.token = token;
+  paintConnection();
+  const connection = {epoch: state.epoch, namespace: state.namespace};
+  const caps = await api('GET', '/capabilities');
+  assertConnection(connection);
+  await activate(caps);
+}
+function retryRememberedTokenButton() {
+  const retry = h('button', {onclick: async () => {
+    try {await connectBrowserToken(state.token);}
+    catch (error) {if (error.code !== 'CONNECTION_CHANGED') {state.caps = null; state.connectionError = error;}}
+    await route();
+  }}, t('connection_retry_remembered'));
+  const render = () => {retry.hidden = !state.token || state.token === browserSessionToken || !state.connectionError?.credentialRefused;};
+  render();
+  const paint = () => {
+    if (!retry.isConnected) connectionPainters.delete(paint);
+    else render();
+  };
+  connectionPainters.add(paint);
+  return retry;
 }
 
 function loadToken() {
   if (nativeDesktop) return null;
-  try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  try { const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); browserCredentialRefusals.prepare(token); return token; } catch { return null; }
 }
 function saveToken(token, remember) {
   if (nativeDesktop) return;
+  const previous = new Set();
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const old = store.getItem(TOKEN_KEY); if (old && old !== token) previous.add(old);
+    }
+  } catch { /* unavailable */ }
+  for (const old of previous) browserCredentialRefusals.forget(old);
+  browserCredentialRefusals.prepare(token);
   try {
     sessionStorage.setItem(TOKEN_KEY, token);
     if (remember) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
   } catch { /* storage may be unavailable; the token stays in memory */ }
 }
 function clearToken() {
-  try { sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  const forgotten = new Set();
+  if (!nativeDesktop && state.token && state.token !== browserSessionToken) forgotten.add(state.token);
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const token = store.getItem(TOKEN_KEY); if (token) forgotten.add(token); store.removeItem(TOKEN_KEY);
+    }
+  } catch { /* unavailable */ }
+  for (const token of forgotten) browserCredentialRefusals.forget(token);
 }
 
 // ------------------------------------------------------------------ DOM helpers
@@ -353,6 +471,12 @@ async function api(method, path, body, key, collectReceipt) {
     return data;
   } catch(error) {
     if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
+      if (!nativeDesktop && state.token && state.token !== browserSessionToken && (error.credentialRefused || isCredentialRefusal(error.status, method, path))) {
+        error.credentialRefused = true;
+        state.connectionError = error;
+        state.pollHealth = pollFailure(error, Date.now());
+        updateOnline(false); paintConnection();
+      }
       if(method==='GET' && (path==='/capabilities' || path==='/bootstrap'))rememberVersionRead('capabilities',null,undefined,epoch);
       recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
       if (state.health && state.health === readHealth) withdrawHealthRead(state.health, method, path, error);
@@ -385,6 +509,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   catch (cause) {
     if (['FOREGROUND_READ_RETIRED', 'CONNECTION_CHANGED'].includes(cause?.code)) throw cause;
+    if (cause?.credentialRefused) throw Object.assign(new ApiError(cause.status, cause.code, cause.message, {localized: cause.localized === true}), {credentialRefused: true});
     const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
     throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
   }
@@ -429,7 +554,8 @@ async function submit(action, target, params, preconditions, scope) {
     else rememberOp(scope, key, out.operation.operation_id, connection.namespace);
     return out.operation;
   } catch (e) {
-    if (e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace); // a conflict retains its original intent key
+    // A local credential gate has not resolved an earlier uncertain submission.
+    if (!e.credentialRefused && e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace);
     throw e;
   }
 }
@@ -628,6 +754,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
         const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
         guard(true);
         if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed during upload");
+        if (response.status === 401) throw browserCredentialError({status: 401, code: 'UNAUTHORIZED',
+          credentialRefused: !nativeDesktop && state.token !== browserSessionToken});
         if (response.status < 200 || response.status >= 300)
           throw new ApiError(response.status, response.data.error?.code, response.data.error?.message);
         do {op = await readNext();} while (["accepted", "running", "waiting_external"].includes(op.status));
@@ -1094,10 +1222,24 @@ function foregroundChanged() {
   if (state.token) {updateOnline(false); paintConnection(true, true);}
   wakeEventPoll?.();
 }
+// For checkpointed polls, dashboard_sync.check proves server/principal identity
+// before these continuity failures. All other or unknown reasons withdraw the
+// whole view immediately; they cannot retain facts or an editing view.
+const IDENTITY_PRESERVING_RESETS = new Set(['cursor_expired', 'cursor_ahead', 'history_changed', 'checkpoint_cursor_mismatch']);
 async function streamEvents() {
   for (;;) {
     await refreshManagedRecovery();
-    if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === 'hidden') {
+    if (!nativeDesktop && state.token && state.token !== browserSessionToken) {
+      const token = state.token, epoch = state.epoch;
+      const refusal = browserCredentialRefusals.read(token);
+      if (token !== state.token || epoch !== state.epoch) continue;
+      if (refusal) {
+        state.connectionError = refusal; state.pollHealth = pollFailure(refusal, Date.now());
+        updateOnline(false); paintConnection();
+        await waitForEventPoll(1000); continue;
+      }
+    }
+    if (state.nativeBusy || !state.token || !state.namespace || !state.viewReady || document.visibilityState === 'hidden') {
       paintConnection(true);
       await waitForEventPoll(1000); continue;
     }
@@ -1110,6 +1252,7 @@ async function streamEvents() {
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
       if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
       pollSucceeded = true; state.pollHealth = 'connected';
+      if (state.connectionError?.credentialRefused) state.connectionError = null;
       state.lastPoll = {at: Date.now(), namespace: state.namespace}; paintConnection(true);
       if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
@@ -1150,8 +1293,9 @@ async function streamEvents() {
       paintConnection(false, pollSucceeded);
       if (error.code === "EVENT_CURSOR_RESET") {
         const previous = { namespace: state.namespace, sync: state.sync };
-        const accessChanged = error.reason === "access_changed";
+        const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
         if (accessChanged) {
+          clearEarlierDrafts();
           // A changed access boundary invalidates displayed facts immediately. Drafts stay
           // in their original principal namespace, even when bootstrap is unavailable.
           generation++; state.viewReady = false;
@@ -3371,6 +3515,9 @@ async function viewOperation(main, id) {
         main.append(repair.box);
       }
       const refs = op.external_refs || {};
+      const retainedCheckpoint = op.action === "checkpoint.continue" && op.status === "failed" &&
+        ["CHECKPOINT_STAGING_RETAINED", "CHECKPOINT_DESTINATION_APPEARED"].includes(op.error_code);
+      const reason = retainedCheckpoint ? t("error_code_" + op.error_code) : op.status_reason;
       const retry = refs.merged_sha && op.action === "delivery.merge_and_deploy" && op.status === "failed"
         ? h("button", { class: "primary", onclick: async () => {
           let sourceRefresh = true;
@@ -3427,11 +3574,22 @@ async function viewOperation(main, id) {
           h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")),
           h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`),
           h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))),
-          op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null,
+          reason ? [h("dt", {}, t("reason")), h("dd", {}, reason)] : null,
           op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null,
           h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))),
           Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null,
           op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null),
+        retainedCheckpoint ? h("div", {class: "note warn", "data-checkpoint-retained": ""},
+          h("dl", {class: "kv"},
+            typeof refs.retained_staging_path === "string" ? [h("dt", {}, t("checkpoint_retained_path")),
+              h("dd", {}, h("code", {}, refs.retained_staging_path))] : null,
+            op.error_code === "CHECKPOINT_DESTINATION_APPEARED" && typeof refs.clone_path === "string"
+              ? [h("dt", {}, t("checkpoint_destination_path")), h("dd", {}, h("code", {}, refs.clone_path))] : null),
+          h("p", {}, t("checkpoint_retained_why")),
+          h("p", {}, t(op.error_code === "CHECKPOINT_DESTINATION_APPEARED" ? "checkpoint_destination_next" : "checkpoint_retained_next")),
+          typeof refs.source_host === "string" && refs.source_host && typeof refs.source_session_id === "string" && refs.source_session_id
+            ? h("a", {href: sessionHref({host: refs.source_host, sessionId: refs.source_session_id})}, t("source_session")) : null,
+          h("p", {}, t("checkpoint_retained_cleanup"))) : null,
         ...(receipts || []),
         mergeRecovery(op),
         op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")),
@@ -3570,6 +3728,8 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
       h("a", {href: setupGuide()}, t("global_setup_guide")))));
   main.append(languageSwitch(), frame.root);
+  frame.panel('about').append(h('div', {'data-earlier-drafts-slot': ''}));
+  paintEarlierDrafts();
   const identityEpoch = state.epoch;
   const paintBuild = () => {
     if(!frame.root.isConnected || identityEpoch !== state.epoch){versionPainters.delete(paintBuild);return;}
@@ -3597,7 +3757,8 @@ function viewBrowserSettings(main) {
     facts,
     managed ? h("h2", {}, t("ui_local_connector")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
-    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
+    retryRememberedTokenButton(),
+    h("button", {class: "danger", onclick: async () => {await disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
   frame.panel("fleet").append(fleetEmpty());
   return () => {};
@@ -3608,23 +3769,30 @@ function viewBrowserSignedOut(main) {
   const info = h("div", {class: "global-connect-status"});
   const showConnectError = error => {
     info.setAttribute("role", "alert");
-    info.replaceChildren(error?.status === 401 ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
+    info.replaceChildren(error?.credentialRefused ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
   };
   if (state.connectionError) showConnectError(state.connectionError);
-  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
-    event.preventDefault();
-    disconnect();
-    state.token = input.value.trim();
+  const connect = async (token, saved = false) => {
+    if (!token) return;
     try {
-      await activate(await api("GET", "/capabilities"));
-      saveToken(state.token, remember.checked);
+      await connectBrowserToken(token);
+      if (!saved) saveToken(token, remember.checked);
       location.hash = "#/home";
       await route();
-    } catch (e) {state.token = null; showConnectError(e);}
+    } catch (error) {
+      if (error.code !== 'CONNECTION_CHANGED') {
+        state.token = null; state.caps = null; state.connectionError = error; showConnectError(error);
+      }
+    }
+  };
+  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
+    event.preventDefault();
+    await connect(input.value.trim());
   }}, h("label", {class: "connection-token"}, t("token"), input),
     h("label", {class: "global-remember"}, remember, " ", t("remember")),
     h("div", {class: "global-connect-actions"},
       h("button", {class: "primary", type: "submit"}, t("connect")),
+      loadToken() ? h('button', {type: 'button', onclick: () => connect(loadToken(), true)}, t('connection_retry_remembered')) : null,
       h("a", {class: "global-quiet-link", href: setupGuide()}, t("global_setup_guide"))),
     disclosure({label: t("global_details"), body: h("p", {}, t("token_help"))}), info);
   const root = firstRunCard({h, t, body: form});
@@ -3706,7 +3874,7 @@ async function viewManagedSettings(main) {
     disposeFleet = await mountFleet(fleetRoot, {h, t, onStatus: rememberFleetHealth});
     disposeTailscale = await fleetTailscale(fleetRoot, guard);
   } else {
-    local.append(h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")));
+    local.append(...[retryRememberedTokenButton(), h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))].filter(Boolean));
     fleetRoot.append(fleetEmpty());
   }
   return () => {setup.dispose(); disposeFleet?.(); disposeTailscale?.();};
@@ -5114,6 +5282,7 @@ async function route() {
   // immediately instead of leaving the connection control blank during startup.
   paintConnection(true);
   const main = document.getElementById("main");
+  const recoveryPanel = earlierPanel, recoveryFocus = earlierPanel?.contains(document.activeElement) ? document.activeElement : null, recoveryScroll = main.scrollTop;
   main.replaceChildren();
   if (!state.token && name !== "settings") {
     const off = await viewSettings(main);
@@ -5152,6 +5321,10 @@ async function route() {
   teardown = () => {off?.(); preferences?.dispose(); skills?.dispose();};
   if (off?.navigate) teardown.navigate = off.navigate;
   state.viewReady = true;
+  paintEarlierDrafts(); paintEarlierNotice();
+  if (recoveryPanel === earlierPanel && recoveryFocus?.isConnected && document.activeElement === document.body) {
+    main.scrollTop = recoveryScroll; recoveryFocus.focus({preventScroll: true});
+  }
 }
 
 async function start() {
@@ -5159,10 +5332,15 @@ async function start() {
   setLocale(locale);
   observeViewport();
   window.addEventListener("hashchange", route);
+  window.addEventListener('storage', event => {
+    if (event.key && !event.key.startsWith('batc.credential-refused.')) return;
+    browserCredentialRefusals.storageChanged(event);
+    wakeEventPoll?.();
+  });
   document.addEventListener('visibilitychange', foregroundChanged);
   window.addEventListener('pageshow', event => {if (event.persisted) foregroundChanged();});
   if (nativeDesktop) {
-    clearToken(); // discard obsolete browser credentials if an older build ever stored them
+    await clearToken(); // discard obsolete browser credentials if an older build ever stored them
     const attempt = ++state.nativeAttempt;
     let startupManaged = false;
     try {
@@ -5189,11 +5367,11 @@ async function start() {
     } finally { if (attempt === state.nativeAttempt) state.nativeBusy = false; }
   } else {
     const browserSession = await restoreBrowserSession().catch(() => false);
-    if (browserSession) clearToken();
+    if (browserSession) await clearToken();
     state.token = browserSession ? browserSessionToken : loadToken();
     if (state.token) {
       try { await activate(await api("GET", "/capabilities")); }
-      catch { state.token = null; }
+      catch (error) { state.token = null; state.caps = null; state.connectionError = error; }
     }
   }
   // Start before the first view: a hung source read must not freeze freshness.

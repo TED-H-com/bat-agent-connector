@@ -5,6 +5,7 @@ import {mountConversation} from './conversation-fixture.ts';
 import {pmRoute, workspaceId} from './pm-fixture.ts';
 import {openPmPanel} from './pm-navigation.ts';
 import {openSession, fromRequirements} from './session-fixture.ts';
+import {STRINGS} from '../src/i18n.js';
 async function shot(page: Page, state: string, locale: string, width: number) {
   if (!process.env.BATC_FIX2_SHOTS) return;
   await mkdir(process.env.BATC_FIX2_SHOTS, {recursive: true});
@@ -126,7 +127,23 @@ for (const locale of ['en', 'zh-TW']) {
   });
   for (const width of [1440, 390]) for (const code of [401, 403, 404, 503]) test(`Settings gives one access reason ${code} ${locale} ${width}`, async ({browser, baseURL}) => {
     const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage(), f = shellReviewFixture(); f.state.projectError = code;
-    await mountConversation(page, false, f.dispatch); await page.goto(`/dashboard/#/pm/${workspaceId}/overview`); await openPmPanel(page, 'ui_workspace_settings');
+    await mountConversation(page, false, f.dispatch); await page.goto(`/dashboard/#/pm/${workspaceId}/overview`);
+    if (code === 401) {
+      // A refused credential pauses every resource read. Connection Settings
+      // owns its one access reason and explicit recovery, including this route.
+      const copy = STRINGS[locale];
+      await expect(page.locator('#live')).toHaveText(copy.ui_connection_refused);
+      let requests = 0;
+      page.on('request', request => {if (new URL(request.url()).pathname.startsWith('/api/v1/')) requests++;});
+      await page.locator('#live').click();
+      await expect(page.locator('.global-connection-facts .ui-pill')).toHaveText(copy.ui_connection_refused);
+      await expect(page.locator('#main').getByText(copy.ui_connection_refused, {exact: true})).toHaveCount(1);
+      await expect(page.getByRole('button', {name: copy.connection_retry_remembered, exact: true})).toBeVisible();
+      await expect(page.locator('[data-pm-evidence]')).toHaveCount(0);
+      expect(requests).toBe(0);
+      expect(f.base.base.state.writes).toHaveLength(0); await context.close(); return;
+    }
+    await openPmPanel(page, 'ui_workspace_settings');
     const panel = page.locator('[data-pm-evidence]'), reason = locale === 'en' ? {401: 'Token not accepted.', 403: 'Your token lacks this permission.', 404: 'Project data was not found.', 503: 'Connector is unavailable.'}[code]!
       : {401: '權杖無效。', 403: '你的權杖沒有這個權限。', 404: '找不到專案資料。', 503: '無法連線至 Connector。'}[code]!;
     await expect(panel.getByRole('heading', {name: locale === 'en' ? 'Projects unavailable' : '無法取得專案', exact: true})).toBeVisible();
