@@ -1,6 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
-import {publishedFixture, selected, dispatchProject, uploadId, aid, publishedSha} from './repository-start-fixture';
+import {publishedFixture, selected, dispatchProject, aid, publishedSha} from './repository-start-fixture';
 
 const form = (page: Page) => page.locator('[data-published-start]');
 const prompt = (page: Page) => form(page).getByRole('textbox', {name: 'Original instructions', exact: true});
@@ -66,8 +66,9 @@ async function pasteText(page: Page, selector: string, text: string) {
   }, {selector, text});
 }
 
-for (const native of [false, true]) {
-  const mode = native ? 'IPC' : 'Browser';
+// Raw file bytes belong only to the browser flow. Native paste refusals are covered below.
+{
+  const native = false, mode = 'Browser';
 
   test(`${mode}: unavailable durable draft storage prevents pasted upload`, async ({page}) => {
     const state = await publishedFixture(page, native, {dispatch: true, bindings: [selected]});
@@ -265,3 +266,58 @@ for (const native of [false, true]) {
     expect(state.errors).toEqual([]);
   });
 }
+
+for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', 'textarea']) {
+  test(`IPC: image paste refuses before effects ${locale} ${target}`, async ({browser}, testInfo) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const state = await publishedFixture(page, true, {dispatch: true, bindings: [selected]});
+    const original = '  Keep this draft.\n保留原始文字。  ';
+    const message = locale === 'zh-TW'
+      ? '桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。'
+      : 'Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.';
+    try {
+      await page.goto('/dashboard/#/dispatch/' + dispatchProject);
+      await expect(form(page)).toBeVisible();
+      await form(page).locator('textarea').fill(original);
+      const before = state.invokes.length;
+      await pasteFile(page, '[data-published-start] ' + target, 'screenshot.png', 'image/png', pngBuffer);
+      await expect(form(page).locator('.attachments [data-error-summary]')).toHaveText(message);
+      await expect(form(page).locator('.attachments [data-api-error]')).toHaveCount(1);
+      await expect(form(page).locator('.attachment-list')).toBeEmpty();
+      await expect(form(page).locator('img.attachment-thumb')).toHaveCount(0);
+      await expect(form(page).locator('textarea')).toHaveValue(original);
+      expect(state.posts).toEqual([]);
+      expect(state.bytes).toEqual([]);
+      expect(state.uploaded).toBe(false);
+      expect(state.invokes.slice(before).filter(call => !(call.command === 'native_files_status'
+        || call.command === 'connector_request' && call.method === 'GET'))).toEqual([]);
+      await page.reload();
+      await expect(form(page).locator('textarea')).toHaveValue(original);
+      await expect(form(page).locator('.attachment-list')).toBeEmpty();
+      expect(state.posts).toEqual([]);
+      expect(state.errors).toEqual([]);
+    } finally {
+      await testInfo.attach('paste-effects', {body: JSON.stringify({posts: state.posts, uploaded: state.uploaded,
+        byteCount: state.bytes.length, invokes: state.invokes}, null, 2), contentType: 'application/json'});
+      await context.close();
+    }
+  });
+}
+
+for (const locale of ['en-US', 'zh-TW']) test(`IPC: plain text paste remains unchanged ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  const state = await publishedFixture(page, true, {dispatch: true, bindings: [selected]});
+  try {
+    await page.goto('/dashboard/#/dispatch/' + dispatchProject);
+    await expect(form(page)).toBeVisible();
+    const original = '  Written draft.\n原始草稿。  ', pasted = '\nPasted text. 貼上文字。';
+    await form(page).locator('textarea').fill(original);
+    const result = await pasteText(page, '[data-published-start] textarea', pasted);
+    expect(result).toEqual({defaultPrevented: false, value: original + pasted});
+    await expect(form(page).locator('.attachment-list')).toBeEmpty();
+    await expect(form(page).locator('[data-api-error]')).toHaveCount(0);
+    expect(state.posts).toEqual([]);
+    expect(state.uploaded).toBe(false);
+    expect(state.errors).toEqual([]);
+  } finally {await context.close();}
+});

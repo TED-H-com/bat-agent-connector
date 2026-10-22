@@ -132,11 +132,8 @@ export async function connectorRequest(method: string, path: string, body: unkno
 
 export async function connectorUploadArtifact(operationId: string, bytes: ArrayBuffer,
   browserToken: string): Promise<ConnectorResponse> {
+  if (nativeDesktop) throw new Error("Native uploads require the native file manager.");
   if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-  if (nativeDesktop) {
-    if (bytes.byteLength > 16 * 1024 * 1024) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-    return invoke<ConnectorResponse>("connector_upload_artifact", bytes, {headers: {"x-batc-upload-operation": operationId}});
-  }
   // Ignore content_url from operation metadata. Tokens only reach this same-origin fixed route.
   const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {method: "POST", redirect: "error",
     credentials: "same-origin", headers: {...browserAuthHeaders(browserToken), "Content-Type": "application/octet-stream"}, body: bytes});

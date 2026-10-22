@@ -11,8 +11,7 @@ const fields = ['token', 'nativeBusy', 'online', 'viewReady', 'manageAllowed', '
 const sites = [
   ['POST including its existing credential check', {post: true}, (f: any) => !!f.token && !f.nativeBusy && f.online && f.viewReady],
   ['waiting_external', {attachment: true}, (f: any) => f.online && f.viewReady],
-  ['browser paste', {attachment: true, supported: true, manage: true}, (f: any) => f.attachmentsSupported && f.manageAllowed && f.online && f.viewReady],
-  ['native paste', {attachment: true, supported: true, manage: true, uploads: true}, (f: any) => f.attachmentsSupported && f.manageAllowed && f.uploadsAllowed && f.online && f.viewReady],
+  ['browser paste', {attachment: true, paste: true, supported: true, manage: true}, (f: any) => f.attachmentsSupported && f.manageAllowed && f.online && f.viewReady],
   // nativeFiles already returned before the old browser-drop expression.
   ['browser drop', {attachment: true, supported: true, manage: true}, (f: any) => f.attachmentsSupported && f.manageAllowed && f.online && f.viewReady],
   ['native canWrite', {attachment: true, manage: true, uploads: true}, (f: any) => f.online && f.viewReady && f.manageAllowed && f.uploadsAllowed],
@@ -44,6 +43,7 @@ export const reasons = [
   ['manage_required', {...ready, manageAllowed: false}, {attachment: true, manage: true}],
   ['attachments_unavailable', {...ready, attachmentsSupported: false}, {attachment: true, supported: true}],
   ['uploads_not_allowed', {...ready, uploadsAllowed: false}, {attachment: true, uploads: true}],
+  ['native_paste_unsupported', {...ready, nativeDesktop: true}, {attachment: true, paste: true}],
   ...failedPolls.filter(([, , kind]) => kind !== 'transport').map(([status, code, kind, , reason]) =>
     [reason, {...ready, online: false, pollHealth: {kind, status, code, at: 1234}}, {post: true}] as const),
 ] as const;
@@ -74,4 +74,12 @@ for (const locale of ['en', 'zh-TW'] as const) test(`${locale}: session server/t
   ] as const) assert.equal((errors as any).sessionErrorLine(new ApiError(status, code, 'fixture diagnostic'), t), t(key));
   const refusal = (errors as any).clientActionError('not_connected', t, 401);
   assert.equal(refusal.status, 401, 'preserve the existing missing-token draft-key classification');
+});
+
+test('native image paste always refuses, regardless of connection or upload permissions', () => {
+  for (let bits = 0; bits < 2 ** fields.length; bits++) {
+    const facts = {...Object.fromEntries(fields.map((field, i) => [field, !!(bits & (1 << i))])), nativeDesktop: true};
+    assert.deepEqual(gate(facts, {attachment: true, paste: true, supported: true, manage: true, uploads: true}),
+      {allowed: false, reason: 'native_paste_unsupported'});
+  }
 });
