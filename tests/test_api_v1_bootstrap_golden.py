@@ -30,7 +30,8 @@ def normalize_bootstrap(response):
 
 
 @pytest.mark.parametrize("managed", [True, False])
-async def test_managed_bootstrap_matches_shared_golden(tmp_path, managed):
+async def test_managed_bootstrap_matches_shared_golden(tmp_path, managed, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     daemon = TaskDaemon(Config(hosts={}), tmp_path / "journal.db")
     if managed:
         daemon.managed_installation = {"installation_id": "fixture-installation", "runtime_version": __version__}
@@ -49,6 +50,8 @@ async def test_managed_bootstrap_matches_shared_golden(tmp_path, managed):
         assert response["capabilities"]["identity"] == identity
         assert response["sync"]["checkpoint"]["token"].startswith("s1.")
         assert set(response["capabilities"]["build"]) == {"version", "commit", "source"}
+        assert response["capabilities"]["connector_update"] == {
+            "state": "not_enrolled", "activation": "next_launch"}
         digest = capabilities["frontend"]["digest"]
         assert digest is None or re.fullmatch(r"[a-f0-9]{64}", digest)
         normalized = normalize_bootstrap(response)
