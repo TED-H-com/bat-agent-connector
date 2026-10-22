@@ -438,8 +438,8 @@ for en, zh, d, dz in [
     (
         "Match the package",
         "核對套件",
-        "Download Connector 0.2.12 / desktop 0.1.8 from the published release. Check its source manifest and SHA-256 checksums.",
-        "下載已發布的 Connector 0.2.12／desktop 0.1.8，核對來源清單與 SHA-256 校驗碼。",
+        "Stable: Connector 0.2.12 / desktop 0.1.8, source 14c62830. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
+        "穩定版：Connector 0.2.12／desktop 0.1.8，來源 14c62830。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
     ),
     (
         "Connect your environment",
@@ -459,8 +459,13 @@ parts.append(
     '</ol><div class="install-current">'
     + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
-        "Advanced users can explicitly join an existing central. The published release includes fixed source and checksum records. These are development validation builds, not a stable signed update channel. Closing the UI leaves central work running.",
-        "進階使用者可明確加入既有中央。已發布版本附有固定來源與校驗紀錄。這些是開發驗證包，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
+        "Advanced users can explicitly join an existing central. The published release includes fixed source and checksum records. These are unsigned or ad-hoc-signed development builds, not a stable signed update channel. Closing the UI leaves central work running.",
+        "進階使用者可明確加入既有中央。已發布版本附有固定來源與校驗紀錄。這些是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
+        "p",
+    )
+    + bi(
+        "For Connector, use the verified installer from the same tag: --tag v0.2.12 --channel-check stable, or --tag v0.2.13-preview.20261022 --channel-check preview. A tag is required; the default preview check accepts stable releases and prereleases, while stable refuses previews. On Linux, --enable-updates enrolls and schedules that channel. The updater offers eligible newer stable releases on stable, and eligible newer stable releases or prereleases on preview. Updates affect future launches; existing processes keep running.",
+        "Connector 使用同一 tag 的驗證安裝器：穩定版為 --tag v0.2.12 --channel-check stable，預覽版為 --tag v0.2.13-preview.20261022 --channel-check preview。必須指定 tag；預設 preview 可接受穩定版與預覽版，stable 拒絕預覽版。Linux 加上 --enable-updates 才會登記該通道並啟用排程。更新器在 stable 提供符合條件的較新穩定版，在 preview 提供符合條件的較新穩定版或預覽版。更新供下次啟動使用，既有程序繼續執行。",
         "p",
     )
     + '<div class="actions">'
@@ -473,10 +478,17 @@ parts.append(
     )
     + link(
         repo + "/releases/tag/v0.2.12",
-        "Download published release →",
-        "下載已發布版本 →",
+        "Download stable 0.2.12 →",
+        "下載穩定版 0.2.12 →",
         "text-link",
     )
+    + link(
+        repo + "/releases/tag/v0.2.13-preview.20261022",
+        "Download prerelease 0.2.13 →",
+        "下載預覽版 0.2.13 →",
+        "text-link",
+    )
+    + doc("scripts/install_connector.py", "Installer source", "安裝器原始碼", "text-link")
     + doc("docs/connector-updates.md", "Connector automatic updates", "Connector 自動更新", "text-link")
     + "</div></div></div></section>"
 )
@@ -597,8 +609,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "Merged main at 14c62830 (through #314, October 19, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.",
-        "已合併主線 14c62830（截至 #314，2026 年 10 月 19 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。",
+        "Published preview source 437ee6a7 (through #395, October 22, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.",
+        "已發布預覽版來源 437ee6a7（截至 #395，2026 年 10 月 22 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。",
     ),
     (
         "Still ahead",
