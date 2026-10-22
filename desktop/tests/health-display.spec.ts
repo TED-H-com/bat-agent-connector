@@ -71,6 +71,47 @@ async function managedHealthReset(page: Page) {
 }
 
 for (const locale of ['en-US', 'zh-TW']) {
+  test(`capability verification retains a refused native replacement notice ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage(), fixture = conversationFixture();
+    const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+    const refusal = 'Fixture identity mismatch; previous credential retained';
+    let changed = false, bootstraps = 0;
+    await mountConversation(page, true, async input => {
+      const result = structuredClone(await fixture.dispatch(input));
+      if (input.path === '/bootstrap') bootstraps++;
+      const caps = input.path === '/capabilities' ? result.data : input.path === '/bootstrap' ? result.data.capabilities : null;
+      if (caps && changed) caps.connector = '0.2.99';
+      return result;
+    });
+    await page.addInitScript(refusal => {
+      const bridge = (window as any).__TAURI_INTERNALS__, invoke = bridge.invoke;
+      bridge.invoke = (command: string, args: any) => {
+        if (command === 'native_status') return Promise.resolve({endpoint: 'https://central.example/', expected_actor: 'reader',
+          credential_available: true, credential_saved: true, enrollment_supported: true, connected: true, configuration_source: 'external'});
+        if (command === 'connector_enroll') throw new Error(refusal);
+        return invoke(command, args);
+      };
+    }, refusal);
+    try {
+      await page.goto('/dashboard/#/settings');
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      await page.getByRole('button', {name: copy.desktop_replace_credential, exact: true}).click();
+      await expect(page.locator('.native-connection [data-api-error]')).toContainText(refusal);
+      changed = true;
+      await page.evaluate(() => {location.hash = '#/home';});
+      await expect(page.locator('.native-connection')).toHaveCount(0);
+      await page.evaluate(() => {location.hash = '#/settings';});
+      await expect.poll(() => bootstraps).toBe(2);
+      await expect(page.locator('#installation-health [data-health-key=capabilities]')).toHaveCount(0);
+      await page.evaluate(() => {location.hash = '#/home';});
+      await expect(page.locator('.native-connection')).toHaveCount(0);
+      await page.evaluate(() => {location.hash = '#/settings';});
+      await expect(page.locator('.native-connection [data-api-error]')).toContainText(refusal);
+      await expect(page.locator('#live')).toHaveText(copy.ui_connected);
+      expect(fixture.data.writes).toEqual([]);
+    } finally {await context.close();}
+  });
+
   for (const reason of ['principal_changed', 'server_changed', 'cursor_expired']) {
     test(`health follows the identity boundary during ${reason} ${locale}`, async ({browser}) => {
       const context = await browser.newContext({locale}), page = await context.newPage();
