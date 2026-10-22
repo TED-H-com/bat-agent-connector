@@ -48,6 +48,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.goto('/dashboard/');
       await page.locator('input[type=password]').fill('fixture-token');
       await page.getByRole('button', {name: copy.connect, exact: true}).click();
+      await page.evaluate(() => {location.hash = '#/settings';});
       await page.clock.runFor(3000);
       await expect(page.locator('#live')).toHaveText(copy.ui_connecting);
       expect(polls).toBe(0);
