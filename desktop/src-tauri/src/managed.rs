@@ -164,8 +164,24 @@ pub fn held(error: &str) -> bool {
     matches!(error, "SERVICE_STOPPED" | "SERVICE_STILL_STOPPING")
 }
 // Shared with startup visibility: a held login launch is quiet.
-pub fn show_on_login(status: &Status) -> bool {
-    status.mode == "role_pending" || status.error.is_some()
+pub fn startup_visible(
+    status: &Status,
+    login: bool,
+    update_pending: bool,
+    show_dashboard: bool,
+) -> bool {
+    if login
+        && status
+            .lifecycle
+            .as_ref()
+            .is_some_and(|v| v.state != "running")
+    {
+        return false;
+    }
+    status.mode == "role_pending"
+        || status.error.is_some()
+        || update_pending
+        || !login && show_dashboard
 }
 
 #[derive(Clone, Serialize)]
@@ -384,7 +400,8 @@ impl Managed {
     }
 
     pub fn read_status(&self) -> Result<Status, String> {
-        if !self.status.lock().unwrap().background {
+        let background = self.status.lock().unwrap().background;
+        if !background {
             return Ok(self.status());
         }
         #[derive(Deserialize)]
@@ -814,7 +831,7 @@ mod tests {
         fs::write(data.join("managed-central/held"), b"hold").unwrap();
         let (managed, launch) = Managed::prepare(&resources, &data, &config);
         assert!(launch.is_none());
-        assert!(!show_on_login(&managed.status()));
+        assert!(!startup_visible(&managed.status(), true, true, true));
         assert_eq!(managed.browser_file().unwrap_err(), "SERVICE_STOPPED");
         let value = serde_json::to_value(managed.status()).unwrap();
         assert_eq!(value["lifecycle"]["state"], "stopped");
@@ -838,7 +855,7 @@ mod tests {
         fs::write(data.join("managed-central/held"), b"hold").unwrap();
         for _ in 0..5 {
             assert_eq!(managed.recover().err().unwrap(), "SERVICE_STOPPED");
-            assert!(!show_on_login(&managed.status()));
+            assert!(!startup_visible(&managed.status(), true, true, true));
         }
         assert_eq!(
             fs::read(data.join("managed-central/ensure-count")).unwrap(),
@@ -1136,6 +1153,7 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
         assert!(managed.select_role(Role::Client, 0).unwrap().is_none());
         assert_eq!(managed.stop().err().unwrap(), "MANAGED_SERVICE_NOT_OWNED");
         assert_eq!(managed.start().err().unwrap(), "MANAGED_SERVICE_NOT_OWNED");
+        assert!(managed.read_status().unwrap().lifecycle.is_none());
         fs::create_dir(&config).unwrap();
         fs::write(
             config.join("central.json"),

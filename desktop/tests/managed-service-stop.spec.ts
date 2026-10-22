@@ -39,6 +39,10 @@ for (const locale of ['en', 'zh-TW']) {
     } else {
       await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務停止中' : 'Background service stopping');
       await expect(page.getByRole('button', {name: start, exact: true})).toBeVisible();
+      fixture.startStillStopping = true;
+      await page.getByRole('button', {name: start, exact: true}).click();
+      await expect(page.locator('[data-managed-service]')).toContainText(zh ? '背景服務仍在停止中，請稍後再啟動。' : 'The background service is still stopping. Try Start again shortly.');
+      await expect(page.locator('[data-managed-lifecycle]')).toHaveText(zh ? '背景服務停止中' : 'Background service stopping');
     }
   });
 }

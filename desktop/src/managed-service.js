@@ -19,7 +19,10 @@ export async function managedServiceControls(root, {h, t, managedControl, errorB
       try {guard();} catch {return;}
       // Read the owner's hold after refusal/uncertainty; never repeat the effect.
       try {status = await managedControl({action: 'status'}); guard();} catch { /* retain the last observation */ }
-      errors.replaceChildren(errorBox(error, {sourceRefresh: false, within: errors}));
+      const code = String(error?.message || error);
+      if (code.includes('SERVICE_STILL_STOPPING')) errors.replaceChildren(h('p', {}, t('managed_still_stopping')));
+      else if (code.includes('SERVICE_STOPPED')) errors.replaceChildren(h('p', {}, t(status?.lifecycle?.state === 'stop_pending' ? 'managed_stopping' : 'managed_stopped')));
+      else errors.replaceChildren(errorBox(error, {sourceRefresh: false, within: errors}));
     } finally {busy = false; paint();}
   };
   const stop = h('button', {type: 'button', class: 'secondary', onclick: () => {preview.hidden = false;}}, t('managed_stop'));

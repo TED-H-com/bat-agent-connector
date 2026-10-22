@@ -55,7 +55,10 @@ async function managedServiceControls(root, { h, t, managedControl, errorBox, gu
 				status = await managedControl({ action: "status" });
 				guard();
 			} catch {}
-			errors.replaceChildren(errorBox(error, {
+			const code = String(error?.message || error);
+			if (code.includes("SERVICE_STILL_STOPPING")) errors.replaceChildren(h("p", {}, t("managed_still_stopping")));
+			else if (code.includes("SERVICE_STOPPED")) errors.replaceChildren(h("p", {}, t(status?.lifecycle?.state === "stop_pending" ? "managed_stopping" : "managed_stopped")));
+			else errors.replaceChildren(errorBox(error, {
 				sourceRefresh: false,
 				within: errors
 			}));
@@ -10734,7 +10737,7 @@ var init_i18n = __esmMin((() => {
 			desktop_role_changed: "此安裝已變更。請重新開啟以讀取已儲存的用途。",
 			managed_join_existing: "加入既有的 Connector",
 			managed_join_help: "輸入另一個 Connector 的位址與預期帳號，在原生視窗確認後，再加入該 Connector 的憑證。此電腦原有的背景工作會繼續運作。",
-			managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
+			managed_background_help: "關閉這個畫面不會停止背景工作。可使用「停止背景服務」停止本機 Connector。",
 			managed_open_browser: "在瀏覽器開啟 Dashboard",
 			managed_start_login: "登入電腦時啟動",
 			managed_stop: "停止背景服務",
@@ -10743,6 +10746,7 @@ var init_i18n = __esmMin((() => {
 			managed_running: "背景服務運作中",
 			managed_stopped: "背景服務已停止",
 			managed_stopping: "背景服務停止中",
+			managed_still_stopping: "背景服務仍在停止中，請稍後再啟動。",
 			managed_stop_local: "本機 Connector 會停止。",
 			managed_stop_hold: "在你選擇啟動之前，開啟程式、登入電腦、自動恢復或在瀏覽器開啟都不會重新啟動。",
 			managed_stop_busy: "尚未完成或核對的工作會阻擋停止。",
@@ -12488,7 +12492,7 @@ var init_i18n = __esmMin((() => {
 			desktop_role_changed: "This installation changed. Reopen to read its saved role.",
 			managed_join_existing: "Join another Connector",
 			managed_join_help: "Enter the address and expected account for another Connector, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
-			managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
+			managed_background_help: "Closing this view does not stop background work. Use Stop background service to stop the local Connector.",
 			managed_open_browser: "Open Dashboard in browser",
 			managed_start_login: "Start when I sign in",
 			managed_stop: "Stop background service",
@@ -12497,6 +12501,7 @@ var init_i18n = __esmMin((() => {
 			managed_running: "Background service running",
 			managed_stopped: "Background service stopped",
 			managed_stopping: "Background service stopping",
+			managed_still_stopping: "The background service is still stopping. Try Start again shortly.",
 			managed_stop_local: "The local Connector will stop.",
 			managed_stop_hold: "App open, sign-in, recovery and Open in browser will not restart it until you choose Start.",
 			managed_stop_busy: "Unsettled work blocks stopping.",

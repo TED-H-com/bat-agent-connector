@@ -845,9 +845,12 @@ fn main() {
             bootstrap.start_auto(control.clone());
             app.manage(QuitState::default());
             let mut config = app.config().app.windows[0].clone();
-            config.visible = managed::show_on_login(&managed_status)
-                || update_pending
-                || !managed_login && !matches!(login_options, Some(Ok((false, false))));
+            config.visible = managed::startup_visible(
+                &managed_status,
+                managed_login,
+                update_pending,
+                !matches!(login_options, Some(Ok((false, false)))),
+            );
             let window = tauri::WebviewWindowBuilder::from_config(app, &config)?
                 .initialization_script(
                     if login_path.is_some()
