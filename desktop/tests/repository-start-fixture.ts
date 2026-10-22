@@ -6,7 +6,7 @@ export const dispatchProject = 'prj_'+'1'.repeat(20), dispatchArtifact = {artifa
 export async function publishedFixture(page: Page, native: boolean, options: any = {}) {
   const state = {actor: 'published-person', server: 'published-server', principal: 'published-principal', scopes: ['observe', 'start', 'manage'],
     allowed: true, writes: true, orchestrate: true, status: 'succeeded', posts: [] as any[], previews: [] as any[], reads: [] as string[],
-    errors: [] as string[], events: [] as any[], after: 0, operation: null as any, bytes: [] as number[], uploaded: false,
+    invokes: [] as {command: string; method?: string; path?: string}[], errors: [] as string[], events: [] as any[], after: 0, operation: null as any, bytes: [] as number[], uploaded: false,
     project: {project_id: dispatchProject, name: 'Dashboard project', description: 'Shared browser and desktop work',
       repositories: ['example/project'], children: [], version: 1, archived: false, counts: {total: 0, approved: 0}}, ...options};
   const baseCaps = () => ({actor: state.actor, scopes: state.scopes, api_version: 1, contract_version: '2026-10-08',
@@ -113,15 +113,18 @@ export async function publishedFixture(page: Page, native: boolean, options: any
   page.on('pageerror', e => state.errors.push(e.message));
   if (native) {
     await page.exposeFunction('publishedFixture', dispatch);
-    await page.addInitScript(() => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any, options: any) => {
-      if (command === 'native_status') return {endpoint: 'https://fixture.example', credential_available: true};
+    await page.exposeFunction('publishedInvoke', (command: string, input: any) => {
+      state.invokes.push({command, method: input?.method, path: input?.path});
+    });
+    await page.addInitScript(() => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
+      await (window as any).publishedInvoke(command, args?.input);
+      if (command === 'native_status') return {endpoint: 'https://fixture.example', credential_available: true, file_transfers: true};
+      if (command === 'native_files_status') return {supported: true, transfers: [], drop_error: null};
       if (command === 'connector_connect') return (await (window as any).publishedFixture({method: 'GET', path: '/capabilities'})).data;
       if (command === 'connector_disconnect') return;
       if (command === 'connector_request') return (window as any).publishedFixture(args.input);
-      if (command === 'connector_upload_artifact') return (window as any).publishedFixture({method: 'BINARY',
-        path: '/artifacts/uploads/' + (options?.headers?.['x-batc-upload-operation'] || uploadId) + '/content', bytes: [...new Uint8Array(args)]});
       if (command === 'fleet_availability') return {configured: false, platform_supported: false};
-      throw new Error(command);
+      throw new Error('Forbidden or unexpected command: ' + command);
     }}}));
   } else await page.addInitScript(() => sessionStorage.setItem('batc.dashboard.token', 'fixture-token'));
   await page.route('**/api/v1/**', async route => {

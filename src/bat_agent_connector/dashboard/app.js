@@ -2132,6 +2132,7 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "This attachment action needs Manage access. Ask the Connector administrator for Manage access, then try again.",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "Attachments are unavailable on this connection. Ask the Connector administrator to check attachment support.",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "Attachment uploads are not allowed on this connection. Ask the Connector administrator to allow uploads, then try again.",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.",
 			ui_switch_workspace: "Switch workspace",
 			ui_new_workspace: "New workspace",
 			ui_report: "Report",
@@ -2237,6 +2238,7 @@ var init_ui_strings = __esmMin((() => {
 			error_code_CLIENT_ACTION_MANAGE_REQUIRED: "此附件操作需要管理權限。請向 Connector 管理員申請管理權限，再試一次。",
 			error_code_CLIENT_ACTION_ATTACHMENTS_UNAVAILABLE: "目前連線無法使用附件。請聯絡 Connector 管理員確認附件支援。",
 			error_code_CLIENT_ACTION_UPLOADS_NOT_ALLOWED: "目前連線未允許附件上傳。請聯絡 Connector 管理員開放上傳，再試一次。",
+			error_code_CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED: "桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。",
 			ui_switch_workspace: "切換工作空間",
 			ui_new_workspace: "新增工作空間",
 			ui_report: "報告",
@@ -14051,6 +14053,10 @@ function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
 	};
 }
 function clientActionGate(facts, requirements) {
+	if (requirements.paste && facts.nativeDesktop) return {
+		allowed: false,
+		reason: "native_paste_unsupported"
+	};
 	const ready = requirements.post || requirements.attachment;
 	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
 		allowed: true,
@@ -14070,7 +14076,8 @@ var clientReasons = [
 	"view_not_ready",
 	"manage_required",
 	"attachments_unavailable",
-	"uploads_not_allowed"
+	"uploads_not_allowed",
+	"native_paste_unsupported"
 ];
 var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
@@ -25252,11 +25259,8 @@ async function connectorRequest(method, path, body, key, browserToken, signal) {
 	};
 }
 async function connectorUploadArtifact(operationId, bytes, browserToken) {
+	if (nativeDesktop) throw new Error("Native uploads require the native file manager.");
 	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-	if (nativeDesktop) {
-		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
-	}
 	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
 		method: "POST",
 		redirect: "error",
@@ -69428,7 +69432,8 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		...state,
 		manageAllowed: may("manage"),
 		attachmentsSupported: supported,
-		uploadsAllowed: nativeUploadAllowed
+		uploadsAllowed: nativeUploadAllowed,
+		nativeDesktop
 	}, requirements);
 	const refuseAttachment = (reason) => {
 		if (!supported) {
@@ -69787,6 +69792,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		e.preventDefault();
 		const gate = attachmentGate({
 			attachment: true,
+			paste: true,
 			supported: true,
 			manage: true,
 			uploads: nativeFiles
