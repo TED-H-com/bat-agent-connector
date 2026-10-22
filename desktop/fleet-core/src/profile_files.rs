@@ -1,10 +1,6 @@
 //! Fixed native profile files; no path in this module comes from IPC.
 use crate::Result;
-use std::{
-    fs::OpenOptions,
-    io::{Read, Write},
-    path::Path,
-};
+use std::{fs::OpenOptions, io::Read, path::Path};
 pub(crate) const LIMIT: usize = 1024 * 1024;
 fn plain(metadata: &std::fs::Metadata) -> bool {
     if metadata.file_type().is_symlink() {
@@ -73,35 +69,24 @@ pub(crate) fn replace(
     if bytes.len() > LIMIT {
         return Err("PROFILE_INDEX_UNPROVEN");
     }
-    let dir = path.parent().ok_or("PROFILE_INDEX_UNPROVEN")?;
-    verify()?;
-    if read(path)? != expected {
-        return Err("PROFILE_INDEX_CHANGED");
-    }
-    let temporary = dir.join(format!("fleet-profile-{:032x}.tmp", rand::random::<u128>()));
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&temporary)
-        .map_err(|_| "PROFILE_INDEX_UNAVAILABLE")?;
-    let result = (|| {
-        file.write_all(bytes)
-            .and_then(|_| file.sync_all())
-            .map_err(|_| "PROFILE_INDEX_UNAVAILABLE")?;
-        verify()?;
-        if read(path)? != expected {
-            return Err("PROFILE_INDEX_CHANGED");
-        }
-        drop(file);
-        std::fs::rename(&temporary, path).map_err(|_| "PROFILE_INDEX_UNAVAILABLE")
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(temporary);
-    }
-    result
+    path.parent().ok_or("PROFILE_INDEX_UNPROVEN")?;
+    crate::compare_replace::replace(
+        path,
+        Some(expected),
+        Some(bytes),
+        crate::compare_replace::Policy {
+            limit: LIMIT,
+            too_large: "PROFILE_INDEX_UNPROVEN",
+            invalid_path: "PROFILE_INDEX_UNPROVEN",
+            changed: "PROFILE_INDEX_CHANGED",
+            unavailable: "PROFILE_INDEX_UNAVAILABLE",
+            prefix: "fleet-profile",
+            create_only: false,
+            skip_equal: false,
+            sync_directory: false,
+            private: false,
+        },
+        || read(path).map(Some),
+        Some(&mut verify),
+    )
 }

@@ -32,10 +32,12 @@ struct Native {
     launcher: Rc<Cell<bool>>,
     monitor: Rc<Cell<bool>>,
     refused: Option<(Artifact, FileOwnership)>,
+    require_monitor: bool,
+    authority: Rc<Cell<bool>>,
 }
 impl Native {
     fn held(&self) {
-        assert!(self.launcher.get() && self.monitor.get());
+        assert!(self.launcher.get() && (!self.require_monitor || self.monitor.get()));
     }
 }
 impl migration::Platform for Native {
@@ -71,8 +73,13 @@ impl migration::Platform for Native {
     fn launch(&mut self, _: Backend) -> Result<()> {
         panic!("no process effects")
     }
-    fn validate_config(&self, _: &[u8], _: Backend) -> Result<()> {
-        panic!("no migration")
+    fn validate_config(&self, bytes: &[u8], backend: Backend) -> Result<()> {
+        self.held();
+        let doc: Value = serde_json::from_slice(bytes).map_err(|_| "INSTALLATION_INVALID")?;
+        if doc["backend"] != serde_json::to_value(backend).unwrap() {
+            return Err("INSTALLATION_INVALID");
+        }
+        Ok(())
     }
     fn classify_shortcut(&self, _: &[u8]) -> Result<Backend> {
         panic!("no startup effects")
@@ -90,7 +97,10 @@ impl Platform for Native {
         current: Option<&[u8]>,
     ) -> Result<FileOwnership> {
         self.held();
-        assert_eq!(owner, &self.owner); // Independent synthetic creation authority, not a path test.
+        // Independent synthetic creation authority, not a path test.
+        if owner != &self.owner || !self.authority.get() {
+            return Ok(FileOwnership::Unknown);
+        }
         if let Some((a, refused)) = &self.refused {
             if *a == artifact {
                 return Ok(refused.clone());
@@ -128,6 +138,8 @@ impl Fixture {
             launcher: Rc::new(Cell::new(false)),
             monitor: Rc::new(Cell::new(false)),
             refused: None,
+            require_monitor: true,
+            authority: Rc::new(Cell::new(true)),
         };
         Self {
             root,
@@ -330,6 +342,9 @@ fn third_bytes_at_each_step_stop_without_any_later_write() {
         std::fs::write(f.path(a), b"third bytes").unwrap();
         assert_eq!(f.publish(&plan), Err(Error::ThirdBytes { artifact: a }));
         assert_eq!(std::fs::read(f.path(a)).unwrap(), b"third bytes");
+        for out in plan.outputs.iter().take(index) {
+            assert_eq!(std::fs::read(f.path(out.artifact)).unwrap(), out.bytes);
+        }
         for out in plan.outputs.iter().skip(index + 1) {
             assert!(!f.path(out.artifact).exists());
         }
@@ -469,7 +484,7 @@ fn third_bytes_after_intent_survive_and_completed_prefix_remains_recorded() {
 }
 
 #[test]
-fn unavailable_lock_or_private_state_has_no_publication_effect() {
+fn unavailable_existing_locks_have_no_publication_effect() {
     let mut f = Fixture::new();
     let plan = build(&f.input).unwrap();
     f.native.launcher.set(true);
@@ -502,4 +517,157 @@ fn linked_artifacts_and_nonprivate_receipts_refuse_without_following_links() {
     f.publish(&plan).unwrap();
     std::fs::set_permissions(f.journal(&plan), std::fs::Permissions::from_mode(0o644)).unwrap();
     assert!(f.publish(&plan).is_err());
+}
+
+#[test]
+fn a_mutated_review_cannot_publish_even_with_self_consistent_output_digests() {
+    let mut f = Fixture::new();
+    let mut plan = build(&f.input).unwrap();
+    let output = plan
+        .outputs
+        .iter_mut()
+        .find(|o| o.artifact == Artifact::Inventory)
+        .unwrap();
+    let mut document: Value = serde_json::from_slice(&output.bytes).unwrap();
+    document["hosts"][0]["label"] = json!("Unreviewed change");
+    output.bytes = serde_json::to_vec(&document).unwrap();
+    output.sha256 = digest(&output.bytes);
+    plan.steps[0].after_digest = output.sha256.clone();
+    assert_eq!(f.publish(&plan), Err(Error::InvalidPlan));
+    for output in &plan.outputs {
+        assert!(!f.path(output.artifact).exists());
+    }
+    assert!(!f.journal(&plan).exists());
+}
+
+#[test]
+fn disk_bytes_override_published_receipts_and_missing_receipts_are_repaired() {
+    let mut f = Fixture::new();
+    let plan = build(&f.input).unwrap();
+    f.publish(&plan).unwrap();
+    // An external restore to the original absent state must not be called applied
+    // merely because a published receipt remains. Crash immediately after intent.
+    std::fs::remove_file(f.path(Artifact::Inventory)).unwrap();
+    assert_eq!(
+        f.publisher().publish(&plan, &mut f.native, &mut |b, a| {
+            if b == Boundary::AfterIntended && a == Artifact::Inventory {
+                Err("INJECTED_IO")
+            } else {
+                Ok(())
+            }
+        }),
+        Err(Error::Gate("INJECTED_IO"))
+    );
+    f.publish(&plan).unwrap();
+    f.finished(&plan);
+    std::fs::remove_file(f.journal(&plan)).unwrap();
+    f.publisher()
+        .publish(&plan, &mut f.native, &mut |b, _| {
+            assert_ne!(b, Boundary::AfterReplace);
+            Ok(())
+        })
+        .unwrap();
+    f.finished(&plan);
+}
+
+#[test]
+fn pointer_rechecks_kit_after_the_before_pointer_boundary() {
+    let mut f = Fixture::new();
+    let plan = build(&f.input).unwrap();
+    let inventory = f.path(Artifact::Inventory);
+    assert_eq!(
+        f.publisher().publish(&plan, &mut f.native, &mut |b, _| {
+            if b == Boundary::BeforePointer {
+                std::fs::write(&inventory, b"third bytes").unwrap();
+            }
+            Ok(())
+        }),
+        Err(Error::ThirdBytes {
+            artifact: Artifact::Inventory
+        })
+    );
+    assert!(!f.path(Artifact::Installation).exists());
+    assert_eq!(std::fs::read(inventory).unwrap(), b"third bytes");
+}
+
+#[test]
+fn ownership_is_reproved_after_intended_before_replacing() {
+    let mut f = Fixture::new();
+    let plan = build(&f.input).unwrap();
+    let authority = f.native.authority.clone();
+    assert_eq!(
+        f.publisher().publish(&plan, &mut f.native, &mut |b, _| {
+            if b == Boundary::AfterIntended {
+                authority.set(false);
+            }
+            Ok(())
+        }),
+        Err(Error::Ownership {
+            artifact: Artifact::Inventory
+        })
+    );
+    for output in &plan.outputs {
+        assert!(!f.path(output.artifact).exists());
+    }
+    authority.set(true);
+    f.publish(&plan).unwrap();
+    f.finished(&plan);
+}
+
+#[test]
+fn existing_migration_journal_gate_blocks_publication() {
+    let mut f = Fixture::new();
+    let first = build(&f.input).unwrap();
+    f.publish(&first).unwrap();
+    let store =
+        migration::Store::new(&f.path(Artifact::Installation), &f.root.join("Startup")).unwrap();
+    f.native.require_monitor = false;
+    let preview = store.preview(&mut f.native, Backend::Rust).unwrap();
+    // Use migration's real producer, not a hand-written pending journal.
+    store
+        .begin(
+            &mut f.native,
+            &"b".repeat(32),
+            &preview,
+            Backend::Rust,
+            &first.output(Artifact::Installation).bytes,
+            false,
+        )
+        .unwrap();
+    f.native.require_monitor = true;
+    assert!(store.pending().unwrap().is_some());
+    let receipt = std::fs::read(f.journal(&first)).unwrap();
+    assert_eq!(f.publish(&first), Err(Error::Gate("MIGRATION_PENDING")));
+    assert_eq!(std::fs::read(f.journal(&first)).unwrap(), receipt);
+}
+
+#[test]
+fn altered_receipt_fields_refuse_without_republishing() {
+    for field in [
+        "version",
+        "review_digest",
+        "generator_version",
+        "artifact",
+        "before_digest",
+        "after_digest",
+        "owner",
+        "state",
+    ] {
+        let mut f = Fixture::new();
+        let plan = build(&f.input).unwrap();
+        f.publish(&plan).unwrap();
+        let mut journal: Value =
+            serde_json::from_slice(&std::fs::read(f.journal(&plan)).unwrap()).unwrap();
+        journal["receipts"][0][field] = json!("tampered");
+        let changed = serde_json::to_vec(&journal).unwrap();
+        std::fs::write(f.journal(&plan), &changed).unwrap();
+        assert_eq!(f.publish(&plan), Err(Error::ReceiptConflict));
+        assert_eq!(std::fs::read(f.journal(&plan)).unwrap(), changed);
+        for output in &plan.outputs {
+            assert_eq!(
+                std::fs::read(f.path(output.artifact)).unwrap(),
+                output.bytes
+            );
+        }
+    }
 }

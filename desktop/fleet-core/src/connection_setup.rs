@@ -381,7 +381,9 @@ pub fn allocate_loopback(
         .ok_or(Gap::PoolExhausted)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum Artifact {
     Inventory,
     ProfileIndex,
@@ -392,14 +394,15 @@ pub enum Artifact {
 /// Native caller's existing creation evidence, never inferred from a path.
 /// Publication must re-prove this under the installation lock, with the existing
 /// installation/migration ownership gates. These are references, not new receipts.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OwnerEvidence {
     pub installation_id: String,
     pub owner_sid: String,
     pub creation_receipt: String,
 }
 impl OwnerEvidence {
-    fn valid(&self) -> bool {
+    pub(crate) fn valid(&self) -> bool {
         epoch_valid(&self.installation_id)
             && sid_valid(&self.owner_sid)
             && literal(&self.creation_receipt, 256)
@@ -517,7 +520,8 @@ pub struct Output {
     pub bytes: Vec<u8>,
     pub sha256: String,
 }
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PublicationStep {
     pub artifact: Artifact,
     pub before_digest: Option<String>,
@@ -537,8 +541,26 @@ pub struct PublicationPlan {
     /// adds -L while system SSH may already have the same LocalForward.
     pub reference_route_only: bool,
     pub review_digest: String,
+    // Keeps the native proposal tied to build() even though its inspection fields
+    // are public. Replacing output bytes and their hashes cannot re-author a review.
+    publication_identity: String,
 }
 impl PublicationPlan {
+    fn publication_identity(&self) -> String {
+        let after: Vec<_> = self
+            .outputs
+            .iter()
+            .map(|o| json!({"artifact":o.artifact,"sha256":o.sha256}))
+            .collect();
+        let value = json!({"generator":self.generator_version,"root":self.root.to_str(),"after":after,
+            "steps":self.steps,"sources":self.sources,"preferences":self.preferences,"review":self.review_digest,
+            "reference_route_only":self.reference_route_only,
+            "allocation":self.allocation.as_ref().map(|a|json!({"version":a.version,"local":a.local.to_string()}))});
+        digest(value.to_string().as_bytes())
+    }
+    pub(crate) fn matches_review(&self) -> bool {
+        self.publication_identity == self.publication_identity()
+    }
     pub fn output(&self, artifact: Artifact) -> &Output {
         self.outputs
             .iter()
@@ -952,7 +974,7 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
     let review = json!({"generator":GENERATOR_VERSION,"root":input.root,"owner":input.owner,"before":before,"after":after,
         "sources":sources,"preferences":input.preferences,"steps":steps,"reference_route_only":true,
         "allocation":allocation.as_ref().map(|a|json!({"version":a.version,"local":a.local.to_string()}))});
-    Ok(PublicationPlan {
+    let mut plan = PublicationPlan {
         generator_version: GENERATOR_VERSION,
         root: input.root.clone(),
         outputs,
@@ -962,7 +984,10 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
         allocation,
         reference_route_only: true,
         review_digest: digest(&serde_json::to_vec(&review).map_err(|_| Gap::InvalidInput)?),
-    })
+        publication_identity: String::new(),
+    };
+    plan.publication_identity = plan.publication_identity();
+    Ok(plan)
 }
 /// A publisher must obtain the native application-data pointer path separately;
 /// it cannot resolve every artifact by joining a filename onto `kit_root`.

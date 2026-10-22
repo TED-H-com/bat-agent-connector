@@ -2,7 +2,7 @@
 
 [Windows guide](../windows.md) · [繁體中文摘要](#繁體中文設定摘要)
 
-「加入機器」的共用契約及已實作用途選擇、連線預覽、來源政策與純產生器（發布、native apply 與 UI 尚未完成）見[下方章節](#加入機器共用契約)。下列手動設定
+「加入機器」的共用契約及已實作用途選擇、連線預覽、來源政策、純產生器與逐檔發布核心（native apply 與 UI 接線尚未完成）見[下方章節](#加入機器共用契約)。下列手動設定
 仍作現有格式的參考；新流程的完成條件是退休重複填寫，不是另加一份設定表單。
 
 The packaged Windows client contains the Rust Fleet runtime. A new installation can
@@ -86,7 +86,60 @@ The example's required features are `inventory` and `events_stream` with contrac
 API identity must have **exactly observe scope**. A running service or listening port
 alone does not establish API readiness.
 
-## Pure configuration generator — implemented; publication, native apply and UI pending
+## Durable configuration publisher — native core only
+
+[`connection_publish::Publisher`](../../desktop/fleet-core/src/connection_publish.rs)
+is the single writer for a `connection_setup::build()` plan. It resolves kit files
+through `Artifact::location()` and takes the separate native application-data
+`fleet.json` path from its caller. It retains migration's existing launcher and
+monitor guards in that order (Windows `LauncherMutex` / `MonitorMutex`, also used
+by installation), checks `migration::Store::pending()`, current login and monitor
+absence, and requires fresh `FileOwnership::Owned` evidence before each effect.
+An absent file still needs independent creation authority. The mandatory native
+adapter must re-read creation evidence and prove protected state ancestors; this
+core supplies no path-based ownership adapter or enrollment flow.
+
+Publication writes one file at a time in plan order. Before publishing the pointer,
+the three kit files must match their output digests and pass `Configuration::load`
+together, including an empty issues list. These checks repeat before and after
+staging the pointer. `Snapshot::load` verifies the final installation. External
+SSH files are read by the existing loader and never written. Plans keep an internal
+binding from `build()` so changing public inspection fields cannot re-author a review.
+
+The migration-journal pattern is reused alongside the native pointer:
+`fleet-publications/<review_digest>.json`. Each bounded, versioned journal retains
+the full step sequence and one receipt per reached step, including version, review
+digest, generator version, artifact, before/after digest, owner and `intended` or
+`published` state. Receipts are written before replacement and after matching
+read-back. POSIX directories/files are 0700/0600; Windows uses a protected
+owner/SYSTEM DACL with explicit current-user ownership, and refuses existing broad
+ACLs or reparse points. Creation evidence and native ancestor privacy remain
+separate mandatory checks, not properties inferred from these permissions.
+
+The same plan resumes from disk bytes: after bytes reconcile a lagging receipt;
+before bytes permit replacement; any third bytes stop with `ThirdBytes { artifact }`
+and retain completed receipts. An unfinished journal, including the gap between
+two steps, blocks a different review with `UnfinishedPlan { review_digest }`.
+Completed journals remain available. The shared `compare_replace` primitive also
+serves profile, migration and supervisor writes, preserving their error codes,
+read policies and creation/deletion behavior. Each replacement is durable on its
+own; neither a cross-file transaction nor a filesystem compare-and-swap against a
+non-cooperating editor is claimed.
+
+This module has no Tauri/IPC, UI, Python, durable-operation participant, enrollment,
+startup, tunnel or monitor-launch wiring. The native ownership adapter and live
+acceptance remain follow-up work. Linux fixtures run real generator/loaders and
+filesystem IO with synthetic native ownership/lock authorities. Windows CI's
+**Fleet contracts and owned Windows fixtures** additionally exercises real DACL,
+owner/reparse and replacement behavior; Linux tests do not prove those semantics.
+
+**繁體中文摘要：** 發布核心沿用既有安裝／遷移 guards 與 pending gate，持鎖重查
+建立證據、owner 和目前位元組，逐檔寫入 intended／published 回執。第三種內容立即
+停止；同 plan 依磁碟恢復，未完成 plan 阻擋另一份審閱。三個 kit 檔讀回並通過既有
+loader 後才寫 native application-data 指標。一般使用者流程仍待接線，手動設定
+說明尚不能退休；不宣稱 E01／E03／E11、R0–R5 或 A01–A40 的實機驗收完成。
+
+## Pure configuration generator — implemented; native apply and UI wiring pending
 
 The native-only [generator](../../desktop/fleet-core/src/connection_setup.rs) accepts a
 reviewed setup: a selected [BAT catalog](bat-source-catalog.md) profile with admission
@@ -156,9 +209,9 @@ allocation does not create a profile or rewrite SSH. Preview recheck reports a c
 without selecting a replacement. Every plan is **reference-route only**: current SSH
 launch adds `-L`, so native wiring must settle the duplicate-listener boundary before
 publication/activation. Independent observe-handle enrollment, safe overlay consumption,
-native publication/readback, preference persistence and UI remain open.
+native apply wiring, preference persistence and UI remain open. The publication/readback core below is implemented.
 
-**繁體中文狀態：產生器已實作；發布、native apply 與 UI 尚未完成。**
+**繁體中文狀態：產生器與逐檔發布核心已實作；native apply 與 UI 接線尚未完成。**
 四檔由已審來源及版本化政策產生，缺關聯回傳具型別缺口，不猜 endpoint、不接管手寫檔。
 使用者仍選標籤、既有 profile／route／workspace 與四種獨立偏好；一般安裝流程的手填
 步驟尚未退休。測試以合成資料驗證正式 loaders；Tauri sanitizer
