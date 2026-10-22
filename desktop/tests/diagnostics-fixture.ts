@@ -1,4 +1,5 @@
 import type {Page} from '@playwright/test';
+import {managedStatusFixture} from './managed-status-fixture.ts';
 import {attentionFixture, mountAttention} from './attention-fixture.ts';
 export async function diagnosticsFixture(page:Page, native=false, known=true, producerBootstrap:any=null) {
  const base=attentionFixture(),state={projectsStatus:200,hostsStatus:200,hostStale:false,operationsStatus:200,eventStatus:200,sessionReads:false,omitReading:false,historyReasons:['archive_unconfirmed','archive_budget','message_ids'] as string[]|undefined,scopes:['observe'],reads:[] as string[],hold:false,release:null as any,saved:[] as any[],sessions:[{host:'private-box.internal',session_id:'sample-1',title:'Private title',loaded:true,streaming:false,stale:false},{host:'private-box.internal',session_id:'sample-2',title:'Private title 2',loaded:false,streaming:true,stale:true,pending:{kind:'permission'}}] as any[]};
@@ -26,14 +27,15 @@ export async function diagnosticsFixture(page:Page, native=false, known=true, pr
  if(native){
   await page.exposeFunction('diagnosticsRequest',dispatch);
   await page.exposeFunction('diagnosticsSave',(input:any)=>{state.saved.push(input);return {display_name:input.filename};});
-  await page.addInitScript(({caps,known})=>Object.assign(window,{isTauri:true,__TAURI_INTERNALS__:{invoke:async(command:string,args:any)=>{
+  await page.addInitScript(({caps,known,managed})=>Object.assign(window,{isTauri:true,__TAURI_INTERNALS__:{invoke:async(command:string,args:any)=>{
    if(command==='native_status')return {endpoint:'https://central.example/',credential_available:true,diagnostics_save:true,app_build:{version:'0.1.1',commit:known?'b'.repeat(40):null}};
+   if(command==='managed_control' && args.input.action==='status')return managed;
    if(command==='connector_connect')return caps;
    if(command==='connector_request')return (window as any).diagnosticsRequest(args.input);
    if(command==='native_diagnostics_save')return (window as any).diagnosticsSave(args.input);
    if(command==='connector_disconnect')return null;
    throw Error('Fixture feature unavailable');
-  }}}),{caps:caps(),known});
+  }}}),{caps:caps(),known,managed:managedStatusFixture(false)});
  }else await mountAttention(page,false,{...base,caps},dispatch);
  await page.addInitScript(()=>{Object.defineProperty(navigator,'clipboard',{value:{writeText:async(text:string)=>{(window as any).diagnosticsClipboard=text;}}});});
  return Object.assign(state,{producer});
