@@ -1,8 +1,9 @@
 import {test, expect, type Page} from '@playwright/test';
 import {managedSetupFixture, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
 
-async function existingForm(page: Page, locale: string) {
+async function existingForm(page: Page, locale: string, profile = 'default') {
   const state = await managedSetupFixture(page, false, locale); state.saved = true;
+  state.configuredProfile = profile;
   await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);
   await page.locator('[data-setup-connect] > summary').click();
   await page.locator('[data-setup-manual] > summary').click();
@@ -40,6 +41,15 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} existing connecti
     await expect(page.locator('[data-setup-review-reason]')).toHaveText(credential);
     await expect(page.locator('[data-setup-host]').getByRole('button', {name: review, exact:true})).toBeDisabled();
     expect(state.previews).toEqual([]); expect(state.posts).toEqual([]);
+  });
+  test('S1 keeps a configured nondefault profile when the form has no profile draft', async ({page}) => {
+    const state = await existingForm(page, locale, 'work');
+    const button = page.locator('[data-setup-host]').getByRole('button', {name:review,exact:true});
+    await expect(button).toBeEnabled(); await button.click();
+    await expect(page.locator('[data-setup-review]')).toContainText('work');
+    expect(state.previews[0].body.params.profile_id).toBe('work');
+    await applySetupReview(page);
+    expect(state.discoveries).toEqual([]); expect(state.staged).toEqual([]); expect(state.posts).toHaveLength(1);
   });
   test('S2 shared fixture uses discovery and N5 names the profile placeholder', async ({page}) => {
     const state = await managedSetupFixture(page, false, locale);

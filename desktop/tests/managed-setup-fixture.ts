@@ -9,7 +9,7 @@ const hostGolden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed
 export async function managedSetupFixture(page: Page, native: boolean, locale: string | null = 'en',
   evidence?: {state: any, operation: any}) {
   const base = attentionFixture();
-  const state = {posts: [] as any[], previews: [] as any[], staged: [] as any[], discoveries: [] as any[], discoveryVersion: 1,
+  const state = {posts: [] as any[], previews: [] as any[], staged: [] as any[], discoveries: [] as any[], discoveryVersion: 1, configuredProfile:'default',
     discoveryProfiles: null as any[] | null, discoveryWorkspaces: null as any[] | null, lost: false, refused: false, previewRefused: false,
     admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, connectionStatus: null as string | null, connected: true, extraHosts: [] as any[], repositories: [] as any[], reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profiles: null as any[] | null, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
   if (evidence) {state.saved = true; state.operation = evidence.operation; state.configuredHost = evidence.operation.target.host;}
@@ -27,7 +27,7 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
       const result = state.setupStatus !== 200 ? {status:state.setupStatus,data:{error:{code:state.setupStatus===403?'FORBIDDEN':'NOT_FOUND',message:'Setup source withdrawn'}}}
         : {status:200,data:{revision:state.revision, preview_contract_version:1, discovery_contract_version:state.discoveryVersion, verification:structuredClone(state.verification),
           hosts:[...(state.saved ? [{...structuredClone(hostGolden), name:state.configuredHost,url:state.configuredUrl,connected:state.connected,
-            token_available:true, connection_checked_at:null,
+            token_available:true, profile_id:state.configuredProfile, connection_checked_at:null,
             connection_status: state.connectionStatus || (state.connected ? 'connected' : 'checking')}] : []), ...state.extraHosts],
           repositories:structuredClone(state.repositories), profiles:state.profiles ?? (state.hasProfiles ? [{id:'profile-demo',name:locale==='zh-TW'?'示範連線設定檔':'Demo profile',url:'wss://demo.example:9876/',
             fingerprint:'a'.repeat(64),profile_id:'default',token_available:true}] : []), profiles_error: state.profilesError, busy:false}};

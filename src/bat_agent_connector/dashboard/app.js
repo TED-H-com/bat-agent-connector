@@ -57054,9 +57054,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	const hasFreshCredential = () => !!fields.get("bat_secret").value || (stagedSecrets.get("host")?.expiresAt || 0) > Date.now();
 	const configuredHost = () => snapshot?.hosts?.find((row) => row.name === fields.get("host").value.trim());
+	const profileId = () => fields.get("profile_id").value.trim() || configuredHost()?.profile_id || "default";
 	function reuseExistingConnection() {
 		const host = configuredHost();
-		return !!host?.token_available && !saved.import_profile_id && !hasFreshCredential() && host.url?.replace(/\/$/, "") === fields.get("url").value.trim().replace(/\/$/, "") && normalizeSetupFingerprint(host.fingerprint || "") === normalizeSetupFingerprint(fields.get("fingerprint").value) && (host.profile_id || "default") === (fields.get("profile_id").value.trim() || "default");
+		return !!host?.token_available && !saved.import_profile_id && !hasFreshCredential() && host.url?.replace(/\/$/, "") === fields.get("url").value.trim().replace(/\/$/, "") && normalizeSetupFingerprint(host.fingerprint || "") === normalizeSetupFingerprint(fields.get("fingerprint").value) && (host.profile_id || "default") === profileId();
 	}
 	const needsDiscovery = () => snapshot?.discovery_contract_version === 1 && !reuseExistingConnection() && !discovery?.profile_id;
 	const discoveryReason = () => configuredHost() && !hasFreshCredential() ? "setup_profile_token_required" : "setup_discovery_required";
@@ -57444,7 +57445,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				...imported ? { import_profile_id: imported } : {
 					url: value("url"),
 					fingerprint: value("fingerprint"),
-					profile_id: value("profile_id") || "default"
+					profile_id: profileId()
 				},
 				writes: checked("writes"),
 				orchestrate: checked("orchestrate"),

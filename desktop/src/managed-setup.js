@@ -416,12 +416,13 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   const hasFreshCredential = () => !!fields.get('bat_secret').value || (stagedSecrets.get('host')?.expiresAt || 0) > Date.now();
   const configuredHost = () => snapshot?.hosts?.find(row => row.name === fields.get('host').value.trim());
+  const profileId = () => fields.get('profile_id').value.trim() || configuredHost()?.profile_id || 'default';
   function reuseExistingConnection() {
     const host = configuredHost();
     return !!host?.token_available && !saved.import_profile_id && !hasFreshCredential() &&
       host.url?.replace(/\/$/, '') === fields.get('url').value.trim().replace(/\/$/, '') &&
       normalizeSetupFingerprint(host.fingerprint || '') === normalizeSetupFingerprint(fields.get('fingerprint').value) &&
-      (host.profile_id || 'default') === (fields.get('profile_id').value.trim() || 'default');
+      (host.profile_id || 'default') === profileId();
   }
   const needsDiscovery = () => snapshot?.discovery_contract_version === 1 && !reuseExistingConnection() && !discovery?.profile_id;
   const discoveryReason = () => configuredHost() && !hasFreshCredential() ? 'setup_profile_token_required' : 'setup_discovery_required';
@@ -674,7 +675,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       }
       const imported = kind === "host" && !secretRef && saved.import_profile_id;
       const params = kind === "host" ? {...(imported ? {import_profile_id: imported} :
-        {url: value("url"), fingerprint: value("fingerprint"), profile_id: value("profile_id") || "default"}),
+        {url: value("url"), fingerprint: value("fingerprint"), profile_id: profileId()}),
         writes: checked("writes"), orchestrate: checked("orchestrate"), shared_clone_worktrees: checked("shared_clone_worktrees"),
         managed_roots: defaults ? [] : value("managed_roots").split(/\r?\n|;/).map(item => item.trim()).filter(Boolean),
         ...(!defaults && value("ssh_alias") ? {ssh_alias: value("ssh_alias")} : {})}
