@@ -17,8 +17,8 @@ PREFIX = "/bat-agent-connector/"
 REPO = "https://github.com/TED-H-com/bat-agent-connector/blob/main/"
 LOCKFILE = "desktop/package-lock.json"
 LOCKFILE_DIGEST = "without_root_version"
-# capture_site.mjs requires these paths to equal the pinned commit and reads its tooling from the checkout.
-# tests/test_product_site_check.py keeps this set identical to the JS capture guard.
+# This checker is authoritative for pinned capture inputs; only tooling comes from the checkout.
+# The recorded capture script's early guard covers a subset until the next recapture.
 PINNED_PATHS = (
     "desktop/src/",
     "desktop/tests/demo/",

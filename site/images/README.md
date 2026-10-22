@@ -69,8 +69,18 @@ To repeat the capture:
 檢查十六張公開圖片、48 張不同寬度的預覽及 18 張補充畫面，再連同 manifest 更新圖庫。
 
 The script owns its ephemeral loopback server and Chromium, and closes both on exit.
-A source-byte check refuses frontend, demo, conversation fixture or browser asset changes against the pinned commit.
-來源位元組檢查會拒絕前端、demo、對話 fixture 或瀏覽器資產與固定 commit 不同的擷取。
+The script's source-byte guard refuses frontend, demo and dashboard asset drift
+against the pinned commit before capturing.
+The [checker](../../scripts/check_product_site.py) verifies every recorded capture
+input against that commit, including the conversation fixture, except
+`scripts/capture_site.mjs` and `desktop/package-lock.json`. Those two inputs are
+verified against the checkout, with only the lockfile's root version excluded.
+
+腳本的來源位元組檢查會在擷取前拒絕前端、demo 與 Dashboard 資產偏離固定 commit。
+[校驗程式](../../scripts/check_product_site.py)會對照固定 commit 驗證所有記錄的擷取輸入，
+包括對話 fixture；只有 `scripts/capture_site.mjs` 與 `desktop/package-lock.json`
+改以工作樹內容校驗，且僅排除 lockfile 的根套件版本。
+
 To refresh, deliberately update the pin, review fixture compatibility and regenerate
 all scenes. Rendering may vary with browser and system fonts; the manifest
 identifies the files actually produced.
