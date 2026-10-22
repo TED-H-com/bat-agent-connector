@@ -566,6 +566,10 @@ fn materialize(resources: &Path, app_data: &Path) -> Result<(PathBuf, String), S
                 writer
                     .sync_all()
                     .map_err(|_| "MANAGED_RUNTIME_WRITE_FAILED")?;
+                // Publish only after closing the write handle. In particular, a
+                // concurrently spawned child must not inherit a writer to the
+                // executable we are about to launch (ETXTBSY on Unix).
+                drop(writer);
                 if count != document.size || digest(&temporary)? != document.sha256 {
                     return Err("MANAGED_RUNTIME_INTEGRITY_FAILED".into());
                 }
