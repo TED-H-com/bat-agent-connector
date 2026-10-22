@@ -209,6 +209,9 @@ def receive(ops, principal, body):
         # Expiry prohibits a new claim/write, not late evidence of the original claimed effect.
         ops.db.execute("UPDATE operation_steps SET response=? WHERE operation_id=? AND name=?",
             (canonical({"receipts": [*history, receipt]}).decode(), operation["operation_id"], STEP))
+        ops._merge_refs(operation["operation_id"], {
+            "connection_id": operation["target"].get("connection_id") or "conn_" + operation["operation_id"][3:],
+            "receipt_refs": [item["receipt_ref"] for item in [*history, receipt]]})
         ops.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (operation["operation_id"],))
         ops.journal.api_event("operation", operation["operation_id"], "connection.native.receipt",
             {"step": STEP, "receipt_ref": receipt["receipt_ref"], "outcome": body["outcome"]}, actor=principal.actor)

@@ -741,6 +741,9 @@ class OperationService:
         if op["status"] in TERMINAL:
             return op
         if op["action"] == "setup.connection.apply" and op["status"] == "needs_attention":
+            if op["error_code"] == "CONNECTION_PROJECTION_CHANGED":
+                from .setup_connections import cancel_projection_conflict
+                return cancel_projection_conflict(self, principal, op)
             open_step = self.db.execute("SELECT name FROM operation_steps WHERE operation_id=? "
                 "AND status IN ('started','uncertain') ORDER BY seq DESC LIMIT 1", (operation_id,)).fetchone()
             if open_step and open_step["name"] == "native_effects":

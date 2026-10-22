@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+import sqlite3
 
 from . import connection_handoff as handoff
 from . import dashboard_sync, platform_files
@@ -268,11 +269,18 @@ def _authorize(ops, principal, operation, verb):
             history = handoff.receipts(row) if row else []
             receipt = history[-1] if history else None
             if receipt and receipt["outcome"] != "uncertain":
-                raise OperationError("CONNECTION_EFFECT_PROVEN", "The native outcome is proven; resume its completion instead of abandoning it / "
-                    "本機結果已有確定回執；請恢復完成原操作，不能放棄已證實的效果", 409)
+                if (operation["status"] == "needs_attention" and operation["error_code"] == "CONNECTION_PROJECTION_CHANGED"
+                        and receipt["outcome"] in {"applied", "unchanged"}):
+                    return  # This one recorded projection conflict has an explicit, evidence-preserving exit.
+                message = ("Native participant refused without writing; the runner will finish this operation as failed / "
+                    "本機參與者已拒絕且未寫入；執行程序將以失敗結束此操作") if receipt["outcome"] == "refused" else (
+                    "Definitive native evidence is retained; complete this operation instead of abandoning it / "
+                    "已保留本機確定回執；應完成此操作，不能放棄已證實的效果")
+                raise OperationError("CONNECTION_EFFECT_PROVEN", message, 409)
             if (operation["status"] != "needs_attention"
                     and (operation.get("external_refs") or {}).get("native_effects_sent")):
-                raise OperationError("CONNECTION_EFFECT_PENDING", "Read back the dispatched native effect before cancelling", 409)
+                raise OperationError("CONNECTION_EFFECT_PENDING", "Read back the dispatched native effect before cancelling / "
+                    "請先查回已派送的本機效果，再取消操作", 409)
 
 
 def _require_intent(operation):
@@ -305,6 +313,32 @@ def abandon(ops, principal, operation):
         ops.db.execute("UPDATE operations SET cancel_requested=1 WHERE operation_id=?", (operation["operation_id"],))
         return ops._transition(operation["operation_id"], "cancelled", actor=principal.actor,
             reason="Human abandoned this operation: local effect never proven")
+
+
+def cancel_projection_conflict(ops, principal, operation):
+    """Close a proven local effect whose shared association lost its accepted revision."""
+    with ops.journal.tx():
+        if ops._running(operation["operation_id"]):
+            raise OperationError("CONNECTION_OPERATION_RUNNING", "Wait for the current runner to exit before cancelling / "
+                "請等待目前的執行程序退出後再取消", 409)
+        current = ops.get(operation["operation_id"], steps=False)
+        row = ops.db.execute("SELECT response FROM operation_steps WHERE operation_id=? AND name=?",
+            (operation["operation_id"], handoff.STEP)).fetchone()
+        history = handoff.receipts(row) if row else []
+        if (current["status"] != "needs_attention" or current["error_code"] != "CONNECTION_PROJECTION_CHANGED"
+                or not history or history[-1]["outcome"] not in {"applied", "unchanged"}):
+            raise OperationError("CONNECTION_EFFECT_PROVEN", "Only the recorded projection conflict can be closed / "
+                "僅能結束已記錄的關聯投影衝突", 409)
+        outcome = history[-1]["outcome"]
+        local = "Local configuration was written / 本機設定已寫入" if outcome == "applied" else (
+            "Local configuration was already unchanged / 本機設定已符合檢閱內容，未另行寫入")
+        message = local + "; shared association was not saved because it changed / 共用關聯已變更，因此未儲存"
+        decision = {"code": "CONNECTION_PROJECTION_NOT_SAVED", "message": message,
+            "native_outcome": outcome, "actor": principal.actor}
+        ops._merge_refs(operation["operation_id"], {"projection_decision": decision})
+        ops.journal.api_event("operation", operation["operation_id"], "connection.projection.cancelled", decision, actor=principal.actor)
+        ops.db.execute("UPDATE operations SET cancel_requested=1 WHERE operation_id=?", (operation["operation_id"],))
+        return ops._transition(operation["operation_id"], "cancelled", actor=principal.actor, reason=message)
 
 
 def validate_operation_source(ops, operation):
@@ -402,7 +436,7 @@ async def _run(ctx):
                     "SELECT 1 FROM operation_steps WHERE operation_id=? AND name=?", (ctx.operation_id, handoff.STEP)).fetchone():
                 _source_guard(ctx)
             receipt = await _native(ctx)
-        except OSError:
+        except (OSError, sqlite3.Error):
             raise Uncertain(handoff.STEP, "Native receipt needs reconciliation under the original operation") from None
     # A successful operation and its projection become visible in the same commit.
     try:
@@ -417,7 +451,7 @@ async def _run(ctx):
             if ctx.op["action"] == "setup.connection.apply":
                 result = {**result, "receipt_ref": receipt["receipt_ref"]}
             ctx.service._transition(ctx.operation_id, "succeeded", result=result)
-    except OSError:
+    except (OSError, sqlite3.Error):
         raise Uncertain("connection_binding", "Projection and success receipt need the original transaction replay") from None
     except OperationError as error:
         if ctx.op["action"] == "setup.connection.apply":

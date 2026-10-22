@@ -167,7 +167,7 @@ History／relations 的 opaque cursor 在任何 journal read 前驗證 version�
 | `GET /api/v1/sessions/{host}/{id}/messages` | observe | 經 read-only fleet 讀對話；`reading` 隨當次讀取附 `incomplete_reasons`（`archive_unconfirmed`／`archive_budget`／`message_ids`）與可選 `unindexed_count`，見 [session-reading.md](session-reading.md) |
 | `GET /api/v1/policy` | observe | mutation 清單與各主機設定 |
 | `GET /api/v1/connections?installation_ref=…&after=…&limit=…` | observe | 僅目前 principal 與 installation 的投影；limit 1–200，預設 50，`next_after` 分頁 |
-| `POST /api/v1/connections/preview` | observe；setup 另需 manage 與原 personal identity | 唯讀連線 before／after 與 review_digest；不 probe、不寫入、不建立 operation |
+| `POST /api/v1/connections/preview` | observe；解析來源或 setup 另需 manage 與原 personal identity | 唯讀連線 before／after 與 review_digest；來源沿用 discovery 的 resolver／validator 及拒絕碼，不 probe、不寫入、不建立 operation |
 | `POST /api/v1/connections/receipt` | manage 與原 personal identity | 固定 v1 native 收據；只能完成原 operation 的 native_effects，不能受理新意圖 |
 | `POST /api/v1/connections/handoff` | manage 與原 personal identity | exact body `{installation_ref,operation_id}`；claim 記錄 fence 並回傳 native_handoff；TTL 從 claim 起算，未 claim 的過期 epoch 可重發 |
 | `GET/POST /api/v1/operations` | observe／依 action | 列表；建立（`Idempotency-Key` 標頭或 `idempotency_key`，`?wait=0-60` 秒，格式錯誤時在保存前回 422） |

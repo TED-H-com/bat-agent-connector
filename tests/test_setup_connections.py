@@ -25,6 +25,7 @@ HANDOFF = "/api/v1/connections/handoff"
 async def served_setup(installed):
     daemon, principal, _ = installed
     bearer = token(daemon, principal.actor, *principal.scopes)
+    daemon.managed_stop = asyncio.Event()
     server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     async def request(method, path, body=None, *, credential=bearer, key=None):
@@ -130,7 +131,7 @@ class DiskParticipant:
         return await request("POST", RECEIPT, body), body
 
 
-async def test_c_observer_association_has_zero_configuration_or_manage_effects(installed, served_setup, source):
+async def test_observer_association_has_zero_configuration_or_manage_effects(installed, served_setup, source):
     daemon, _, root = installed
     observer = token(daemon, "reader", "observe")
     before = (root / "config/hosts.toml").read_bytes()
@@ -147,7 +148,7 @@ async def test_c_observer_association_has_zero_configuration_or_manage_effects(i
     assert daemon.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
 
 
-async def test_c_nonpersonal_setup_refused_before_journal(installed, served_setup, source):
+async def test_nonpersonal_setup_refused_before_journal(installed, served_setup, source):
     daemon, _, _ = installed
     outsider = token(daemon, "other-person", "observe", "manage")
     body = intent(source, action="setup.connection.apply")
@@ -157,7 +158,7 @@ async def test_c_nonpersonal_setup_refused_before_journal(installed, served_setu
     assert not daemon.journal.db.execute("SELECT 1 FROM operations").fetchone()
 
 
-async def test_e_same_key_lost_reply_and_two_installations(installed, served_setup, source):
+async def test_same_key_lost_reply_and_two_installations(installed, served_setup, source):
     daemon, _, _ = installed
     body, ident = await accept(served_setup, intent(source))
     await settle_operations(daemon.ops)
@@ -175,7 +176,7 @@ async def test_e_same_key_lost_reply_and_two_installations(installed, served_set
 
 
 @pytest.mark.parametrize("fault", ["principal", "installation", "endpoint", "pin", "profile", "revision"])
-async def test_e_existing_binding_refuses_rebind_or_foreign_access(installed, served_setup, source, fault):
+async def test_existing_binding_refuses_rebind_or_foreign_access(installed, served_setup, source, fault):
     daemon, principal, root = installed
     _, ident = await accept(served_setup, intent(source))
     await settle_operations(daemon.ops)
@@ -209,7 +210,7 @@ async def test_e_existing_binding_refuses_rebind_or_foreign_access(installed, se
 
 
 @pytest.mark.parametrize("phase", ["never_claimed", "after_effect", "late_first", "expired_readback", "uncertain"])
-async def test_h_disk_participant_disconnect_expiry_and_third_value(installed, served_setup, source, tmp_path, phase):
+async def test_disk_participant_disconnect_expiry_and_third_value(installed, served_setup, source, tmp_path, phase):
     daemon, _, _ = installed
     body, ident = await accept(served_setup, intent(source, action="setup.connection.apply"))
     await settle_operations(daemon.ops)
@@ -1373,3 +1374,11 @@ async def test_changed_discovery_source_is_refused_before_dispatch(installed, se
     else:
         assert not daemon.journal.db.execute("SELECT 1 FROM operations").fetchone()
     assert not daemon.journal.db.execute("SELECT 1 FROM connection_bindings").fetchone()
+
+
+async def test_pending_effect_cancel_refusal_is_bilingual(installed, served_setup, source):
+    _, ident = await waiting_connection(installed, served_setup, source)
+    await claim_handoff(served_setup, ident)
+    status, response = await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {})
+    assert status == 409 and response["error"]["code"] == "CONNECTION_EFFECT_PENDING"
+    assert "查回" in response["error"]["message"] and "Read back" in response["error"]["message"]

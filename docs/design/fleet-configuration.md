@@ -343,8 +343,8 @@ stateDiagram-v2
 | 原步驟讀回／排程（現況） | 實際轉移與限制 |
 | --- | --- |
 | setup 已送步驟：目前 revision 等於 after／before | after 回傳已完成結果；before 回傳 `RERUN`，由原 operation 接續該步，不建立新意圖。[managed_setup.py:640](../../src/bat_agent_connector/managed_setup.py#L640)、[operations.py:285](../../src/bat_agent_connector/operations.py#L285) |
-| setup 已送步驟：目前 revision 既非 before 也非 after | reconcile 回傳 `None`，step 標為 uncertain 並拋出 `Uncertain`；operation 仍為 `uncertain`，按 30／60／120／300／600 秒退避查回。[managed_setup.py:649](../../src/bat_agent_connector/managed_setup.py#L649)、[operations.py:279](../../src/bat_agent_connector/operations.py#L279)、[operations.py:49](../../src/bat_agent_connector/operations.py#L49)、[operations.py:935](../../src/bat_agent_connector/operations.py#L935) |
-| setup 的 Uncertain 重試預算耗盡 | 才轉為 `needs_attention`／`UNCERTAIN_UNRESOLVED`。`uncertain` 及 `needs_attention` 都不屬 TERMINAL；`_busy` 持續阻擋新 setup，受理時回 `SETUP_BUSY`，不是耗盡後即可重新送出。[operations.py:938](../../src/bat_agent_connector/operations.py#L938)、[operations.py:36](../../src/bat_agent_connector/operations.py#L36)、[managed_setup.py:135](../../src/bat_agent_connector/managed_setup.py#L135)、[managed_setup.py:384](../../src/bat_agent_connector/managed_setup.py#L384) |
+| setup 已送步驟：目前 revision 既非 before 也非 after | reconcile 回傳 `None`，step 標為 uncertain 並拋出 `Uncertain`；operation 仍為 `uncertain`，按 30／60／120／300／600 秒退避查回。[managed_setup.py:649](../../src/bat_agent_connector/managed_setup.py#L649)、[operations.py:279](../../src/bat_agent_connector/operations.py#L279)、[operations.py:49](../../src/bat_agent_connector/operations.py#L49)、[operations.py:938](../../src/bat_agent_connector/operations.py#L938) |
+| setup 的 Uncertain 重試預算耗盡 | 才轉為 `needs_attention`／`UNCERTAIN_UNRESOLVED`。`uncertain` 及 `needs_attention` 都不屬 TERMINAL；`_busy` 持續阻擋新 setup，受理時回 `SETUP_BUSY`，不是耗盡後即可重新送出。[operations.py:941](../../src/bat_agent_connector/operations.py#L941)、[operations.py:36](../../src/bat_agent_connector/operations.py#L36)、[managed_setup.py:135](../../src/bat_agent_connector/managed_setup.py#L135)、[managed_setup.py:384](../../src/bat_agent_connector/managed_setup.py#L384) |
 | Fleet migration 的 config／startup 讀回第三值 | 此路徑直接拒絕 `MIGRATION_CHANGED`；與上述 setup journal 的退避查回不同。[migration.rs:319](../../desktop/fleet-core/src/migration.rs#L319) |
 
 以下 UI 轉移是**規範**；顯示差異不得取代上表的原 operation 查回流程。
@@ -631,6 +631,8 @@ For every terminal state (`cancelled`, `succeeded`, `failed`), an identical alre
 accepted receipt returns `replayed: true`; every other valid receipt returns
 `CONNECTION_OPERATION_TERMINAL`. Replay never changes the terminal state or history.
 The envelope's `receipt` is the latest receipt. No route admits another intent.
+Receipt acceptance atomically links its `receipt_ref` on the operation read, including
+`refused` and `uncertain` evidence; a later projection failure cannot hide it.
 
 #### Projection, admission and recovery
 
@@ -688,7 +690,9 @@ The native step remains succeeded and its receipts stay linked on operation read
 `external_refs.connection_id` and `external_refs.receipt_refs`; the competing projection
 revision and choices are not overwritten. Other refused proven-completion guards use
 `CONNECTION_COMPLETION_BLOCKED`. A projection I/O failure uses the existing Uncertain
-budget, retaining the proven native step and allowing only the original completion path.
+budget for `OSError` and `sqlite3.Error`, retaining the proven native step and allowing
+only the original completion path. Resume after storage recovery commits one projection
+row with the original receipt reference, without another native write.
 
 `installation_ref` is an opaque client claim under the authenticated principal.
 It separates one person's installations; it grants nothing and proves no attestation.
@@ -730,17 +734,46 @@ it proves neither that the local write happened nor that it did not. It does not
 resend, mint a key, clear unrelated locks or undo earlier configuration. Subsequent
 new/different receipts are refused with `CONNECTION_OPERATION_TERMINAL`, keeping it
 terminal; identical accepted replay follows the rule above. A definitive receipt
-cannot be abandoned: cancel refuses with `CONNECTION_EFFECT_PROVEN`, preserving the
-step and evidence. Resume retries proven completion after its projection fault is
-resolved, without another native write. Definitive refusal ends failed;
+cannot be recorded as never proven. Except for the specific projection conflict below,
+cancel refuses with `CONNECTION_EFFECT_PROVEN`, preserving the step and evidence.
+Resume retries proven completion after a storage fault is resolved, without another
+native write. For `refused`, nothing was written; the cancel refusal explains that the
+runner finishes the operation as failed and does not suggest an unavailable resume.
+Definitive refusal ends failed;
 applied/unchanged completes succeeded unless a projection conflict needs attention.
 Earlier known
 configuration effects remain in operation history even if the local participant fails.
 
-繁體中文：observe 僅儲存自己的連線關聯；會解析 BAT 來源的預覽必須有 manage 與原
-personal 安裝身分。GET 不派送；POST claim 先記錄 fence 再回傳，TTL 從 claim 起算。
-未 claim 的過期 challenge 可沿原 operation／step／effect ID 增加 epoch 重發；已 claim
-的效果不重發，晚到收據與 uncertain 後的一次確定 readback 可完成原操作。
-needs_attention 的取消是針對單一 operation 的明確人工放棄，記錄本機效果始終未證實，
-不是重送、清空 locks 或證明沒有本機寫入。native 收據不能證明中央可達性或遠端擁有權。
+Exactly `needs_attention CONNECTION_PROJECTION_CHANGED` has a different cancel exit
+for journals admitted before the connection gate. The person's cancel records
+`CONNECTION_PROJECTION_NOT_SAVED` in `external_refs.projection_decision` and the
+operation history: participant evidence reports that local configuration was written
+(or already unchanged), while the shared association was not saved because its
+revision changed. This cancels the one operation and releases connection/setup/stop
+busy status, without overwriting the competing projection, erasing the succeeded
+native step, losing receipt links, resending or clearing unrelated locks. The person
+can review a new edit against the current revision. Every other proven-receipt state
+retains its cancel refusal, and the runner must exit before this decision is recorded.
+
+繁體中文：observe 僅儲存自己的連線關聯；解析來源須有 manage 與原 personal 安裝身分。
+同一 principal／installation／connection 只能有一個未完成操作；`CONNECTION_BUSY`
+會列出尚未完成的原操作。取消未 claim 的操作不派送效果，之後可重新檢閱。
+GET 不派送；POST claim 先重查 revision 與 discovery snapshot，再記錄 fence。
+版本或已檢閱來源變動時回 `SETUP_REVIEW_CHANGED`，不提供 native 寫入指示；已知的
+Connector 設定成功收據仍保留。TTL 從 claim 起算；只有未 claim 的過期 challenge
+可在 claim 或明確 resume 時沿原 operation／step／effect ID 增加 epoch，背景不重發。
+重建 challenge 的 key 改變時回 `CONNECTION_HANDOFF_KEY_CHANGED`，不提供新指示，
+保留操作狀態；持有原 challenge 的 participant 仍可回報原效果證據。
+晚到收據與 uncertain 後的一次確定 readback 可完成原操作；相同已接受收據在所有
+終態均可冪等 replay，其他有效收據回 `CONNECTION_OPERATION_TERMINAL`。
+只有開放步驟是 native_effects、無確定收據，且已到 needs_attention 時，取消才記錄
+`LOCAL_EFFECT_NEVER_PROVEN`。configuration-only uncertainty 沿正常取消並列出該步驟；
+runner 未退出時回 `CONNECTION_OPERATION_RUNNING`。確定回執不能被改記成未證實。
+一般確定回執以 `CONNECTION_EFFECT_PROVEN` 拒絕取消；SQLite／儲存故障沿原 Uncertain
+預算與 resume 完成。refused 已證明未寫入，執行程序會以失敗結束，不要求不可用的 resume。
+唯一例外是 `needs_attention CONNECTION_PROJECTION_CHANGED`：本人取消時記錄
+`CONNECTION_PROJECTION_NOT_SAVED`，說明本機已寫入或原已符合，但共用關聯因版本
+改變而未儲存。原成功步驟及收據連結保留，釋放 busy 後可依目前 revision 重新檢閱。
+兩種人工決定都不重送、不清空 locks，也不撤銷已知設定。native 收據只提供本機證據，
+server 無法驗證本機寫入時間，不能據此證明中央可達性或遠端擁有權。
 此證據不代表實機驗收完成。
