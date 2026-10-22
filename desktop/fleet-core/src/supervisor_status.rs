@@ -132,7 +132,9 @@ impl Entry {
                         generation: route.generation.generation,
                     })
             });
-        if selected {
+        // An unresolved owned stop is evidence even after the desired selection
+        // changes. It is not an ordinary off row and cannot claim readiness.
+        if selected || failure.is_some_and(|(code, _)| code == "STOP_UNCONFIRMED") {
             if let Some((code, layer)) = failure {
                 row.level = if code == "TAILSCALE_WAKING" {
                     "degraded"
@@ -232,6 +234,7 @@ impl Snapshot {
         }
         let mut seen = HashSet::new();
         for row in &mut value.entries {
+            let stop_unconfirmed = row.code.as_deref() == Some("STOP_UNCONFIRMED");
             let label = expected
                 .iter()
                 .find(|(id, _)| *id == row.name)
@@ -240,6 +243,7 @@ impl Snapshot {
             if !seen.insert(row.name.clone())
                 || !["off", "ready", "degraded", "down"].contains(&row.level.as_str())
                 || row.selected == (row.level == "off")
+                    && !(stop_unconfirmed && !row.selected && row.level == "down")
                 || row.code.as_ref().is_some_and(|s| {
                     s.is_empty()
                         || s.len() > 80
@@ -254,6 +258,7 @@ impl Snapshot {
             // independently of the legacy sparse readiness-layer contract.
             if !row.selected {
                 row.route = None;
+                row.route_requirement = None;
             }
             if let Some(route) = &row.route {
                 if route.generation == 0
@@ -268,10 +273,15 @@ impl Snapshot {
                 Some(at) => now.checked_sub(millis(at)?).ok_or("STATUS_UNPROVEN")? > 60_000,
                 None => true,
             };
-            if row.selected && (file_stale || row.stale || old && row.level == "ready") {
-                row.level = "degraded".into();
-                row.blocking = Some(Layer::Stale);
-                row.code = Some("PROBE_STALE".into());
+            if (row.selected || stop_unconfirmed)
+                && (file_stale || row.stale || old && row.level == "ready")
+            {
+                // Age withdraws fresh layers, never an unresolved stop outcome.
+                if !stop_unconfirmed {
+                    row.level = "degraded".into();
+                    row.blocking = Some(Layer::Stale);
+                    row.code = Some("PROBE_STALE".into());
+                }
                 row.stale = true;
                 row.layers = Layers::default();
             }

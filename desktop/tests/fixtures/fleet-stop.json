@@ -7,8 +7,8 @@
       "configuration_binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "entries": [
         {
-          "blocking": "stale",
-          "code": "PROBE_STALE",
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture Dashboard",
           "layers": {
             "auth": null,
@@ -18,15 +18,15 @@
             "version": null,
             "workspace": false
           },
-          "level": "degraded",
+          "level": "down",
           "name": "connector",
           "observed_at": null,
           "selected": true,
           "stale": true
         },
         {
-          "blocking": "stale",
-          "code": "PROBE_STALE",
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture 1",
           "layers": {
             "auth": null,
@@ -36,15 +36,15 @@
             "version": null,
             "workspace": false
           },
-          "level": "degraded",
+          "level": "down",
           "name": "node-1",
           "observed_at": null,
           "selected": true,
           "stale": true
         },
         {
-          "blocking": "stale",
-          "code": "PROBE_STALE",
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture 2",
           "layers": {
             "auth": null,
@@ -54,15 +54,15 @@
             "version": null,
             "workspace": false
           },
-          "level": "degraded",
+          "level": "down",
           "name": "node-2",
           "observed_at": null,
           "selected": true,
           "stale": true
         },
         {
-          "blocking": "stale",
-          "code": "PROBE_STALE",
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture 3",
           "layers": {
             "auth": null,
@@ -72,15 +72,15 @@
             "version": null,
             "workspace": false
           },
-          "level": "degraded",
+          "level": "down",
           "name": "node-3",
           "observed_at": null,
           "selected": true,
           "stale": true
         },
         {
-          "blocking": "stale",
-          "code": "PROBE_STALE",
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture 4",
           "layers": {
             "auth": null,
@@ -90,7 +90,7 @@
             "version": null,
             "workspace": false
           },
-          "level": "degraded",
+          "level": "down",
           "name": "node-4",
           "observed_at": null,
           "selected": true,
@@ -154,8 +154,8 @@
           "stale": false
         },
         {
-          "blocking": null,
-          "code": null,
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture 1",
           "layers": {
             "auth": null,
@@ -165,15 +165,15 @@
             "version": null,
             "workspace": false
           },
-          "level": "off",
+          "level": "down",
           "name": "node-1",
           "observed_at": null,
           "selected": false,
           "stale": false
         },
         {
-          "blocking": null,
-          "code": null,
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture 2",
           "layers": {
             "auth": null,
@@ -183,15 +183,15 @@
             "version": null,
             "workspace": false
           },
-          "level": "off",
+          "level": "down",
           "name": "node-2",
           "observed_at": null,
           "selected": false,
           "stale": false
         },
         {
-          "blocking": null,
-          "code": null,
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture 3",
           "layers": {
             "auth": null,
@@ -201,15 +201,15 @@
             "version": null,
             "workspace": false
           },
-          "level": "off",
+          "level": "down",
           "name": "node-3",
           "observed_at": null,
           "selected": false,
           "stale": false
         },
         {
-          "blocking": null,
-          "code": null,
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
           "label": "Fixture 4",
           "layers": {
             "auth": null,
@@ -219,7 +219,7 @@
             "version": null,
             "workspace": false
           },
-          "level": "off",
+          "level": "down",
           "name": "node-4",
           "observed_at": null,
           "selected": false,

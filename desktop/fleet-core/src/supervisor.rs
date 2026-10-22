@@ -460,6 +460,11 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                                 h.policy.exited(run, now, true)?;
                             }
                             h.owned = None;
+                            if h.failure
+                                .is_some_and(|(code, _)| code == "STOP_UNCONFIRMED")
+                            {
+                                h.failure = None;
+                            }
                         }
                         Err(error) => {
                             self.hosts.get_mut(&name).unwrap().failure =
@@ -503,7 +508,14 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     }
                     match self.stop_file(&file, true) {
                         Ok(()) => {
-                            self.hosts.get_mut(&file.name).unwrap().owned = None;
+                            let host = self.hosts.get_mut(&file.name).unwrap();
+                            host.owned = None;
+                            if host
+                                .failure
+                                .is_some_and(|(code, _)| code == "STOP_UNCONFIRMED")
+                            {
+                                host.failure = None;
+                            }
                         }
                         Err(error) => {
                             blocked.insert(file.name.clone(), error);
@@ -911,7 +923,14 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
             if let Some(file) = file {
                 match self.stop_file(&file, true) {
                     Ok(()) => {
-                        self.hosts.get_mut(&name).unwrap().owned = None;
+                        let host = self.hosts.get_mut(&name).unwrap();
+                        host.owned = None;
+                        if host
+                            .failure
+                            .is_some_and(|(code, _)| code == "STOP_UNCONFIRMED")
+                        {
+                            host.failure = None;
+                        }
                     }
                     Err(_) => {
                         unsettled = true;

@@ -837,6 +837,13 @@ fn readiness_row(value: &Value) -> Result<Value, String> {
     if let Some(route) = readiness_route(&value["route"])? {
         row["route"] = route;
     }
+    if let Some(requirement) = value.get("route_requirement") {
+        // Rebuild from the producer's closed enum, never arbitrary diagnostic data.
+        let requirement: bat_fleet_core::route::RouteRequirement =
+            serde_json::from_value(requirement.clone())
+                .map_err(|_| "Invalid Fleet route requirement".to_owned())?;
+        row["route_requirement"] = json!(requirement);
+    }
     Ok(row)
 }
 
