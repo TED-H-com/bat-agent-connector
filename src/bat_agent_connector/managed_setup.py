@@ -25,6 +25,7 @@ from . import dashboard_sync, platform_files, service
 from .artifact_host import ArtifactHost
 from .client import BatClient
 from .config import git_transport, normalize_fingerprint, parse_config, tomllib
+from .connection_contract import VERSION as CONNECTION_VERSION
 from .connection_endpoints import setup_endpoint
 from .connection_sources import (
     SourceUnavailable,
@@ -181,7 +182,7 @@ def state(daemon, principal):
         "allow_pr_update": repo.allow_pr_update, "allow_integrate": repo.integrate is not None}
         for repo in daemon.fleet.config.github.repos.values()]
     verification = _verification(document)
-    return {"revision": revision, "preview_contract_version": 1, "discovery_contract_version": 1, "connection_contract_version": 1, "hosts": hosts, "repositories": repos, "profiles": profiles,
+    return {"revision": revision, "preview_contract_version": 1, "discovery_contract_version": 1, "connection_contract_version": CONNECTION_VERSION, "hosts": hosts, "repositories": repos, "profiles": profiles,
             "verification": {"commands": {name: list(argv) for name, argv in verification.commands.items()},
                              "timeout_s": verification.timeout_s},
             "profiles_error": profiles_error, "busy": _busy(daemon)}

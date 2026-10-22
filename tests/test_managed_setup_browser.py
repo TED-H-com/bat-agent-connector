@@ -29,7 +29,10 @@ pytestmark = pytest.mark.skipif(os.environ.get("BATC_WORK_LOOP_BROWSER") != "1",
 
 
 @pytest.fixture
-async def managed_browser(installed, tmp_path):
+async def managed_browser(installed, tmp_path, monkeypatch):
+    browser_home = os.environ.get("HOME", "")
+    # Match the plain golden producer; never inspect the developer updater state.
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     daemon, fixture_principal, root = installed
     personal_token = token(daemon, fixture_principal.actor, *api_auth.SCOPES)
     principal = api_auth.authenticate(daemon.journal.db, personal_token, daemon._admin_token)
@@ -57,7 +60,7 @@ async def managed_browser(installed, tmp_path):
                 child = await asyncio.create_subprocess_exec("node", "tests/managed-setup-browser-integration.mjs",
                     mode, cwd=ROOT / "desktop", stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE, stderr=errors,
-                    env={**os.environ, "TMPDIR": str(browser_temp), "TEMP": str(browser_temp), "TMP": str(browser_temp)})
+                    env={**os.environ, "HOME": browser_home, "TMPDIR": str(browser_temp), "TEMP": str(browser_temp), "TMP": str(browser_temp)})
                 try:
                     child.stdin.write((json.dumps({"origin": daemon._endpoint.removesuffix("/rpc"), "locale": locale,
                         "handoff": handoff["handoff_file"], "identity": identity, "shots": str(shots), **facts}) + "\n").encode())
@@ -143,13 +146,21 @@ async def test_empty_setup_opens_existing_read_only_session(managed_browser, moc
     status, bootstrap = await http(port, "GET", "/api/v1/bootstrap", tok=golden_token)
     assert status == 200
     normalized = normalize_bootstrap(bootstrap)
-    # The plain golden daemon does not register the installed setup actions.
-    # Check those additions, then compare every original bootstrap field.
+    # Check every setup action against the registry, then compare the full baseline.
     actions = normalized["capabilities"]["actions"]
-    assert {row["action"] for row in actions if row["action"].startswith("setup.")} == {
-        "setup.host", "setup.repository", "setup.verification"}
-    normalized["capabilities"]["actions"] = [row for row in actions if not row["action"].startswith("setup.")]
-    assert normalized == json.loads(GOLDEN.read_text())
+    installed_setup = {name for name in daemon.ops.actions if name.startswith("setup.")}
+    setup_rows = [row for row in actions if row["action"].startswith("setup.")]
+    assert {row["action"] for row in setup_rows} == installed_setup
+    for row in setup_rows:
+        assert row["scope"] == daemon.ops.actions[row["action"]].scope
+        assert row["allowed"] is False
+    expected = json.loads(GOLDEN.read_text())
+    baseline_actions = {row["action"] for row in expected["capabilities"]["actions"]}
+    # ApiV1 already installs some setup actions in the plain golden producer.
+    # Remove only the installation-specific additions, preserving full equality.
+    normalized["capabilities"]["actions"] = [row for row in actions
+        if not row["action"].startswith("setup.") or row["action"] in baseline_actions]
+    assert normalized == expected
     status, before = await http(port, "GET", "/api/v1/bootstrap", tok=personal_token)
     assert status == 200 and before["capabilities"]["identity"] == identity
     assert before["snapshot"]["hosts"]["hosts"] == []

@@ -5,6 +5,7 @@ import asyncio
 import copy
 import hashlib
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -14,6 +15,17 @@ from bat_agent_connector import platform_files
 from tests import test_managed_setup as producer
 from tests.operation_helpers import settle_operations
 from tests.test_api_v1 import http, token
+
+CONTRACT = json.loads(Path("src/bat_agent_connector/connection_contract.json").read_text())
+
+
+def native_manifest(kind="create"):
+    return json.loads(Path("tests/fixtures/native-plan-manifest.json").read_text())[kind]
+
+
+def handoff_request(operation, installation="desktop-a", mode="claim"):
+    return {"contract_version": CONTRACT["contract_version"], "operation_id": operation, "installation_ref": installation, "mode": mode}
+
 
 installed = producer.installed
 PREVIEW = "/api/v1/connections/preview"
@@ -73,8 +85,13 @@ def source(installed):
 
 
 def intent(source, *, action="connection.reference.apply", installation="desktop-a", connection=None):
+    params = copy.deepcopy(source)
+    if action == "setup.connection.apply":
+        params.setdefault("native_plan", native_manifest())
+    else:
+        params.pop("native_plan", None)
     return {"action": action, "target": {"installation_ref": installation,
-        **({"connection_id": connection} if connection else {})}, "params": copy.deepcopy(source),
+        **({"connection_id": connection} if connection else {})}, "params": params,
         "preconditions": {"expected_revision": 0}}
 
 
@@ -92,9 +109,25 @@ async def accept(request, body, *, key="original-key", **kwargs):
 
 
 async def read_handoff(request, operation, installation="desktop-a", **kwargs):
-    status, response = await request("POST", HANDOFF, {"operation_id": operation, "installation_ref": installation}, **kwargs)
+    status, response = await request("POST", HANDOFF, handoff_request(operation, installation), **kwargs)
     assert status == 200, response
     return response["native_handoff"]
+
+
+def participant_receipt(native, outcome="applied", code=None):
+    body = {key: native[key] for key in ("contract_version", "installation_ref", "operation_id",
+        "step", "review_digest", "expected_revision", "epoch", "effect_id", "challenge")}
+    matrix = CONTRACT["matrix"][outcome]
+    phase = next(iter(matrix))
+    roles = copy.deepcopy(native["native_plan"]["artifacts"])
+    for index, role in enumerate(roles):
+        if outcome == "refused" or outcome in {"uncertain", "abandoned"} and index > 0:
+            role["after_digest"] = role["before_digest"]
+        elif outcome == "uncertain":
+            role["after_digest"] = digest(b"synthetic-third-value")
+        role["observation"] = "present" if role["after_digest"] is not None else "absent"
+    return {**body, "native_review_digest": native["native_plan"]["review_digest"], "outcome": outcome,
+        "phase": phase, "code": matrix[phase][0] if code is None else code, "roles": roles}
 
 
 class DiskParticipant:
@@ -107,27 +140,21 @@ class DiskParticipant:
         counter = self.path.with_suffix(".count")
         return int(counter.read_text()) if counter.exists() else 0
 
-    def effect(self, handoff, *, outcome="applied"):
+    def effect(self, handoff, *, outcome="applied", code=None):
         if self.path.exists():
             body = json.loads(self.path.read_text())
         else:
-            role = self.path.with_suffix(".role")
-            before = role.read_bytes() if role.exists() else b""
-            after = (b"fixture-third-value" if outcome == "uncertain" else b"fixture-after") if outcome in {"applied", "uncertain"} else before
-            assert len(before) <= 512
-            if after != before:
+            body = participant_receipt(handoff, outcome, code=code)
+            if outcome in {"applied", "uncertain"}:
+                # Bounded synthetic participant observations, never Fleet file bytes.
                 self.path.with_suffix(".count").write_text(str(self.writes + 1))
-                role.write_bytes(after)
-            body = {key: handoff[key] for key in ("contract_version", "installation_ref", "operation_id",
-                "step", "review_digest", "expected_revision", "epoch", "effect_id", "challenge")}
-            body.update(outcome=outcome, code=None, roles=[{"role": "inventory", "before_digest": digest(before),
-                "after_digest": digest(after)}])
+                self.path.with_suffix(".role").write_text(json.dumps(body["roles"]))
             self.path.write_text(json.dumps(body))
-        assert self.path.stat().st_size < 4096
+        assert self.path.stat().st_size < CONTRACT["bounds"]["receipt_bytes"]
         return body
 
-    async def send(self, request, handoff, *, outcome="applied"):
-        body = self.effect(handoff, outcome=outcome)
+    async def send(self, request, handoff, *, outcome="applied", code=None):
+        body = self.effect(handoff, outcome=outcome, code=code)
         return await request("POST", RECEIPT, body), body
 
 
@@ -219,7 +246,7 @@ async def test_disk_participant_disconnect_expiry_and_third_value(installed, ser
         assert daemon.ops.get(ident)["external_refs"].get("native_effects_sent") is False
         assert (await served_setup("GET", f"/api/v1/operations/{ident}"))[0] == 200
         assert not (tmp_path / "participant.json").exists()
-        status, _ = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-b"})
+        status, _ = await served_setup("POST", HANDOFF, handoff_request(ident, "desktop-b"))
         assert status == 403
     handoff = await read_handoff(served_setup, ident)
     assert handoff and handoff["step"] == "native_effects"
@@ -251,7 +278,8 @@ async def test_disk_participant_disconnect_expiry_and_third_value(installed, ser
         assert daemon.ops.get(ident)["status"] == ("uncertain" if phase == "uncertain" else "succeeded")
         (status, _), again = await participant.send(served_setup, handoff)
         assert status == 200 and again == receipt
-        changed = {**receipt, "roles": [{**receipt["roles"][0], "after_digest": "c" * 64}]}
+        changed = copy.deepcopy(receipt)
+        changed["roles"][0]["after_digest"] = "c" * 64
         status, _ = await served_setup("POST", RECEIPT, changed)
         assert status == 409
         if phase == "after_effect":
@@ -376,7 +404,7 @@ async def test_cancel_cannot_hide_dispatched_effect_or_dispatch_cancelled_step(i
         assert not daemon.ops.get(ident)["cancel_requested"]
     else:
         assert status == 200 and response["operation"]["status"] == "cancelled"
-        status, _ = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+        status, _ = await served_setup("POST", HANDOFF, handoff_request(ident, "desktop-a"))
         assert status == 409
         assert daemon.ops.get(ident)["external_refs"]["native_effects_sent"] is False
 
@@ -531,6 +559,8 @@ async def test_native_final_receipt_loss_keeps_original_uncertain_then_recovers(
 
 @pytest.mark.parametrize("outcome", ["unchanged", "refused"])
 async def test_native_definitive_no_effect_outcomes_and_refusal_resume(installed, served_setup, source, tmp_path, outcome):
+    if outcome == "unchanged":
+        source = {**source, "native_plan": native_manifest("unchanged")}
     daemon, _, _ = installed
     _, ident = await accept(served_setup, intent(source, action="setup.connection.apply"))
     await settle_operations(daemon.ops)
@@ -543,7 +573,7 @@ async def test_native_definitive_no_effect_outcomes_and_refusal_resume(installed
     if outcome == "refused":
         status, _ = await served_setup("POST", f"/api/v1/operations/{ident}/resume", {})
         assert status == 409
-        assert daemon.ops.get(ident)["error_code"] == "CONNECTION_NATIVE_REFUSED"
+        assert daemon.ops.get(ident)["error_code"] == CONTRACT["matrix"]["refused"]["preflight"][0]
     assert daemon.journal.db.execute("SELECT count(*) FROM operation_steps WHERE name='native_effects'").fetchone()[0] == 1
 
 
@@ -574,11 +604,11 @@ async def test_challenge_is_private_and_dispatch_read_reports_persisted_fence(in
     daemon, _, _ = installed
     _, ident = await accept(served_setup, intent(source, action="setup.connection.apply"))
     await settle_operations(daemon.ops)
-    status, response = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+    status, response = await served_setup("POST", HANDOFF, handoff_request(ident, "desktop-a"))
     assert status == 200 and daemon.ops.get(ident)["external_refs"]["native_effects_sent"] is True
     native = response["native_handoff"]
     assert set(native) == {"contract_version", "server_id", "principal_id", "installation_ref", "operation_id", "step",
-        "review_digest", "expected_revision", "epoch", "effect_id", "expires_at", "challenge", "receipt"}
+        "review_digest", "expected_revision", "epoch", "effect_id", "expires_at", "challenge", "receipt", "native_plan"}
     assert native["challenge"] not in "\n".join(daemon.journal.db.iterdump())
     for route in (f"/api/v1/operations/{ident}", "/api/v1/operations", "/api/v1/bootstrap"):
         status, response = await served_setup("GET", route)
@@ -640,7 +670,7 @@ async def test_source_snapshot_guard_precedes_configuration_publication(installe
 
 
 async def claim_handoff(request, ident):
-    status, response = await request("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+    status, response = await request("POST", HANDOFF, handoff_request(ident, "desktop-a"))
     assert status == 200, response
     return response["native_handoff"]
 
@@ -654,9 +684,11 @@ async def waiting_connection(installed, request, source, *, connection=None):
     return body, ident
 
 
-@pytest.mark.parametrize("outcome", ["applied", "unchanged", "refused", "uncertain"])
+@pytest.mark.parametrize("outcome", [value for value in CONTRACT["outcomes"] if value != "abandoned"])
 @pytest.mark.parametrize("after_budget", [False, True])
 async def test_late_first_receipt_completes_operation(installed, served_setup, source, tmp_path, outcome, after_budget):
+    if outcome == "unchanged":
+        source = {**source, "native_plan": native_manifest("unchanged")}
     from bat_agent_connector import connection_handoff
     from bat_agent_connector.operations import UNCERTAIN_RETRY_S
     daemon, _, _ = installed
@@ -713,7 +745,7 @@ async def test_abandonment_releases_busy_and_stop(installed, served_setup, sourc
         assert rows[0]["revision"] == 1 and rows[0]["connection_id"] == connection
     body = {key: native[key] for key in ("contract_version", "installation_ref", "operation_id", "step",
         "review_digest", "expected_revision", "epoch", "effect_id", "challenge")}
-    body.update(outcome="refused", code=None, roles=[{"role": "inventory", "before_digest": "a" * 64, "after_digest": "a" * 64}])
+    body = participant_receipt(native, "refused")
     status, response = await served_setup("POST", RECEIPT, body)
     assert status == 409 and response["error"]["code"] == "CONNECTION_OPERATION_TERMINAL"
     assert daemon.ops.get(ident)["status"] == "cancelled"
@@ -750,6 +782,8 @@ async def test_projection_follows_terminal_operation(installed, served_setup, so
 
 @pytest.mark.parametrize("outcome", ["applied", "unchanged", "refused"])
 async def test_definitive_readback_appends_uncertain_history(installed, served_setup, source, tmp_path, outcome):
+    if outcome == "unchanged":
+        source = {**source, "native_plan": native_manifest("unchanged")}
     daemon, _, _ = installed
     _, ident = await waiting_connection(installed, served_setup, source)
     native = await claim_handoff(served_setup, ident)
@@ -757,8 +791,7 @@ async def test_definitive_readback_appends_uncertain_history(installed, served_s
     assert (await served_setup("POST", RECEIPT, uncertain))[0] == 200
     await settle_operations(daemon.ops)
     assert (await served_setup("POST", f"/api/v1/operations/{ident}/cancel", {}))[0] == 409
-    definitive = {**uncertain, "outcome": outcome, "roles": [{**uncertain["roles"][0],
-        "after_digest": uncertain["roles"][0]["before_digest"] if outcome in {"unchanged", "refused"} else digest(b"settled")} ]}
+    definitive = participant_receipt(native, outcome)
     status, response = await served_setup("POST", RECEIPT, definitive)
     assert status == 200, response
     await settle_operations(daemon.ops)
@@ -915,7 +948,7 @@ async def test_published_configuration_survives_source_drift(installed, served_s
     assert "fixture" in setup.tomllib.loads(published.decode())["hosts"]
     if not restart:
         assert daemon.ops.get(ident)["status"] == "waiting_external"
-        status, refused = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+        status, refused = await served_setup("POST", HANDOFF, handoff_request(ident, "desktop-a"))
         assert status == 409 and refused["error"]["code"] == "SETUP_REVIEW_CHANGED"
         step = next(step for step in daemon.ops.get(ident)["steps"] if step["name"] == "managed_configuration")
         assert step["status"] == "succeeded"
@@ -939,7 +972,7 @@ async def test_published_configuration_survives_source_drift(installed, served_s
         restored.journal.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (ident,))
         await settle_operations(restored.ops)
         assert restored.ops.get(ident)["status"] == "waiting_external"
-        status, refused = await request("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+        status, refused = await request("POST", HANDOFF, handoff_request(ident, "desktop-a"))
         assert status == 409 and refused["error"]["code"] == "SETUP_REVIEW_CHANGED"
         step = next(step for step in restored.ops.get(ident)["steps"] if step["name"] == "managed_configuration")
         assert step["status"] == "succeeded"
@@ -1050,6 +1083,8 @@ async def test_cancel_unclaimed_update_releases_connection_admission(installed, 
 @pytest.mark.parametrize("interleaved_action", ["connection.reference.apply", "setup.connection.apply"])
 async def test_legacy_interleaved_update_checks_revision_and_preserves_evidence(
         installed, served_setup, source, tmp_path, monkeypatch, claimed, outcome, interleaved_action):
+    if outcome == "unchanged":
+        source = {**source, "native_plan": native_manifest("unchanged")}
     from bat_agent_connector import setup_connections
     daemon, _, _ = installed
     connection = await _created_connection(daemon, served_setup, source)
@@ -1058,7 +1093,7 @@ async def test_legacy_interleaved_update_checks_revision_and_preserves_evidence(
     _, ident = await accept(served_setup, _update_intent(source, connection), key="personal-update")
     await settle_operations(daemon.ops)
     native = await claim_handoff(served_setup, ident) if claimed else None
-    _, reference = await accept(served_setup, _update_intent(source, connection,
+    _, reference = await accept(served_setup, _update_intent({**source, "native_plan": native_manifest()}, connection,
         action=interleaved_action, label="Browser label"), key="interleaved-update")
     if interleaved_action == "setup.connection.apply":
         await settle_operations(daemon.ops)
@@ -1070,7 +1105,7 @@ async def test_legacy_interleaved_update_checks_revision_and_preserves_evidence(
     await settle_operations(daemon.ops)
     assert daemon.ops.get(reference)["status"] == "succeeded"
     if not claimed:
-        status, response = await served_setup("POST", HANDOFF, {"operation_id": ident, "installation_ref": "desktop-a"})
+        status, response = await served_setup("POST", HANDOFF, handoff_request(ident, "desktop-a"))
         assert status == 409 and response["error"]["code"] == "SETUP_REVIEW_CHANGED"
         operation = daemon.ops.get(ident)
         assert operation["status"] == "failed" and operation["error_code"] == "SETUP_REVIEW_CHANGED"
@@ -1100,6 +1135,8 @@ async def test_legacy_interleaved_update_checks_revision_and_preserves_evidence(
 @pytest.mark.parametrize("outcome", ["applied", "unchanged"])
 async def test_projection_receipt_io_failure_cannot_abandon_proven_native_effect(
         installed, served_setup, source, tmp_path, monkeypatch, outcome):
+    if outcome == "unchanged":
+        source = {**source, "native_plan": native_manifest("unchanged")}
     from bat_agent_connector.operations import UNCERTAIN_RETRY_S
     daemon, _, _ = installed
     _, ident = await waiting_connection(installed, served_setup, source)
@@ -1197,6 +1234,8 @@ def _committed_operation(daemon, ident):
 @pytest.mark.parametrize("seam", ["native_effects", "connection_binding"])
 async def test_sqlite_receipt_fault_exhausts_budget_then_resumes_original_completion(
         installed, served_setup, source, tmp_path, monkeypatch, outcome, seam):
+    if outcome == "unchanged":
+        source = {**source, "native_plan": native_manifest("unchanged")}
     import sqlite3
 
     from bat_agent_connector.operations import UNCERTAIN_RETRY_S
@@ -1231,6 +1270,8 @@ async def test_sqlite_receipt_fault_exhausts_budget_then_resumes_original_comple
 @pytest.mark.parametrize("outcome", ["applied", "unchanged"])
 async def test_cancel_projection_conflict_keeps_proof_and_releases_connection_gate(
         installed, served_setup, source, tmp_path, monkeypatch, outcome):
+    if outcome == "unchanged":
+        source = {**source, "native_plan": native_manifest("unchanged")}
     from bat_agent_connector import setup_connections
     from bat_agent_connector.browser_sessions import BrowserSessions
     daemon, _, root = installed
@@ -1282,7 +1323,7 @@ async def test_refused_receipt_cancel_explains_automatic_failure_without_resume(
     assert status == 409 and refused["error"]["code"] == "CONNECTION_EFFECT_PROVEN"
     assert "resume" not in refused["error"]["message"].lower() and "未寫入" in refused["error"]["message"]
     await settle_operations(daemon.ops)
-    assert _committed_operation(daemon, ident)[:2] == ("failed", "CONNECTION_NATIVE_REFUSED")
+    assert _committed_operation(daemon, ident)[:2] == ("failed", CONTRACT["matrix"]["refused"]["preflight"][0])
     _, response = await served_setup("GET", f"/api/v1/operations/{ident}")
     assert response["operation"]["external_refs"]["receipt_refs"] == [receipt_ref]
 
@@ -1365,7 +1406,7 @@ async def test_changed_discovery_source_is_refused_before_dispatch(installed, se
         else:
             platform_files.atomic_write(path, path.read_bytes() + b"\n")
     route = PREVIEW if at == "preview" else "/api/v1/operations" if at == "admission" else HANDOFF
-    request = body if at == "preview" else reviewed if at == "admission" else {"operation_id": ident, "installation_ref": "desktop-a"}
+    request = body if at == "preview" else reviewed if at == "admission" else handoff_request(ident, "desktop-a")
     status, response = await served_setup("POST", route, request, key="changed-source")
     assert status == 409 and response["error"]["code"] == "SETUP_REVIEW_CHANGED", response
     if at == "claim":

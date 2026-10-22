@@ -38,6 +38,9 @@ from . import (
     work_items,
 )
 from .build_identity import build_identity
+from .connection_contract import BOUNDS as CONNECTION_BOUNDS
+from .connection_contract import VERSION as CONNECTION_VERSION
+from .connection_contract import decode_native_json
 from .errors import BatError, ResourceReadOnly
 from .operations import STATES, OperationError
 from .updater import connector_update_status
@@ -518,7 +521,8 @@ class ApiV1:
                     await writer.drain()
                 return
             body = await self._read_body(method, headers, reader,
-                max_body=8192 if path == "/api/v1/connections/receipt" else MAX_BODY)
+                max_body=CONNECTION_BOUNDS["receipt_bytes"] if path == "/api/v1/connections/receipt" else (
+                    CONNECTION_BOUNDS["handoff_bytes"] if path == "/api/v1/connections/handoff" else MAX_BODY), path=path)
             if method == "POST" and getattr(self.daemon, "managed_stopping", False):
                 raise ApiError(503, "SERVICE_STOPPING", "owned service is stopping; reopen Dashboard to reconnect")
             principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token,
@@ -677,7 +681,7 @@ class ApiV1:
         return auth[7:].strip() if auth.startswith("Bearer ") else ""
 
     @staticmethod
-    async def _read_body(method: str, headers: dict[str, str], reader, *, max_body=MAX_BODY) -> dict:
+    async def _read_body(method: str, headers: dict[str, str], reader, *, max_body=MAX_BODY, path=None) -> dict:
         if method != "POST":
             return {}
         raw_length = headers.get("content-length", "0").strip()
@@ -698,7 +702,12 @@ class ApiV1:
             raise ApiError(400, "BAD_JSON", "request body must be JSON") from None
         if not isinstance(body, dict):
             raise ApiError(422, "INVALID_REQUEST", "request body must be a JSON object")
-        return body
+        code = {"/api/v1/connections/handoff": "INVALID_CONNECTION_HANDOFF",
+            "/api/v1/connections/receipt": "INVALID_CONNECTION_RECEIPT",
+            "/api/v1/connections/preview": "INVALID_PARAMS"}.get(path)
+        if path in {"/api/v1/operations", "/api/v1/connections/preview"} and body.get("action") == "setup.connection.apply":
+            code = "INVALID_NATIVE_PLAN"
+        return decode_native_json(raw, code=code) if code else body
 
     def _route(self, method: str, path: str):
         allowed = False
@@ -1296,7 +1305,7 @@ class ApiV1:
                                    "hosts": [{"host": h, "configured": self.daemon.ops.context["artifact_host"].available(h),
                                               "readiness": self.daemon.ops.context["artifact_host"].readiness.get(h)} for h in fleet.config.hosts]},
                      "identity": dashboard_sync.identity(self.daemon.journal, principal),
-                     "actions": actions, "operation_statuses": list(STATES), "connection_contract_version": 1,
+                     "actions": actions, "operation_statuses": list(STATES), "connection_contract_version": CONNECTION_VERSION,
                      "cleanup": {"preview_ttl_s": cleanup.TTL_S, "max_items": cleanup.MAX_ITEMS, "restore": False,
                                  "scopes": ["cleanup", "cleanup_discard"], "retention": vars(fleet.config.cleanup),
                                  "read_deadline_s": cleanup.READ_DEADLINE_S, "serialize_previews": True,

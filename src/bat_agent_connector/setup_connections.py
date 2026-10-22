@@ -10,11 +10,13 @@ from . import connection_handoff as handoff
 from . import dashboard_sync, platform_files
 from . import managed_setup as setup
 from . import setup_source_discovery as discovery
+from .connection_contract import CONTRACT, VERSION, invalid_plan, validate_native_plan
 from .connection_source_descriptor import build_source_descriptor
 from .operations import TERMINAL, ActionDef, NeedsAttention, OperationError, Uncertain, Wait
 
 PARAMS = frozenset({"source", "source_reference", "remote_profile_id", "service_ref", "workspace_ref",
-                    "label", "preferences", "server_configuration"})
+                    "label", "preferences", "server_configuration", "native_plan"})
+CREATE_REQUIRED = frozenset({"source", "source_reference", "remote_profile_id", "service_ref", "workspace_ref", "label", "preferences"})
 
 
 def _changed(message="Connection inputs changed; review again"):
@@ -137,6 +139,12 @@ def _plan(ops, principal, action, target, params, pre):
     personal = action == "setup.connection.apply"
     if personal:
         setup._installation(ops.context["daemon"], principal)
+        if "native_plan" not in params:
+            raise OperationError("NATIVE_REVIEW_REQUIRED", "Finish this connection review in the desktop app / "
+                "請到桌面應用程式完成此連線檢閱", 409)
+        validate_native_plan(params["native_plan"])
+    elif "native_plan" in params:
+        invalid_plan()
     if set(target) not in ({"installation_ref"}, {"installation_ref", "connection_id"}):
         raise OperationError("INVALID_TARGET", "Use installation_ref and optional existing connection_id", 422)
     setup._text(target["installation_ref"], "installation reference", 128)
@@ -160,7 +168,7 @@ def _plan(ops, principal, action, target, params, pre):
         _changed("Connection revision changed; review again")
     _require_connection_available(ops, identity["principal_id"], target)
     fields = ("label", "preferences", "service_ref", "workspace_ref", "remote_profile_id")
-    if not before and not (PARAMS - {"server_configuration"}) <= params.keys():
+    if not before and not CREATE_REQUIRED <= params.keys():
         raise OperationError("INVALID_PARAMS", "Create needs the full connection choices and a source", 422)
     changes = {key: params.get(key, before[key] if before else None) for key in fields}
     setup._text(changes["label"], "connection label", 100)
@@ -230,12 +238,16 @@ def _plan(ops, principal, action, target, params, pre):
     binding = {**config_binding, **identity, "installation_ref": target["installation_ref"],
         "connection_id": target.get("connection_id"), "create_intent": None if before else handoff.digest([target, params]),
         "source_descriptor": descriptor, "projection": changes}
-    plan = {"contract_version": 1, "action": action, "target": target, "expected_revision": pre["expected_revision"],
+    if personal:
+        binding["native_plan"] = params["native_plan"]
+    plan = {"contract_version": VERSION, "action": action, "target": target, "expected_revision": pre["expected_revision"],
         "source": descriptor if personal else None, "before": {key: before[key] for key in fields} if before else None,
         "after": changes, "server_configuration": config_plan,
         "effects": {"configuration_written": False, "operation_created": False, "probe_started": False,
             "on_apply": (["guarded_configuration"] if configuration else []) + ["connection_binding"] +
                 (["native_effects"] if personal else [])}}
+    if personal:
+        plan["native_plan"] = params["native_plan"]
     review = handoff.digest({**identity, "action": action, "target": target, "params": params,
         "expected_revision": pre["expected_revision"], "plan": plan})
     return {**binding, "review_digest": review}, {**plan, "review_digest": review}
@@ -274,6 +286,8 @@ def _authorize(ops, principal, operation, verb):
                     return  # This one recorded projection conflict has an explicit, evidence-preserving exit.
                 message = ("Native participant refused without writing; the runner will finish this operation as failed / "
                     "本機參與者已拒絕且未寫入；執行程序將以失敗結束此操作") if receipt["outcome"] == "refused" else (
+                    "Remaining native publication was abandoned; the runner will finish failed, retaining existing effects / "
+                    "已放棄剩餘本機發布；執行程序將以失敗結束，保留既有效果") if receipt["outcome"] == "abandoned" else (
                     "Definitive native evidence is retained; complete this operation instead of abandoning it / "
                     "已保留本機確定回執；應完成此操作，不能放棄已證實的效果")
                 raise OperationError("CONNECTION_EFFECT_PROVEN", message, 409)
@@ -309,10 +323,11 @@ def abandon(ops, principal, operation):
             ops.db.execute("UPDATE operation_steps SET response=? WHERE operation_id=? AND name=?",
                 (handoff.canonical(saved).decode(), operation["operation_id"], handoff.STEP))
             ops._step_status(operation["operation_id"], handoff.STEP, "failed", error=decision)
-            ops.journal.api_event("operation", operation["operation_id"], "connection.native.abandoned", decision, actor=principal.actor)
+            ops.journal.api_event("operation", operation["operation_id"], "connection.native.unknown_closed", decision, actor=principal.actor)
         ops.db.execute("UPDATE operations SET cancel_requested=1 WHERE operation_id=?", (operation["operation_id"],))
         return ops._transition(operation["operation_id"], "cancelled", actor=principal.actor,
-            reason="Human abandoned this operation: local effect never proven")
+            reason="Human closed this operation with unknown local result; local publication remains unresolved / "
+                "人員以本機結果未知結束此操作；本機發布仍未釐清")
 
 
 def cancel_projection_conflict(ops, principal, operation):
@@ -413,9 +428,9 @@ async def _native(ctx):
     if receipt["outcome"] == "uncertain":
         ctx.service._step_status(ctx.operation_id, handoff.STEP, "uncertain")
         raise Uncertain(handoff.STEP, "Native participant reported a third value; never resend automatically")
-    if receipt["outcome"] == "refused":
+    if receipt["outcome"] in {"refused", "abandoned"}:
         ctx.service._step_status(ctx.operation_id, handoff.STEP, "failed")
-        raise OperationError("CONNECTION_NATIVE_REFUSED", "Native participant refused the reviewed local effect", 409)
+        raise OperationError(receipt["code"], CONTRACT["codes"][receipt["code"]]["reason"], 409)
     if row["status"] != "succeeded":
         ctx.service._step_done(ctx.operation_id, handoff.STEP, {"receipts": history})
     return receipt
