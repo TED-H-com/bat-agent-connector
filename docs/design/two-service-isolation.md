@@ -1,5 +1,8 @@
 # Two independent services in one client (M04)
 
+The [health display contract](health-display.md) keeps observations and summaries
+within these verified source boundaries and defines when displayed facts expire.
+
 The client must select one verified source at a time. Identical host/session IDs,
 names and actor labels cannot establish identity. `activate`
 (`desktop/src/app.js:119`) verifies `/bootstrap`, then assigns the namespace before

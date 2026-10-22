@@ -1,7 +1,7 @@
 import {fleetStatus, rememberFleetDetails} from "./fleet-status.js";
 import {fleetControl, fleetRequest} from "./transport/index.ts";
 
-export async function mountFleetDesktop(main, {h, t}) {
+export async function mountFleetDesktop(main, {h, t, onStatus = () => {}}) {
   const panel = h("section", {class: "panel fleet-desktop", "aria-label": t("fleet_desktop_title")});
   const content = h("div"), message = h("p", {class: "muted", role: "status"});
   panel.append(h("h2", {}, t("fleet_desktop_title")), h("p", {class: "muted"}, t("fleet_independent")), content, message);
@@ -55,6 +55,7 @@ export async function mountFleetDesktop(main, {h, t}) {
       } catch {/* Invalid drafts never authorize a request. */}
     }
     snapshot = value; readable = true;
+    onStatus(value);
     const automatic=value.login_launch;
     if (!launch && automatic?.configuration_binding === binding && validId(automatic.preview_id) && validSummary(automatic.summary,automatic.preview_id)) {
       launch={preview_id:automatic.preview_id,summary:automatic.summary,attempted:true};
