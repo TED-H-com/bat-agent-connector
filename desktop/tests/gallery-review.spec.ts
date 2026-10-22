@@ -186,14 +186,11 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     });
     test('graph duplicate ordinals are stable within their name group in every view', async ({page}) => {
       let added = false;
-      // Reuse real component/link rows and producer ID shapes, including an
-      // unrelated peer sorted before both same-name local components.
+      // Reuse real component/link rows and producer ID shapes. The added
+      // unrelated component sorts before both same-name local components.
       await start(page, locale, 'dependencies', ['api', 'api'], doc => {
-        const peerId = hexId('pmcomp_', 0, 32);
-        doc.external_components[0].component_id = peerId;
-        doc.cross_repository_edges[0].target_component_id = peerId;
         if (added) {
-          const componentId = hexId('pmcomp_', 9, 32);
+          const componentId = hexId('pmcomp_', 0, 32);
           doc.components.push({...doc.components[0], component_id: componentId, name: 'unrelated', manifest_path: 'tools/pyproject.toml', verification_hints: []});
           doc.edges.push({...doc.edges[0], edge_id: hexId('pmde_', 99, 32), component_id: componentId});
           doc.counts.components++; doc.counts.edges++;

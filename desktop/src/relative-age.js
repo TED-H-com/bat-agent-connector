@@ -6,6 +6,11 @@ export const relativeAgeStrings = {
   'zh-TW': {age_unknown: '時間未知', age_recent: '剛剛', age_under_minute: '不到 1 分鐘',
     age_minute: '{n} 分鐘', age_hour: '{n} 小時', age_day: '{n} 天', age_past: '{age}前', age_future: '{age}後'},
 };
+// Standalone time labels use the same single-pass interpolation contract as t.
+export function relativeAgeTranslator(locale = 'en') {
+  const strings = relativeAgeStrings[String(locale).toLowerCase().startsWith('zh') ? 'zh-TW' : 'en'];
+  return (key, vars = {}) => (strings[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ''));
+}
 export function relativeAge(seconds, t, {direction = 'past'} = {}) {
   if (!Number.isFinite(seconds)) return t('age_unknown');
   const age = Math.max(0, seconds);

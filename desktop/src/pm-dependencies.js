@@ -4,6 +4,7 @@ import {searchField, discussLink, button, disclosure, emptyState, inspector, seg
 import {icon} from './ui/icons.js';
 import {discussHref} from './pm-discuss-link.js';
 import {boundGraph, layoutGraph, limitColumns} from './pm-dependencies-layout.js';
+import {dependencyNodeNames, wrapDependencyName} from './pm-dependencies-labels.js';
 import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
 import {place} from './ui/dom.js';
 import {joinLabel} from './label-text.js';
@@ -59,8 +60,9 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   const remember = () => Object.assign(preference, {mode, relations: [...relationFilter], evidence: [...evidenceFilter], query: search.value, showAll, showAllRows, selection, focus: focusId, zoom});
   const ready = () => Boolean(data?.source?.repository && data.source.commit_sha && data.source.binding_digest && Number.isInteger(data.version) && Number.isInteger(data.workspace_version));
   const preconditions = () => ({expected_version: data.version, expected_workspace_version: data.workspace_version, expected_binding_digest: data.source.binding_digest});
-  const dependencyName = key => dependencyByKey().get(key)?.name || '';
-  const componentName = id => (data?.components || []).find(row => row.component_id === id)?.name || (data?.external_components || []).find(row => row.component_id === id)?.name || '';
+  let nodeName = () => '';
+  const dependencyName = key => nodeName('d:' + key);
+  const componentName = id => nodeName('c:' + id);
 
   function dependencyByKey() {
     const map = new Map();
@@ -103,7 +105,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       const row = externalById(link.target_component_id) || externalById(link.component_id);
       if (!row || seen.has(row.component_id)) continue;
       seen.add(row.component_id);
-      labels.push(joinLabel([row.name, otherRepositoryLabel(row)]));
+      labels.push(joinLabel([componentName(row.component_id), otherRepositoryLabel(row)]));
     }
     return labels.join(' · ');
   }
@@ -312,8 +314,13 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   const element = h('section', {class: 'dep-view', 'data-dep-view': ''}, captureHint, toolbar, coverage, statusBox, captureForm.box, legend, matrixHost, graphHost, details, holder);
 
   function fillComponents() {
+    nodeName = dependencyNodeNames([
+      ...(data?.components || []).map(row => ({id: 'c:' + row.component_id, name: row.name || row.component_id})),
+      ...(data?.external_components || []).map(row => ({id: 'c:' + row.component_id, name: row.name || row.component_id})),
+      ...[...dependencyByKey()].map(([key, row]) => ({id: 'd:' + key, name: row.name || key})),
+    ]);
     const value = componentSelect.value;
-    componentSelect.replaceChildren(...(data?.components || []).map(row => h('option', {value: row.component_id}, row.name || row.component_id)));
+    componentSelect.replaceChildren(...(data?.components || []).map(row => h('option', {value: row.component_id}, componentName(row.component_id))));
     if ([...componentSelect.options].some(option => option.value === value)) componentSelect.value = value;
   }
   function fillRetract() {
@@ -496,7 +503,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     const owner = ownerFact(component || data);
     const facts = h('dl', {class: 'dep-facts'});
     const add = (label, value, note) => {facts.append(h('dt', {}, label), h('dd', {}, value)); if (note) facts.append(h('dd', {class: 'dep-note'}, note));};
-    if (dep || selection.type !== 'component') add(t('dep_name'), dep?.name || dependencyName(selectedKey()) || t('dep_dash'));
+    if (dep || selection.type !== 'component') add(t('dep_name'), dependencyName(selectedKey()) || t('dep_dash'));
     if (selection.type === 'component') {
       facts.dataset.depComponentFacts = '';
       add(t('dep_component'), componentName(selection.componentId) || t('dep_dash'));
@@ -541,7 +548,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
         affected.append(h('p', {class: 'dep-impact-summary', 'data-dep-impact-summary': ''}, t('dep_impact_partial', {detail})));
         if (reasons.length) affected.append(disclosure({label: t('dep_impact_reasons'), body: h('div', {'data-dep-impact-reasons': ''}, ...reasons.map(code => h('p', {'data-dep-impact-reason': code}, reasonText(t, code)))), key: JSON.stringify([namespace, workspaceId, 'dep-impact', selectedKey()])}));
       } else for (const code of reasons) affected.append(h('p', {class: 'dep-note', 'data-dep-impact-reason': code}, reasonText(t, code)));
-      for (const row of impact.components || []) affected.append(h('p', {}, joinLabel([row.name, Number.isFinite(row.distance) ? t('dep_distance', {n: row.distance}) : ''])));
+      for (const row of impact.components || []) affected.append(h('p', {}, joinLabel([componentName(row.component_id) || row.name, Number.isFinite(row.distance) ? t('dep_distance', {n: row.distance}) : ''])));
       for (const row of impact.declared || []) affected.append(h('section', {'data-dep-impact-declaration': row.declaration_id},
         h('p', {}, joinLabel([componentName(row.component_id), row.dependency?.name, t('dep_' + row.relation), versionLabel(row) || t('dep_dash'), levelText(row.evidence_level)])),
         h('p', {class: 'dep-note'}, (row.evidence_refs || (row.source_ref ? [row.source_ref] : [])).map(evidenceLine).filter(Boolean).join(' · '))));
@@ -596,18 +603,8 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     // wraps inside each node instead of collapsing different names to one prefix.
     const measure = document.createElement('canvas').getContext('2d');
     measure.font = `12px ${getComputedStyle(graphScroll).fontFamily}`;
-    const names = new Map(), lines = new Map(), nameCounts = new Map();
-    for (const node of nodes.values()) nameCounts.set(node.name, (nameCounts.get(node.name) || 0) + 1);
-    [...nodes].sort(([a], [b]) => a.localeCompare(b)).forEach(([id, node], index) => {
-      const name = node.name + (nameCounts.get(node.name) > 1 ? ` [${index + 1}]` : '');
-      names.set(id, name);
-      const wrapped = []; let line = '';
-      for (const char of name) {
-        if (line && measure.measureText(line + char).width > NODE_W - 20) {wrapped.push(line); line = '';}
-        line += char;
-      }
-      wrapped.push(line); lines.set(id, wrapped);
-    });
+    const lines = new Map([...nodes].map(([id, node]) => [id,
+      wrapDependencyName(node.name, NODE_W - 20, text => measure.measureText(text).width)]));
     const nodeHeight = Math.max(narrow() ? 44 : NODE_H, ...[...nodes].map(([id, node]) => lines.get(id).length * 16 + 16 + (node.external ? 16 : 0)));
     const strideX = Math.max(NODE_W + (narrow() ? 16 : GAP_X), (graphScroll.clientWidth - 2 - PAD * 2 - NODE_W) / Math.max(1, layout.layers - 1));
     const width = Math.max(1, PAD * 2 + NODE_W + Math.max(0, layout.layers - 1) * strideX);
@@ -653,7 +650,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       if (!position) continue;
       const left = PAD + position.x * strideX, top = PAD + position.y * (nodeHeight + GAP_Y);
       const repo = node.external ? node.repository : '';
-      const accessible = repo ? `${names.get(id)}, ${repo}` : names.get(id);
+      const accessible = repo ? `${node.name}, ${repo}` : node.name;
       const group = svg('g', {class: node.external ? 'dep-node dep-node-external' : 'dep-node', tabindex: '-1', role: 'button', 'aria-label': accessible, 'aria-pressed': String(selectedIds.has(id)), 'data-dep-node': id, 'data-dep-external': node.external ? 'true' : null, 'data-dep-focus': id.startsWith('d:') ? `col:${id.slice(2)}` : `row:${id.slice(2)}`, 'data-dep-mark': markOf(id)});
       const wrapped = lines.get(id), nameY = top + (nodeHeight - wrapped.length * 16 - (repo ? 16 : 0)) / 2 + 12;
       const shownRepo = repo && repo.length > 22 ? repo.slice(0, 21) + '…' : repo;
@@ -738,20 +735,20 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
           colOf.set(dep.key, col);
           const selectedCol = selection?.type === 'dependency' && selection.dependencyKey === dep.key;
           const peer = peerCaption(dep.key);
-          const columnLabel = joinLabel([dep.name, peer]);
-          headName.append(h('th', {scope: 'col', title: columnLabel}, h('button', {type: 'button', title: columnLabel, 'aria-label': columnLabel, 'data-dep-focus': `col:${dep.key}`, 'data-row': '-1', 'data-col': String(col), tabindex: '-1', 'aria-pressed': String(selectedCol), onclick: () => choose({type: 'dependency', dependencyKey: dep.key}, true)}, abbreviate(dep.name), peer ? h('span', {class: 'dep-peer', 'data-dep-peer': ''}, peer) : null)));
+          const columnLabel = joinLabel([dependencyName(dep.key), peer]);
+          headName.append(h('th', {scope: 'col', title: columnLabel}, h('button', {type: 'button', title: columnLabel, 'aria-label': columnLabel, 'data-dep-focus': `col:${dep.key}`, 'data-row': '-1', 'data-col': String(col), tabindex: '-1', 'aria-pressed': String(selectedCol), onclick: () => choose({type: 'dependency', dependencyKey: dep.key}, true)}, abbreviate(dependencyName(dep.key)), peer ? h('span', {class: 'dep-peer', 'data-dep-peer': ''}, peer) : null)));
           col += 1;
         }
       }
       const body = h('tbody');
       visibleRows.forEach((component, row) => {
         const selectedRow = selection?.type === 'component' && selection.componentId === component.component_id;
-        const line = h('tr', {}, h('th', {scope: 'row'}, h('button', {type: 'button', class: 'dep-name', 'data-dep-focus': `row:${component.component_id}`, 'data-row': String(row), 'data-col': '-1', tabindex: '-1', 'aria-pressed': String(selectedRow), onclick: () => choose({type: 'component', componentId: component.component_id}, true)}, component.name)));
+        const line = h('tr', {}, h('th', {scope: 'row'}, h('button', {type: 'button', class: 'dep-name', 'data-dep-focus': `row:${component.component_id}`, 'data-row': String(row), 'data-col': '-1', tabindex: '-1', 'aria-pressed': String(selectedRow), onclick: () => choose({type: 'component', componentId: component.component_id}, true)}, componentName(component.component_id))));
         for (const dep of columnDeps) {
           const cellEdges = edges.filter(edge => edge.component_id === component.component_id && edge.dependency_key === dep.key);
           const selectedCell = selection?.type === 'edge' && selection.componentId === component.component_id && selection.dependencyKey === dep.key;
           const label = joinLabel(cellEdges.map(edgeLabel));
-          line.append(h('td', {}, h('button', {type: 'button', class: 'dep-cell', 'data-dep-cell': cellEdges.length ? `${component.component_id}|${dep.key}` : null, 'data-dep-focus': `cell:${component.component_id}|${dep.key}`, 'data-row': String(row), 'data-col': String(colOf.get(dep.key)), tabindex: '-1', title: label || dep.name, 'aria-label': label || joinLabel([component.name, dep.name]), 'aria-pressed': String(selectedCell), onclick: cellEdges.length ? () => choose({type: 'edge', componentId: component.component_id, dependencyKey: dep.key}, true) : null}, ...cellEdges.map(mark))));
+          line.append(h('td', {}, h('button', {type: 'button', class: 'dep-cell', 'data-dep-cell': cellEdges.length ? `${component.component_id}|${dep.key}` : null, 'data-dep-focus': `cell:${component.component_id}|${dep.key}`, 'data-row': String(row), 'data-col': String(colOf.get(dep.key)), tabindex: '-1', title: label || dependencyName(dep.key), 'aria-label': label || joinLabel([componentName(component.component_id), dependencyName(dep.key)]), 'aria-pressed': String(selectedCell), onclick: cellEdges.length ? () => choose({type: 'edge', componentId: component.component_id, dependencyKey: dep.key}, true) : null}, ...cellEdges.map(mark))));
         }
         body.append(line);
       });
@@ -763,7 +760,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       matrixScroll.scrollTop = preference.matrixTop || 0;
       listHost.replaceChildren(...(narrow() && mode === 'matrix' ? visibleRows : []).map(component => {
         const own = edges.filter(edge => edge.component_id === component.component_id);
-        return h('section', {class: 'dep-group'}, h('h2', {}, component.name), ...own.map(edge => {
+        return h('section', {class: 'dep-group'}, h('h2', {}, componentName(component.component_id)), ...own.map(edge => {
           const selectedPick = selection?.type === 'edge' && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
           const peer = peerCaption(edge.dependency_key, edge.component_id);
           return h('button', {type: 'button', class: 'dep-pick', 'data-dep-pick': `${edge.component_id}|${edge.dependency_key}`, 'data-dep-focus': `pick:${edge.component_id}|${edge.dependency_key}`, tabindex: selectedPick ? '0' : '-1', 'aria-pressed': String(selectedPick), 'aria-label': edgeLabel(edge), onclick: () => choose({type: 'edge', componentId: edge.component_id, dependencyKey: edge.dependency_key}, true)},

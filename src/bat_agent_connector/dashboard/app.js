@@ -20,6 +20,10 @@ var __exportAll = (all, no_symbols) => {
 };
 //#endregion
 //#region src/relative-age.js
+function relativeAgeTranslator(locale = "en") {
+	const strings = relativeAgeStrings[String(locale).toLowerCase().startsWith("zh") ? "zh-TW" : "en"];
+	return (key, vars = {}) => (strings[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ""));
+}
 function relativeAge(seconds, t, { direction = "past" } = {}) {
 	if (!Number.isFinite(seconds)) return t("age_unknown");
 	const age = Math.max(0, seconds);
@@ -6023,9 +6027,6 @@ var init_pm_resources_strings = __esmMin((() => {
 			res_observed_range: "{start} – {end} · {zone}",
 			res_window_hours: "{hours}-hour window",
 			res_window_days: "{days}-day window",
-			res_in_min: "in {n} min",
-			res_in_hr: "in {n} hr",
-			res_in_day: "in {n} d",
 			res_tokens: "Tokens observed",
 			res_sources: "Sources",
 			res_sources_value: "{current} / {total}",
@@ -6127,9 +6128,6 @@ var init_pm_resources_strings = __esmMin((() => {
 			res_observed_range: "{start}–{end} · {zone}",
 			res_window_hours: "{hours} 小時區間",
 			res_window_days: "{days} 天區間",
-			res_in_min: "{n} 分鐘後",
-			res_in_hr: "{n} 小時後",
-			res_in_day: "{n} 天後",
 			res_tokens: "已觀測用量",
 			res_sources: "來源",
 			res_sources_value: "{current} / {total}",
@@ -16645,10 +16643,7 @@ function compactTime(value, { locale = "en", now = Date.now() } = {}) {
 	const date = parse(value);
 	if (!date) return "";
 	const chinese = zh(locale), delta = Number(now) - date.getTime(), distance = Math.abs(delta);
-	if (distance < DAY$1) {
-		const strings = relativeAgeStrings[chinese ? "zh-TW" : "en"];
-		return relativeAge(distance / 1e3, (key, vars = {}) => Object.entries(vars).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), strings[key]), { direction: delta < 0 ? "future" : "past" });
-	}
+	if (distance < DAY$1) return relativeAge(distance / 1e3, relativeAgeTranslator(locale), { direction: delta < 0 ? "future" : "past" });
 	return `${compactDate(date, {
 		locale,
 		now
@@ -29226,6 +29221,42 @@ function layoutGraph(nodes, links) {
 	};
 }
 //#endregion
+//#region src/pm-dependencies-labels.js
+function dependencyNodeNames(nodes) {
+	const groups = new Map(), names = new Map(), seen = new Set();
+	for (const { id, name } of nodes) {
+		if (seen.has(id)) continue;
+		seen.add(id);
+		if (!groups.has(name)) groups.set(name, new Set());
+		groups.get(name).add(id);
+	}
+	for (const [name, ids] of groups) [...ids].sort().forEach((id, index) => {
+		names.set(id, name + (ids.size > 1 ? ` [${index + 1}]` : ""));
+	});
+	return (id) => names.get(id) || "";
+}
+function wrapDependencyName(name, width, measure) {
+	const segments = String(name).match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]|[^\s\-_/\.\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]+[\s\-_/\.]*|[\s\-_/\.]+/gu) || [""];
+	const lines = [];
+	let line = "";
+	for (const segment of segments) {
+		if (line && measure(line + segment) > width) {
+			lines.push(line);
+			line = "";
+		}
+		if (measure(segment) > width) for (const char of segment) {
+			if (line && measure(line + char) > width) {
+				lines.push(line);
+				line = "";
+			}
+			line += char;
+		}
+		else line += segment;
+	}
+	lines.push(line);
+	return lines;
+}
+//#endregion
 //#region src/pm-dependencies.js
 init_ui_strings();
 var RELATIONS = [
@@ -29338,8 +29369,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		expected_workspace_version: data.workspace_version,
 		expected_binding_digest: data.source.binding_digest
 	});
-	const dependencyName = (key) => dependencyByKey().get(key)?.name || "";
-	const componentName = (id) => (data?.components || []).find((row) => row.component_id === id)?.name || (data?.external_components || []).find((row) => row.component_id === id)?.name || "";
+	let nodeName = () => "";
+	const dependencyName = (key) => nodeName("d:" + key);
+	const componentName = (id) => nodeName("c:" + id);
 	function dependencyByKey() {
 		const map = new Map();
 		for (const kind of KINDS) for (const row of data?.dependencies?.[kind] || []) if (row?.key && !map.has(row.key)) map.set(row.key, row);
@@ -29409,7 +29441,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			const row = externalById(link.target_component_id) || externalById(link.component_id);
 			if (!row || seen.has(row.component_id)) continue;
 			seen.add(row.component_id);
-			labels.push(joinLabel([row.name, otherRepositoryLabel(row)]));
+			labels.push(joinLabel([componentName(row.component_id), otherRepositoryLabel(row)]));
 		}
 		return labels.join(" · ");
 	}
@@ -29836,8 +29868,22 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"data-dep-view": ""
 	}, captureHint, toolbar, coverage, statusBox, captureForm.box, legend, matrixHost, graphHost, details, holder);
 	function fillComponents() {
+		nodeName = dependencyNodeNames([
+			...(data?.components || []).map((row) => ({
+				id: "c:" + row.component_id,
+				name: row.name || row.component_id
+			})),
+			...(data?.external_components || []).map((row) => ({
+				id: "c:" + row.component_id,
+				name: row.name || row.component_id
+			})),
+			...[...dependencyByKey()].map(([key, row]) => ({
+				id: "d:" + key,
+				name: row.name || key
+			}))
+		]);
 		const value = componentSelect.value;
-		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, row.name || row.component_id)));
+		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, componentName(row.component_id))));
 		if ([...componentSelect.options].some((option) => option.value === value)) componentSelect.value = value;
 	}
 	function fillRetract() {
@@ -30116,7 +30162,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			facts.append(h("dt", {}, label), h("dd", {}, value));
 			if (note) facts.append(h("dd", { class: "dep-note" }, note));
 		};
-		if (dep || selection.type !== "component") add(t("dep_name"), dep?.name || dependencyName(selectedKey()) || t("dep_dash"));
+		if (dep || selection.type !== "component") add(t("dep_name"), dependencyName(selectedKey()) || t("dep_dash"));
 		if (selection.type === "component") {
 			facts.dataset.depComponentFacts = "";
 			add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
@@ -30191,7 +30237,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				class: "dep-note",
 				"data-dep-impact-reason": code
 			}, reasonText(t, code)));
-			for (const row of impact.components || []) affected.append(h("p", {}, joinLabel([row.name, Number.isFinite(row.distance) ? t("dep_distance", { n: row.distance }) : ""])));
+			for (const row of impact.components || []) affected.append(h("p", {}, joinLabel([componentName(row.component_id) || row.name, Number.isFinite(row.distance) ? t("dep_distance", { n: row.distance }) : ""])));
 			for (const row of impact.declared || []) affected.append(h("section", { "data-dep-impact-declaration": row.declaration_id }, h("p", {}, joinLabel([
 				componentName(row.component_id),
 				row.dependency?.name,
@@ -30281,23 +30327,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const placed = new Map(layout.positions.map((position) => [position.id, position]));
 		const measure = document.createElement("canvas").getContext("2d");
 		measure.font = `12px ${getComputedStyle(graphScroll).fontFamily}`;
-		const names = new Map(), lines = new Map(), nameCounts = new Map();
-		for (const node of nodes.values()) nameCounts.set(node.name, (nameCounts.get(node.name) || 0) + 1);
-		[...nodes].sort(([a], [b]) => a.localeCompare(b)).forEach(([id, node], index) => {
-			const name = node.name + (nameCounts.get(node.name) > 1 ? ` [${index + 1}]` : "");
-			names.set(id, name);
-			const wrapped = [];
-			let line = "";
-			for (const char of name) {
-				if (line && measure.measureText(line + char).width > 128) {
-					wrapped.push(line);
-					line = "";
-				}
-				line += char;
-			}
-			wrapped.push(line);
-			lines.set(id, wrapped);
-		});
+		const lines = new Map([...nodes].map(([id, node]) => [id, wrapDependencyName(node.name, 128, (text) => measure.measureText(text).width)]));
 		const nodeHeight = Math.max(narrow() ? 44 : NODE_H, ...[...nodes].map(([id, node]) => lines.get(id).length * 16 + 16 + (node.external ? 16 : 0)));
 		const strideX = Math.max(NODE_W + (narrow() ? 16 : GAP_X), (graphScroll.clientWidth - 2 - 40 - NODE_W) / Math.max(1, layout.layers - 1));
 		const width = Math.max(1, 188 + Math.max(0, layout.layers - 1) * strideX);
@@ -30367,7 +30397,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			if (!position) continue;
 			const left = PAD + position.x * strideX, top = PAD + position.y * (nodeHeight + GAP_Y);
 			const repo = node.external ? node.repository : "";
-			const accessible = repo ? `${names.get(id)}, ${repo}` : names.get(id);
+			const accessible = repo ? `${node.name}, ${repo}` : node.name;
 			const group = svg("g", {
 				class: node.external ? "dep-node dep-node-external" : "dep-node",
 				tabindex: "-1",
@@ -30497,7 +30527,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 					colOf.set(dep.key, col);
 					const selectedCol = selection?.type === "dependency" && selection.dependencyKey === dep.key;
 					const peer = peerCaption(dep.key);
-					const columnLabel = joinLabel([dep.name, peer]);
+					const columnLabel = joinLabel([dependencyName(dep.key), peer]);
 					headName.append(h("th", {
 						scope: "col",
 						title: columnLabel
@@ -30514,7 +30544,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 							type: "dependency",
 							dependencyKey: dep.key
 						}, true)
-					}, abbreviate(dep.name), peer ? h("span", {
+					}, abbreviate(dependencyName(dep.key)), peer ? h("span", {
 						class: "dep-peer",
 						"data-dep-peer": ""
 					}, peer) : null)));
@@ -30536,7 +30566,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						type: "component",
 						componentId: component.component_id
 					}, true)
-				}, component.name)));
+				}, componentName(component.component_id))));
 				for (const dep of columnDeps) {
 					const cellEdges = edges.filter((edge) => edge.component_id === component.component_id && edge.dependency_key === dep.key);
 					const selectedCell = selection?.type === "edge" && selection.componentId === component.component_id && selection.dependencyKey === dep.key;
@@ -30549,8 +30579,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						"data-row": String(row),
 						"data-col": String(colOf.get(dep.key)),
 						tabindex: "-1",
-						title: label || dep.name,
-						"aria-label": label || joinLabel([component.name, dep.name]),
+						title: label || dependencyName(dep.key),
+						"aria-label": label || joinLabel([componentName(component.component_id), dependencyName(dep.key)]),
 						"aria-pressed": String(selectedCell),
 						onclick: cellEdges.length ? () => choose({
 							type: "edge",
@@ -30569,7 +30599,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			matrixScroll.scrollTop = preference.matrixTop || 0;
 			listHost.replaceChildren(...(narrow() && mode === "matrix" ? visibleRows : []).map((component) => {
 				const own = edges.filter((edge) => edge.component_id === component.component_id);
-				return h("section", { class: "dep-group" }, h("h2", {}, component.name), ...own.map((edge) => {
+				return h("section", { class: "dep-group" }, h("h2", {}, componentName(component.component_id)), ...own.map((edge) => {
 					const selectedPick = selection?.type === "edge" && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
 					const peer = peerCaption(edge.dependency_key, edge.component_id);
 					return h("button", {
@@ -45838,12 +45868,24 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		tipCell = null;
 	}
 	function showLabel(cell, text) {
+		if (tipCell === cell) return;
 		tipCell = cell;
 		labelTip.textContent = text;
 		labelTip.hidden = false;
+		positionLabel(cell);
+	}
+	function positionLabel(cell) {
 		const box = cell.getBoundingClientRect();
 		labelTip.style.left = `${Math.max(8, Math.min(box.left, innerWidth - labelTip.offsetWidth - 8))}px`;
 		labelTip.style.top = `${Math.max(8, Math.min(box.bottom, innerHeight - labelTip.offsetHeight - 8))}px`;
+	}
+	function treeDate(value) {
+		const stamp = timeStamp(value, { dateOnly: true });
+		if (stamp instanceof HTMLElement) {
+			stamp.setAttribute("aria-label", stamp.title);
+			stamp.removeAttribute("title");
+		}
+		return stamp;
 	}
 	const main = h$1("div", { class: "schedule-main" }, error, viewport, unscheduled);
 	viewport.append(caption, chart);
@@ -45891,7 +45933,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		class: "pm-schedule"
 	}, toolbar, layout, labelTip);
 	viewport.addEventListener("scroll", () => {
-		if (tipCell?.contains(document.activeElement)) showLabel(tipCell, tipCell.title);
+		if (tipCell?.contains(document.activeElement)) positionLabel(tipCell);
 		else hideLabel();
 	}, { passive: true });
 	viewport.addEventListener("scroll", saveScroll, { passive: true });
@@ -46267,8 +46309,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			const dates = spans(row).map((span) => {
 				const s = row[span.kind].start?.slice(0, 10) || "—";
 				const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
-				const suffix = span.open ? [" → ", t("sched_open")] : span.unknownEnd ? [" → ", reasonLabel(t, "terminal_time_unrecorded")] : e && e !== s ? [" → ", timeStamp(e, { dateOnly: true })] : [];
-				return h$1("span", {}, t("sched_" + span.kind), " ", timeStamp(s, { dateOnly: true }), ...suffix);
+				const suffix = span.open ? [" → ", t("sched_open")] : span.unknownEnd ? [" → ", reasonLabel(t, "terminal_time_unrecorded")] : e && e !== s ? [" → ", treeDate(e)] : [];
+				return h$1("span", {}, t("sched_" + span.kind), " ", treeDate(s), ...suffix);
 			});
 			const deltaValue = row.kind === "milestone" ? milestoneDelta(row) : null;
 			const dateChildren = dates.length ? dates.flatMap((date, index) => index ? [" · ", date] : [date]) : [t("sched_no_dates")];
@@ -46276,35 +46318,32 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			const pill = row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null;
 			const descId = `sched-desc-${index}`, statusId = pill ? `sched-status-${index}` : null;
 			if (pill) pill.id = statusId;
+			const fullTitle = scheduleTitle(row) || label(row);
 			const cell = h$1("div", {
 				class: "schedule-tree-cell",
 				role: "treeitem",
 				"aria-level": depth,
 				"aria-expanded": expandable ? String(!collapsed.has(row.id)) : null,
-				"aria-label": scheduleTitle(row) || label(row),
+				"aria-label": fullTitle,
 				"aria-describedby": [statusId, descId].filter(Boolean).join(" "),
 				tabindex: tabId === row.id ? 0 : -1,
 				"data-schedule-select": row.id,
 				onclick: (event) => row.kind === "group" ? toggle(row.id) : select(row.id, event.currentTarget),
 				onkeydown: (event) => keydown(event, item, index)
-			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
-				class: "schedule-title",
-				title: scheduleTitle(row)
-			}, label(row)), h$1("span", {
+			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", { class: "schedule-title" }, label(row)), h$1("span", {
 				id: descId,
 				class: "schedule-date-range"
 			}, ...dateChildren)), pill);
-			cell.title = scheduleTitle(row);
 			const hoverLabel = () => {
 				const focused = document.activeElement?.closest(".schedule-tree-cell");
-				if (!focused || focused === cell) showLabel(cell, scheduleTitle(row));
+				if (!focused || focused === cell) showLabel(cell, fullTitle);
 			};
 			cell.addEventListener("mouseenter", hoverLabel);
 			cell.addEventListener("mousemove", hoverLabel);
 			cell.addEventListener("mouseleave", () => {
 				if (tipCell === cell && !cell.contains(document.activeElement)) hideLabel();
 			});
-			cell.addEventListener("focusin", () => showLabel(cell, scheduleTitle(row)));
+			cell.addEventListener("focusin", () => showLabel(cell, fullTitle));
 			cell.addEventListener("focusout", (event) => {
 				if (tipCell === cell && !cell.contains(event.relatedTarget)) hideLabel();
 			});
