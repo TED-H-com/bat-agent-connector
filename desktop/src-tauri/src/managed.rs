@@ -628,6 +628,7 @@ if [ ! -f "$root/installation.json" ]; then
   printf 'original-project' > "$root/state/project-fixture"
   printf 'service\n' >> "$root/service-count"
 fi
+if [ -f "$root/fail-once" ]; then rm "$root/fail-once"; exit 1; fi
 printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture-user","server_id":"fixture-server","principal_id":"fixture-principal","token":"fixture-token","runtime_version":"fixture-1"}'
 "##;
         let package = fixture(root, script);
@@ -765,6 +766,90 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
                 assert!(!data.join("managed-central").exists());
             }
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn old_installation_is_adopted_without_changing_its_manifest_identity_journal_or_service() {
+        for external in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let resources = startup_fixture(root.path());
+            let data = root.path().join("app");
+            let config = root.path().join("config");
+            // An original installation predates the role record.
+            let (executable, _) = materialize(&resources.join("managed-runtime"), &data).unwrap();
+            assert!(Command::new(executable)
+                .args(["ensure", "--data-dir"])
+                .arg(data.join("managed-central"))
+                .stdout(Stdio::null())
+                .status()
+                .unwrap()
+                .success());
+            if external {
+                fs::create_dir(&config).unwrap();
+                fs::write(config.join("central.json"), b"original-external").unwrap();
+            }
+            let names = [
+                "installation.json",
+                "identity.token",
+                "state/tasks.sqlite3",
+                "state/project-fixture",
+                "service-count",
+            ];
+            let original: Vec<_> = names
+                .iter()
+                .map(|name| fs::read(data.join("managed-central").join(name)).unwrap())
+                .collect();
+            assert!(!startup_role::record_path(&data).exists());
+            let (managed, launch) = Managed::prepare(&resources, &data, &config);
+            assert!(launch.is_some());
+            assert_eq!(
+                managed.startup_role().unwrap().role,
+                Some(if external { Role::Both } else { Role::Provider })
+            );
+            for (name, bytes) in names.iter().zip(original) {
+                assert_eq!(
+                    fs::read(data.join("managed-central").join(name)).unwrap(),
+                    bytes
+                );
+            }
+            if external {
+                assert_eq!(
+                    fs::read(config.join("central.json")).unwrap(),
+                    b"original-external"
+                );
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_ensure_after_service_creation_reopens_the_same_service_and_original_data() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let config = root.path().join("config");
+        let (managed, _) = Managed::prepare(&resources, &data, &config);
+        fs::create_dir_all(data.join("managed-central")).unwrap();
+        fs::write(data.join("managed-central/fail-once"), b"interrupt reply").unwrap();
+        assert!(managed.select_role(Role::Provider, 0).is_err());
+        assert!(managed.select_role(Role::Provider, 0).is_err());
+        let reference = managed.startup_role().unwrap();
+        let (reopened, launch) = Managed::prepare(&resources, &data, &config);
+        assert!(launch.is_some());
+        assert_eq!(reopened.startup_role().unwrap(), reference);
+        assert_eq!(
+            fs::read(data.join("managed-central/state/tasks.sqlite3")).unwrap(),
+            b"original-journal"
+        );
+        assert_eq!(
+            fs::read_to_string(data.join("managed-central/ensure-count")).unwrap(),
+            "ensure\nensure\n"
+        );
+        assert_eq!(
+            fs::read_to_string(data.join("managed-central/service-count")).unwrap(),
+            "service\n"
+        );
     }
 
     #[test]

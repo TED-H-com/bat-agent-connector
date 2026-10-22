@@ -4592,6 +4592,34 @@ mod tests {
         handle.join().unwrap();
     }
     #[tokio::test]
+    async fn startup_launch_refuses_bootstrap_identity_mismatch_without_publishing() {
+        let root = tempfile::tempdir().unwrap();
+        let bridge = Bridge::role_pending(root.path());
+        let (endpoint, requests, handle) = server(vec![
+            json_response(&capabilities("fixture-server", "fixture-principal", true)),
+            managed_bootstrap_response("fixture-server", "another-principal"),
+        ]);
+        assert!(bridge
+            .install_startup_launch(
+                0,
+                Some(recovery_launch(
+                    &endpoint,
+                    "fixture-server",
+                    "fixture-principal"
+                ))
+            )
+            .await
+            .is_err());
+        assert!(!bridge.status().connected);
+        assert!(bridge.status().endpoint.is_none());
+        assert!(!bridge.state.lock().unwrap().recovery_enabled);
+        for _ in 0..2 {
+            assert!(requests.recv().unwrap().starts_with("GET "));
+        }
+        handle.join().unwrap();
+    }
+
+    #[tokio::test]
     async fn startup_transition_refuses_stale_generation_and_appearing_external_configuration() {
         let root = tempfile::tempdir().unwrap();
         let bridge = Bridge::role_pending(root.path());
