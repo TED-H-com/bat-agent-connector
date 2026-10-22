@@ -454,3 +454,77 @@ staged 來源涵蓋 opaque staging reference、完整 metadata（含到期及擁
 刻意排除伺服器回報的 profiles/workspaces、所選伺服器 profile/workspace、UI 草稿、連線檢查時間、
 setup revision 與 operation key：這些由 discovery 回應或既有 preview／apply 意圖綁定；
 本 descriptor 只描述可信來源，不能授予寫入權或證明伺服器／workspace 仍可用。
+
+### Durable connection operations
+
+The backend v1 handoff below is frozen for the next native participant round.
+`OperationService`, `operations` and `operation_steps` remain the only intent and
+history authority. Native receipt evidence proves only that participant's local
+effect; it does **not** prove server-observed reachability or remote ownership.
+The native Bridge, HTTP allowlist and Fleet file generator are separate work.
+
+#### Frozen native handoff v1
+
+After accepting `setup.connection.apply`, the backend completes any guarded
+`managed_configuration` step within that operation, then waits in `native_effects`.
+The creating principal reads `GET /api/v1/operations/{operation_id}?installation_ref=desktop-a`
+to dispatch that original step. The response's `operation.native_handoff` has exactly
+these fields (the ordinary operation fields and stable original key remain):
+
+```json
+{
+  "contract_version": 1,
+  "server_id": "<journal server identity>",
+  "principal_id": "<effective principal identity>",
+  "installation_ref": "desktop-a",
+  "operation_id": "op_<32 lowercase hex>",
+  "step": "native_effects",
+  "review_digest": "<64 lowercase hex>",
+  "expected_revision": 0,
+  "epoch": 1,
+  "effect_id": "effect_<64 lowercase hex>",
+  "expires_at": 1800000300.0,
+  "challenge": "<64 lowercase hex>",
+  "receipt": null
+}
+```
+
+The challenge lasts 300 seconds, is bound to all claims above (excluding `receipt`),
+and uses a domain-separated HMAC under the existing private journal signing key.
+Only its SHA-256 hash is stored in the step request, alongside the claims. No raw
+challenge enters operations, receipts or events. It is reconstructed only for the
+original effective principal's explicit installation-scoped operation read; lists,
+bootstrap and ordinary operation reads do not carry it. Dispatch records the
+transport fence **before** returning the challenge; a lost HTTP reply can therefore
+mean dispatched. Repeat the same read, never create another operation/key.
+`effect_id` is stable for that operation and step; epoch is initially 1. Version 1
+has no automatic challenge renewal after expiry or uncertain dispatch.
+
+One fixed `POST /api/v1/connections/receipt` accepts exactly this JSON shape:
+
+```json
+{
+  "contract_version": 1,
+  "installation_ref": "desktop-a",
+  "operation_id": "op_<32 lowercase hex>",
+  "step": "native_effects",
+  "review_digest": "<64 lowercase hex>",
+  "expected_revision": 0,
+  "epoch": 1,
+  "effect_id": "effect_<64 lowercase hex>",
+  "challenge": "<64 lowercase hex>",
+  "outcome": "applied",
+  "roles": [{"role": "inventory", "before_digest": "<64 lowercase hex>", "after_digest": "<64 lowercase hex>"}]
+}
+```
+
+Outcomes are `applied`, `unchanged`, `refused`, `uncertain`. Roles are unique, one
+to four of `inventory`, `backend`, `startup`, `central`; only digests, never paths,
+TOML, credentials or raw SSH bytes. `unchanged` and `refused` require equal digests.
+The body is at most 8192 UTF-8 bytes. The response is
+`{"receipt": <body without challenge, plus receipt_ref>, "replayed": false}`;
+`receipt_ref` is `receipt_` plus the canonical evidence SHA-256. Identical replay
+returns the same receipt with `replayed:true`, including after expiry. An expired
+challenge cannot introduce a new effect. Different evidence under a used challenge,
+a different principal/installation/operation/step/review/revision/epoch/effect,
+or an undispatched challenge is refused. Receipt POST cannot admit a new intent.
