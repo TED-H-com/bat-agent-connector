@@ -1,0 +1,72 @@
+name: Cache packages and bound apt downloads
+description: Reuse completed packages and keep three retries with short stalled-download waits.
+inputs:
+  package-set:
+    description: Package group, shared by all apt steps in the job.
+    required: true
+  package-set-hash:
+    description: Hash of the lockfile and any other files defining this package group.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Prepare package archive cache
+      id: archives
+      shell: bash
+      env:
+        PACKAGE_SET: ${{ inputs.package-set }}
+        PACKAGE_SET_HASH: ${{ inputs.package-set-hash }}
+      run: |
+        [[ "$PACKAGE_SET" =~ ^[a-z0-9][a-z0-9-]*$ ]]
+        [[ "$PACKAGE_SET_HASH" =~ ^[a-f0-9]{64}$ ]]
+        # Hosted runner homes can be 0750; keep _apt's path outside those ancestors.
+        archives="/var/cache/bat-ci-apt/$PACKAGE_SET"
+        sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0755 "$archives"
+        set_prefix="apt-v1-$RUNNER_OS-$RUNNER_ARCH-${ImageOS:?}-$PACKAGE_SET-"
+        exact_prefix="$set_prefix$PACKAGE_SET_HASH-"
+        key="$exact_prefix${ImageVersion:?}"
+        # Linux build invokes this twice. Register one restore/post-save for both installs.
+        marker="$RUNNER_TEMP/bounded-apt-$PACKAGE_SET.cache-key"
+        cache_needed=true
+        if [[ -f "$marker" && "$(cat "$marker")" == "$key" ]]; then
+          cache_needed=false
+        fi
+        printf '%s\n' "$key" > "$marker"
+        {
+          echo "directory=$archives"
+          echo "key=$key"
+          echo "exact-prefix=$exact_prefix"
+          echo "set-prefix=$set_prefix"
+          echo "cache-needed=$cache_needed"
+        } >> "$GITHUB_OUTPUT"
+    - name: Restore packages and save after a successful job
+      if: steps.archives.outputs.cache-needed == 'true'
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      # Cache availability and parallel reservation conflicts must not fail an install.
+      continue-on-error: true
+      with:
+        # Only completed, world-readable packages; exclude the root lock and _apt partials.
+        path: ${{ steps.archives.outputs.directory }}/*.deb
+        key: ${{ steps.archives.outputs.key }}
+        restore-keys: |
+          ${{ steps.archives.outputs.exact-prefix }}
+          ${{ steps.archives.outputs.set-prefix }}
+    - name: Configure apt download bounds
+      shell: bash
+      env:
+        APT_ARCHIVES: ${{ steps.archives.outputs.directory }}
+      run: |
+        # The runner owns the cache root; apt's sandbox alone writes incomplete downloads.
+        test -w "$APT_ARCHIVES"
+        sudo install -d -o _apt -g root -m 0700 "$APT_ARCHIVES/partial"
+        # Check ancestor traversal too, instead of allowing unsandboxed root downloads.
+        sudo -u _apt test -w "$APT_ARCHIVES/partial"
+        # Shorter connection/data waits allow faster mirror failover; keep three retries.
+        sudo tee /etc/apt/apt.conf.d/99-playwright-ci > /dev/null <<EOF
+        Acquire::Retries "3";
+        Acquire::http::Timeout "15";
+        Acquire::https::Timeout "15";
+        Dir::Cache::Archives "$APT_ARCHIVES";
+        APT::Keep-Downloaded-Packages "true";
+        Binary::apt::APT::Keep-Downloaded-Packages "true";
+        EOF

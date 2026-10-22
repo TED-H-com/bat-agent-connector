@@ -15,6 +15,7 @@ on:
       - "docs/getting-started*.md"
       - "docs/design/managed-installation.md"
       - ".github/workflows/pages.yml"
+      - ".github/actions/**"
   pull_request:
     paths:
       - "site/**"
@@ -28,6 +29,7 @@ on:
       - "docs/getting-started*.md"
       - "docs/design/managed-installation.md"
       - ".github/workflows/pages.yml"
+      - ".github/actions/**"
   workflow_dispatch:
 
 permissions:
@@ -69,13 +71,10 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
       - name: Bound stalled apt downloads
-        run: |
-          # Shorter connection/data waits allow faster mirror failover; keep three retries.
-          sudo tee /etc/apt/apt.conf.d/99-playwright-ci > /dev/null <<'EOF'
-          Acquire::Retries "3";
-          Acquire::http::Timeout "15";
-          Acquire::https::Timeout "15";
-          EOF
+        uses: ./.github/actions/bounded-apt
+        with:
+          package-set: playwright-chromium
+          package-set-hash: ${{ hashFiles('desktop/package-lock.json') }}
       - name: Chromium system dependencies
         working-directory: desktop
         run: npx playwright install-deps chromium
