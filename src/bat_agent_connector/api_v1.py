@@ -140,6 +140,8 @@ class ApiV1:
         failover_operations.install(daemon.ops)
         from . import worktree_merge_operations
         worktree_merge_operations.install(daemon.ops)
+        from . import setup_connections
+        setup_connections.install(daemon.ops)
 
         from . import bulk_approval
         bulk_approval.install(daemon.ops, daemon._admin_token)
@@ -398,6 +400,9 @@ class ApiV1:
             ("GET", r"/api/v1/tasks/(?P<task>[0-9a-f-]{8,64})/history", self.task_history, "observe"),
             ("GET", r"/api/v1/tasks/(?P<task>[0-9a-f-]{8,64})/sessions", self.task_sessions, "observe"),
             ("GET", r"/api/v1/policy", self.policy, "observe"),
+            ("GET", r"/api/v1/connections", self.connections, "observe"),
+            ("POST", r"/api/v1/connections/preview", self.connections_preview, None),
+            ("POST", r"/api/v1/connections/receipt", self.connections_receipt, "manage"),
             ("GET", r"/api/v1/operations", self.operations, "observe"),
             ("POST", r"/api/v1/operations", self.create_operation, None),
             ("GET", r"/api/v1/operations/(?P<op>op_[0-9a-f]{32})", self.operation, "observe"),
@@ -569,7 +574,7 @@ class ApiV1:
                 query = parse_qs(parts.query, keep_blank_values=True)
                 kwargs.update(reader=reader, writer=writer,
                               check_authorization=authorizer(self.daemon, token, principal, browser_session=browser_session))
-            if fn in {self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
+            if fn in {self.connections, self.operation, self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
                       self.host_preferences, self.project_skills, self.work_item_results,
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
@@ -1285,7 +1290,7 @@ class ApiV1:
                                    "hosts": [{"host": h, "configured": self.daemon.ops.context["artifact_host"].available(h),
                                               "readiness": self.daemon.ops.context["artifact_host"].readiness.get(h)} for h in fleet.config.hosts]},
                      "identity": dashboard_sync.identity(self.daemon.journal, principal),
-                     "actions": actions, "operation_statuses": list(STATES),
+                     "actions": actions, "operation_statuses": list(STATES), "connection_contract_version": 1,
                      "cleanup": {"preview_ttl_s": cleanup.TTL_S, "max_items": cleanup.MAX_ITEMS, "restore": False,
                                  "scopes": ["cleanup", "cleanup_discard"], "retention": vars(fleet.config.cleanup),
                                  "read_deadline_s": cleanup.READ_DEADLINE_S, "serialize_previews": True,
@@ -1584,6 +1589,22 @@ class ApiV1:
         with controller_authority.use(controller_authority.binding(self.daemon.journal.db, principal), self.daemon.journal):
             return 200, {"hosts": [await resource_policy.session_policy(self.daemon.fleet, h) for h in names]}
 
+    async def connections(self, query, principal, **_):
+        from . import setup_connections
+        self._exact_query(query, {"installation_ref", "after", "limit"})
+        return 200, setup_connections.list_connections(self.daemon.ops, principal,
+            self._q(query, "installation_ref"), after=self._q(query, "after"), limit=self._int(query, "limit", 50))
+
+    async def connections_preview(self, query, principal, body, **_):
+        from . import setup_connections
+        self._exact_query(query, set())
+        return 200, setup_connections.preview(self.daemon.ops, principal, body)
+
+    async def connections_receipt(self, query, principal, body, **_):
+        from . import connection_handoff
+        self._exact_query(query, set())
+        return 200, connection_handoff.receive(self.daemon.ops, principal, body)
+
     async def operations(self, query, principal, **_):
         statuses = [s for s in (self._q(query, "status") or "").split(",") if s]
         before = self._q(query, "before")
@@ -1609,7 +1630,8 @@ class ApiV1:
             )
             if (not str(action or "").startswith("pm.")
                     and action not in {
-                        "setup.host", "setup.repository", "setup.verification", "work.start", "work.adopt_and_start",
+                        "setup.host", "setup.repository", "setup.verification", "setup.connection.apply",
+                        "connection.reference.apply", "work.start", "work.adopt_and_start",
                         "github.pr.publish",
                     } and not is_work_send):
                 raise
@@ -1629,11 +1651,15 @@ class ApiV1:
         op = await pm_operation_loop.attach(self.daemon.ops, principal, op)
         return (202 if created else 200), {"operation": op, "created": created}
 
-    async def operation(self, op, principal, **_):
+    async def operation(self, op, principal, query=None, **_):
+        if query and "installation_ref" in query:
+            self._exact_query(query, {"installation_ref"})
         from . import pm_work_follow_up
         operation = await pm_operation_loop.attach(
             self.daemon.ops, principal, pm_work_follow_up.enrich_operation(
                 self.daemon.ops.db, self.daemon.ops.get(op, principal=principal)))
+        from . import connection_handoff
+        operation = connection_handoff.read(self.daemon.ops, principal, operation, self._q(query or {}, "installation_ref"))
         return 200, {"operation": operation,
                      "work_items": work_items.work_items_for(self.daemon.journal.db, "operation", op),
                      "cleanup_receipts": cleanup.receipts(self.daemon.ops, op)}

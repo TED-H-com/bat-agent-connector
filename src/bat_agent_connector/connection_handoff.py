@@ -77,6 +77,8 @@ def read(ops, principal, operation, installation_ref):
         return operation
     if not visible(ops.db, principal, operation) or installation_ref != operation["target"]["installation_ref"]:
         raise OperationError("FORBIDDEN", "Handoff belongs to the original principal and installation", 403)
+    if operation["status"] in {"cancelled", "failed"} or operation["cancel_requested"]:
+        _refuse("A cancelled or failed operation cannot dispatch a native effect")
     row = ops.db.execute("SELECT request,response FROM operation_steps WHERE operation_id=? AND name=?",
                          (operation["operation_id"], STEP)).fetchone()
     if not row:
@@ -88,7 +90,8 @@ def read(ops, principal, operation, installation_ref):
     if not sent and now() > claims["expires_at"]:
         _refuse("Handoff expired before dispatch; review the original operation")
     ops._merge_refs(operation["operation_id"], {"native_effects_sent": True})
-    return {**operation, "native_handoff": {**claims, "challenge": _challenge(ops, claims),
+    return {**operation, "external_refs": {**(operation.get("external_refs") or {}), "native_effects_sent": True},
+        "native_handoff": {**claims, "challenge": _challenge(ops, claims),
         "receipt": json.loads(row["response"]) if row["response"] else None}}
 
 

@@ -365,6 +365,18 @@
         "allowed": false
       },
       {
+        "action": "connection.reference.apply",
+        "scope": "observe",
+        "summary": "Save a principal-local connection association",
+        "allowed": true
+      },
+      {
+        "action": "setup.connection.apply",
+        "scope": "manage",
+        "summary": "Coordinate personal Connector configuration and native connection evidence",
+        "allowed": false
+      },
+      {
         "action": "session.approve_pending",
         "scope": "operate",
         "summary": "Approve a fixed reviewed set of managed permission prompts",
@@ -940,6 +952,7 @@
       "failed",
       "cancelled"
     ],
+    "connection_contract_version": 1,
     "cleanup": {
       "preview_ttl_s": 900,
       "max_items": 500,

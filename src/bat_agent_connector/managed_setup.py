@@ -198,7 +198,8 @@ def state(daemon, principal):
         "allow_pr_update": repo.allow_pr_update, "allow_integrate": repo.integrate is not None}
         for repo in daemon.fleet.config.github.repos.values()]
     verification = _verification(document)
-    return {"revision": revision, "preview_contract_version": 1, "hosts": hosts, "repositories": repos, "profiles": profiles,
+    return {"revision": revision, "preview_contract_version": 1, "connection_contract_version": 1,
+            "hosts": hosts, "repositories": repos, "profiles": profiles,
             "verification": {"commands": {name: list(argv) for name, argv in verification.commands.items()},
                              "timeout_s": verification.timeout_s},
             "profiles_error": profiles_error, "busy": _busy(daemon)}
@@ -599,7 +600,10 @@ def _require_setup_identity(daemon, binding):
         raise NeedsAttention("SETUP_IDENTITY_CHANGED", "Original setup installation is unavailable")
 
 
-async def _run(ctx):
+async def _run(ctx, *, action=None, target=None, params=None):
+    action = action or ctx.op["action"]
+    target = target if target is not None else ctx.target
+    params = params if params is not None else ctx.params
     daemon = ctx.service.context["daemon"]
     root = _installation(daemon)
     binding = ctx.admission_binding or {}
@@ -613,28 +617,28 @@ async def _run(ctx):
             if revision == binding["after_revision"]:
                 old = _activate(daemon, parse_config(document, path), document, revision)
                 await asyncio.gather(*(client.close() for client in old), return_exceptions=True)
-                return {"configured": True, "revision": revision, **ctx.target}
+                return {"configured": True, "revision": revision, **target}
             if revision == binding["before_revision"]:
                 return RERUN
             return None
         async def apply():
             if _busy(daemon, ctx.operation_id):
                 raise _error("SETUP_BUSY", "Central work began; review setup again after it settles", 409)
-            config, document, encoded, before, after = _candidate(daemon, ctx.op["action"], ctx.target, ctx.params, expired=True)
+            config, document, encoded, before, after = _candidate(daemon, action, target, params, expired=True)
             if before != binding["before_revision"] or after != binding["after_revision"]:
                 raise _error("CONFIGURATION_CHANGED", "Setup inputs or configuration changed; review again", 409)
             runner = daemon._git_runner(config,
                 {**daemon.adapter.verifier.settings.ssh_hosts, **_aliases(document)})
-            if ctx.op["action"] == "setup.host" and binding.get("git_execution") is not None:
-                if binding["git_execution"] != {ctx.target["host"]: runner.execution_binding(ctx.target["host"])}:
+            if action == "setup.host" and binding.get("git_execution") is not None:
+                if binding["git_execution"] != {target["host"]: runner.execution_binding(target["host"])}:
                     raise _error("GIT_EXECUTION_LOCATION_CHANGED", "Original setup execution location changed", 409)
             try:
-                if ctx.op["action"] == "setup.host":
-                    proof = await _probe_host(config, ctx.target["host"])
-                    if config.host(ctx.target["host"]).git == "ssh" and ctx.params.get("ssh_alias"):
-                        await _probe_ssh(ctx.params["ssh_alias"])
-                elif ctx.op["action"] == "setup.repository":
-                    proof = await _probe_repository(config, ctx.target["repository"], ctx.params["host"], ctx.params["workspace_id"])
+                if action == "setup.host":
+                    proof = await _probe_host(config, target["host"])
+                    if config.host(target["host"]).git == "ssh" and params.get("ssh_alias"):
+                        await _probe_ssh(params["ssh_alias"])
+                elif action == "setup.repository":
+                    proof = await _probe_repository(config, target["repository"], params["host"], params["workspace_id"])
                 else:
                     # Saving a command never executes it; task ownership and the
                     # existing observed-verification gates govern its later run.

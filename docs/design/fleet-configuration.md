@@ -528,3 +528,103 @@ returns the same receipt with `replayed:true`, including after expiry. An expire
 challenge cannot introduce a new effect. Different evidence under a used challenge,
 a different principal/installation/operation/step/review/revision/epoch/effect,
 or an undispatched challenge is refused. Receipt POST cannot admit a new intent.
+
+#### Projection, admission and recovery
+
+The idempotent schema list creates `connection_bindings` empty, keyed by
+`(principal, installation_ref, connection_id)`. There is no `user_version` allocation
+or data migration; `LATEST_DATA_STEP` stays 3. Rows contain revision, `active`/`detached`
+state (detach is not implemented), the immutable descriptor reference/source_digest/
+kind/policy_version/profile_reference/association, immutable selected remote profile,
+selected service/workspace references, a 1–100 character label, bounded display
+preferences, source operation ID and receipt references. No credential, token,
+path, TOML, private snapshot bytes or raw SSH content belongs in this projection.
+Operations and their steps retain history; the projection is not a second intent log.
+
+`connection.reference.apply` uses existing `observe` scope and changes only the
+effective principal's local association. It cannot edit `hosts.toml`, grant
+permissions, start remote work, stop a service or call BAT. `setup.connection.apply`
+uses existing `manage` scope **and the unchanged original personal `_installation`
+check**, including at preview and receipt. An optional server configuration invokes
+the same guarded `setup.host` configuration step inside this operation, without a
+nested operation. The old `setup.host` key/revision replay and setup review clients
+remain supported. New actions are classified with the existing Git execution gates:
+the reference action is journal-only; setup retains its candidate configuration binding.
+
+Both actions use the standard `POST /api/v1/operations` envelope and original key.
+The target is `{installation_ref}` for create or `{installation_ref,connection_id}`
+for update. Create accepts no client-chosen connection ID: the server derives
+`conn_` plus the accepted operation's 32 hex digits. Admission freezes server and
+effective principal identity, installation, existing connection ID or create-intent
+digest, descriptor, expected revision and review digest. An update's atomic local
+transaction checks revision again. Endpoint, pin, remote profile or principal cannot
+be rebound in place: add a separate connection. The source association is immutable,
+including its original source digest; a changed source snapshot requires separate review.
+
+`installation_ref` is a 1–128 character opaque, bounded client claim under the
+authenticated principal. It separates one person's installations, grants nothing
+and proves no attestation. Anyone holding that same effective principal can claim
+its installation strings. It is not a machine authentication credential. The
+effective principal identity follows existing server/actor/scopes/admin semantics;
+changing effective scope is not an identity rebind. No new permission scope is added.
+
+`POST /api/v1/connections/preview` accepts `{action,target,params,preconditions}`.
+The params are exactly `source`, `source_reference`, `remote_profile_id`, `service_ref`,
+`workspace_ref`, `label`, `preferences`, and optional `server_configuration` for setup.
+Preferences allow only `favorite` (boolean) and `order` (integer 0–10000). Service and
+workspace may be null; a selected service must already be readable in configuration
+(or be the setup candidate), match the endpoint/pin/profile, and a selected workspace
+must be present in that service's current bound inventory observation. This never
+probes to manufacture missing read evidence. Other principals' PM resources cannot
+be selected as BAT service/workspace references.
+
+The source selector is `{kind:"bat_profile",profile_reference}` or
+`{kind:"staged_secret",secret_ref,url,fingerprint}`. Staged sources require personal
+manage authority, since staging is an existing personal setup effect. The base has
+no discovery helper yet: `setup_connections.source_descriptor` calls the frozen
+`build_source_descriptor` using locally derived inputs. BAT snapshot inputs are
+SHA-256 of UTF-8 resolved selected directory, full index bytes and full credential
+store bytes. Staged snapshot inputs hash the canonical opaque staging reference,
+full metadata bytes and credential bytes. These private inputs are never returned
+or stored in the projection. The descriptor continues to exclude server-returned
+profile/workspace choices. Discovery integration must use the same source snapshots;
+this backend does not add or edit a discovery route or probe helper.
+
+The optional `server_configuration` contains `{target:{host},params,preconditions:{config_revision}}`
+using the existing `setup.host` allowlist and guards. Its source must match the selected
+descriptor. Preview recomputes the source and returns bounded semantic before/after,
+configuration revision digests and `review_digest`, with all effect flags false.
+It creates no operation/step, writes no configuration and starts no BAT/SSH probe.
+Apply requires `preconditions:{expected_revision,review_digest}` (revision 0 for create).
+Source, configuration, choices or revision changes refuse admission with the existing
+changed-review path, rather than silently accepting a new source.
+
+Read `GET /api/v1/connections?installation_ref=…` with `observe` for only the calling
+principal's rows. `limit` is 1–200 (default 50), `after` is an opaque connection ID,
+and `next_after` is null on the last page. Connection operations, controls, list and
+event visibility preserve the same effective principal. Explicit handoff reads
+also require the matching installation claim. Ordinary operation reads and list
+responses never contain a challenge.
+
+On a lost acceptance reply, submit the **identical** request and original key to read
+back the accepted operation. Once its ID is known, read it; never mint a replacement
+key or send another local effect. A saved Connector association can remain visibly
+`waiting_external` with a pending `native_effects` step. A dispatch read records the
+sent fence before delivering the challenge, so a lost reply is conservatively treated
+as possibly sent. Before dispatch expiry yields existing `NeedsAttention`; after
+dispatch expiry or a third-value receipt yields existing `Uncertain` and its bounded
+readback budget. There is no automatic resend, renewal, rollback or lock clearing.
+Definitive participant refusal yields `NeedsAttention`; applied/unchanged completes
+the original step and projects its receipt reference. Journal receipt loss reconciles
+the original evidence without another effect. Cancel is refused while a dispatched
+effect awaits reconciliation; a cancelled intent cannot subsequently dispatch.
+Resume uses the same operation, steps, key, epoch and effect identity. An expired
+unrecorded effect cannot be introduced by resume. Earlier completed configuration
+steps are not undone when the local participant refuses or remains uncertain.
+
+繁體中文：本輪只有後端 durable connection operations，未接 native／Bridge／Fleet 產檔。
+observe 僅儲存自己的連線關聯；setup 保留 manage 與原 personal 安裝身分，不因唯讀
+client 放寬。installation_ref 是客戶端聲稱，沒有額外授權或裝置證明。
+預覽不寫入、不 probe、不建立 operation；回覆遺失保留原 key／ID，已派送不自動重送。
+native 收據只證明參與者本機效果，不能證明中央觀測的可達性或遠端資源擁有權。
+此工作沿 E01／E03／E11 與既有 R／A 驗收接續，不宣稱 R0–R5 或 A01–A40 的實機驗收完成。
