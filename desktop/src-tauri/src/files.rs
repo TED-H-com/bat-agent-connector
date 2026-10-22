@@ -1441,6 +1441,7 @@ fn decode_preview(bytes: Vec<u8>) -> Result<Preview, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    include!("clipboard_tests.rs");
     fn fixture() -> (tempfile::TempDir, Arc<Bridge>, Arc<Files>) {
         let root = tempfile::tempdir().unwrap();
         let bridge = Arc::new(Bridge::file_fixture(

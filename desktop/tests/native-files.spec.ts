@@ -1,4 +1,5 @@
 import {test, expect, type Page} from "@playwright/test";
+import {selectedReceipt} from './native-receipt-fixture';
 import {STRINGS} from '../src/i18n.js';
 import {serveGateBaseline} from './action-gate-baseline';
 const wid="wi_"+"d".repeat(20), oid="op_"+"a".repeat(32), aid="art_"+"b".repeat(32), digest="c".repeat(64);
@@ -14,9 +15,10 @@ async function fixture(page:Page) {
     if(command==="native_files_status")return{supported:true,transfers:state.available?state.receipts.filter(r=>r.owner===state.actor):[],drop_error:null};
     if(command==="native_files_drop_target")return null;
     if(command==="native_files_pick"){
-      const receipt={transfer_id:"file_"+String(state.receipts.length+1).padStart(32,"0"),direction:"upload",draft_id:args.draftId,
-        display_name:"review-notes-檔案.html",size_bytes:1024,digest,media_type:"text/plain",stage:"selected",transferred_bytes:0,error:null,
-        operation_id:null,operation_status:null,artifact:null,intent_key:"fixed-native-intent",owner:state.actor};
+      const receipt={...selectedReceipt(args.draftId, {
+        transfer_id:"file_"+String(state.receipts.length+1).padStart(32,"0"),
+        display_name:"review-notes-檔案.html", digest, media_type:"text/plain",
+      }), owner:state.actor};
       state.receipts.push(receipt);
       if(state.held)await new Promise<void>(resolve=>{state.release=resolve;});
       return[receipt];

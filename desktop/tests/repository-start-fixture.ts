@@ -1,3 +1,4 @@
+import {selectedReceipt} from './native-receipt-fixture';
 import {expect, type Page} from '@playwright/test';
 export const publishedId = 'op_'+'a'.repeat(32), publishedSha = 'b'.repeat(40), bindingDigest = 'c'.repeat(64);
 export const uploadId = 'op_'+'d'.repeat(32), aid = 'art_'+'e'.repeat(32);
@@ -6,7 +7,7 @@ export const dispatchProject = 'prj_'+'1'.repeat(20), dispatchArtifact = {artifa
 export async function publishedFixture(page: Page, native: boolean, options: any = {}) {
   const state = {actor: 'published-person', server: 'published-server', principal: 'published-principal', scopes: ['observe', 'start', 'manage'],
     allowed: true, writes: true, orchestrate: true, status: 'succeeded', posts: [] as any[], previews: [] as any[], reads: [] as string[],
-    invokes: [] as {command: string; method?: string; path?: string}[], errors: [] as string[], events: [] as any[], after: 0, operation: null as any, bytes: [] as number[], uploaded: false,
+    invokes: [] as {command: string; method?: string; path?: string; args?: any}[], errors: [] as string[], events: [] as any[], after: 0, operation: null as any, bytes: [] as number[], uploaded: false,
     project: {project_id: dispatchProject, name: 'Dashboard project', description: 'Shared browser and desktop work',
       repositories: ['example/project'], children: [], version: 1, archived: false, counts: {total: 0, approved: 0}}, ...options};
   const baseCaps = () => ({actor: state.actor, scopes: state.scopes, api_version: 1, contract_version: '2026-10-08',
@@ -113,13 +114,28 @@ export async function publishedFixture(page: Page, native: boolean, options: any
   page.on('pageerror', e => state.errors.push(e.message));
   if (native) {
     await page.exposeFunction('publishedFixture', dispatch);
-    await page.exposeFunction('publishedInvoke', (command: string, input: any) => {
-      state.invokes.push({command, method: input?.method, path: input?.path});
+    const receipts: any[] = [];
+    await page.exposeFunction('publishedInvoke', async (command: string, args: any) => {
+      state.invokes.push({command, method: args?.input?.method, path: args?.input?.path, args});
+      if (command === 'native_files_status') return {supported: true, transfers: receipts, drop_error: null};
+      if (command === 'native_files_paste_arm') return null;
+      if (command === 'native_files_paste') {
+        if (state.pasteUnsupported) return {clipboardError: {code: 'CLIENT_ACTION_NATIVE_PASTE_UNSUPPORTED', reason: 'platform'}};
+        const receipt = selectedReceipt(args.draftId);
+        receipts.push(receipt); return receipt;
+      }
+      if (command === 'native_files_upload') {
+        const receipt = receipts.find(r => r.transfer_id === args.handleId);
+        Object.assign(receipt, {stage: 'ready', transferred_bytes: receipt.size_bytes,
+          operation_id: uploadId, operation_status: 'succeeded', artifact: {artifact_id: aid, revision: 1, digest: receipt.digest}});
+        state.uploaded = true; return receipt;
+      }
     });
     await page.addInitScript(() => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
-      await (window as any).publishedInvoke(command, args?.input);
+      const result = await (window as any).publishedInvoke(command, args);
+      if (result?.clipboardError) throw result.clipboardError;
+      if (command.startsWith('native_files_')) return result;
       if (command === 'native_status') return {endpoint: 'https://fixture.example', credential_available: true, file_transfers: true};
-      if (command === 'native_files_status') return {supported: true, transfers: [], drop_error: null};
       if (command === 'connector_connect') return (await (window as any).publishedFixture({method: 'GET', path: '/capabilities'})).data;
       if (command === 'connector_disconnect') return;
       if (command === 'connector_request') return (window as any).publishedFixture(args.input);

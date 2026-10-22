@@ -66,7 +66,7 @@ async function pasteText(page: Page, selector: string, text: string) {
   }, {selector, text});
 }
 
-// Raw file bytes belong only to the browser flow. Native paste refusals are covered below.
+// Raw file bytes belong only to the browser flow. Native clipboard receipts are covered below.
 {
   const native = false, mode = 'Browser';
 
@@ -268,13 +268,13 @@ async function pasteText(page: Page, selector: string, text: string) {
 }
 
 for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', 'textarea']) {
-  test(`IPC: image paste refuses before effects ${locale} ${target}`, async ({browser}, testInfo) => {
+  test(`IPC: unsupported image paste refuses before effects ${locale} ${target}`, async ({browser}, testInfo) => {
     const context = await browser.newContext({locale}), page = await context.newPage();
-    const state = await publishedFixture(page, true, {dispatch: true, bindings: [selected]});
+    const state = await publishedFixture(page, true, {dispatch: true, bindings: [selected], pasteUnsupported: true});
     const original = '  Keep this draft.\n保留原始文字。  ';
     const message = locale === 'zh-TW'
-      ? '桌面版不支援貼上圖片。請使用「選擇檔案」，或先「啟用拖放」再拖入檔案。'
-      : 'Image paste is not supported in the desktop app. Use Choose files, or Enable file drop and drop the file.';
+      ? '此平台或剪貼簿圖片格式不支援貼上。請使用「選擇檔案」，或先「啟用拖放」。'
+      : 'This platform or clipboard image format does not support image paste. Use Choose files or Enable file drop.';
     try {
       await page.goto('/dashboard/#/dispatch/' + dispatchProject);
       await expect(form(page)).toBeVisible();
@@ -290,7 +290,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', '
       expect(state.bytes).toEqual([]);
       expect(state.uploaded).toBe(false);
       expect(state.invokes.slice(before).filter(call => !(call.command === 'native_files_status'
-        || call.command === 'connector_request' && call.method === 'GET'))).toEqual([]);
+        || call.command === 'connector_request' && call.method === 'GET'))).map(call => call.command)).toEqual(['native_files_paste_arm', 'native_files_paste']);
       await page.reload();
       await expect(form(page).locator('textarea')).toHaveValue(original);
       await expect(form(page).locator('.attachment-list')).toBeEmpty();
@@ -321,3 +321,34 @@ for (const locale of ['en-US', 'zh-TW']) test(`IPC: plain text paste remains unc
     expect(state.errors).toEqual([]);
   } finally {await context.close();}
 });
+
+for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', 'textarea']) {
+  test(`IPC: native image paste adopts and uploads one receipt ${locale} ${target}`, async ({browser}) => {
+    const context = await browser.newContext({locale}), page = await context.newPage();
+    const state = await publishedFixture(page, true, {dispatch: true, bindings: [selected]});
+    try {
+      await page.goto('/dashboard/#/dispatch/' + dispatchProject);
+      await expect(form(page)).toBeVisible();
+      // Desktop may inspect MIME metadata only, even when file APIs are poisoned.
+      await page.evaluate(target => {
+        const el = document.querySelector('[data-published-start] ' + target)!;
+        const event = new Event('paste', {bubbles: true, cancelable: true});
+        Object.defineProperty(event, 'clipboardData', {value: {
+          items: [{kind: 'file', type: 'image/png', getAsFile() {throw new Error('WebView clipboard file read');}}],
+          get files() {throw new Error('WebView clipboard files read');},
+        }});
+        el.dispatchEvent(event);
+      }, target);
+      await expect(form(page).locator('.attachment-list')).toContainText(aid);
+      await expect(form(page).locator('.attachment-list')).toContainText('pasted-image-20261022T120000Z.png');
+      const effects = state.invokes.filter(c => ['native_files_paste_arm', 'native_files_paste', 'native_files_upload', 'connector_upload_artifact'].includes(c.command));
+      expect(effects.map(c => c.command)).toEqual(['native_files_paste_arm', 'native_files_paste', 'native_files_upload']);
+      expect(Object.keys(effects[0].args)).toEqual(['draftId']);
+      expect(effects[1].args).toEqual(effects[0].args);
+      expect(effects[2].args).toEqual({handleId: 'file_' + '1'.repeat(32)});
+      expect(state.posts).toEqual([]);
+      expect(state.bytes).toEqual([]);
+      expect(state.errors).toEqual([]);
+    } finally {await context.close();}
+  });
+}
