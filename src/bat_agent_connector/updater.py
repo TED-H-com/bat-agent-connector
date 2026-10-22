@@ -294,6 +294,7 @@ class Updater:
                 return self.status(state)
             try:
                 self.reconcile(state)
+                before = copy.deepcopy(state)
                 self.verify(state["versions"][state["current"]])
                 candidate = self.find_release(state["channel"])
                 current = state["versions"][state["current"]]["release"]
@@ -309,8 +310,10 @@ class Updater:
                     state["pending"] = {"id": secrets.token_hex(16), "from": state["current"], "to": candidate["commit"],
                                         "status": "installed_for_next_launch"}
                     self.save(state)
+                    before = copy.deepcopy(state)
                     self.reconcile(state)
-                self.save(state)
+                if state != before:
+                    self.save(state)
                 return self.status(state)
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 self.failure(state, exc)
@@ -380,10 +383,12 @@ class Updater:
                     write_unit(path, text)
             env = clean_env(self.home)
             env["XDG_RUNTIME_DIR"] = "/run/user/" + str(os.getuid())
+            before = copy.deepcopy(state)
             self.command(["/usr/bin/systemctl", "--user", "daemon-reload"], env=env, timeout=30)
             self.command(["/usr/bin/systemctl", "--user", "enable", "--now", "batc-update.timer"], env=env, timeout=30)
             state["schedule_complete"] = True
-            self.save(state)
+            if state != before:
+                self.save(state)
             return self.status(state)
 
 
