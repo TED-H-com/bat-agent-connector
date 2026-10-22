@@ -26,6 +26,26 @@ Setup now uses an authenticated active write connection or existing inventory ev
 
 A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
 
+## 與「加入機器」共用的契約（已定，尚未實作）
+
+本節補充上方現行首次設定，未實作新的角色精靈。程式查核基線為 `5615d6c0`
+（合併 main `f7a71405`），下列 `file:line` 已按此基線重核。
+責任分工只維護於 [Fleet 唯一責任表](fleet-configuration.md#責任表與退休條件)；
+共用欄位、狀態、變更、lifecycle、健康投影、驗收與 D1–D8 的產品決定／技術預設
+均引用 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約已定尚未實作)，本處不另訂一份。
+
+| 首次設定特有行為（現況） | 可核對的輸入／輸出 |
+| --- | --- |
+| UI 選 BAT 來源 | 自動模式沿用可讀 BAT profile，多項時選擇，無可用項目時貼遮蔽連結；parser 拆出 endpoint／pin／token。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[managed-setup.js:332](../../desktop/src/managed-setup.js#L332) |
+| 自動設定送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:481](../../desktop/src/managed-setup.js#L481) |
+| UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:440](../../desktop/src/managed-setup.js#L440)、[managed-setup.js:455](../../desktop/src/managed-setup.js#L455) |
+
+2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，角色入口須移至本機服務準備前，
+完整保留與驗收規則只維護於 [已定契約](fleet-configuration.md#已決定的產品契約2026-10-22經-owner-授權)。
+這是上方 managed-first 旅程的後續改接，尚不代表現有首次設定可免建本機服務。
+後端對帳與新 setup 阻擋規則只引用
+[Fleet 的現況／規範狀態表](fleet-configuration.md#預覽--套用--讀回)。
+
 ## First-run visual evidence
 
 Synthetic shared-browser fixtures, identical data and light theme, 1440×900 and 390×844. These are not installed Windows or live BAT acceptance. Before captures use the original `origin/main` UI; after captures use this implementation. Every PNG is under 90 KB.
@@ -78,6 +98,49 @@ that have not been made.
 - The package pins its compressed runtime and executable digests. Installation does not download and execute an unversioned script. The frozen runtime starts without Python or uv on the user's PATH.
 - Browser handoff is short-lived and single-use. The resulting session uses an HttpOnly SameSite cookie plus origin/CSRF checks; this is not a public unauthenticated hosting mode.
 - Setup mutations use central durable actions, opaque staged credential references and the reviewed configuration revision. Publication is atomic. Recovery reads the original revision/receipt rather than inventing a new intent; live configuration changes wait for a safe point.
+
+### Credentials and browser connections
+
+API tokens are bearer credentials for HTTP and `/rpc`, with their existing actor
+and scopes. A managed browser-session credential is accepted only through the
+browser cookie path. It requires the existing exact-origin, fetch-metadata and
+CSRF checks. Only the session restore GET omits the CSRF header; it still requires
+the origin and fetch metadata. Browser-session credentials presented as bearers
+receive exactly the same status and error as unknown credentials on that path.
+Managed browser entry and service stop continue to require an API bearer.
+
+Existing session records identify the cookie-only credentials, including sessions
+created before an upgrade. Opening the journal creates the session table
+idempotently without changing the schema data-step version or rewriting tokens.
+Cookie sessions retain their lifetime, parent binding, actor and scopes. Long
+reads recheck the same credential class, expiry and revocation. This corrects the
+credential acceptance boundary; it adds no protocol channel or capability and
+does not change API request/response shapes or the contract version.
+
+When a remembered bearer receives HTTP 401, the Dashboard displays its localized
+refusal state and pauses further automatic presentations. HTTP 403 pauses it only
+on the reads required to run the Dashboard: capabilities, bootstrap and event
+polling. Other 403 responses retain the existing action or resource error; the
+connection and polling continue. One shared decision covers ordinary requests
+and file transfers. Once refused, the pause covers startup, page restore,
+polling, retries and file requests.
+
+The token remains stored because it may still be valid for the original service.
+A separate refusal record identifies its domain-separated digest, endpoint and refusal status.
+It is kept in memory and in the same store as the token, preferring local storage
+when the token is remembered there; session-only tokens leave no durable refusal
+record. The pause survives reloads, and remembered tokens stay paused in new
+tabs. The person can Connect with a new token or choose Retry remembered token.
+Disconnect, successful replacement with a different token and explicit retry
+remove the corresponding refusal record. Tabs at the same origin observe stored refusal changes, including an explicit retry in another tab. Credential checks before requests are synchronous; preparing the storage key does not delay Connect or Retry. Work drafts, pending intents and
+operation keys stay in their original namespaces. If browser storage is
+unavailable, the current page retains the pause in memory.
+
+Cookies are scoped to a host, not a port: browsers can send them to other ports
+of the same host. Origin checks and HttpOnly do not provide port isolation or
+prove which installation is listening. Per-installation channel binding remains
+future work. Pausing after a refusal also does not prevent the first credential
+presentation or establish server identity.
 
 On Windows, a private reader can temporarily block replacement of a manifest or
 endpoint pointer. Atomic replacement retries only native rename errors 5 and 32,
@@ -186,9 +249,7 @@ Multiple matching old ports are **not** merged or ranked, even when their values
 look identical or one port only has orphan drafts/tab preferences without a
 checkpoint. Existing destination data, missing old checkpoint keys, legacy
 keys without server/principal proof, unrecognized legacy key envelopes, ambiguous namespace boundaries, non-loopback
-endpoints and different identities are left in place. These cases require explicit
-review/export of the retained data; there is no automatic picker or recovery UI in
-this change. Reverting to the old frontend can still read original old-port keys
+endpoints and different identities are left in place. Reverting to the old frontend can still read original old-port keys
 when connected at that original endpoint, but later edits in the new scope are not
 copied back automatically.
 
@@ -199,12 +260,94 @@ journal also retains its `server_id` while its cursor regresses; the B02 backend
 test covers both regression and divergent reuse of a sequence. Thus even a
 unique highest saved cursor does not prove the latest namespace. This migration
 deliberately leaves all such sources untouched. A user with several old scopes
-gets an empty new scope; their old drafts remain available for explicit local
-inspection/export. Recovery requires reviewing the matching identity and choosing
-the intended complete source, including its original operation keys and pending
-requests, after backing up both old and new data. This change supplies no tool
-for that selection or import; copying draft text alone must not replay a pending
-request. Do not clear storage or guess a source from its port or cursor.
+gets an empty new scope. The text recovery panel below makes matching old drafts
+readable without selecting or importing a namespace. Original operation keys and
+pending requests stay in their original scope: copying draft text alone must not replay a pending request. Do not clear storage or guess a
+source from its port or cursor.
+
+#### Reading drafts from earlier local addresses
+
+After native managed bootstrap verification, an optional deferred scan finds old
+loopback HTTP port scopes with the exact verified server, principal and actor.
+It uses the same canonical endpoint rules and exact checkpoint-key boundaries
+as migration. Orphan scopes without a checkpoint and overlapping dotted-actor
+boundaries are excluded. Browser clients and external native connections do not
+scan. A completed migration receipt excludes its source, even if the migrated
+draft has subsequently been consumed. No cursor ranks drafts. The panel does not
+cover orphan scopes, ambiguous boundaries, different identities, non-loopback
+addresses, unverified connections, generated Work checkpoint-continuation summaries
+(`draft.continue.<checkpoint>.<work item>`) or unrecognized key families. Those sources
+remain available for explicit manual review/export of the original storage,
+including their operation evidence; the panel does not activate or repair them.
+
+When recoverable text exists, **Settings → About → Drafts from earlier local
+addresses** appears. A non-blocking notice links there the first time that
+verified identity has recoverable text. The notice stays eligible until its link is
+used or the panel is opened, lives inside the main layout, and follows language
+changes. Each entry shows its localized form and field names,
+original loopback address and read-only text. The audited writers do not store a
+draft-edit timestamp; checkpoint cursors, operation receipt times and dates typed
+inside a form are not presented as an edit time.
+
+Entries with an `intent`, `submission`, artifact-review `accept`, or a
+sibling `batc.key` record are **possibly sent requests**, even when their result
+is unknown, unreadable or has no operation ID. Artifact capture alone does not
+classify review text as possibly sent: `artifact.capture.managed` carries a preview
+token, while `artifact.accept` carries the review receipt. Session writers may append a
+request digest to the sibling key. Mirrored form/attachment text retains the
+submission evidence from either writer. These entries are shown in a separate
+read-only group labelled **May already have been sent — check it before sending
+it again**, with links to their known `#/op/<id>` operations on the same Connector,
+or to the original session/form when no operation ID is known. They have no
+**Copy text** action and are never presented as ordinary drafts. Inspecting them
+does not look up, replay or adopt an operation key.
+
+For ordinary draft text, **Copy text** copies only that entry's text to the clipboard. If clipboard access
+is unavailable, the text is selected for manual copying. **Hide** writes a local
+marker scoped to the verified identity and a digest of the original key/field.
+It survives relaunch and never deletes the original. The notice has its own local
+marker. Nothing is sent, resubmitted, loaded into a current form, merged or
+automatically deleted. Current drafts, operation keys and checkpoints are untouched.
+Unreadable storage is skipped with a content-free console diagnostic, without an
+error dialog or error summary. The scan yields between batches and never gates
+view activation; connection changes invalidate its result and controls. Cancelling
+a connection change retains the panel. The identity-preserving reset reasons
+`cursor_expired`, `cursor_ahead`, `history_changed` and `checkpoint_cursor_mismatch`
+preserve the panel instance, expansion, focus and reading position, but Copy/Hide
+remain inert during bootstrap verification and until the current identity's rescan
+completes. Every other reset reason, including `principal_changed`, `server_changed`,
+`identity_unavailable`, `checkpoint_invalid` and `access_changed`, withdraws cached
+text before re-verification; failed bootstrap cannot revive its controls. An
+ordinary transport outage does not revoke the completed identity scan, so local
+inspection, copy and hide remain usable without Connector writes.
+
+The recovery reader uses explicit editable-text fields from each producer, rather
+than walking arbitrary JSON. Some writers persist all fields when one changes,
+including loaded values and defaults. Legacy storage has no per-field authorship
+proof, so the sources marked below may contain server text; their writers are
+unchanged. The inventory below is separate from the complete-scope migration
+inventory: migration still preserves all original bytes together.
+
+| Key family (without `batc.`) | Text recovery decision |
+| --- | --- |
+| `draft` | Raw session `send` text; `answer.answers`; Work edit `fields.title/goal/request/acceptance`; published/dispatch attachment `text`; session continuation `continue.<checkpoint>.text`. Only the Work continuation key `continue.<checkpoint>.<work item>` is excluded as a generated summary. Work edit fields may include text loaded from the server, not only what the person typed. Generated Work continuation text, queue flags, attachments and agent choices are excluded. Submission metadata is used only to classify possibly sent requests. Identical published/dispatch prompts mirrored in the corresponding form appear once; orphan or differing attachment text remains recoverable. |
+| `create` | Project `values.name/description/task_project`; Work `values.title/goal/request/acceptance/steps`. Repository, ancestry and state selectors are excluded. |
+| `pm.<scope>.<action>.<target>` (including nested form scopes) | Allowlisted editable fields for discussion messages/titles, Work instructions/follow-ups, plan text, analysis purposes, input values/references, rationale/reasons, governance prose, product-goal/definition-of-done rationale (not their server-prefilled text), sprint goals/capacity notes, meeting notes/output, maintenance review prose, PR title/body and handoff prompts. Per-criterion review reasons and authored text within meeting decisions/follow-ups/outcomes, maintenance follow-ups/public sources and roadmap milestones are extracted field by field. Hidden inputs (including the overview-assessment carrier title), structured source-reference selectors, model/adapter choices, IDs, policy configuration, selected receipts, structured plan snapshots and intent/request bodies are excluded from displayed text. The editable `pm.input.record.reference` is included; it is not a structured source selector. Intent presence and operation IDs only classify/link possibly sent requests. Malformed collections are skipped independently without discarding other fields. PM form values may include text loaded from the server, not only what the person typed, as well as form defaults. New action/field shapes require an explicit reader update. |
+| `pm.<scope>.discussion-send` | Handoff `content` only; thread identity is excluded. |
+| Other `pm` keys | Exclude discussion origins/indexes, follow-up/assessment pointers, adopt/start landing records, adapter/profile-return/release selectors and all nested selection/navigation/verifier keys. They contain provenance or navigation, not authored drafts. |
+| `start`, `published`, `dispatch` | `title` and `prompt` only. Repair-dispatch keys (`<project>.<repair work item>`) and `.shortcut` keys are excluded. Targets, agent/model/source choices and previews are excluded; intents only classify/link possibly sent requests. |
+| `orchestrate` | `message` and each item's `title/prompt` only; host, session/workspace, queue, agent and limits are excluded; intents only classify/link possibly sent requests. |
+| `labels` | Editable `text` only; reviewing current labels may persist server values. These may include text loaded from the server, not only what the person typed. Base version is excluded; intents only classify/link possibly sent requests. |
+| `artifact-review` | `reviewText` only; paths, selected evidence and previews are excluded; only `accept` classifies/links possibly sent review text; `capture` never carries it. |
+| `managed.setup`, `repair`, `capture`, `task-control`, `session-bat`, `permissions`, `approvals` | Exclude configuration, credentials, paths/identifiers, resource choices, previews, control flags and durable request/recovery data. |
+| `model-preferences`, `project-skills`, `cleanup.draft/pending/intent` | Exclude preferences, skill selections and cleanup selections/receipts. |
+| `key`, `sync`, `tree`, `sessions`, `attention`, `composer-shortcut`, sessionStorage `delivery` | Do not display or adopt keys, checkpoint proof, navigation, filters or preferences. Sibling operation metadata only classifies/links possibly sent requests. |
+| `earlier-drafts.<managed scope>.*` | Local hide and acknowledged-notice markers; never displayed as text or adopted from an old scope. |
+| Globals, credentials, Fleet bindings and in-memory view state | Outside the verified legacy envelope; never read or copied by recovery. |
+
+All panel text, form labels and clipboard fallback text are available in English
+and Traditional Chinese. This is local text inspection only; it does not prove
+native installation, real BAT/model behavior or physical-mobile acceptance.
 
 The namespace audit covers these durable families uniformly (names below omit
 `batc.`); memory-only consumers use the same verified namespace:
@@ -215,6 +358,7 @@ The namespace audit covers these durable families uniformly (names below omit
 | PM forms, intents, handoffs, exact Work/Attempt navigation | `pm.<scope>.*`, nested `pm.*-selection`, `pm.*-navigation`, `pm.governance.selection`, `pm.verifier` |
 | Setup, create, repair, capture and work controls | `managed.setup`, `create`, `repair`, `capture`, `task-control`, `start`, `orchestrate`, `published`, `dispatch` |
 | Resource forms, approvals and cleanup | `labels`, `session-bat`, `permissions`, `artifact-review`, `model-preferences`, `project-skills`, `approvals`, `cleanup.draft`, `cleanup.pending`, `cleanup.intent` |
+| Text recovery hide/notice markers | `earlier-drafts.<managed scope>.*` |
 | Tab preferences | `tree`, `sessions`, `attention`, `composer-shortcut` |
 | Standalone delivery repository/PR selection | sessionStorage `delivery.<scope>.repo`, `delivery.<scope>.pr` |
 | In-memory view selection and navigation folds | `viewState(namespace, workspaceId, view)` and `pm-workbench` maps, including `project-navigation`; no durable keys to copy |

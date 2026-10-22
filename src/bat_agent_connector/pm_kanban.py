@@ -26,7 +26,7 @@ def _source(row):
 
 def _unknown_flow(item, completion, reason):
     return {"basis": "recorded_work_content_approval", "history": reason,
-            "wip": False if completion["approved"] else True if item["state"] != "todo" or completion["pending"] else None,
+            "wip": False if completion["approved"] or work_items.source_lane(item) in work_items.GITHUB_CLOSED_LANES else True if item["state"] != "todo" or completion["pending"] else None,
             "started_at": None, "state_since": None, "closed_at": None, "age_seconds": None,
             "cycle_seconds": None, "waiting_since": None, "waiting_seconds": None,
             "total_waiting_seconds": None, "reopened": None, "sources": [],
@@ -112,14 +112,15 @@ def _flow(ops, principal, wid, item, completion, now):
         return unknown("inconsistent_history")
     if state == "waiting":
         waiting += now - last_time
-    wip = not approved and (ever_started or state != "todo" or completion["pending"])
+    inactive = work_items.source_lane(item) in work_items.GITHUB_CLOSED_LANES
+    wip = not inactive and not approved and (ever_started or state != "todo" or completion["pending"])
     return {"basis": "recorded_work_content_approval", "history": "available_central_events", "wip": wip,
             "started_at": started, "state_since": since, "closed_at": closed,
             "age_seconds": now - started if wip and started is not None else None,
             "cycle_seconds": closed - started if approved and started is not None else None,
-            "waiting_since": since if state == "waiting" else None,
-            "waiting_seconds": now - since if state == "waiting" else None,
-            "total_waiting_seconds": waiting, "reopened": len(reopened), "sources": sources,
+            "waiting_since": since if state == "waiting" and not inactive else None,
+            "waiting_seconds": now - since if state == "waiting" and not inactive else None,
+            "total_waiting_seconds": None if inactive else waiting, "reopened": len(reopened), "sources": sources,
             "blocked": "unknown", "blocked_reason": None, "cancelled": "unknown"}
 
 
@@ -254,9 +255,13 @@ def _card(ops, principal, wid, binding, now):
     archived = bool(item["archived"] or project["archived"])
     column = ("archived" if archived else "accepted" if completion["approved"] else "review" if completion["pending"]
               else {"todo": "backlog", "doing": "in_progress", "waiting": "waiting", "done": "review"}[item["state"]])
+    external = item.get('external')
+    source_lane = work_items.source_lane(item)
+    if not archived and source_lane:
+        column = {'todo': 'backlog', 'doing': 'in_progress'}.get(source_lane, source_lane)
     capture = pm_evidence.latest_capture(ops, principal, wid, item["work_item_id"])["capture"]
     return {"work_item_id": item["work_item_id"], "binding": {k: binding[k] for k in _BINDING_FIELDS},
-            "work": {k: item[k] for k in _WORK_FIELDS}, "column": column, "completion": completion,
+            "work": {**{k: item[k] for k in _WORK_FIELDS}, "external": external}, "column": column, "completion": completion,
             "project_archived": bool(project["archived"]), "flow": _flow(ops, principal, wid, item, completion, now),
             "execution": {**_Execution(ops, principal, wid).collect(item["work_item_id"]),
                 "manual_observation_sources": manual_sources(ops, principal, wid, item["work_item_id"])},

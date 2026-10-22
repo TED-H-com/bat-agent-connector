@@ -19,88 +19,6 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
-//#region src/managed-recovery.js
-function managedRecoveryKey(code) {
-	if (!code) return null;
-	if (code === "MANAGED_RECOVERING") return "managed_service_recovering";
-	if (code === "MANAGED_RECOVERY_IDENTITY_CHANGED") return "managed_service_identity";
-	return "managed_service_retry";
-}
-//#endregion
-//#region src/central-service-status.js
-function pollFailure(error, at) {
-	const status = Number.isFinite(error.status) ? error.status : 200;
-	const code = error.code || "INVALID_EVENT_PAGE";
-	return {
-		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
-		status,
-		code,
-		at
-	};
-}
-var pollKeys = {
-	transport: "ui_reconnecting",
-	refused: "ui_connection_refused",
-	service_error: "ui_service_error",
-	invalid_response: "ui_invalid_response",
-	continuity: "ui_connecting"
-};
-var pollReasons = {
-	ui_reconnecting: "reconnecting",
-	ui_connection_refused: "refused",
-	ui_service_error: "service_error",
-	ui_invalid_response: "invalid_response"
-};
-function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
-	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
-	const recoveryKey = managedRecoveryKey(managedRecovery);
-	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
-	return {
-		key,
-		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
-		connection,
-		recoveryKey
-	};
-}
-function clientActionGate(facts, requirements) {
-	const ready = requirements.post || requirements.attachment;
-	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
-		allowed: true,
-		reason: null
-	};
-	const key = centralServiceStatus(facts).key;
-	return {
-		allowed: false,
-		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
-	};
-}
-var clientReasons = [
-	"not_connected",
-	"connecting",
-	...Object.values(pollReasons),
-	"connection_changing",
-	"view_not_ready",
-	"manage_required",
-	"attachments_unavailable",
-	"uploads_not_allowed"
-];
-var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
-var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
-var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
-//#endregion
-//#region src/workbench-mode.js
-function decideLayout({ search = "", policy } = {}) {
-	const requested = new URLSearchParams(search).get("workbench");
-	const blocked = requested === "1" && policy?.allowWorkbench === false;
-	return Object.freeze({
-		layout: requested === "1" && !blocked ? "workbench" : "classic",
-		source: blocked ? "policy" : requested === null ? "default" : "url",
-		status: "preview",
-		reason: blocked ? "policy_disabled" : requested !== null && !["0", "1"].includes(requested) ? "unrecognized_workbench_value" : null
-	});
-}
-var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
-//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -126,169 +44,6 @@ function h$1(tag, attrs = {}, ...children) {
 	return el;
 }
 //#endregion
-//#region src/session-navigation.js
-var projectViews$2 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function workSessionContext(params) {
-	const fields = {
-		workspaceId: "workspace",
-		workItemId: "work",
-		attemptId: "attempt"
-	};
-	const patterns = {
-		workspaceId: /^ws_[0-9a-f]{32}$/,
-		workItemId: /^wi_[0-9a-f]{20}$/,
-		attemptId: /^att_[0-9a-f]{32}$/
-	};
-	const context = {};
-	for (const [key, name] of Object.entries(fields)) {
-		if (params.getAll(name).length !== 1 || !patterns[key].test(params.get(name))) return null;
-		context[key] = params.get(name);
-	}
-	return context;
-}
-function sessionHref$1({ host, sessionId, from = "", workspaceId, workItemId, attemptId }) {
-	const query = new URLSearchParams(projectViews$2.has(from) ? { from } : {});
-	const context = new URLSearchParams({
-		workspace: workspaceId || "",
-		work: workItemId || "",
-		attempt: attemptId || ""
-	});
-	if (workSessionContext(context)) for (const [key, value] of context) query.set(key, value);
-	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query.size ? "?" + query : ""}`;
-}
-function sessionOrigin(value) {
-	if (typeof value !== "string" || value.length > 4096) return "";
-	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
-	if (!match) return "";
-	try {
-		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
-		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
-		const query = new URLSearchParams(match[3] || "");
-		if ([...query.keys()].some((key) => ![
-			"from",
-			"workspace",
-			"work",
-			"attempt"
-		].includes(key)) || query.getAll("from").length > 1) return "";
-		const from = query.get("from") || "";
-		if (from && !projectViews$2.has(from)) return "";
-		const context = workSessionContext(query);
-		if ([
-			"workspace",
-			"work",
-			"attempt"
-		].some((key) => query.has(key)) && !context) return "";
-		return sessionHref$1({
-			host,
-			sessionId,
-			from,
-			...context
-		});
-	} catch {
-		return "";
-	}
-}
-var contextFields = {
-	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
-	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
-	requirement: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrev_[0-9a-f]{32}$/
-	},
-	milestone: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrb_[0-9a-f]{32}$/
-	},
-	work_item: { id: /^wi_[0-9a-f]{20}$/ },
-	work_input: { id: /^op_[0-9a-f]{32}$/ },
-	quality_assessment: {
-		id: /^op_[0-9a-f]{32}$/,
-		review_id: /^pmqr_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
-	finding: {
-		id: /^pmfn_[0-9a-f]{32}$/,
-		observation_id: /^pmgh_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
-	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
-	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
-	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
-	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
-	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
-};
-var projectViews$1 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function fullMatch(value, pattern) {
-	return typeof value === "string" && pattern.exec(value)?.[0] === value;
-}
-function isContextRef(ref) {
-	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
-	const fields = Object.entries(contextFields[ref.kind]);
-	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
-}
-function normalizeRefs(refs) {
-	const result = [], seen = new Set();
-	if (!Array.isArray(refs)) return result;
-	for (const ref of refs) {
-		if (!isContextRef(ref)) continue;
-		const item = { kind: ref.kind };
-		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
-		const identity = JSON.stringify(item);
-		if (seen.has(identity)) continue;
-		seen.add(identity);
-		result.push(item);
-		if (result.length === 8) break;
-	}
-	return result;
-}
-function normalizeDetails(title, from, report) {
-	return {
-		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews$1.has(from) ? from : sessionOrigin(from),
-		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
-	};
-}
-function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
-	const query = new URLSearchParams();
-	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
-	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
-	const search = query.toString();
-	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
-}
-function parseDiscussRefs(query) {
-	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
-	return {
-		refs: normalizeRefs(params.getAll("ref").map((value) => {
-			try {
-				return JSON.parse(value);
-			} catch {
-				return null;
-			}
-		})),
-		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
-	};
-}
-//#endregion
 //#region src/result-sources-strings.js
 var resultSourcesStrings;
 var init_result_sources_strings = __esmMin((() => {
@@ -306,6 +61,413 @@ var init_result_sources_strings = __esmMin((() => {
 			results_observation_gone: "未再看到此工作階段"
 		}
 	};
+}));
+//#endregion
+//#region src/earlier-drafts-strings.js
+var earlierDraftStrings;
+var init_earlier_drafts_strings = __esmMin((() => {
+	earlierDraftStrings = {
+		en: {
+			earlier_title: "Drafts from earlier local addresses",
+			earlier_draft_group: "Draft text",
+			earlier_pending_group: "Possibly sent requests",
+			earlier_pending_warning: "May already have been sent — check it before sending it again",
+			earlier_check_operation: "Check operation",
+			earlier_check_form: "Check session or form",
+			earlier_notice: "Drafts from an earlier local address are available.",
+			earlier_help: "Ordinary draft text can be copied. Check possibly sent requests first. Hide only dismisses an entry here; the original stays in local storage.",
+			earlier_address: "Original address: {address}",
+			earlier_copy: "Copy text",
+			earlier_hide: "Hide",
+			earlier_copied: "Text copied.",
+			earlier_copy_manual: "Select and copy the text manually.",
+			earlier_session: "Session message",
+			earlier_answers: "Session answers",
+			earlier_work: "Work form",
+			earlier_project: "Project form",
+			earlier_discussion: "PM discussion",
+			earlier_pm: "PM form",
+			earlier_start: "Start work",
+			earlier_orchestration: "Orchestrate work",
+			earlier_labels: "Session labels",
+			earlier_review: "Artifacts and review"
+		},
+		"zh-TW": {
+			earlier_draft_group: "草稿文字",
+			earlier_pending_group: "可能已送出的請求",
+			earlier_pending_warning: "可能已經送出 — 再次送出前請先確認",
+			earlier_check_operation: "查看操作",
+			earlier_check_form: "查看工作階段或表單",
+			earlier_title: "先前本機位址的草稿",
+			earlier_notice: "找到先前本機位址留下的草稿。",
+			earlier_help: "一般草稿文字可以複製。可能已送出的請求，請先確認。隱藏只會收起此處的項目，原始資料仍保留在本機儲存空間。",
+			earlier_address: "原始位址：{address}",
+			earlier_copy: "複製文字",
+			earlier_hide: "隱藏",
+			earlier_copied: "已複製文字。",
+			earlier_copy_manual: "請選取文字並手動複製。",
+			earlier_session: "工作階段訊息",
+			earlier_answers: "工作階段回答",
+			earlier_work: "工作表單",
+			earlier_project: "專案表單",
+			earlier_discussion: "PM 討論",
+			earlier_pm: "PM 表單",
+			earlier_start: "開始工作",
+			earlier_orchestration: "安排工作執行",
+			earlier_labels: "工作階段標籤",
+			earlier_review: "附件成果與審閱"
+		}
+	};
+	for (const [name, en, zh] of [
+		[
+			"text",
+			"Text",
+			"文字"
+		],
+		[
+			"answers",
+			"Answers",
+			"回答"
+		],
+		[
+			"title",
+			"Title",
+			"標題"
+		],
+		[
+			"content",
+			"Content",
+			"內容"
+		],
+		[
+			"name",
+			"Name",
+			"名稱"
+		],
+		[
+			"description",
+			"Description",
+			"說明"
+		],
+		[
+			"value",
+			"Value",
+			"內容值"
+		],
+		[
+			"reference",
+			"Reference",
+			"參考資料"
+		],
+		[
+			"markdown",
+			"Plan text",
+			"計畫文字"
+		],
+		[
+			"instruction",
+			"Instructions",
+			"指示"
+		],
+		[
+			"purpose",
+			"Purpose",
+			"目的"
+		],
+		[
+			"rationale",
+			"Rationale",
+			"理由"
+		],
+		[
+			"reason",
+			"Reason",
+			"原因"
+		],
+		[
+			"public_title",
+			"Public title",
+			"公開標題"
+		],
+		[
+			"public_body",
+			"Public description",
+			"公開說明"
+		],
+		[
+			"body",
+			"Description",
+			"說明"
+		],
+		[
+			"publicReason",
+			"Public reason",
+			"公開理由"
+		],
+		[
+			"ecosystem",
+			"Ecosystem",
+			"生態系統"
+		],
+		[
+			"version",
+			"Version",
+			"版本"
+		],
+		[
+			"path",
+			"Path",
+			"路徑"
+		],
+		[
+			"url",
+			"URL",
+			"網址"
+		],
+		[
+			"note",
+			"Note",
+			"備註"
+		],
+		[
+			"date",
+			"Date",
+			"日期"
+		],
+		[
+			"goal",
+			"Goal",
+			"目標"
+		],
+		[
+			"capacity_note",
+			"Capacity note",
+			"容量備註"
+		],
+		[
+			"discussion_summary",
+			"Discussion summary",
+			"討論摘要"
+		],
+		[
+			"result",
+			"Result",
+			"結果"
+		],
+		[
+			"trigger",
+			"Trigger",
+			"觸發條件"
+		],
+		[
+			"response",
+			"Response",
+			"回應"
+		],
+		[
+			"alternatives",
+			"Alternatives",
+			"替代方案"
+		],
+		[
+			"distinction",
+			"Distinction",
+			"區別"
+		],
+		[
+			"problem",
+			"Problem",
+			"問題"
+		],
+		[
+			"goal_relation",
+			"Relation to goal",
+			"與目標的關係"
+		],
+		[
+			"expected_effect",
+			"Expected effect",
+			"預期效果"
+		],
+		[
+			"options",
+			"Options",
+			"選項"
+		],
+		[
+			"hypotheses",
+			"Hypotheses",
+			"假設"
+		],
+		[
+			"direction_rationale",
+			"Direction rationale",
+			"方向理由"
+		],
+		[
+			"next_observation_focus",
+			"Next observation focus",
+			"下次觀察重點"
+		],
+		[
+			"limitations",
+			"Limitations",
+			"限制"
+		],
+		[
+			"basis",
+			"Basis",
+			"依據"
+		],
+		[
+			"prompt",
+			"Instructions",
+			"指示"
+		],
+		[
+			"why",
+			"Purpose",
+			"目的"
+		],
+		[
+			"delivery_approach",
+			"Delivery approach",
+			"交付方式"
+		],
+		[
+			"capacity_discussion",
+			"Capacity discussion",
+			"容量討論"
+		],
+		[
+			"dependency_notes",
+			"Dependency notes",
+			"相依性備註"
+		],
+		[
+			"goal_review",
+			"Goal review",
+			"目標檢視"
+		],
+		[
+			"feedback",
+			"Feedback",
+			"回饋"
+		],
+		[
+			"environment_changes",
+			"Environment changes",
+			"環境變化"
+		],
+		[
+			"next_steps",
+			"Next steps",
+			"後續步驟"
+		],
+		[
+			"observations",
+			"Observations",
+			"觀察"
+		],
+		[
+			"previous_improvement_review",
+			"Previous improvement review",
+			"前次改善檢視"
+		],
+		[
+			"no_improvement_rationale",
+			"Reason for no improvement",
+			"不進行改善的理由"
+		],
+		[
+			"unresolved_questions",
+			"Unresolved questions",
+			"未解問題"
+		],
+		[
+			"decisions",
+			"Decisions",
+			"決定"
+		],
+		[
+			"follow_ups",
+			"Follow-ups",
+			"後續追蹤"
+		],
+		[
+			"verification",
+			"Verification",
+			"驗證"
+		],
+		[
+			"outcomes",
+			"Outcomes",
+			"成果"
+		],
+		[
+			"observation",
+			"Observation",
+			"觀察"
+		],
+		[
+			"public_sources",
+			"Public sources",
+			"公開來源"
+		],
+		[
+			"claim",
+			"Claim",
+			"主張"
+		],
+		[
+			"milestones",
+			"Milestones",
+			"里程碑"
+		],
+		[
+			"baseline_date",
+			"Baseline date",
+			"基準日期"
+		],
+		[
+			"request",
+			"Request",
+			"需求"
+		],
+		[
+			"acceptance",
+			"Acceptance criteria",
+			"驗收條件"
+		],
+		[
+			"task_project",
+			"Task project",
+			"任務專案"
+		],
+		[
+			"steps",
+			"Steps",
+			"步驟"
+		],
+		[
+			"message",
+			"Message",
+			"訊息"
+		],
+		[
+			"items",
+			"Items",
+			"項目"
+		],
+		[
+			"reviewText",
+			"Review",
+			"審閱"
+		]
+	]) {
+		earlierDraftStrings.en["earlier_field_" + name] = en;
+		earlierDraftStrings["zh-TW"]["earlier_field_" + name] = zh;
+	}
 }));
 //#endregion
 //#region src/pm-external-history-strings.js
@@ -1717,6 +1879,21 @@ var init_ui_strings = __esmMin((() => {
 			"zh-TW": "已回復",
 			tone: "warn"
 		},
+		github_closed: {
+			en: "Closed (not completed)",
+			"zh-TW": "已關閉（未完成）",
+			tone: "neutral"
+		},
+		github_completed: {
+			en: "Completed · GitHub",
+			"zh-TW": "完成議題 · GitHub",
+			tone: "neutral"
+		},
+		github_done: {
+			en: "Done · GitHub",
+			"zh-TW": "完成 · GitHub",
+			tone: "neutral"
+		},
 		unconfirmed: {
 			en: "Unconfirmed",
 			"zh-TW": "待確認",
@@ -2039,6 +2216,8 @@ var init_ui_strings = __esmMin((() => {
 		never_observed: ["Not observed yet", "尚未觀測"],
 		SOURCE_MOVED: ["Source moved", "來源已移動"],
 		SOURCE_UNAVAILABLE: ["Source unavailable", "來源無法取得"],
+		CHECKPOINT_STAGING_RETAINED: ["Earlier copy kept", "已保留先前副本"],
+		CHECKPOINT_DESTINATION_APPEARED: ["Destination appeared; copy kept", "目的地已出現，副本已保留"],
 		invalid_proposal: ["Needs review", "待審閱"],
 		adopted: ["Update adopted", "已採用更新"],
 		content_changed: ["Discussion changed", "討論內容已變更"],
@@ -2113,6 +2292,7 @@ var init_ui_strings = __esmMin((() => {
 		terminal_time_unrecorded: ["End time not recorded", "尚無結束時間紀錄"],
 		state_time_unrecorded: ["State time not recorded", "尚無狀態時間紀錄"],
 		multiple_explicit_parents: ["Linked to several parents", "已連結多個上層項目"],
+		github_source_closed_is_not_delivery: ["GitHub closure does not prove delivery", "GitHub 關閉不代表已有交付證據"],
 		attempt_finished_is_not_work_completion: ["Attempt finished; work completion unknown", "執行嘗試已結束，工作是否完成仍未知"],
 		inconsistent_dates: ["End precedes start; end omitted", "結束早於開始，已省略結束日期"],
 		mapping_page_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
@@ -2156,11 +2336,108 @@ var init_ui_strings = __esmMin((() => {
 	}
 }));
 //#endregion
+//#region src/board-github-strings.js
+var boardGitHubStrings;
+var init_board_github_strings = __esmMin((() => {
+	boardGitHubStrings = {
+		en: {
+			bgh_issue: "Issue",
+			bgh_pr: "PR",
+			bgh_draft: "Draft",
+			bgh_closed: "Closed (not completed)",
+			bgh_completed: "Completed · GitHub",
+			bgh_missing_card: "Source missing",
+			bgh_history: "Include closed history",
+			bgh_missing: "Some sources are missing from GitHub. Their last observations are retained; no closure was inferred.",
+			bgh_invalid_source: "GitHub returned invalid source data. No partial changes were applied; sync will retry later.",
+			bgh_apply_failed: "GitHub data could not be applied. Your cards are safe; sync will retry later.",
+			bgh_sync_failed: "Automatic sync could not run. Your cards are safe; sync will retry later.",
+			bgh_lifecycle_stopped: "Automatic sync paused because the workspace lifecycle stopped new work. Reopen it and save settings to authorize sync again.",
+			bgh_identity_conflict: "The repository identity changed. Existing cards are preserved; check the repository binding.",
+			bgh_action_import: "Import GitHub board",
+			bgh_action_configure: "Configure GitHub board sync",
+			bgh_action_sync: "Sync GitHub board",
+			bgh_title: "GitHub board sync",
+			bgh_repo: "GitHub repository",
+			bgh_project: "Board project",
+			bgh_new: "Create a project for this board",
+			bgh_import: "Import from GitHub",
+			bgh_sync: "Sync now",
+			bgh_keep: "Keep in sync",
+			bgh_save: "Save settings",
+			bgh_no_repo: "Link a GitHub repository to bring its issues and pull requests onto this board.",
+			bgh_not_synced: "This repository has not been imported yet. Import its issues and pull requests to get started.",
+			bgh_empty: "This repository has no open issues or pull requests to import.",
+			bgh_no_open: "This repository has no open issues or pull requests. Closed cards retain their source status.",
+			bgh_synced: "Up to date with GitHub. Open issues go to To do, pull requests to Doing, with separate source lanes for merged, completed and other closed items.",
+			bgh_rate_limited: "GitHub is limiting requests. Your cards are safe. Try syncing after the limit resets. Signing in with gh on the Connector can increase the public repository limit.",
+			bgh_unreachable: "GitHub could not be reached. Your cards are safe. Try syncing later.",
+			bgh_auth_required: "GitHub could not open this repository. Check its name and your GitHub access on the Connector (gh auth login or the existing token setting).",
+			bgh_authorization_required: "Automatic sync paused because its original access changed. Turn on Keep in sync and save settings to authorize it again.",
+			bgh_too_large: "This repository exceeds the bounded import size. Existing cards are preserved; no partial import was applied.",
+			bgh_conflicts: "Some GitHub identities match more than one legacy card or have changed. Existing cards were preserved; review their GitHub links.",
+			bgh_public: "Using public GitHub access. GitHub allows fewer requests without signing in.",
+			bgh_help: "Sync runs about every five minutes while the Connector is running, even with this board closed. Your edits and manual lane moves are preserved; later closures use separate source lanes. Closed history is optional. GitHub changes never claim or approve local completion.",
+			bgh_checked: "GitHub check finished. See the sync status above.",
+			bgh_saved: "Settings saved",
+			bgh_done: "Done · GitHub",
+			bgh_last: "Last synced",
+			bgh_read_failed: "GitHub sync settings could not be loaded. Try refreshing the board."
+		},
+		"zh-TW": {
+			bgh_issue: "議題",
+			bgh_pr: "PR",
+			bgh_draft: "草稿",
+			bgh_closed: "已關閉（未完成）",
+			bgh_completed: "完成議題 · GitHub",
+			bgh_missing_card: "來源已消失",
+			bgh_history: "包含已關閉的歷史",
+			bgh_missing: "部分 GitHub 來源已消失。保留上次觀察，不會推定為已關閉。",
+			bgh_invalid_source: "GitHub 來源資料無效。本次未套用任何部分變更，稍後會重試同步。",
+			bgh_apply_failed: "無法套用 GitHub 資料。現有卡片會保留，稍後會重試同步。",
+			bgh_sync_failed: "自動同步無法執行。現有卡片會保留，稍後會重試同步。",
+			bgh_lifecycle_stopped: "工作區生命週期已停止新工作，自動同步已暫停。重新開啟工作區並儲存設定，才能重新授權同步。",
+			bgh_identity_conflict: "儲存庫身分已變更。現有卡片會保留，請檢查儲存庫綁定。",
+			bgh_action_import: "匯入 GitHub 看板",
+			bgh_action_configure: "設定 GitHub 看板同步",
+			bgh_action_sync: "同步 GitHub 看板",
+			bgh_title: "GitHub 看板同步",
+			bgh_repo: "GitHub 儲存庫",
+			bgh_project: "看板專案",
+			bgh_new: "為這個看板建立專案",
+			bgh_import: "從 GitHub 匯入",
+			bgh_sync: "立即同步",
+			bgh_keep: "持續同步",
+			bgh_save: "儲存設定",
+			bgh_no_repo: "連結 GitHub 儲存庫，即可將議題與 PR 匯入這個看板。",
+			bgh_not_synced: "這個儲存庫尚未匯入。匯入議題與 PR，即可開始使用看板。",
+			bgh_empty: "這個儲存庫目前沒有開啟中的議題或 PR 可匯入。",
+			bgh_no_open: "這個儲存庫目前沒有開啟中的議題或 PR。已關閉的卡片會保留其來源狀態。",
+			bgh_synced: "已與 GitHub 同步。開啟中的議題放入「待辦」，PR 放入「進行中」，合併、完成議題與其他關閉項目各自顯示來源狀態。",
+			bgh_rate_limited: "GitHub 暫時限制請求次數。現有卡片會保留，請在限制解除後再次同步。在 Connector 以 gh 登入可提高公開儲存庫的請求額度。",
+			bgh_unreachable: "目前無法連線至 GitHub。現有卡片會保留，請稍後再次同步。",
+			bgh_auth_required: "GitHub 無法開啟這個儲存庫。請確認名稱，以及 Connector 上的 GitHub 存取權限（gh auth login 或既有權杖設定）。",
+			bgh_authorization_required: "原本的存取權限已變更，自動同步已暫停。請開啟「持續同步」並儲存設定，以重新授權。",
+			bgh_too_large: "這個儲存庫超過單次匯入的大小上限。現有卡片會保留，本次未套用不完整的匯入。",
+			bgh_conflicts: "部分 GitHub 身分對應到多張舊卡片，或身分已變更。現有卡片會保留，請檢查其 GitHub 連結。",
+			bgh_public: "目前使用 GitHub 公開存取，未登入時可用的請求額度較少。",
+			bgh_help: "Connector 執行時約每五分鐘同步一次，關閉看板後仍會繼續。文字編輯與手動移動會保留；GitHub 後續關閉時，卡片使用各自的來源狀態欄。歷史匯入可自行選擇。同步不會回報本機工作完成或核可內容。",
+			bgh_checked: "已完成 GitHub 查核，請查看上方同步狀態。",
+			bgh_saved: "已儲存設定",
+			bgh_done: "完成 · GitHub",
+			bgh_last: "上次同步",
+			bgh_read_failed: "無法讀取 GitHub 同步設定，請重新整理看板。"
+		}
+	};
+}));
+//#endregion
 //#region src/global-strings.js
 var globalStrings;
 var init_global_strings = __esmMin((() => {
+	init_board_github_strings();
 	globalStrings = {
 		en: {
+			...boardGitHubStrings.en,
 			global_product: "BAT Dashboard",
 			global_first_sentence: "Connect this dashboard to your Connector.",
 			global_setup_guide: "Setup guide",
@@ -2250,6 +2527,7 @@ var init_global_strings = __esmMin((() => {
 			global_empty_unread: "No unread updates",
 			global_attempts: "Attempts",
 			global_token_rejected: "Token not accepted.",
+			connection_retry_remembered: "Retry remembered token",
 			global_discussion: "Discussion",
 			global_plan: "Plan",
 			global_plan_version: "Plan v{n}",
@@ -2366,6 +2644,7 @@ var init_global_strings = __esmMin((() => {
 			action_work_item_pin: "Pin work item"
 		},
 		"zh-TW": {
+			...boardGitHubStrings["zh-TW"],
 			global_product: "BAT Dashboard",
 			global_first_sentence: "將這個儀表板連到你的 Connector。",
 			global_setup_guide: "設定說明",
@@ -2455,6 +2734,7 @@ var init_global_strings = __esmMin((() => {
 			global_empty_unread: "沒有未讀更新",
 			global_attempts: "嘗試次數",
 			global_token_rejected: "權杖無效。",
+			connection_retry_remembered: "重試已記住的權杖",
 			global_discussion: "討論",
 			global_plan: "計畫",
 			global_plan_version: "計畫 v{n}",
@@ -9900,6 +10180,7 @@ function t(key, vars = {}) {
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
 	init_result_sources_strings();
+	init_earlier_drafts_strings();
 	init_pm_external_history_strings();
 	init_pm_adopt_start_strings();
 	init_pm_work_profile_strings();
@@ -9943,6 +10224,7 @@ var init_i18n = __esmMin((() => {
 			...resultSourcesStrings["zh-TW"],
 			...externalHistoryStrings["zh-TW"],
 			...diagnosticsStrings["zh-TW"],
+			...earlierDraftStrings["zh-TW"],
 			...workStartStrings["zh-TW"],
 			...workProfileStrings["zh-TW"],
 			...workResultStrings["zh-TW"],
@@ -10026,6 +10308,14 @@ var init_i18n = __esmMin((() => {
 			setup_view_sessions: "查看工作階段",
 			error_generic: "無法完成此要求，請查看詳細資料。",
 			error_generic_short: "無法完成此要求。",
+			error_code_CHECKPOINT_STAGING_RETAINED: "先前的嘗試可能留下未完成的副本，目前已保留。",
+			error_code_CHECKPOINT_DESTINATION_APPEARED: "準備副本時，目的地已出現；兩個路徑都已保留。",
+			checkpoint_retained_path: "保留的副本",
+			checkpoint_destination_path: "目的地路徑",
+			checkpoint_retained_why: "Connector 只會移除能證明由它建立的資料夾。",
+			checkpoint_retained_next: "請在來源工作階段選擇「從這裡接續」，或在其工作項目選擇「從這個版本派工」。新的嘗試會使用新的暫存資料夾。",
+			checkpoint_destination_next: "請先檢查目的地。請在來源工作階段選擇「從這裡接續」，或在其工作項目選擇「從這個版本派工」。新的嘗試會使用新的暫存資料夾。",
+			checkpoint_retained_cleanup: "請到「整理與復原」檢視舊副本。當原操作記錄與建立標記相符，且通過其他檢查時，整理功能可回收副本。缺少標記的未完成副本仍屬未知；請先檢查，再決定是否自行移除。",
 			desktop_status_error: "無法使用本機 Connector 連線，請檢查設定。",
 			error_code_ARTIFACT_TOO_LARGE: "檔案過大，請選擇較小的檔案。",
 			connection_actor: "帳號識別碼",
@@ -11206,8 +11496,13 @@ var init_i18n = __esmMin((() => {
 			link_session: "工作階段",
 			link_checkpoint: "檢查點",
 			link_operation: "操作",
+			wi_state_github_closed: "已關閉（未完成）",
+			wi_state_github_completed: "完成議題 · GitHub",
+			wi_state_github_done: "完成 · GitHub",
 			link_task: "任務",
 			link_pull_request: "PR",
+			link_github_source: "GitHub 主要來源",
+			link_ref_github_source: "https://github.com/owner/repo/issues/123",
 			link_ref_hint: "對象",
 			link_ref_session: "host/session_id",
 			link_ref_checkpoint: "cp_…",
@@ -11635,6 +11930,7 @@ var init_i18n = __esmMin((() => {
 			...resultSourcesStrings.en,
 			...externalHistoryStrings.en,
 			...diagnosticsStrings.en,
+			...earlierDraftStrings.en,
 			...workStartStrings.en,
 			...workProfileStrings.en,
 			...workResultStrings.en,
@@ -11718,6 +12014,14 @@ var init_i18n = __esmMin((() => {
 			setup_view_sessions: "View sessions",
 			error_generic: "This request could not be completed. Check Details.",
 			error_generic_short: "This request could not be completed.",
+			error_code_CHECKPOINT_STAGING_RETAINED: "An earlier attempt may have left an incomplete copy. It has been kept.",
+			error_code_CHECKPOINT_DESTINATION_APPEARED: "The destination appeared while the copy was being prepared. Both paths have been kept.",
+			checkpoint_retained_path: "Kept copy",
+			checkpoint_destination_path: "Destination path",
+			checkpoint_retained_why: "The Connector only removes folders it can prove it created.",
+			checkpoint_retained_next: "In the source session, choose “Start from here”, or choose “Start agent work from this checkpoint” on its work item. The new attempt uses a new temporary folder.",
+			checkpoint_destination_next: "Check the destination first. In the source session, choose “Start from here”, or choose “Start agent work from this checkpoint” on its work item. The new attempt uses a new temporary folder.",
+			checkpoint_retained_cleanup: "Use Cleanup and retained work to review the old copy. Cleanup may reclaim it when the recorded attempt and creation markers match and its other checks pass. An incomplete copy without those markers stays unknown; inspect it before removing it yourself.",
 			desktop_status_error: "The local Connector connection is unavailable. Check its settings.",
 			error_code_ARTIFACT_TOO_LARGE: "This file is too large. Choose a smaller file.",
 			connection_actor: "Actor ID",
@@ -12898,9 +13202,14 @@ var init_i18n = __esmMin((() => {
 			new_step: "New step",
 			link_session: "Session",
 			link_checkpoint: "Checkpoint",
+			wi_state_github_closed: "Closed (not completed)",
+			wi_state_github_completed: "Completed · GitHub",
+			wi_state_github_done: "Done · GitHub",
 			link_operation: "Operation",
 			link_task: "Task",
 			link_pull_request: "PR",
+			link_github_source: "Primary GitHub source",
+			link_ref_github_source: "https://github.com/owner/repo/issues/123",
 			link_ref_hint: "Target",
 			link_ref_session: "host/session_id",
 			link_ref_checkpoint: "cp_…",
@@ -13327,8 +13636,728 @@ var init_i18n = __esmMin((() => {
 	if (globalThis.document) document.documentElement.lang = locale;
 }));
 //#endregion
-//#region src/ui/icons.js
+//#region src/board-github.js
 init_i18n();
+init_board_github_strings();
+var boardGitHubText = (key, fallback = key) => (boardGitHubStrings[locale] || boardGitHubStrings.en)[key] || fallback;
+function boardGitHubLink(external) {
+	if (!external || typeof external.repository !== "string" || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(external.repository) || !Number.isSafeInteger(external.number) || external.number < 1 || !["issue", "pull_request"].includes(external.kind)) return null;
+	const url = `https://github.com/${external.repository}/${external.kind === "pull_request" ? "pull" : "issues"}/${external.number}`;
+	if (external.url !== url) return null;
+	const stage = external.state === "closed" && (external.kind === "pull_request" || external.state_reason !== "completed") ? "bgh_closed" : external.state === "closed" && external.state_reason === "completed" ? "bgh_completed" : external.state === "merged" ? "bgh_done" : null;
+	const markers = external.availability === "missing" ? ["bgh_missing_card"] : [stage, external.draft ? "bgh_draft" : null].filter(Boolean);
+	return {
+		url,
+		label: [`${boardGitHubText(external.kind === "pull_request" ? "bgh_pr" : "bgh_issue")} #${external.number}`, ...markers.map((key) => boardGitHubText(key))].join(" · "),
+		repository: external.repository
+	};
+}
+function boardGitHubPanel({ t, api, alive, caps, form, permitted, workspaceId = null, projectId = null, onSaved }) {
+	const bt = (key, values) => boardGitHubText(key, t(key, values));
+	let current = null, projects = [], forms = [], loaded = false, serial = 0, preferredProject = null;
+	let repository = h$1("input", {
+		type: "text",
+		maxlength: 200,
+		placeholder: "owner/repo",
+		required: true,
+		"aria-label": bt("bgh_repo")
+	});
+	let project = h$1("select", { "aria-label": bt("bgh_project") });
+	let enabled = h$1("input", {
+		type: "hidden",
+		value: "true"
+	});
+	let toggle = h$1("input", {
+		type: "checkbox",
+		checked: true
+	});
+	let includeClosed = h$1("input", {
+		type: "hidden",
+		value: "false"
+	});
+	let history = h$1("input", { type: "checkbox" });
+	const status = h$1("p", {
+		role: "status",
+		class: "muted",
+		"data-github-sync-status": ""
+	});
+	const controls = h$1("div"), description = h$1("p", { class: "muted" }), stamp = h$1("p", { class: "ui-meta" });
+	const element = h$1("section", {
+		class: "panel",
+		"data-board-github": "",
+		hidden: true
+	}, h$1("h3", {}, bt("bgh_title")), status, controls, description, stamp, h$1("details", {}, h$1("summary", {}, bt("bgh_title")), h$1("p", {}, bt("bgh_help"))));
+	const selected = () => projectId || project.value || null;
+	const allowed = () => loaded && permitted() && !forms.some((f) => f.locked());
+	const updateStatus = () => {
+		const repo = current?.repository;
+		status.textContent = bt(!repo ? "bgh_no_repo" : "bgh_" + (current?.status || "not_synced"));
+		description.textContent = current?.authenticated === false ? bt("bgh_public") : "";
+		stamp.textContent = current?.last_sync ? `${bt("bgh_last")} · ${new Date(current.last_sync * 1e3).toLocaleString()}` : "";
+	};
+	function build() {
+		const repoValue = repository.value, projectValue = project.value;
+		for (const f of forms) f.dispose();
+		forms = [];
+		repository = repository.cloneNode(true);
+		repository.disabled = false;
+		repository.value = repoValue;
+		project = project.cloneNode(true);
+		project.disabled = false;
+		project.value = projectValue;
+		enabled = enabled.cloneNode(true);
+		enabled.disabled = false;
+		toggle = toggle.cloneNode(true);
+		toggle.disabled = false;
+		includeClosed = includeClosed.cloneNode(true);
+		includeClosed.disabled = false;
+		history = history.cloneNode(true);
+		history.disabled = false;
+		current = projects.find((p) => p.project_id === selected()) || null;
+		repository.value = current?.repository || repository.value || "";
+		toggle.checked = current?.revision ? current.enabled : true;
+		enabled.value = String(toggle.checked);
+		repository.dataset.pmDefault = repository.value;
+		enabled.dataset.pmDefault = enabled.value;
+		history.checked = Boolean(current?.include_closed);
+		includeClosed.value = String(history.checked);
+		includeClosed.dataset.pmDefault = includeClosed.value;
+		const fields = {
+			repository,
+			enabled,
+			include_closed: includeClosed,
+			...workspaceId ? { project_id: project } : {}
+		};
+		let importForm, submittedValues = null;
+		const refreshSaved = async (result) => {
+			preferredProject = result.project_id || selected();
+			await refresh(null, true);
+			await onSaved();
+		};
+		const saved = async (result) => {
+			if ([
+				"unreachable",
+				"rate_limited",
+				"auth_required",
+				"invalid_source",
+				"apply_failed",
+				"sync_failed",
+				"too_large",
+				"identity_conflict"
+			].includes(result.status)) {
+				for (const [name, input] of Object.entries(fields)) input.value = submittedValues?.[name] ?? input.value;
+				history.checked = includeClosed.value === "true";
+				toggle.checked = enabled.value === "true";
+				status.textContent = bt("bgh_" + result.status);
+				setTimeout(() => {
+					if (element.isConnected && forms.includes(importForm)) importForm.changed();
+				}, 0);
+				return;
+			}
+			await refreshSaved(result);
+		};
+		importForm = form({
+			t: bt,
+			action: workspaceId ? "pm.github.import" : "project.github.import",
+			target: workspaceId ? { workspace_id: workspaceId } : { project_id: projectId },
+			fields,
+			params: (values) => ({
+				repository: values.repository.trim(),
+				enabled: values.enabled === "true",
+				include_closed: values.include_closed === "true",
+				...workspaceId ? { project_id: values.project_id || null } : {}
+			}),
+			preconditions: () => ({ expected_revision: current?.revision || 0 }),
+			permitted: () => loaded && permitted() && !forms.some((f) => f !== importForm && f.locked()),
+			recoverPermitted: permitted,
+			label: current?.last_sync ? "bgh_sync" : "bgh_import",
+			extra: h$1("div", { class: "capture-fields" }, workspaceId ? h$1("label", {}, bt("bgh_project"), project) : null, h$1("label", {}, bt("bgh_repo"), repository), h$1("label", { class: "capture-choice" }, toggle, bt("bgh_keep")), h$1("label", { class: "capture-choice" }, history, bt("bgh_history")), enabled, includeClosed),
+			onBeforeSaved: (_result, values) => {
+				submittedValues = { ...values };
+			},
+			onSaved: saved,
+			savedText: "bgh_checked"
+		});
+		toggle.checked = enabled.value === "true";
+		history.checked = includeClosed.value === "true";
+		current = projects.find((p) => p.project_id === selected()) || null;
+		forms.push(importForm);
+		const save = h$1("div");
+		if (current?.project_id) {
+			const pid = current.project_id;
+			const configForm = form({
+				t: bt,
+				action: "project.github.configure",
+				target: { project_id: pid },
+				fields: {},
+				params: () => ({
+					repository: repository.value.trim(),
+					enabled: toggle.checked,
+					include_closed: history.checked
+				}),
+				preconditions: () => ({ expected_revision: current.revision }),
+				permitted: () => loaded && permitted() && !importForm.locked(),
+				recoverPermitted: permitted,
+				label: "bgh_save",
+				extra: h$1("span"),
+				savedText: "bgh_saved",
+				onSaved: refreshSaved
+			});
+			configForm.box.querySelector("button[type=submit]").classList.replace("primary", "secondary");
+			forms.push(configForm);
+			save.append(configForm.box);
+		}
+		toggle.addEventListener("change", () => {
+			enabled.value = String(toggle.checked);
+			forms[0]?.changed();
+		});
+		history.addEventListener("change", () => {
+			includeClosed.value = String(history.checked);
+			forms[0]?.changed();
+		});
+		project.addEventListener("change", () => {
+			if (allowed()) {
+				repository.value = "";
+				build();
+			}
+		});
+		controls.replaceChildren(importForm.box, save);
+		updateStatus();
+		for (const f of forms) f.update();
+	}
+	async function refresh(data = null, force = false) {
+		if (caps()?.features?.board_github_sync?.version !== 1) return;
+		const ticket = ++serial;
+		element.hidden = false;
+		try {
+			data ||= await api("GET", workspaceId ? `/pm/workspaces/${encodeURIComponent(workspaceId)}/projects?limit=100` : `/projects/${projectId}`);
+			alive();
+			if (ticket !== serial) return;
+			const settings = data.github_sync;
+			if (!settings) throw Error();
+			projects = workspaceId ? settings.projects : [{
+				...settings,
+				name: data.project?.name
+			}];
+			if (!Array.isArray(projects)) throw Error();
+			loaded = true;
+			if (force || !forms.some((f) => f.locked() || f.hasDraft())) {
+				if (workspaceId) {
+					const previous = preferredProject || project.value;
+					preferredProject = null;
+					project.replaceChildren(...projects.map((p) => h$1("option", { value: p.project_id }, p.name)), h$1("option", { value: "" }, bt("bgh_new")));
+					project.value = projects.some((p) => p.project_id === previous) ? previous : projects[0]?.project_id || "";
+					project.dataset.pmDefault = project.value;
+					if (!repository.value) repository.value = settings.suggested_repository || "";
+				}
+				build();
+			} else {
+				current = projects.find((p) => p.project_id === selected()) || null;
+				updateStatus();
+				for (const f of forms) f.update();
+			}
+		} catch {
+			try {
+				alive();
+				if (ticket === serial) {
+					loaded = false;
+					status.textContent = bt("bgh_read_failed");
+					for (const f of forms) f.update();
+				}
+			} catch {}
+		}
+	}
+	return {
+		element,
+		refresh,
+		update: () => {
+			for (const f of forms) f.update();
+		},
+		message: () => status.textContent,
+		dispose: () => {
+			serial++;
+			for (const f of forms) f.dispose();
+		}
+	};
+}
+//#endregion
+//#region src/managed-recovery.js
+function managedRecoveryKey(code) {
+	if (!code) return null;
+	if (code === "MANAGED_RECOVERING") return "managed_service_recovering";
+	if (code === "MANAGED_RECOVERY_IDENTITY_CHANGED") return "managed_service_identity";
+	return "managed_service_retry";
+}
+//#endregion
+//#region src/central-service-status.js
+function pollFailure(error, at) {
+	const status = Number.isFinite(error.status) ? error.status : 200;
+	const code = error.code || "INVALID_EVENT_PAGE";
+	return {
+		kind: code === "EVENT_CURSOR_RESET" ? "continuity" : status === 401 || status === 403 ? "refused" : status >= 500 ? "service_error" : status === 0 ? "transport" : "invalid_response",
+		status,
+		code,
+		at
+	};
+}
+var pollKeys = {
+	transport: "ui_reconnecting",
+	refused: "ui_connection_refused",
+	service_error: "ui_service_error",
+	invalid_response: "ui_invalid_response",
+	continuity: "ui_connecting"
+};
+var pollReasons = {
+	ui_reconnecting: "reconnecting",
+	ui_connection_refused: "refused",
+	ui_service_error: "service_error",
+	ui_invalid_response: "invalid_response"
+};
+function centralServiceStatus({ token, pollHealth, online, managedRecovery }) {
+	const connection = !token ? "offline" : pollHealth === "connected" || pollHealth === "initial" && online ? "connected" : "reconnecting";
+	const recoveryKey = managedRecoveryKey(managedRecovery);
+	const key = recoveryKey || (!token ? "ui_not_connected" : connection === "connected" ? "ui_connected" : pollHealth === "initial" ? "ui_connecting" : pollKeys[pollHealth?.kind] || (pollHealth === "reconnecting" ? "ui_reconnecting" : "ui_connecting"));
+	return {
+		key,
+		tone: key === "ui_connected" ? "ok" : pollReasons[key] ? "warn" : "neutral",
+		connection,
+		recoveryKey
+	};
+}
+function clientActionGate(facts, requirements) {
+	const ready = requirements.post || requirements.attachment;
+	if (!(requirements.post && (!facts.token || facts.nativeBusy) || ready && (!facts.online || !facts.viewReady) || requirements.supported && !facts.attachmentsSupported || requirements.manage && !facts.manageAllowed || requirements.uploads && !facts.uploadsAllowed)) return {
+		allowed: true,
+		reason: null
+	};
+	const key = centralServiceStatus(facts).key;
+	return {
+		allowed: false,
+		reason: requirements.post && !facts.token || key === "ui_not_connected" ? "not_connected" : requirements.post && facts.nativeBusy ? "connection_changing" : requirements.supported && !facts.attachmentsSupported ? "attachments_unavailable" : requirements.manage && !facts.manageAllowed ? "manage_required" : requirements.uploads && !facts.uploadsAllowed ? "uploads_not_allowed" : !facts.online && pollReasons[key] ? pollReasons[key] : !facts.online && key === "ui_connecting" ? "connecting" : !facts.viewReady || key === "ui_connected" ? "view_not_ready" : "connecting"
+	};
+}
+var clientReasons = [
+	"not_connected",
+	"connecting",
+	...Object.values(pollReasons),
+	"connection_changing",
+	"view_not_ready",
+	"manage_required",
+	"attachments_unavailable",
+	"uploads_not_allowed"
+];
+var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
+var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
+var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
+//#endregion
+//#region src/credential-storage-key.js
+function credentialStorageDigest(token) {
+	const input = new TextEncoder().encode("batc.dashboard.credential-refusal.v1\0" + token);
+	const bytes = new Uint8Array(Math.ceil((input.length + 9) / 64) * 64);
+	bytes.set(input);
+	bytes[input.length] = 128;
+	const view = new DataView(bytes.buffer);
+	view.setUint32(bytes.length - 8, Math.floor(input.length / 536870912));
+	view.setUint32(bytes.length - 4, input.length * 8);
+	const hash = [
+		1779033703,
+		3144134277,
+		1013904242,
+		2773480762,
+		1359893119,
+		2600822924,
+		528734635,
+		1541459225
+	];
+	const words = new Uint32Array(64);
+	for (let block = 0; block < bytes.length; block += 64) {
+		for (let i = 0; i < 16; i++) words[i] = view.getUint32(block + i * 4);
+		for (let i = 16; i < 64; i++) {
+			const x = words[i - 15], y = words[i - 2];
+			words[i] = words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ x >>> 3) + words[i - 7] + (rotate(y, 17) ^ rotate(y, 19) ^ y >>> 10);
+		}
+		let [a, b, c, d, e, f, g, h] = hash;
+		for (let i = 0; i < 64; i++) {
+			const first = h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + (e & f ^ ~e & g) + rounds[i] + words[i];
+			const second = (rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + (a & b ^ a & c ^ b & c);
+			[a, b, c, d, e, f, g, h] = [
+				first + second | 0,
+				a,
+				b,
+				c,
+				d + first | 0,
+				e,
+				f,
+				g
+			];
+		}
+		for (const [i, word] of [
+			a,
+			b,
+			c,
+			d,
+			e,
+			f,
+			g,
+			h
+		].entries()) hash[i] = hash[i] + word >>> 0;
+	}
+	return hash.map((word) => word.toString(16).padStart(8, "0")).join("");
+}
+var rounds, rotate;
+var init_credential_storage_key = __esmMin((() => {
+	rounds = [
+		1116352408,
+		1899447441,
+		3049323471,
+		3921009573,
+		961987163,
+		1508970993,
+		2453635748,
+		2870763221,
+		3624381080,
+		310598401,
+		607225278,
+		1426881987,
+		1925078388,
+		2162078206,
+		2614888103,
+		3248222580,
+		3835390401,
+		4022224774,
+		264347078,
+		604807628,
+		770255983,
+		1249150122,
+		1555081692,
+		1996064986,
+		2554220882,
+		2821834349,
+		2952996808,
+		3210313671,
+		3336571891,
+		3584528711,
+		113926993,
+		338241895,
+		666307205,
+		773529912,
+		1294757372,
+		1396182291,
+		1695183700,
+		1986661051,
+		2177026350,
+		2456956037,
+		2730485921,
+		2820302411,
+		3259730800,
+		3345764771,
+		3516065817,
+		3600352804,
+		4094571909,
+		275423344,
+		430227734,
+		506948616,
+		659060556,
+		883997877,
+		958139571,
+		1322822218,
+		1537002063,
+		1747873779,
+		1955562222,
+		2024104815,
+		2227730452,
+		2361852424,
+		2428436474,
+		2756734187,
+		3204031479,
+		3329325298
+	];
+	rotate = (word, bits) => word >>> bits | word << 32 - bits;
+}));
+//#endregion
+//#region src/credential-refusals.js
+function isCredentialRefusal(status, method, path) {
+	return status === 401 || status === 403 && method === "GET" && [
+		"/capabilities",
+		"/bootstrap",
+		"/events"
+	].includes(path.split("?")[0].replace(/\/+$/, ""));
+}
+function credentialRefusals({ stores = () => [sessionStorage, localStorage], endpoint = () => location.origin } = {}) {
+	const memory = new Map();
+	const identity = (token) => endpoint() + "\0" + token;
+	const storage = () => {
+		try {
+			return stores();
+		} catch {
+			return [];
+		}
+	};
+	const prepare = (token) => {
+		if (!token) return;
+		const id = identity(token);
+		if (!memory.has(id)) memory.set(id, {
+			key: `batc.credential-refused.${encodeURIComponent(endpoint())}.${credentialStorageDigest(token)}`,
+			token,
+			value: null,
+			persisted: false
+		});
+		return memory.get(id);
+	};
+	const forget = (token) => {
+		const entry = prepare(token);
+		if (!entry) return;
+		entry.value = null;
+		entry.persisted = false;
+		for (const store of storage()) try {
+			store.removeItem(entry.key);
+		} catch {}
+	};
+	return {
+		prepare,
+		read(token) {
+			const entry = memory.get(identity(token));
+			if (!entry) return null;
+			let ownerHasToken = false;
+			for (const store of storage()) try {
+				const value = JSON.parse(store.getItem(entry.key));
+				if (store === entry.owner) ownerHasToken = store.getItem(BROWSER_TOKEN_KEY) === token;
+				if (value?.status === 401 || value?.status === 403) {
+					entry.persisted = true;
+					entry.owner = store;
+					return entry.value = {
+						...value,
+						credentialRefused: true
+					};
+				}
+			} catch {}
+			if (ownerHasToken && entry.persisted) {
+				entry.value = null;
+				entry.persisted = false;
+			}
+			return entry.value;
+		},
+		refuse(token, status, method, path) {
+			if (!token || !isCredentialRefusal(status, method, path)) return;
+			const entry = prepare(token), value = {
+				status,
+				code: status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+				credentialRefused: true
+			};
+			entry.value = value;
+			const stores = storage();
+			const owner = [...stores].reverse().find((store) => {
+				try {
+					return store.getItem(BROWSER_TOKEN_KEY) === token;
+				} catch {
+					return false;
+				}
+			});
+			for (const store of stores) try {
+				if (store === owner) {
+					store.setItem(entry.key, JSON.stringify(value));
+					entry.persisted = true;
+					entry.owner = store;
+				} else store.removeItem(entry.key);
+			} catch {}
+		},
+		storageChanged(event) {
+			for (const entry of memory.values()) if (entry.persisted && (!event.key || event.key === entry.key)) try {
+				if (entry.owner.getItem("batc.dashboard.token") === entry.token) {
+					entry.value = null;
+					entry.persisted = false;
+				}
+			} catch {}
+		},
+		retry: forget,
+		forget
+	};
+}
+var BROWSER_TOKEN_KEY, browserCredentialRefusals;
+var init_credential_refusals = __esmMin((() => {
+	init_credential_storage_key();
+	BROWSER_TOKEN_KEY = "batc.dashboard.token";
+	browserCredentialRefusals = credentialRefusals();
+}));
+//#endregion
+//#region src/workbench-mode.js
+init_credential_refusals();
+function decideLayout({ search = "", policy } = {}) {
+	const requested = new URLSearchParams(search).get("workbench");
+	const blocked = requested === "1" && policy?.allowWorkbench === false;
+	return Object.freeze({
+		layout: requested === "1" && !blocked ? "workbench" : "classic",
+		source: blocked ? "policy" : requested === null ? "default" : "url",
+		status: "preview",
+		reason: blocked ? "policy_disabled" : requested !== null && !["0", "1"].includes(requested) ? "unrecognized_workbench_value" : null
+	});
+}
+var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
+//#endregion
+//#region src/session-navigation.js
+var projectViews$2 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function workSessionContext(params) {
+	const fields = {
+		workspaceId: "workspace",
+		workItemId: "work",
+		attemptId: "attempt"
+	};
+	const patterns = {
+		workspaceId: /^ws_[0-9a-f]{32}$/,
+		workItemId: /^wi_[0-9a-f]{20}$/,
+		attemptId: /^att_[0-9a-f]{32}$/
+	};
+	const context = {};
+	for (const [key, name] of Object.entries(fields)) {
+		if (params.getAll(name).length !== 1 || !patterns[key].test(params.get(name))) return null;
+		context[key] = params.get(name);
+	}
+	return context;
+}
+function sessionHref$1({ host, sessionId, from = "", workspaceId, workItemId, attemptId }) {
+	const query = new URLSearchParams(projectViews$2.has(from) ? { from } : {});
+	const context = new URLSearchParams({
+		workspace: workspaceId || "",
+		work: workItemId || "",
+		attempt: attemptId || ""
+	});
+	if (workSessionContext(context)) for (const [key, value] of context) query.set(key, value);
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query.size ? "?" + query : ""}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => ![
+			"from",
+			"workspace",
+			"work",
+			"attempt"
+		].includes(key)) || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$2.has(from)) return "";
+		const context = workSessionContext(query);
+		if ([
+			"workspace",
+			"work",
+			"attempt"
+		].some((key) => query.has(key)) && !context) return "";
+		return sessionHref$1({
+			host,
+			sessionId,
+			from,
+			...context
+		});
+	} catch {
+		return "";
+	}
+}
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	work_input: { id: /^op_[0-9a-f]{32}$/ },
+	quality_assessment: {
+		id: /^op_[0-9a-f]{32}$/,
+		review_id: /^pmqr_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews$1.has(from) ? from : sessionOrigin(from),
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/ui/icons.js
 /*!
 ISC License
 
@@ -13753,6 +14782,7 @@ function sheetHistory({ show, hide, canRestore = () => true }) {
 }
 //#endregion
 //#region src/ui/components.js
+init_i18n();
 init_ui_strings();
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
@@ -14793,7 +15823,8 @@ function workbenchProjection(data, record = null) {
 		id: item?.work_item_id || JSON.stringify([session.host, session.session_id]),
 		title: item?.title || session.title,
 		goal: item?.goal || item?.request || "",
-		recordState: item?.completion?.display_state || item?.state || null,
+		recordState: item?.display_state || item?.completion?.display_state || item?.state || null,
+		external: item?.external || null,
 		href: item ? "#/item/" + encodeURIComponent(item.work_item_id) : href,
 		source,
 		host: session.host,
@@ -14815,6 +15846,11 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	const summary = h$1("p", {
 		class: "wc-summary",
 		"data-workbench-summary": ""
+	});
+	const source = h$1("p", {
+		class: "ui-meta",
+		hidden: true,
+		"data-workbench-github": ""
 	});
 	const goal = h$1("p", {
 		class: "wc-goal",
@@ -14850,7 +15886,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	});
 	controls.dataset.workbenchViews = "";
 	const bar = h$1("div", { class: "wc-view-bar" }, controls);
-	head.append(goal, responsibility, summary);
+	head.append(goal, responsibility, summary, source);
 	head.before(bar);
 	work.after(lineage, live, evidence);
 	function select(value) {
@@ -14927,6 +15963,13 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 	}
 	function paint() {
 		if (!projection) return;
+		const github = boardGitHubLink(projection.external);
+		source.replaceChildren(...github ? [h$1("a", {
+			href: github.url,
+			target: "_blank",
+			rel: "noopener noreferrer"
+		}, github.label)] : []);
+		source.hidden = !github;
 		goal.textContent = projection.goal;
 		goal.hidden = !projection.goal;
 		responsibility.textContent = [
@@ -14973,6 +16016,8 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection = null;
 			signature = "";
 			panel?.close();
+			source.replaceChildren();
+			source.hidden = true;
 			goal.textContent = "";
 			goal.hidden = true;
 			responsibility.textContent = "";
@@ -14983,6 +16028,8 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			projection = null;
 			signature = "";
 			panel?.close();
+			source.replaceChildren();
+			source.hidden = true;
 			goal.textContent = "";
 			goal.hidden = true;
 			responsibility.textContent = "";
@@ -15546,7 +16593,7 @@ var action = (value) => typeof value === "string" && /^(?:session|checkpoint|int
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
 var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
-var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var operationId$5 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var select = (value, values) => values.includes(value) ? value : null;
 var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
 var resourceNames = {
@@ -15588,7 +16635,7 @@ function failedCall({ at, method, path, status, code: errorCode, admissionRefuse
 		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
 		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
 		admission_refused: admissionRefused === true,
-		operation_id: operationId$4(operation?.operation_id)
+		operation_id: operationId$5(operation?.operation_id)
 	};
 }
 function errorRing(limit = 50) {
@@ -15675,7 +16722,7 @@ function scrubDiagnostics(text) {
 		} catch {}
 		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
 		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
-		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$4(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$5(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
 	}));
 }
 function sessionFacts(session) {
@@ -15820,7 +16867,7 @@ function buildDiagnostics(input) {
 			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
 		},
 		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
-			id: operationId$4(op.operation_id),
+			id: operationId$5(op.operation_id),
 			action: action(op.action),
 			status: op.status,
 			error_code: code(op.error_code ?? op.error?.code),
@@ -16920,6 +17967,10 @@ function joinLabel(parts, separator = " · ") {
 init_i18n();
 init_ui_strings();
 var ACTIONS = {
+	"pm.github.import": "bgh_action_import",
+	"project.github.import": "bgh_action_import",
+	"project.github.configure": "bgh_action_configure",
+	"project.github.sync": "bgh_action_sync",
 	"checkpoint.continue": "action_checkpoint_continue",
 	"checkpoint.continue.revalidate": "action_checkpoint_revalidate",
 	"artifact.upload": "action_artifact_upload",
@@ -17076,12 +18127,18 @@ var OPERATION_STATUS = {
 	cancelled: "historical"
 };
 var WORK_STATUS = {
+	github_closed: "github_closed",
+	github_completed: "github_completed",
+	github_done: "github_done",
 	todo: "not_started",
 	doing: "in_progress",
 	waiting: "waiting",
 	done: "done",
 	awaiting_approval: "in_review"
 };
+function actionMessageKey(action) {
+	return ACTIONS[action] || "";
+}
 function humanizeAction(action) {
 	const words = String(action || "").split(/[._]+/).filter(Boolean);
 	if (!words.length) return "";
@@ -17422,12 +18479,12 @@ function sourceSentence(t, envelope, candidate) {
 	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
 	return t("wpub_commit_from_result");
 }
-function operationId$3(value) {
+function operationId$4(value) {
 	return typeof value === "string" && OP_ID.test(value) ? value : "";
 }
 function publicationPrLine(h, t, pr) {
 	if (!pr || typeof pr !== "object") return null;
-	const opId = operationId$3(pr.publication_operation_id);
+	const opId = operationId$4(pr.publication_operation_id);
 	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
 	const repo = text$5(pr.repository) ? pr.repository : "";
 	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
@@ -17444,7 +18501,7 @@ function publicationPrLine(h, t, pr) {
 	return item;
 }
 function publicationDeliveryLine(h, t, pr, envelope, attempt) {
-	if (!operationId$3(pr?.publication_operation_id)) return null;
+	if (!operationId$4(pr?.publication_operation_id)) return null;
 	const host = text$5(attempt?.session?.host) ? attempt.session.host : text$5(attempt?.native_session?.host) ? attempt.native_session.host : "";
 	const source = text$5(pr.child_operation_id) ? pr.child_operation_id : text$5(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
 	const repo = text$5(pr.repository) ? pr.repository : "";
@@ -20354,9 +21411,20 @@ var workStatus = (card) => ({
 	waiting: "waiting",
 	review: "in_review",
 	accepted: "done",
+	github_done: "done",
+	github_closed: "historical",
+	github_completed: "historical",
 	archived: "historical"
 })[typeof card?.column === "string" ? card.column : ""] || "unknown";
-var workStatusLabel = (t, card) => card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
+var workStatusLabel = (t, card) => [
+	"github_done",
+	"github_closed",
+	"github_completed"
+].includes(card?.column) ? boardGitHubText({
+	github_done: "bgh_done",
+	github_closed: "bgh_closed",
+	github_completed: "bgh_completed"
+}[card.column]) : card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
 function workStatusPill(t, card) {
 	const pill = statusPill(workStatus(card));
 	pill.textContent = workStatusLabel(t, card);
@@ -20598,6 +21666,12 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				from
 			}) }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
 			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
+			const external = boardGitHubLink(card.work.external);
+			if (external) state.append(paragraph(h$1("a", {
+				href: external.url,
+				target: "_blank",
+				rel: "noopener noreferrer"
+			}, `${external.repository} · ${external.label}`)));
 			if (workHref(card.binding)) state.append(h$1("a", { href: workHref(card.binding) }, t("wv_work_details")));
 			if (source.errors?.some((row) => row.kind === "session")) state.append(paragraph(t("wv_session_unavailable")));
 			if (card.quality?.selected_assessment) result.append(qualityFact({
@@ -23455,12 +24529,19 @@ async function restoreBrowserSession() {
 	browserCsrf = data.csrf;
 	return true;
 }
+function browserCredentialError(refusal) {
+	return Object.assign(new Error(t(refusal.status === 401 || refusal.credentialRefused ? "global_token_rejected" : "error_code_FORBIDDEN")), refusal, { localized: true });
+}
 function browserAuthHeaders(token) {
-	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
+	if (token !== "managed-browser-session") {
+		const refusal = browserCredentialRefusals.read(token);
+		if (refusal) throw browserCredentialError(refusal);
+		return { Authorization: `Bearer ${token}` };
+	}
 	if (!browserCsrf) throw new Error("Browser session needs to be restored");
 	return { "X-Batc-CSRF": browserCsrf };
 }
-function forgetBrowserSession() {
+async function forgetBrowserSession() {
 	if (!browserCsrf) return;
 	const headers = {
 		...browserAuthHeaders(browserSessionToken),
@@ -23500,6 +24581,7 @@ async function connectorRequest(method, path, body, key, browserToken, signal) {
 		body: body === void 0 ? void 0 : JSON.stringify(body),
 		signal
 	});
+	if (browserToken !== "managed-browser-session") browserCredentialRefusals.refuse(browserToken, res.status, method, path);
 	return {
 		status: res.status,
 		data: await res.json().catch(() => ({}))
@@ -23521,6 +24603,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		},
 		body: bytes
 	});
+	if (browserToken !== "managed-browser-session") browserCredentialRefusals.refuse(browserToken, res.status, "POST", `/artifacts/uploads/${operationId}/content`);
 	return {
 		status: res.status,
 		data: await res.json().catch(() => ({}))
@@ -30221,7 +31304,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 var ADOPT_START = "work.adopt_and_start";
 var wi = (value) => typeof value === "string" && /^wi_[0-9a-f]{20}$/.test(value);
 var opId$6 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
-var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$6 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var same$9 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var copy$1 = (value) => structuredClone(value);
 var workKeys = [
@@ -30241,15 +31324,15 @@ var planKeys = [
 	"expected_accepted_revision_id",
 	"expected_proposal_digest"
 ];
-var exact = (value, keys) => record$5(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+var exact = (value, keys) => record$6(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 var landingPrefix = (namespace, workspaceId) => `batc.pm.${namespace}.adopt-start-landing.${workspaceId}.`;
 var landingNavigationKey = (namespace, workspaceId, id) => `batc.pm.${namespace}.adopt-start-live.${workspaceId}.${id}`;
 function checkedAdoptPreview(value, body, target, baseline) {
-	if (!record$5(value) || value.workspace_id !== target.workspace_id || value.thread_id !== target.thread_id || value.proposal_id !== body.proposal_id || typeof value.adoptable !== "boolean" || !Array.isArray(value.works) || value.works.length !== body.works.length || !exact(value.preconditions, [...planKeys, "works"]) || !Array.isArray(value.preconditions.works) || value.preconditions.works.length !== body.works.length || planKeys.some((key) => value.preconditions[key] !== baseline[key])) throw Error("loop_preview_mismatch");
+	if (!record$6(value) || value.workspace_id !== target.workspace_id || value.thread_id !== target.thread_id || value.proposal_id !== body.proposal_id || typeof value.adoptable !== "boolean" || !Array.isArray(value.works) || value.works.length !== body.works.length || !exact(value.preconditions, [...planKeys, "works"]) || !Array.isArray(value.preconditions.works) || value.preconditions.works.length !== body.works.length || planKeys.some((key) => value.preconditions[key] !== baseline[key])) throw Error("loop_preview_mismatch");
 	const works = [], conditions = [];
 	value.works.forEach((row, index) => {
 		const selected = body.works[index], pre = value.preconditions.works[index];
-		if (!record$5(row) || row.work_item_id !== selected.work_item_id || !same$9(row.requirement_ids, selected.requirement_ids) || typeof row.readiness?.ready !== "boolean") throw Error("loop_preview_mismatch");
+		if (!record$6(row) || row.work_item_id !== selected.work_item_id || !same$9(row.requirement_ids, selected.requirement_ids) || typeof row.readiness?.ready !== "boolean") throw Error("loop_preview_mismatch");
 		if (!row.readiness.ready) return;
 		if (!exact(pre, ["work_item_id", ...workKeys]) || pre.work_item_id !== row.work_item_id || !["claude", "codex"].includes(row.agent) || !["pull_request", "reviewable_changes"].includes(row.delivery) || typeof row.instruction !== "string" || !row.instruction.trim() || row.instruction.length > 4e3 || selected.instruction !== void 0 && row.instruction !== selected.instruction || row.model != null && (typeof row.model !== "string" || !row.model.trim() || row.model.length > 128) || !exact(row.code_target, [
 			"repository",
@@ -30297,7 +31380,7 @@ function adoptStartReview({ t, api, alive, form, caps, namespace, workspaceId, t
 	const draft = () => {
 		try {
 			const value = JSON.parse(request?.values().selection || "null");
-			return record$5(value) && Array.isArray(value.works) ? value : {
+			return record$6(value) && Array.isArray(value.works) ? value : {
 				proposal_id: null,
 				works: [],
 				drafts: {}
@@ -30701,7 +31784,7 @@ var defaults = {
 	conflict: "conflicting",
 	excluded: "not_applicable"
 };
-var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
 var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
@@ -30719,7 +31802,7 @@ function cyclic(requirements) {
 	return [...graph.keys()].some(visit);
 }
 function validRequirements(values, included) {
-	if (!Array.isArray(values) || values.length > 20 || values.some((row) => !record$4(row) || !key$1(row.id, 80))) return false;
+	if (!Array.isArray(values) || values.length > 20 || values.some((row) => !record$5(row) || !key$1(row.id, 80))) return false;
 	const ids = new Set(values.map((row) => row.id));
 	return ids.size === values.length && values.every((row) => included.has(row.source_key) && refs$1(row.acceptance_keys, included) && [
 		"must",
@@ -30964,10 +32047,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		choose(picker.value);
 	});
 	function checked(value) {
-		if (value?.workspace_id !== workspaceId || !record$4(value.proposal)) throw fail();
+		if (value?.workspace_id !== workspaceId || !record$5(value.proposal)) throw fail();
 		const p = value.proposal, c = p.context;
-		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !record$4(c) || !Number.isInteger(c.thread_version) || !record$4(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$4(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
-		for (const ref of Object.values(c.source_references)) if (!record$4(ref) || typeof ref.quote !== "string" || !ref.quote || typeof ref.id !== "string" || !/^[0-9a-f]{64}$/.test(ref.digest)) throw fail();
+		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !record$5(c) || !Number.isInteger(c.thread_version) || !record$5(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$5(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
+		for (const ref of Object.values(c.source_references)) if (!record$5(ref) || typeof ref.quote !== "string" || !ref.quote || typeof ref.id !== "string" || !/^[0-9a-f]{64}$/.test(ref.digest)) throw fail();
 		if (p.validation.status === "needs_review") {
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
@@ -30975,7 +32058,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$5(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -30998,13 +32081,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		if (!active || !record$5(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$5(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$5(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
 		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
-		if (value.requirements.every((row) => record$4(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
+		if (value.requirements.every((row) => record$5(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
 		if (!validRequirements(value.requirements, included) || !Array.isArray(value.removed_requirement_ids) || !same$8([...value.removed_requirement_ids].sort(), removed(active, value.requirements).sort())) return "pcp_missing";
 		return null;
 	}
@@ -31190,7 +32273,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		let saved = original();
 		if (saved?.proposal_id !== p.proposal_id) {
 			if (adopt.locked()) throw fail();
-			const drafts = { ...record$4(saved?.drafts) ? saved.drafts : {} };
+			const drafts = { ...record$5(saved?.drafts) ? saved.drafts : {} };
 			if (saved?.proposal_id) drafts[saved.proposal_id] = {
 				review: saved.review,
 				preconditions: saved.preconditions,
@@ -31560,7 +32643,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 					const [list, plans] = await Promise.all([api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`), api("GET", base + "/plans?limit=1")]);
 					alive();
 					if (own !== ticket) return;
-					if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
+					if (plans.workspace_id !== workspaceId || !record$5(plans.head)) throw fail();
 					head = plans.head;
 					visible = true;
 					box.hidden = false;
@@ -41396,6 +42479,16 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		caps,
 		errorBox
 	});
+	const github = form && caps()?.features?.board_github_sync?.version === 1 ? boardGitHubPanel({
+		t,
+		api,
+		alive,
+		caps,
+		form,
+		permitted: () => permitted(true),
+		workspaceId,
+		onSaved: () => refresh()
+	}) : null;
 	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -41459,7 +42552,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		title: t("ui_board"),
 		meta,
 		actions: [refreshButton]
-	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, landing.element, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
+	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, ...github ? [github.element] : [], landing.element, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
 		label: t("pm_kanban_board_details"),
 		body: h$1("div", {}, boardInfo, h$1("p", {}, t("pm_kanban_wip_basis")), h$1("p", {}, t("pm_kanban_quality")), h$1("p", {}, t("pm_kanban_limits")))
 	})));
@@ -41659,6 +42752,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		more.disabled = reading;
 	}
 	function preview(card) {
+		const external = boardGitHubLink(card.work.external);
 		const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
 		const earlier = card.binding.plan_revision_id !== plan?.revision_id;
 		const chip = (text) => {
@@ -41684,7 +42778,14 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				title: text,
 				href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(req.id)}`
 			}, text);
-		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
+		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, external ? h$1("a", {
+			class: "ui-context-chip",
+			href: external.url,
+			target: "_blank",
+			rel: "noopener noreferrer",
+			title: `${external.repository} · ${external.label}`,
+			"data-github-card-link": ""
+		}, external.label) : null, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
 			const node = contextChip({ text: `PR #${target.pull_number}` });
 			node.title = joinLabel([
 				node.textContent,
@@ -41750,7 +42851,13 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const locked = (lane) => lane && (lane.matches(":hover") || lane.contains(document.activeElement));
 	function laneKey(card) {
 		if (group.value === "milestone") return milestones.find((row) => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some((id) => card.binding.requirement_ids?.includes(id)))?.milestone_id || "unassigned";
-		return [...columns, "archived"].includes(card.column) ? card.column : "unknown";
+		return [
+			...columns,
+			"github_done",
+			"github_closed",
+			"github_completed",
+			"archived"
+		].includes(card.column) ? card.column : "unknown";
 	}
 	function renderColumns(force = false) {
 		if (!page) return;
@@ -42057,6 +43164,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				if (data.next_cursor == null) break;
 				after = data.next_cursor;
 			}
+			await github?.refresh();
+			alive();
+			if (ticket !== serial) return;
 			const features = caps()?.features?.pm_workspaces;
 			const [accepted, roadmap, read] = await Promise.all([
 				features?.plan_drafting ? api("GET", `${endpoint}/plans/accepted`) : null,
@@ -42219,6 +43329,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		dispose: () => {
 			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
+			github?.dispose();
 			landing.dispose();
 			startPanel?.dispose();
 			startPanel = null;
@@ -43428,6 +44539,11 @@ var scheduleFirstLine = (row) => scheduleTitle(row).split(/\r?\n/)[0];
 init_i18n();
 init_ui_strings();
 function rowStatus(row, data) {
+	if ([
+		"github_closed",
+		"github_completed",
+		"github_done"
+	].includes(row.refs?.source_lane)) return h$1("span", {}, statusPill(row.refs.source_lane), ...["merged", "deployed"].includes(row.status) ? [" ", statusPill(row.status)] : []);
 	return notObserved(row, data) ? h$1("span", { class: "ui-pill tone-neutral" }, t("sched_not_observed")) : statusPill(row.status);
 }
 function dateRange(span) {
@@ -54142,7 +55258,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 				...current.context
 			}) : `#/item/${encodeURIComponent(item.work_item_id)}`;
 			const itemActivity = {
-				key: "wi_state_" + (item.completion?.display_state || item.state),
+				key: "wi_state_" + (item.display_state || item.completion?.display_state || item.state),
 				tone: item.completion?.pending ? "stale" : ""
 			};
 			const row = link(href, item.title, current && !item.completion?.pending ? workActivity(current.source) : itemActivity, current?.source.reading);
@@ -56583,6 +57699,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 //#endregion
 //#region src/transport/artifact-content.ts
 init_transport();
+init_credential_refusals();
 async function readArtifactContent(reference, size, token, signal) {
 	if (nativeDesktop || !/^art_[0-9a-f]{32}$/.test(reference.artifact_id) || !Number.isSafeInteger(reference.revision) || reference.revision < 1 || !/^[0-9a-f]{64}$/.test(reference.digest) || !Number.isSafeInteger(size) || size < 0 || size > 16777216) throw new Error("Artifact content exceeds the supported bound or has an invalid reference");
 	const response = await fetch(`/api/v1/artifacts/${reference.artifact_id}/revisions/${reference.revision}/content`, {
@@ -56594,6 +57711,15 @@ async function readArtifactContent(reference, size, token, signal) {
 		mode: "same-origin",
 		signal: AbortSignal.any([signal, AbortSignal.timeout(3e4)])
 	});
+	if (token !== "managed-browser-session") browserCredentialRefusals.refuse(token, response.status, "GET", `/artifacts/${reference.artifact_id}/revisions/${reference.revision}/content`);
+	if (response.status === 401 || response.status === 403) {
+		await response.body?.cancel();
+		throw browserCredentialError({
+			status: response.status,
+			code: response.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+			credentialRefused: token !== "managed-browser-session" && response.status === 401
+		});
+	}
 	if (response.status !== 200 || response.redirected || response.headers.get("Content-Length") !== String(size) || !response.body) {
 		await response.body?.cancel();
 		throw new Error("Artifact content response does not match the exact revision");
@@ -57783,7 +58909,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 //#region src/project-skills.js
 var digest$4 = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 var refs = (value) => Array.isArray(value) && value.length <= 20 && value.every((ref) => ref && typeof ref.skill_id === "string" && digest$4(ref.digest)) && new Set(value.map((ref) => ref.skill_id)).size === value.length;
-var record$3 = (value) => value && refs(value.selected) && Number.isInteger(value.revision) && value.revision >= 0 && digest$4(value.digest);
+var record$4 = (value) => value && refs(value.selected) && Number.isInteger(value.revision) && value.revision >= 0 && digest$4(value.digest);
 var key = (host, workspace) => JSON.stringify([host, workspace]);
 var same$1 = (a, b) => a.skill_id === b.skill_id && a.digest === b.digest;
 function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storageKey, onEvents, errorBox }) {
@@ -58044,13 +59170,13 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			if (next.version !== 1 || next.project_id !== projectId || next.host !== selectedHost || next.workspace_id !== selectedWorkspace || !Array.isArray(next.catalog?.skills) || !refs(next.selection?.selected) || !Number.isInteger(next.selection.revision)) throw Error(t("skills_invalid"));
 			doc = next;
 			const draftKey = key(selectedHost, selectedWorkspace), stored = saved.drafts[draftKey];
-			draft = record$3(stored) ? stored : {
+			draft = record$4(stored) ? stored : {
 				selected: next.selection.host === selectedHost && next.selection.workspace_id === selectedWorkspace ? structuredClone(next.selection.selected) : [],
 				revision: next.selection.revision,
 				digest: next.catalog.catalog_digest,
 				intent: null
 			};
-			if (draft.intent && !record$3(draft.intent)) draft.intent = null;
+			if (draft.intent && !record$4(draft.intent)) draft.intent = null;
 			saved.drafts[draftKey] = draft;
 			if (draft.revision !== next.selection.revision || draft.digest !== next.catalog.catalog_digest) status.textContent = t("skills_conflict");
 			clearError();
@@ -61177,12 +62303,12 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 }
 //#endregion
 //#region src/capture.js
-var record$2 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$3 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var digest$2 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-var operationId$2 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var previewId = (value) => typeof value === "string" && /^acpv_[0-9a-f]{32}$/.test(value);
 var previewToken = (value) => typeof value === "string" && value.length > 0 && value.length <= 24576;
-var validPreview$3 = (doc) => record$2(doc) && record$2(doc.source) && record$2(doc.evidence) && [
+var validPreview$3 = (doc) => record$3(doc) && record$3(doc.source) && record$3(doc.evidence) && [
 	doc.relative_path,
 	doc.source.host,
 	doc.source.session_id,
@@ -61195,8 +62321,8 @@ function restore$2(value, source) {
 		...source,
 		relative_path: ""
 	} };
-	if (!record$2(value)) return saved;
-	if (record$2(value.input)) {
+	if (!record$3(value)) return saved;
+	if (record$3(value.input)) {
 		for (const key of [
 			"host",
 			"session_id",
@@ -61206,10 +62332,10 @@ function restore$2(value, source) {
 	if (validPreview$3(value.preview)) saved.preview = value.preview;
 	const intent = value.intent, request = intent?.request;
 	const usable = request?.action === "artifact.capture" && previewId(request.target?.preview_id) && previewToken(request.params?.preview_token) && digest$2(request.preconditions?.expected_fingerprint) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
-	if (usable || operationId$2(intent?.operation_id)) saved.intent = {
+	if (usable || operationId$3(intent?.operation_id)) saved.intent = {
 		key: usable ? intent.key : null,
 		request: usable ? request : null,
-		operation_id: operationId$2(intent.operation_id) ? intent.operation_id : null,
+		operation_id: operationId$3(intent.operation_id) ? intent.operation_id : null,
 		reviewed_digest: digest$2(intent.reviewed_digest) ? intent.reviewed_digest : saved.preview?.evidence.digest
 	};
 	return saved;
@@ -61322,7 +62448,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	const accept = async (operation) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !operationId$2(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
+		if (!intent || !operationId$3(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
 		saved.operation = operation;
 		saved.intent.operation_id = operation.operation_id;
 		persist();
@@ -62191,9 +63317,9 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 }
 //#endregion
 //#region src/permissions.js
-var record$1 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var record$2 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var modeValue = (value) => ["default", "allow_all"].includes(value);
-var operationId$1 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$2 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var terminal$5 = (operation) => [
 	"succeeded",
 	"failed",
@@ -62207,9 +63333,9 @@ var admissionRefusals$2 = new Set([
 ]);
 function restore$1(value, target) {
 	const saved = { mode: modeValue(value?.mode) ? value.mode : "default" };
-	if (!record$1(value) || !value.intent) return saved;
+	if (!record$2(value) || !value.intent) return saved;
 	const intent = value.intent, request = intent.request;
-	const valid = request?.action === "session.permissions" && request.target?.host === target.host && request.target?.session_id === target.session_id && modeValue(request.params?.mode) && record$1(request.preconditions) && Object.keys(request.preconditions).length === 0 && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
+	const valid = request?.action === "session.permissions" && request.target?.host === target.host && request.target?.session_id === target.session_id && modeValue(request.params?.mode) && record$2(request.preconditions) && Object.keys(request.preconditions).length === 0 && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
 	saved.intent = {
 		key: valid ? intent.key : null,
 		request: valid ? {
@@ -62218,7 +63344,7 @@ function restore$1(value, target) {
 			params: { mode: request.params.mode },
 			preconditions: {}
 		} : null,
-		operation_id: operationId$1(intent.operation_id) ? intent.operation_id : null
+		operation_id: operationId$2(intent.operation_id) ? intent.operation_id : null
 	};
 	if (valid && !saved.intent.operation_id && admissionRefusals$2.has(intent.refused)) saved.intent.refused = intent.refused;
 	if (valid) saved.mode = request.params.mode;
@@ -62251,7 +63377,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 	const writable = () => ready() && session()?.api_access === "managed" && session()?.provenance === "connector_managed" && (caps()?.scopes || []).includes("operate") && caps()?.hosts?.some((host) => host.host === target.host && host.writes === true) && caps()?.actions?.some((action) => action.action === "session.permissions" && action.allowed === true);
 	const accept = (candidate) => {
 		guard();
-		if (!saved.intent || !operationId$1(candidate?.operation_id) || candidate.action !== "session.permissions" || candidate.target?.host !== target.host || candidate.target?.session_id !== target.session_id || !modeValue(candidate.params?.mode) || saved.intent.request && candidate.params.mode !== saved.intent.request.params.mode || saved.intent.key && candidate.idempotency_key !== saved.intent.key || saved.intent.operation_id && candidate.operation_id !== saved.intent.operation_id) throw new Error(t("permissions_invalid_result"));
+		if (!saved.intent || !operationId$2(candidate?.operation_id) || candidate.action !== "session.permissions" || candidate.target?.host !== target.host || candidate.target?.session_id !== target.session_id || !modeValue(candidate.params?.mode) || saved.intent.request && candidate.params.mode !== saved.intent.request.params.mode || saved.intent.key && candidate.idempotency_key !== saved.intent.key || saved.intent.operation_id && candidate.operation_id !== saved.intent.operation_id) throw new Error(t("permissions_invalid_result"));
 		operation = candidate;
 		saved.intent.operation_id = candidate.operation_id;
 		saved.mode = candidate.params.mode;
@@ -62757,7 +63883,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 //#endregion
 //#region src/session-start.js
 var object$2 = (v) => v && typeof v === "object" && !Array.isArray(v);
-var operationId = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
+var operationId$1 = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
 var terminal$3 = (op) => [
 	"succeeded",
 	"failed",
@@ -62837,7 +63963,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
-			operation_id: operationId(raw.intent.operation_id) ? raw.intent.operation_id : null,
+			operation_id: operationId$1(raw.intent.operation_id) ? raw.intent.operation_id : null,
 			refused: !raw.intent.operation_id && admissionRefusals$1.has(raw.intent.refused) ? raw.intent.refused : null
 		};
 		if (valid) Object.assign(saved, raw.intent.request.target, {
@@ -62966,7 +64092,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	const accept = (candidate) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !intent.request || !intent.key || !operationId(candidate?.operation_id) || candidate.actor !== caps()?.actor || candidate.idempotency_key !== intent.key || !equal$3({
+		if (!intent || !intent.request || !intent.key || !operationId$1(candidate?.operation_id) || candidate.actor !== caps()?.actor || candidate.idempotency_key !== intent.key || !equal$3({
 			action: candidate.action,
 			target: candidate.target,
 			params: candidate.params,
@@ -64978,8 +66104,8 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 }
 //#endregion
 //#region src/artifact-review.js
-var record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-var ordered = (value) => record(value) ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, ordered(value[k])])) : Array.isArray(value) ? value.map(ordered) : value;
+var record$1 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var ordered = (value) => record$1(value) ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, ordered(value[k])])) : Array.isArray(value) ? value.map(ordered) : value;
 var stable = (value) => JSON.stringify(ordered(value));
 var equal = (a, b) => stable(a ?? null) === stable(b ?? null);
 var digest = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
@@ -65002,7 +66128,7 @@ var executions = [
 ];
 var managedCaptureExecution = (op) => oid(op?.operation_id) && op.status === "succeeded" && executions.includes(op.action) && (op.action !== "session.start" || op.result?.started === true && op.result.prompt_sent === true && op.result.message_id === `batc-${op.operation_id}`) && (op.action !== "repository.continue" || op.result?.message_id === `batc-${op.operation_id}` && sha40(op.result.source_sha));
 var safePath = (path) => typeof path === "string" && path && new TextEncoder().encode(path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(path) && path.split("/").every((p) => p && p !== "." && p !== ".." && p.toLowerCase() !== ".git");
-var selectorValid = (s) => record(s) && (equal(Object.keys(s).sort(), ["execution_operation_id"]) && oid(s.execution_operation_id) || equal(Object.keys(s).sort(), ["command_id", "task_id"]) && tid(s.task_id) && commandId(s.command_id));
+var selectorValid = (s) => record$1(s) && (equal(Object.keys(s).sort(), ["execution_operation_id"]) && oid(s.execution_operation_id) || equal(Object.keys(s).sort(), ["command_id", "task_id"]) && tid(s.task_id) && commandId(s.command_id));
 var validRef = (ref) => aid(ref?.artifact_id) && Number.isSafeInteger(ref.revision) && ref.revision > 0 && ref.revision <= 999999999 && digest(ref.digest);
 var refOf = (value) => ({
 	artifact_id: value.artifact_id,
@@ -65011,11 +66137,11 @@ var refOf = (value) => ({
 });
 var sourceFromOperation = (op) => op.action === "session.send" ? op.external_refs?.resolved_target || op.target : op.result;
 function validPreview(doc, input) {
-	return record(doc) && /^acpv_[0-9a-f]{32}$/.test(doc.preview_id) && typeof doc.preview_token === "string" && doc.preview_token.length > 0 && doc.preview_token.length <= 24576 && digest(doc.fingerprint) && doc.snapshot === false && Number.isFinite(doc.expires_at) && doc.source?.provenance === "connector_managed" && doc.source.host === input.host && doc.source.session_id === input.session_id && equal(doc.source.selector, input.selector) && doc.relative_path === input.relative_path && typeof doc.source.root === "string" && typeof doc.source.repository_root === "string" && record(doc.source.lineage) && digest(doc.evidence?.digest) && /^[0-9a-f]{40}$/.test(doc.evidence.head_sha) && Number.isSafeInteger(doc.evidence.size_bytes) && doc.evidence.size_bytes >= 0;
+	return record$1(doc) && /^acpv_[0-9a-f]{32}$/.test(doc.preview_id) && typeof doc.preview_token === "string" && doc.preview_token.length > 0 && doc.preview_token.length <= 24576 && digest(doc.fingerprint) && doc.snapshot === false && Number.isFinite(doc.expires_at) && doc.source?.provenance === "connector_managed" && doc.source.host === input.host && doc.source.session_id === input.session_id && equal(doc.source.selector, input.selector) && doc.relative_path === input.relative_path && typeof doc.source.root === "string" && typeof doc.source.repository_root === "string" && record$1(doc.source.lineage) && digest(doc.evidence?.digest) && /^[0-9a-f]{40}$/.test(doc.evidence.head_sha) && Number.isSafeInteger(doc.evidence.size_bytes) && doc.evidence.size_bytes >= 0;
 }
 function validArtifact(row, expected) {
 	const proof = row?.source;
-	return validRef(row) && row.state === "ready" && record(proof) && proof.kind === "managed_capture" && oid(proof.operation_id) && row.operation_id === proof.operation_id && digest(proof.fingerprint) && proof.source?.provenance === "connector_managed" && record(proof.source.lineage) && selectorValid(proof.source.selector) && safePath(proof.relative_path) && proof.evidence?.digest === row.digest && proof.evidence.size_bytes === row.size_bytes && /^[0-9a-f]{40}$/.test(proof.evidence.head_sha) && (!expected || equal(refOf(row), expected));
+	return validRef(row) && row.state === "ready" && record$1(proof) && proof.kind === "managed_capture" && oid(proof.operation_id) && row.operation_id === proof.operation_id && digest(proof.fingerprint) && proof.source?.provenance === "connector_managed" && record$1(proof.source.lineage) && selectorValid(proof.source.selector) && safePath(proof.relative_path) && proof.evidence?.digest === row.digest && proof.evidence.size_bytes === row.size_bytes && /^[0-9a-f]{40}$/.test(proof.evidence.head_sha) && (!expected || equal(refOf(row), expected));
 }
 function restore(raw) {
 	const saved = {
@@ -65023,14 +66149,14 @@ function restore(raw) {
 		selector: null,
 		reviewText: ""
 	};
-	if (!record(raw)) return saved;
+	if (!record$1(raw)) return saved;
 	if (typeof raw.relative_path === "string") saved.relative_path = raw.relative_path;
 	if (selectorValid(raw.selector)) saved.selector = raw.selector;
 	if (typeof raw.reviewText === "string") saved.reviewText = raw.reviewText;
-	if (record(raw.preview)) saved.preview = raw.preview;
+	if (record$1(raw.preview)) saved.preview = raw.preview;
 	for (const kind of ["capture", "accept"]) if (raw[kind]) {
 		const intent = raw[kind];
-		const usable = record(intent.request) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200 && typeof intent.actor === "string" && record(intent.request.target) && record(intent.request.params) && record(intent.request.preconditions) && intent.request.action === (kind === "capture" ? "artifact.capture.managed" : "artifact.accept");
+		const usable = record$1(intent.request) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200 && typeof intent.actor === "string" && record$1(intent.request.target) && record$1(intent.request.params) && record$1(intent.request.preconditions) && intent.request.action === (kind === "capture" ? "artifact.capture.managed" : "artifact.accept");
 		saved[kind] = {
 			request: usable ? intent.request : null,
 			key: usable ? intent.key : null,
@@ -65871,6 +66997,16 @@ function legacyIdentity(scope) {
 		return null;
 	}
 }
+function matchingLegacySources(identity, keys) {
+	const candidates = keys.filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
+	return candidates.flatMap((scope) => {
+		const old = legacyIdentity(scope);
+		return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor ? [{
+			scope,
+			ambiguous: candidates.some((other) => other !== scope && (other.startsWith(scope + ".") || scope.startsWith(other + ".")))
+		}] : [];
+	});
+}
 function migrateManagedStorage(identity, local, session) {
 	const target = managedStorageScope(identity), marker = `batc.storage-migration.${target}`;
 	const receipt = local.getItem(marker);
@@ -65881,13 +67017,9 @@ function migrateManagedStorage(identity, local, session) {
 	}
 	const areas = [local, session], allKeys = areas.map(keys);
 	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
-	const candidates = allKeys[0].filter((key) => key.startsWith("batc.sync.")).map((key) => key.slice(10));
-	const matching = candidates.filter((scope) => {
-		const old = legacyIdentity(scope);
-		return old?.server_id === identity.server_id && old.principal_id === identity.principal_id && old.actor === identity.actor;
-	});
-	if (matching.length !== 1) return;
-	const source = matching[0];
+	const matching = matchingLegacySources(identity, allKeys[0]);
+	if (matching.length !== 1 || matching[0].ambiguous) return;
+	const source = matching[0].scope;
 	for (const key of allKeys.flat()) {
 		const endpoint = key.match(/^batc\.[a-z.-]+\.(https?%3A%2F%2F[^:]+):/)?.[1];
 		if (!endpoint) continue;
@@ -65899,7 +67031,6 @@ function migrateManagedStorage(identity, local, session) {
 		}
 		if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
 	}
-	if (candidates.some((scope) => scope !== source && (scope.startsWith(source + ".") || source.startsWith(scope + ".")))) return;
 	const copies = areas.flatMap((storage, area) => allKeys[area].flatMap((key) => {
 		const destination = rebase(key, source, target), value = storage.getItem(key);
 		return destination !== null && value !== null ? [{
@@ -65935,6 +67066,439 @@ function migrateManagedStorage(identity, local, session) {
 		local.removeItem(marker);
 		throw error;
 	}
+}
+//#endregion
+//#region src/state/earlier-drafts.ts
+var diagnostic = (code) => console.debug(code);
+var problem$1 = "draft_recovery_unreadable";
+var record = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+var pmText = {};
+function forms(actions, fields) {
+	for (const action of actions.split(" ")) pmText[action] = fields.split(" ");
+}
+forms("session.send", "text");
+forms("work.start", "instruction");
+forms("pm.message.append", "content");
+forms("pm.thread.create", "title content");
+forms("pm.thread.rename pm.snapshot.create", "title");
+forms("pm.workspace.create", "name");
+forms("pm.input.record", "value reference");
+forms("pm.plan.draft", "title markdown");
+forms("pm.run.prepare pm.run.analyze pm.run.bat.analyze pm.follow_up.analyze pm.conversation.propose pm.continuation.prepare", "purpose");
+forms("pm.thread.plan pm.thread.plan.revise pm.input.confirm pm.plan.adopt pm.conversation.adopt pm.workspace.adapter.select pm.work.bind pm.project.bind", "rationale");
+forms("pm.work_input.defer", "reason");
+forms("github.pr.publish github.pr.update", "public_title public_body");
+forms("pm.issue.publish", "title body");
+forms("pm.issue.cancel", "reason publicReason");
+forms("pm.dependencies.declare", "name ecosystem version path url note");
+forms("pm.roadmap.baseline.set", "title rationale");
+forms("pm.roadmap.forecast.set", "date rationale");
+forms("pm.product_goal.revise pm.dod.revise", "rationale");
+forms("pm.backlog.revise pm.sprint.select pm.sprint.start pm.sprint.close pm.sprint.cancel", "rationale");
+forms("pm.sprint.create", "title goal capacity_note rationale");
+forms("pm.sprint.goal.revise", "goal rationale");
+forms("pm.meeting.create", "title rationale");
+forms("pm.meeting.note pm.maintenance_review.note", "content rationale");
+forms("pm.meeting.complete", "discussion_summary rationale");
+forms("pm.meeting.context.revise", "rationale");
+forms("pm.meeting.follow_up.record pm.maintenance_review.follow_up.record", "result rationale");
+forms("pm.governance.record pm.governance.revise", "title description rationale trigger response alternatives distinction");
+forms("pm.governance.decide pm.governance.adoption.link", "rationale");
+forms("pm.lifecycle.set_stage pm.lifecycle.pause pm.lifecycle.close pm.lifecycle.reopen pm.lifecycle.retain_inflight", "reason");
+forms("pm.maintenance_review.prepare", "title");
+forms("pm.maintenance_review.candidate.record", "title problem goal_relation expected_effect options hypotheses rationale");
+forms("pm.maintenance_review.complete", "discussion_summary direction_rationale next_observation_focus rationale");
+forms("pm.release_baseline.register", "rationale limitations");
+forms("pm.work_batch.start pm.work_batch.evidence.record pm.quality.review.create pm.quality.review.record pm.maintenance_policy.adopt", "rationale");
+forms("pm.quality.review.revoke", "reason");
+forms("repository.continue", "basis prompt title");
+forms("pm.meeting.draft", "why delivery_approach capacity_discussion dependency_notes goal_review feedback environment_changes next_steps observations previous_improvement_review no_improvement_rationale unresolved_questions rationale");
+var collections = {
+	"pm.meeting.draft": {
+		decisions: ["text", "rationale"],
+		follow_ups: [
+			"text",
+			"expected_effect",
+			"verification"
+		],
+		outcomes: ["observation"]
+	},
+	"pm.maintenance_review.complete": { follow_ups: [
+		"text",
+		"expected_effect",
+		"verification"
+	] },
+	"pm.maintenance_review.candidate.record": { public_sources: [
+		"url",
+		"title",
+		"claim"
+	] },
+	"pm.roadmap.baseline.set": { milestones: ["title", "baseline_date"] }
+};
+var formText = {
+	session: ["text"],
+	answers: ["answers"],
+	work: [
+		"title",
+		"goal",
+		"request",
+		"acceptance"
+	],
+	attachment: ["text"],
+	discussion: ["content"],
+	project: [
+		"name",
+		"description",
+		"task_project"
+	],
+	createWork: [
+		"title",
+		"goal",
+		"request",
+		"acceptance",
+		"steps"
+	],
+	start: ["title", "prompt"],
+	orchestration: ["message"],
+	items: ["title", "prompt"],
+	labels: ["text"],
+	review: ["reviewText"]
+};
+var formTypes = [
+	"draft",
+	"pm",
+	"create",
+	"start",
+	"published",
+	"dispatch",
+	"orchestrate",
+	"labels",
+	"artifact-review"
+];
+var pmAction = (suffix) => suffix.match(/(?:^|\.)(pm\.[a-z_.]+|session\.send|work\.start|repository\.continue|github\.pr\.(?:publish|update))\.\{/);
+function draftText(family, suffix, raw, report = diagnostic) {
+	const result = [];
+	if (suffix === "shortcut" || suffix.endsWith(".shortcut") || family === "draft" && /^continue\.[^.]+\.[^.]+$/.test(suffix) || family === "dispatch" && /^prj_[0-9a-f]{20}\.wi_[0-9a-f]{20}$/.test(suffix)) return result;
+	const add = (field, value, label, action) => {
+		if (typeof value === "string" && value.trim()) result.push({
+			field,
+			text: value,
+			label,
+			action
+		});
+	};
+	if (family === "draft" && /^send\..+/.test(suffix) && !suffix.endsWith(".queue")) {
+		add(formText.session[0], raw, "earlier_session");
+		return result;
+	}
+	if (!formTypes.includes(family)) return result;
+	const action = family === "pm" ? pmAction(suffix)?.[1] : void 0;
+	if (family === "pm" && !action && !/^discussion-send\./.test(suffix)) return result;
+	const value = JSON.parse(raw);
+	if (!record(value)) return result;
+	const fields = (names, source, label, action) => {
+		if (record(source)) for (const name of names) add(name, source[name], label, action);
+	};
+	if (family === "draft") {
+		if (/^answer\./.test(suffix) && Array.isArray(value.answers)) value.answers.forEach((answer, index) => add(`${formText.answers[0]}.${index}`, answer, "earlier_answers"));
+		else if (/^wi\.edit\./.test(suffix)) fields(formText.work, value.fields, "earlier_work");
+		else if (/^continue\.[^.]+$/.test(suffix)) fields(formText.attachment, value, "continue_from_checkpoint");
+		else if (suffix === "published" || /^dispatch\./.test(suffix)) fields(formText.attachment, value, "earlier_start");
+	} else if (family === "pm") {
+		if (/^discussion-send\./.test(suffix)) fields(formText.discussion, value, "earlier_discussion");
+		else if (value.version === 1 && record(value.values)) {
+			if (action && Object.hasOwn(pmText, action)) {
+				fields(action === "pm.thread.create" && suffix.startsWith("overview-assessment.") ? pmText[action].filter((name) => name !== "title") : pmText[action], value.values, "earlier_pm", action);
+				if (action === "pm.quality.review.record") fields(Object.keys(value.values).filter((name) => /^reason_\d+$/.test(name)), value.values, "earlier_pm", action);
+				for (const [name, names] of Object.entries(collections[action] || {})) {
+					if (!value.values[name]) continue;
+					try {
+						const rows = JSON.parse(value.values[name]);
+						if (Array.isArray(rows)) rows.forEach((row, index) => {
+							if (record(row)) for (const field of names) add(`${name}.${index}.${field}`, row[field], "earlier_pm", action);
+						});
+					} catch {
+						report(problem$1);
+					}
+				}
+			}
+		}
+	} else if (family === "create" && value.version === 1) {
+		if (/^project\./.test(suffix)) fields(formText.project, value.values, "earlier_project");
+		else if (/^work_item\./.test(suffix)) fields(formText.createWork, value.values, "earlier_work");
+	} else if ([
+		"start",
+		"published",
+		"dispatch"
+	].includes(family)) fields(formText.start, value, "earlier_start");
+	else if (family === "orchestrate") {
+		fields(formText.orchestration, value, "earlier_orchestration");
+		if (Array.isArray(value.items)) value.items.forEach((item, index) => {
+			if (record(item)) for (const field of formText.items) add(`items.${index}.${field}`, item[field], "earlier_orchestration");
+		});
+	} else if (family === "labels") fields(formText.labels, value, "earlier_labels");
+	else if (family === "artifact-review") fields(formText.review, value, "earlier_review");
+	return result;
+}
+var marker = (identity, id) => `batc.earlier-drafts.${managedStorageScope(identity)}.${id}`;
+async function entryId(key, field) {
+	const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([key, field])));
+	return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+var operationId = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+function evidence(value) {
+	const intents = record(value) ? [
+		value.intent,
+		value.submission,
+		value.accept
+	].filter((item) => item != null) : [];
+	return {
+		pending: intents.length > 0,
+		operations: intents.flatMap((intent) => operationId(intent?.operation_id) ? [intent.operation_id] : [])
+	};
+}
+function formHref(family, suffix) {
+	const part = (value) => encodeURIComponent(typeof value === "string" ? value : "");
+	let target = {};
+	try {
+		const match = family === "pm" ? pmAction(suffix) : null;
+		const json = match ? match.index + match[0].length - 1 : suffix.indexOf("{");
+		if (json >= 0) target = JSON.parse(suffix.slice(json));
+	} catch {}
+	if (family === "pm") {
+		const workspace = target.workspace_id || (suffix.startsWith("discussion-send.") ? suffix.slice(16) : "");
+		return "#/pm" + (workspace ? "/" + part(workspace) : "") + (target.thread_id ? "/discussions/" + part(target.thread_id) : "");
+	}
+	if (family === "draft") {
+		const session = suffix.split(".");
+		if (session[0] === "send" && session.length === 3 || session[0] === "answer" && session.length === 4) return `#/session/${part(session[1])}/${part(session[2])}`;
+		if (suffix.startsWith("wi.edit.")) return "#/item/" + part(suffix.slice(8));
+		if (suffix.startsWith("dispatch.")) return "#/dispatch/" + part(suffix.slice(9));
+		if (suffix === "published") return "#/published";
+	}
+	if (family === "labels") try {
+		const [host, sid] = JSON.parse(suffix);
+		return `#/session/${part(host)}/${part(sid)}`;
+	} catch {
+		return "#/sessions";
+	}
+	if (family === "create") return suffix.startsWith("work_item.") ? "#/project/" + part(suffix.slice(10)) : "#/projects";
+	if (family === "dispatch") return "#/dispatch/" + part(suffix);
+	if (family === "orchestrate") return "#/orchestrate/" + part(suffix.split(".")[0]);
+	if (family === "artifact-review") return "#/artifact-review" + (target.kind === "session" ? [
+		target.kind,
+		target.host,
+		target.session_id
+	] : [
+		"artifact",
+		"operation",
+		"task"
+	].includes(target.kind) ? [
+		target.kind,
+		target.artifact_id || target.operation_id || target.task_id,
+		...target.kind === "artifact" ? [String(target.revision)] : []
+	] : []).map((value) => "/" + part(value)).join("");
+	return ["start", "published"].includes(family) ? "#/" + family : "#/sessions";
+}
+async function earlierDrafts(identity, local, report = diagnostic) {
+	let keys, migrated;
+	try {
+		keys = Array.from({ length: local.length }, (_, index) => local.key(index)).filter(Boolean).sort();
+		const receipt = JSON.parse(local.getItem(`batc.storage-migration.${managedStorageScope(identity)}`) || "null");
+		if (receipt?.version === 1 && receipt.target === managedStorageScope(identity) && receipt.status === "complete") migrated = receipt.source;
+	} catch {
+		report(problem$1);
+		return [];
+	}
+	const sources = matchingLegacySources(identity, keys).filter((row) => !row.ambiguous && row.scope !== migrated).map((row) => row.scope);
+	const entries = [];
+	for (const [index, key] of keys.entries()) {
+		if (index % 32 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+		const source = sources.find((source) => rebase(key, source, source) !== null);
+		if (!source) continue;
+		const boundary = key.indexOf(source), family = key.slice(5, boundary - 1), suffix = key.slice(boundary + source.length + 1);
+		if (!formTypes.includes(family) || suffix === "shortcut" || suffix.endsWith(".shortcut")) continue;
+		try {
+			const raw = local.getItem(key);
+			if (raw === null) continue;
+			const fields = draftText(family, suffix, raw, report);
+			if (!fields.length) continue;
+			const retained = evidence(family === "draft" && suffix.startsWith("send.") ? null : JSON.parse(raw));
+			if (family === "draft") {
+				const sibling = `batc.key.${source}.${suffix}`;
+				for (const key of keys.filter((key) => key === sibling || key.startsWith(sibling + ".") && /^[0-9a-f]{24}$/.test(key.slice(sibling.length + 1)))) {
+					retained.pending = true;
+					try {
+						const saved = JSON.parse(local.getItem(key) || "null");
+						if (operationId(saved?.op)) retained.operations.push(saved.op);
+					} catch {
+						report(problem$1);
+					}
+				}
+			}
+			let mirror = null;
+			const mirrorKey = family === "draft" && suffix === "published" ? `batc.published.${source}` : family === "draft" && suffix.startsWith("dispatch.") ? `batc.dispatch.${source}.${suffix.slice(9)}` : family === "published" && !suffix ? `batc.draft.${source}.published` : family === "dispatch" ? `batc.draft.${source}.dispatch.${suffix}` : null;
+			if (mirrorKey && keys.includes(mirrorKey)) {
+				try {
+					mirror = JSON.parse(local.getItem(mirrorKey) || "null");
+				} catch {
+					retained.pending = true;
+					report(problem$1);
+				}
+				const mirrored = evidence(mirror);
+				retained.pending ||= mirrored.pending;
+				retained.operations.push(...mirrored.operations);
+			}
+			const operations = [...new Set(retained.operations)].sort();
+			for (const field of fields) {
+				if (family === "draft" && mirror?.prompt === field.text) continue;
+				const id = await entryId(key, field.field);
+				if (local.getItem(marker(identity, id)) !== null) continue;
+				entries.push({
+					...field,
+					id,
+					address: decodeURIComponent(source.split(":")[0]),
+					state: retained.pending ? "possibly-sent" : "draft",
+					operations,
+					href: operations.length ? "#/op/" + operations[0] : formHref(family, suffix)
+				});
+			}
+		} catch {
+			report(problem$1);
+		}
+	}
+	return entries;
+}
+function hideEarlierDraft(identity, local, entry, report = diagnostic) {
+	try {
+		local.setItem(marker(identity, entry.id), "hidden");
+		return true;
+	} catch {
+		report(problem$1);
+		return false;
+	}
+}
+function firstEarlierDraftNotice(identity, local, report = diagnostic) {
+	try {
+		return local.getItem(marker(identity, "noticed")) === null;
+	} catch {
+		report(problem$1);
+		return false;
+	}
+}
+function markEarlierDraftNotice(identity, local, report = diagnostic) {
+	try {
+		local.setItem(marker(identity, "noticed"), "opened");
+	} catch {
+		report(problem$1);
+	}
+}
+//#endregion
+//#region src/earlier-drafts.js
+function earlierFieldLabel(t, field) {
+	if (/^reason_\d+$/.test(field)) return `${t("earlier_field_reason")} ${Number(field.slice(7)) + 1}`;
+	return field.split(".").map((part) => /^\d+$/.test(part) ? String(Number(part) + 1) : t("earlier_field_" + part)).join(" · ");
+}
+function earlierDraftPanel({ h, t, entries, current, hide, opened, emptyFocus, expanded = false }) {
+	const root = h("details", {
+		"data-earlier-drafts": "",
+		class: "earlier-drafts",
+		open: expanded
+	}, h("summary", {}, t("earlier_title")), h("p", { class: "muted" }, t("earlier_help")));
+	const groups = new Map();
+	for (const state of ["draft", "possibly-sent"]) if (entries.some((entry) => entry.state === state)) {
+		const group = h("section", { "data-earlier-group": state }, h("h3", {}, t(state === "draft" ? "earlier_draft_group" : "earlier_pending_group")));
+		groups.set(state, group);
+		root.append(group);
+	}
+	let position = 0, rendering = false;
+	function append(entry) {
+		const name = `${t(actionMessageKey(entry.action) || entry.label)} · ${earlierFieldLabel(t, entry.field)}`;
+		const addressId = "earlier-address-" + entry.id;
+		const text = h("textarea", {
+			readonly: true,
+			rows: 4,
+			"aria-label": name,
+			"aria-describedby": addressId
+		});
+		text.value = entry.text;
+		const status = h("span", {
+			role: "status",
+			class: "muted"
+		});
+		const row = h("article", {
+			"data-earlier-draft": "",
+			class: "panel"
+		}, h("h4", {}, name), h("p", {
+			id: addressId,
+			class: "muted"
+		}, t("earlier_address", { address: entry.address })), text);
+		const actions = h("div", { class: "actions" });
+		if (entry.state === "possibly-sent") {
+			row.insertBefore(h("p", {}, t("earlier_pending_warning")), text);
+			for (const href of entry.operations.length ? entry.operations.map((id) => "#/op/" + id) : [entry.href]) actions.append(h("a", { href }, t(entry.operations.length ? "earlier_check_operation" : "earlier_check_form")));
+		} else actions.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: async () => {
+				if (!current()) return;
+				try {
+					await navigator.clipboard.writeText(entry.text);
+					if (current() && row.isConnected) status.textContent = t("earlier_copied");
+				} catch {
+					if (current() && row.isConnected) {
+						status.textContent = t("earlier_copy_manual");
+						text.focus();
+						text.select();
+					}
+				}
+			}
+		}, t("earlier_copy")));
+		actions.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				if (!current() || !hide(entry)) return;
+				const rows = [...root.querySelectorAll("[data-earlier-draft]")], index = rows.indexOf(row);
+				const next = rows[index + 1]?.querySelector("button") || rows[index - 1]?.querySelector("button");
+				const group = row.parentElement;
+				row.remove();
+				if (!group.querySelector("[data-earlier-draft]") && position === entries.length) group.remove();
+				if (position === entries.length && !root.querySelector("[data-earlier-draft]")) {
+					root.remove();
+					emptyFocus();
+				} else (next || root.querySelector("summary"))?.focus({ preventScroll: true });
+			}
+		}, t("earlier_hide")), status);
+		row.append(actions);
+		groups.get(entry.state).append(row);
+	}
+	function render() {
+		if (!current() || !root.isConnected || !root.open) {
+			rendering = false;
+			return;
+		}
+		const end = Math.min(position + 16, entries.length);
+		while (position < end) append(entries[position++]);
+		if (position < entries.length) setTimeout(render, 0);
+		else rendering = false;
+	}
+	const schedule = () => {
+		if (root.open && root.isConnected && current()) opened();
+		if (!rendering && root.open && position < entries.length) {
+			rendering = true;
+			setTimeout(render, 0);
+		}
+	};
+	root.addEventListener("toggle", schedule);
+	root.reveal = () => {
+		root.open = true;
+		schedule();
+		root.scrollIntoView({ block: "start" });
+		root.querySelector("summary").focus({ preventScroll: true });
+	};
+	root.resume = schedule;
+	return root;
 }
 //#endregion
 //#region src/observed-resource.js
@@ -66242,9 +67806,9 @@ function renderDeliveryWork(item, repositories = [], compact = false, { h, caps,
 }
 //#endregion
 //#region src/app.js
+init_credential_refusals();
 init_transport();
 init_i18n();
-var TOKEN_KEY = "batc.dashboard.token";
 var isWorkbench = layoutDecision.layout === "workbench";
 var state = {
 	token: null,
@@ -66430,7 +67994,120 @@ async function openDiagnostics() {
 		}
 	});
 }
+var earlierEntries = [];
+var earlierIdentity = null;
+var earlierScan = 0;
+var earlierPanel = null;
+var earlierPanelLocale = null;
+var earlierScanState = nativeDesktop ? "waiting" : "skipped";
+var earlierJump = false;
+function clearEarlierDrafts(status = nativeDesktop ? "waiting" : "skipped") {
+	earlierScan++;
+	earlierEntries = [];
+	earlierIdentity = null;
+	earlierPanel = null;
+	earlierJump = false;
+	earlierScanState = status;
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+	document.querySelector("[data-earlier-drafts]")?.remove();
+	paintEarlierDrafts();
+}
+function acknowledgeEarlierDrafts() {
+	if (!earlierIdentity) return;
+	markEarlierDraftNotice(earlierIdentity, localStorage);
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+}
+function paintEarlierNotice() {
+	document.querySelector("[data-earlier-drafts-notice]")?.remove();
+	if (!state.token || !earlierIdentity || !earlierEntries.length || !firstEarlierDraftNotice(earlierIdentity, localStorage)) return;
+	document.getElementById("main")?.prepend(h("aside", {
+		"data-earlier-drafts-notice": "",
+		class: "earlier-drafts-notice",
+		role: "status"
+	}, h("span", {}, t("earlier_notice")), " ", h("a", {
+		href: "#/settings?section=about&drafts=earlier",
+		onclick: () => {
+			earlierJump = false;
+			acknowledgeEarlierDrafts();
+		}
+	}, t("earlier_title"))));
+}
+function paintEarlierDrafts() {
+	const slot = document.querySelector("[data-earlier-drafts-slot]");
+	if (!slot) return;
+	slot.dataset.scanState = earlierScanState;
+	if (!earlierIdentity || !earlierEntries.length) {
+		slot.replaceChildren();
+		return;
+	}
+	const identity = earlierIdentity, scope = managedStorageScope(identity), signature = JSON.stringify(earlierEntries);
+	const current = () => earlierScanState === "complete" && !!state.token && !state.nativeBusy && state.namespace === scope && earlierIdentity && managedStorageScope(earlierIdentity) === scope;
+	if (!earlierPanel || earlierPanelLocale !== locale || earlierPanel.signature !== signature) {
+		const expanded = earlierPanel?.open || false;
+		earlierPanel = earlierDraftPanel({
+			h,
+			t,
+			entries: earlierEntries,
+			current,
+			expanded,
+			opened: acknowledgeEarlierDrafts,
+			emptyFocus: () => {
+				const heading = document.querySelector("[data-settings-panel=\"about\"] h2");
+				if (heading) {
+					heading.tabIndex = -1;
+					heading.focus({ preventScroll: true });
+				}
+			},
+			hide: (entry) => {
+				if (!current() || !hideEarlierDraft(identity, localStorage, entry)) return false;
+				earlierEntries = earlierEntries.filter((row) => row.id !== entry.id);
+				earlierPanel.signature = JSON.stringify(earlierEntries);
+				if (!earlierEntries.length) document.querySelector("[data-earlier-drafts-notice]")?.remove();
+				return true;
+			}
+		});
+		earlierPanel.signature = signature;
+		earlierPanelLocale = locale;
+	}
+	if (earlierPanel.parentElement !== slot) slot.replaceChildren(earlierPanel);
+	earlierPanel.resume();
+	if (!earlierJump && new URLSearchParams(location.hash.split("?")[1] || "").get("drafts") === "earlier") {
+		earlierJump = true;
+		const panel = earlierPanel;
+		setTimeout(() => {
+			if (panel === earlierPanel && panel.isConnected && current()) panel.reveal();
+		}, 0);
+	}
+}
+function scanEarlierDrafts(identity) {
+	const scan = earlierScan;
+	earlierScanState = "scanning";
+	paintEarlierDrafts();
+	setTimeout(async () => {
+		try {
+			if (scan !== earlierScan) return;
+			const entries = await earlierDrafts(identity, localStorage);
+			if (scan !== earlierScan || !state.token || state.namespace !== managedStorageScope(identity)) return;
+			earlierIdentity = identity;
+			earlierEntries = entries;
+			earlierScanState = "complete";
+			paintEarlierDrafts();
+			paintEarlierNotice();
+		} catch {
+			console.debug("draft_recovery_unreadable");
+			if (scan === earlierScan) {
+				earlierScanState = "failed";
+				paintEarlierDrafts();
+			}
+		}
+	}, 0);
+}
 async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
+	if (reset && earlierIdentity) {
+		earlierScan++;
+		earlierScanState = "waiting";
+		paintEarlierDrafts();
+	} else clearEarlierDrafts();
 	withdrawDiagnostics();
 	recentErrors.clear();
 	const retained = retainView ? {
@@ -66462,6 +68139,7 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 			principal_id: sync.principal_id
 		};
 		const managed = nativeDesktop && configurationSource === "managed";
+		if (!managed || earlierIdentity && managedStorageScope(earlierIdentity) !== managedStorageScope(identity)) clearEarlierDrafts(managed ? "waiting" : "skipped");
 		if (managed) migrateManagedStorage(identity, localStorage, sessionStorage);
 		state.scopeIdentity = {
 			...identity,
@@ -66474,7 +68152,9 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 			if (Number.isSafeInteger(saved?.cursor) && saved.cursor >= 0 && typeof saved.token === "string" && saved.token) state.sync = saved;
 		} catch {}
 		state.lastEvent = state.sync.cursor;
+		if (managed) scanEarlierDrafts(identity);
 	} else {
+		clearEarlierDrafts("skipped");
 		state.scopeIdentity = null;
 		state.namespace = storageScope(endpoint, caps.actor);
 		state.lastEvent = 0;
@@ -66493,12 +68173,11 @@ function saveCursor() {
 		localStorage.setItem(`batc.sync.${state.namespace}`, JSON.stringify(state.sync));
 	} catch {}
 }
-function disconnect() {
-	if (state.token === "managed-browser-session") forgetBrowserSession()?.catch(() => {});
+function resetConnection() {
+	clearEarlierDrafts();
 	withdrawDiagnostics();
 	recentErrors.clear();
 	state.epoch++;
-	clearToken();
 	state.token = null;
 	state.caps = null;
 	state.lastEvent = 0;
@@ -66507,28 +68186,93 @@ function disconnect() {
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
+	state.namespace = "";
+	state.endpoint = "";
+	state.lastPoll = null;
+	state.pollHealth = "initial";
+	state.connectionError = null;
+	state.refreshCycle = null;
+}
+function disconnect() {
+	if (state.token === "managed-browser-session") forgetBrowserSession()?.catch(() => {});
+	clearToken();
+	resetConnection();
+}
+async function connectBrowserToken(token) {
+	resetConnection();
+	browserCredentialRefusals.prepare(token);
+	browserCredentialRefusals.retry(token);
+	state.token = token;
+	paintConnection();
+	const connection = {
+		epoch: state.epoch,
+		namespace: state.namespace
+	};
+	const caps = await api("GET", "/capabilities");
+	assertConnection(connection);
+	await activate(caps);
+}
+function retryRememberedTokenButton() {
+	const retry = h("button", { onclick: async () => {
+		try {
+			await connectBrowserToken(state.token);
+		} catch (error) {
+			if (error.code !== "CONNECTION_CHANGED") {
+				state.caps = null;
+				state.connectionError = error;
+			}
+		}
+		await route();
+	} }, t("connection_retry_remembered"));
+	const render = () => {
+		retry.hidden = !state.token || state.token === "managed-browser-session" || !state.connectionError?.credentialRefused;
+	};
+	render();
+	const paint = () => {
+		if (!retry.isConnected) connectionPainters.delete(paint);
+		else render();
+	};
+	connectionPainters.add(paint);
+	return retry;
 }
 function loadToken() {
 	if (nativeDesktop) return null;
 	try {
-		return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+		const token = sessionStorage.getItem("batc.dashboard.token") || localStorage.getItem("batc.dashboard.token");
+		browserCredentialRefusals.prepare(token);
+		return token;
 	} catch {
 		return null;
 	}
 }
 function saveToken(token, remember) {
 	if (nativeDesktop) return;
+	const previous = new Set();
 	try {
-		sessionStorage.setItem(TOKEN_KEY, token);
-		if (remember) localStorage.setItem(TOKEN_KEY, token);
-		else localStorage.removeItem(TOKEN_KEY);
+		for (const store of [sessionStorage, localStorage]) {
+			const old = store.getItem(BROWSER_TOKEN_KEY);
+			if (old && old !== token) previous.add(old);
+		}
+	} catch {}
+	for (const old of previous) browserCredentialRefusals.forget(old);
+	browserCredentialRefusals.prepare(token);
+	try {
+		sessionStorage.setItem(BROWSER_TOKEN_KEY, token);
+		if (remember) localStorage.setItem(BROWSER_TOKEN_KEY, token);
+		else localStorage.removeItem(BROWSER_TOKEN_KEY);
 	} catch {}
 }
 function clearToken() {
+	const forgotten = new Set();
+	if (!nativeDesktop && state.token && state.token !== "managed-browser-session") forgotten.add(state.token);
 	try {
-		sessionStorage.removeItem(TOKEN_KEY);
-		localStorage.removeItem(TOKEN_KEY);
+		for (const store of [sessionStorage, localStorage]) {
+			const token = store.getItem(BROWSER_TOKEN_KEY);
+			if (token) forgotten.add(token);
+			store.removeItem(BROWSER_TOKEN_KEY);
+		}
 	} catch {}
+	for (const token of forgotten) browserCredentialRefusals.forget(token);
 }
 function h(tag, attrs = {}, ...children) {
 	const el = h$1(tag, attrs, ...children);
@@ -66665,6 +68409,13 @@ async function api(method, path, body, key, collectReceipt) {
 		return data;
 	} catch (error) {
 		if (epoch === state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
+			if (!nativeDesktop && state.token && state.token !== "managed-browser-session" && (error.credentialRefused || isCredentialRefusal(error.status, method, path))) {
+				error.credentialRefused = true;
+				state.connectionError = error;
+				state.pollHealth = pollFailure(error, Date.now());
+				updateOnline(false);
+				paintConnection();
+			}
 			if (method === "GET" && (path === "/capabilities" || path === "/bootstrap")) rememberVersionRead("capabilities", null, void 0, epoch);
 			recentErrors.record({
 				at: new Date().toISOString(),
@@ -66701,6 +68452,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 		response = !resumable ? await request() : /^\/events(?:\?|$)/.test(path) ? await retiredRead(request(foregroundReads.signal), foregroundReads.signal) : await readThroughResume(request, () => foregroundReads.signal, guard);
 	} catch (cause) {
 		if (["FOREGROUND_READ_RETIRED", "CONNECTION_CHANGED"].includes(cause?.code)) throw cause;
+		if (cause?.credentialRefused) throw Object.assign(new ApiError(cause.status, cause.code, cause.message, { localized: cause.localized === true }), { credentialRefused: true });
 		throw new ApiError(0, ["AbortError", "TimeoutError"].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause)) ? "TIMEOUT" : "NETWORK_ERROR", cause?.message || String(cause));
 	}
 	const { status, data } = response;
@@ -66754,7 +68506,7 @@ async function submit(action, target, params, preconditions, scope) {
 		else rememberOp(scope, key, out.operation.operation_id, connection.namespace);
 		return out.operation;
 	} catch (e) {
-		if (e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace);
+		if (!e.credentialRefused && e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace);
 		throw e;
 	}
 }
@@ -67121,6 +68873,11 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 				const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
 				guard(true);
 				if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed during upload");
+				if (response.status === 401) throw browserCredentialError({
+					status: 401,
+					code: "UNAUTHORIZED",
+					credentialRefused: !nativeDesktop && state.token !== "managed-browser-session"
+				});
 				if (response.status < 200 || response.status >= 300) throw new ApiError(response.status, response.data.error?.code, response.data.error?.message);
 				do
 					op = await readNext();
@@ -67578,10 +69335,29 @@ function foregroundChanged() {
 	}
 	wakeEventPoll?.();
 }
+var IDENTITY_PRESERVING_RESETS = new Set([
+	"cursor_expired",
+	"cursor_ahead",
+	"history_changed",
+	"checkpoint_cursor_mismatch"
+]);
 async function streamEvents() {
 	for (;;) {
 		await refreshManagedRecovery();
-		if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === "hidden") {
+		if (!nativeDesktop && state.token && state.token !== "managed-browser-session") {
+			const token = state.token, epoch = state.epoch;
+			const refusal = browserCredentialRefusals.read(token);
+			if (token !== state.token || epoch !== state.epoch) continue;
+			if (refusal) {
+				state.connectionError = refusal;
+				state.pollHealth = pollFailure(refusal, Date.now());
+				updateOnline(false);
+				paintConnection();
+				await waitForEventPoll(1e3);
+				continue;
+			}
+		}
+		if (state.nativeBusy || !state.token || !state.namespace || !state.viewReady || document.visibilityState === "hidden") {
 			paintConnection(true);
 			await waitForEventPoll(1e3);
 			continue;
@@ -67595,6 +69371,7 @@ async function streamEvents() {
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
 			pollSucceeded = true;
 			state.pollHealth = "connected";
+			if (state.connectionError?.credentialRefused) state.connectionError = null;
 			state.lastPoll = {
 				at: Date.now(),
 				namespace: state.namespace
@@ -67641,8 +69418,9 @@ async function streamEvents() {
 					namespace: state.namespace,
 					sync: state.sync
 				};
-				const accessChanged = error.reason === "access_changed";
+				const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
 				if (accessChanged) {
+					clearEarlierDrafts();
 					generation++;
 					state.viewReady = false;
 					teardown?.();
@@ -71212,6 +72990,8 @@ async function viewOperation(main, id) {
 				main.append(repair.box);
 			}
 			const refs = op.external_refs || {};
+			const retainedCheckpoint = op.action === "checkpoint.continue" && op.status === "failed" && ["CHECKPOINT_STAGING_RETAINED", "CHECKPOINT_DESTINATION_APPEARED"].includes(op.error_code);
+			const reason = retainedCheckpoint ? t("error_code_" + op.error_code) : op.status_reason;
 			const retry = refs.merged_sha && op.action === "delivery.merge_and_deploy" && op.status === "failed" ? h("button", {
 				class: "primary",
 				onclick: async () => {
@@ -71302,7 +73082,13 @@ async function viewOperation(main, id) {
 			fill(panel, pageHeader({
 				title: actionLabel$1(op.action),
 				pill: statusPill(operationStatusKey(op.status))
-			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
+			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), reason ? [h("dt", {}, t("reason")), h("dd", {}, reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), retainedCheckpoint ? h("div", {
+				class: "note warn",
+				"data-checkpoint-retained": ""
+			}, h("dl", { class: "kv" }, typeof refs.retained_staging_path === "string" ? [h("dt", {}, t("checkpoint_retained_path")), h("dd", {}, h("code", {}, refs.retained_staging_path))] : null, op.error_code === "CHECKPOINT_DESTINATION_APPEARED" && typeof refs.clone_path === "string" ? [h("dt", {}, t("checkpoint_destination_path")), h("dd", {}, h("code", {}, refs.clone_path))] : null), h("p", {}, t("checkpoint_retained_why")), h("p", {}, t(op.error_code === "CHECKPOINT_DESTINATION_APPEARED" ? "checkpoint_destination_next" : "checkpoint_retained_next")), typeof refs.source_host === "string" && refs.source_host && typeof refs.source_session_id === "string" && refs.source_session_id ? h("a", { href: sessionHref$1({
+				host: refs.source_host,
+				sessionId: refs.source_session_id
+			}) }, t("source_session")) : null, h("p", {}, t("checkpoint_retained_cleanup"))) : null, ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
 				refs,
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
@@ -71474,6 +73260,8 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 		"data-export-diagnostics": ""
 	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
 	main.append(languageSwitch(), frame.root);
+	frame.panel("about").append(h("div", { "data-earlier-drafts-slot": "" }));
+	paintEarlierDrafts();
 	const identityEpoch = state.epoch;
 	const paintBuild = () => {
 		if (!frame.root.isConnected || identityEpoch !== state.epoch) {
@@ -71525,10 +73313,10 @@ function viewBrowserSettings(main) {
 	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("ui_local_connector")) : null, disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
-	}), h("button", {
+	}), retryRememberedTokenButton(), h("button", {
 		class: "danger",
-		onclick: () => {
-			disconnect();
+		onclick: async () => {
+			await disconnect();
 			route();
 		}
 	}, t("disconnect"))));
@@ -71546,9 +73334,25 @@ function viewBrowserSignedOut(main) {
 	const info = h("div", { class: "global-connect-status" });
 	const showConnectError = (error) => {
 		info.setAttribute("role", "alert");
-		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
+		info.replaceChildren(error?.credentialRefused ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
 	};
 	if (state.connectionError) showConnectError(state.connectionError);
+	const connect = async (token, saved = false) => {
+		if (!token) return;
+		try {
+			await connectBrowserToken(token);
+			if (!saved) saveToken(token, remember.checked);
+			location.hash = "#/home";
+			await route();
+		} catch (error) {
+			if (error.code !== "CONNECTION_CHANGED") {
+				state.token = null;
+				state.caps = null;
+				state.connectionError = error;
+				showConnectError(error);
+			}
+		}
+	};
 	const root = firstRunCard({
 		h,
 		t,
@@ -71556,22 +73360,15 @@ function viewBrowserSignedOut(main) {
 			class: "global-connect-form",
 			onsubmit: async (event) => {
 				event.preventDefault();
-				disconnect();
-				state.token = input.value.trim();
-				try {
-					await activate(await api("GET", "/capabilities"));
-					saveToken(state.token, remember.checked);
-					location.hash = "#/home";
-					await route();
-				} catch (e) {
-					state.token = null;
-					showConnectError(e);
-				}
+				await connect(input.value.trim());
 			}
 		}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
 			class: "primary",
 			type: "submit"
-		}, t("connect")), h("a", {
+		}, t("connect")), loadToken() ? h("button", {
+			type: "button",
+			onclick: () => connect(loadToken(), true)
+		}, t("connection_retry_remembered")) : null, h("a", {
 			class: "global-quiet-link",
 			href: setupGuide()
 		}, t("global_setup_guide"))), disclosure({
@@ -71758,13 +73555,13 @@ async function viewManagedSettings(main) {
 		});
 		disposeTailscale = await fleetTailscale(fleetRoot, guard);
 	} else {
-		local.append(h("button", {
+		local.append(...[retryRememberedTokenButton(), h("button", {
 			class: "danger",
 			onclick: () => {
 				disconnect();
 				route();
 			}
-		}, t("disconnect")));
+		}, t("disconnect"))].filter(Boolean));
 		fleetRoot.append(fleetEmpty());
 	}
 	return () => {
@@ -72488,7 +74285,34 @@ async function viewProject(main, pid) {
 	create.box.hidden = true;
 	const note = manageNote();
 	if (note) note.hidden = true;
-	main.append(note || "", out, head, work, itemCard);
+	const github = boardGitHubPanel({
+		t,
+		api,
+		alive: () => assertView(connection),
+		caps: () => state.caps,
+		form: (options) => durableForm({
+			h,
+			t,
+			api,
+			caps: () => state.caps,
+			namespace: connection.namespace,
+			guard: () => assertView(connection),
+			errorBox,
+			...options,
+			canSend: () => state.online && !state.nativeBusy && state.viewReady,
+			clientGate: () => clientActionGate(state, { post: true })
+		}),
+		permitted: () => may("manage"),
+		projectId: pid,
+		onSaved: () => render()
+	});
+	const offGitHubOnline = onOnline(() => {
+		try {
+			assertView(connection);
+			github.update();
+		} catch {}
+	});
+	main.append(note || "", out, head, github.element, work, itemCard);
 	const rememberEditors = () => {
 		if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
 		for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden) workDrafts.set(id, {
@@ -72560,6 +74384,7 @@ async function viewProject(main, pid) {
 		workEditors = new Map();
 		freshPage();
 		const p = data.project;
+		await github.refresh(data);
 		if (note) note.hidden = false;
 		itemCard.hidden = false;
 		const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed !== false;
@@ -72732,7 +74557,7 @@ async function viewProject(main, pid) {
 	};
 	showArchived.onchange = () => render();
 	await render();
-	return liveReload(render, [
+	const off = liveReload(render, [
 		"project",
 		"work_item",
 		"operation",
@@ -72741,6 +74566,11 @@ async function viewProject(main, pid) {
 		"session",
 		"integration"
 	], prepare);
+	return () => {
+		off?.();
+		offGitHubOnline();
+		github.dispose();
+	};
 }
 function linkTarget(l) {
 	const x = l.target || {};
@@ -72814,7 +74644,8 @@ async function viewWorkItem(main, wid) {
 		"checkpoint",
 		"operation",
 		"task",
-		"pull_request"
+		"pull_request",
+		"github_source"
 	].map((k) => h("option", { value: k }, t("link_" + k))));
 	const ref = h("input", { placeholder: t("link_ref_hint") });
 	kind.onchange = () => {
@@ -73204,14 +75035,14 @@ function workItemRow(w, open) {
 		title,
 		href,
 		meta,
-		pill: statusPill(workStatusKey(w.completion?.display_state)),
+		pill: statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
 		action: h("a", {
 			class: "ui-button secondary ui-sm",
 			href
 		}, t("global_review")),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
-			statusPill(workStatusKey(w.completion?.display_state)),
+			statusPill(workStatusKey(w.display_state || w.completion?.display_state)),
 			meta ? h("p", {}, meta) : null,
 			w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
 			disclosure({
@@ -74144,6 +75975,7 @@ async function route() {
 	mountWorkspace(name);
 	paintConnection(true);
 	const main = document.getElementById("main");
+	const recoveryPanel = earlierPanel, recoveryFocus = earlierPanel?.contains(document.activeElement) ? document.activeElement : null, recoveryScroll = main.scrollTop;
 	main.replaceChildren();
 	if (!state.token && name !== "settings") {
 		const off = await viewSettings(main);
@@ -74237,17 +76069,28 @@ async function route() {
 	};
 	if (off?.navigate) teardown.navigate = off.navigate;
 	state.viewReady = true;
+	paintEarlierDrafts();
+	paintEarlierNotice();
+	if (recoveryPanel === earlierPanel && recoveryFocus?.isConnected && document.activeElement === document.body) {
+		main.scrollTop = recoveryScroll;
+		recoveryFocus.focus({ preventScroll: true });
+	}
 }
 async function start() {
 	setLocale(locale);
 	observeViewport();
 	window.addEventListener("hashchange", route);
+	window.addEventListener("storage", (event) => {
+		if (event.key && !event.key.startsWith("batc.credential-refused.")) return;
+		browserCredentialRefusals.storageChanged(event);
+		wakeEventPoll?.();
+	});
 	document.addEventListener("visibilitychange", foregroundChanged);
 	window.addEventListener("pageshow", (event) => {
 		if (event.persisted) foregroundChanged();
 	});
 	if (nativeDesktop) {
-		clearToken();
+		await clearToken();
 		const attempt = ++state.nativeAttempt;
 		let startupManaged = false;
 		try {
@@ -74273,12 +76116,14 @@ async function start() {
 		}
 	} else {
 		const browserSession = await restoreBrowserSession().catch(() => false);
-		if (browserSession) clearToken();
+		if (browserSession) await clearToken();
 		state.token = browserSession ? browserSessionToken : loadToken();
 		if (state.token) try {
 			await activate(await api("GET", "/capabilities"));
-		} catch {
+		} catch (error) {
 			state.token = null;
+			state.caps = null;
+			state.connectionError = error;
 		}
 	}
 	await route();

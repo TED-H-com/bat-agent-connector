@@ -832,8 +832,12 @@ def _work_node(db, binding, item, parent, attempts, truncated, evidence, notes):
     deployed = any(row["refs"].get("operation_id") in evidence["deployments"] for row in attempts)
     open_attempt = any((row.get("actual") or {}).get("open") or row["status"] in {"in_progress", "in_review"} for row in attempts)
     verifying = any(row["status"] == "in_review" for row in attempts)
+    source_lane = work_items.source_lane(item)
     if item["archived"]:
         status = "unknown"
+    elif source_lane in work_items.GITHUB_CLOSED_LANES and not merged and not deployed:
+        status = "unknown"
+        _note(notes, "work.status", "github_source_closed_is_not_delivery")
     elif item["state"] == "waiting":
         status = "waiting"
     elif completion["approved"]:
@@ -867,6 +871,8 @@ def _work_node(db, binding, item, parent, attempts, truncated, evidence, notes):
         status = "unknown"
     refs = {"work_item_id": item["work_item_id"], "binding_id": binding["binding_id"],
             "requirement_ids": list(binding["requirement_ids"])}
+    if item.get("external"):
+        refs.update(source_lane=source_lane, github_source=work_items.github_observation(item))
     if binding.get("plan_revision_id"):
         refs["plan_revision_id"] = binding["plan_revision_id"]
     return _node(f"work:{item['work_item_id']}", parent, "work", item["title"], status, None, None, actual, [], refs,

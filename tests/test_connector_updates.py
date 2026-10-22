@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -317,6 +318,117 @@ def policy_file_snapshot(path):
     info = path.lstat()
     content = os.readlink(path) if path.is_symlink() else path.read_bytes() if path.is_file() else None
     return content, info.st_ino, info.st_mtime_ns
+
+
+@contextmanager
+def state_replacements(root):
+    directory = root.stat()
+    replacements = []
+    observing = True
+    def observe(event, args):
+        if observing and event == "os.rename" and args[1] == "state.json" and args[3] >= 0:
+            parent = os.fstat(args[3])
+            if (parent.st_dev, parent.st_ino) == (directory.st_dev, directory.st_ino):
+                with os.fdopen(os.open(args[0], os.O_RDONLY, dir_fd=args[2]), "rb") as source:
+                    info = os.fstat(source.fileno())
+                    saved = (source.read(), info.st_ino, info.st_mtime_ns)
+                frame, reconciled = sys._getframe(1), False
+                while frame:
+                    reconciled |= frame.f_code.co_name == "reconcile"
+                    frame = frame.f_back
+                replacements.append((saved, reconciled))
+    sys.addaudithook(observe)
+    try:
+        yield replacements
+    finally:
+        observing = False
+
+
+def test_install_persists_pending_then_reconciled_state_without_rewriting(deployment):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    candidate = release("b" * 40, "0.2.8")
+    u.find_release = lambda channel: candidate
+    u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
+    path = u.root / "state.json"
+    with state_replacements(u.root) as replacements:
+        result = u.apply()
+    assert result["installed"]["commit"] == candidate["commit"] and not result["pending"]
+    assert len(replacements) == 2
+    assert [reconciled for _, reconciled in replacements] == [False, True]
+    published = json.loads(replacements[0][0][0])
+    assert published["pending"]["to"] == candidate["commit"] and published["current"] == "a" * 40
+    assert json.loads(replacements[1][0][0]) == u.read()
+    assert policy_file_snapshot(path) == replacements[1][0]
+    assert u.status() == result
+
+
+def test_enable_after_pointer_refusal_only_saves_reconciled_state(deployment):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    candidate = release("b" * 40, "0.2.8")
+    u.find_release = lambda channel: candidate
+    pointer = u.root / "current"
+    def install(root, candidate, **kwargs):
+        proof = make_package(root, candidate)
+        pointer.unlink()
+        pointer.symlink_to(u.home / "foreign-pointer-target")
+        return proof
+    u.install = install
+    with pytest.raises(UpdateError, match="update_pointer_changed"):
+        u.apply()
+    interrupted = u.read()
+    assert interrupted["enabled"] and interrupted["pending"]["to"] == candidate["commit"]
+    assert interrupted["last"]["code"] == "update_pointer_changed"
+    updater.replace_link(pointer, receipt.parent, updater.snapshot(pointer))
+    with state_replacements(u.root) as replacements:
+        result = u.policy(True, "preview")
+    assert result["installed"]["commit"] == candidate["commit"] and not result["pending"]
+    assert len(replacements) == 1
+    assert replacements[0][1] is True
+    assert policy_file_snapshot(u.root / "state.json") == replacements[0][0]
+    assert json.loads(replacements[0][0][0]) == u.read()
+    assert u.status() == result
+
+
+@pytest.mark.parametrize("candidate", [None, release(), release("c" * 40, "0.2.6")])
+def test_repeated_release_check_records_a_new_outcome(deployment, candidate):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    u.find_release = lambda channel: candidate
+    first = u.apply()
+    path = u.root / "state.json"
+    before = policy_file_snapshot(path)
+    with path.open("rb") as original:
+        second = u.apply()
+        assert path.stat().st_ino != os.fstat(original.fileno()).st_ino
+    assert second["last"]["status"] == first["last"]["status"]
+    assert second["last"]["at"] != first["last"]["at"]
+    assert path.read_bytes() != before[0] and u.status() == second
+
+
+def test_repeated_schedule_preserves_completed_state_and_units(deployment, monkeypatch):
+    u, receipt, _ = deployment
+    u.enroll(receipt, "preview")
+    calls = []
+    original = updater.write_unit
+    def write_unit(path, text):
+        assert u.read()["schedule_intent"]
+        assert not u.read().get("schedule_complete")
+        original(path, text)
+    monkeypatch.setattr(updater, "write_unit", write_unit)
+    u.command = lambda args, **kwargs: calls.append(args)
+    first = u.schedule()
+    path = u.root / "state.json"
+    before = policy_file_snapshot(path)
+    units = {p: policy_file_snapshot(p) for p in (u.home / ".config/systemd/user").iterdir()}
+    assert u.read()["schedule_intent"] and u.read()["schedule_complete"]
+    assert u.schedule() == first
+    assert len(calls) == 4 and calls[:2] == calls[2:]
+    assert {p: policy_file_snapshot(p) for p in units} == units
+    assert path.read_bytes() == before[0]
+    assert path.stat().st_ino == before[1]
+    assert path.stat().st_mtime_ns == before[2]
 
 
 @pytest.mark.parametrize("channel", [None, "preview"])

@@ -42,7 +42,12 @@ from tests.test_api_v1 import http
 from tests.test_pm_work_attempt_result import pm, ready, start_ready
 from tests.test_repository_sync import world as repository_world
 from tests.test_upgrade_rollback_continuity import close_daemon, differences, read_work, unknown_and_pending
-from tests.upgrade_continuity_helpers import checkout_files, rows, seed_publication
+from tests.upgrade_continuity_helpers import (
+    assert_rows_preserved,
+    checkout_files,
+    seed_publication,
+    snapshot_rows,
+)
 
 _ = pm, ready, start_ready
 pytestmark = pytest.mark.skipif(not sys.platform.startswith('linux'), reason='The plain updater is Linux-only')
@@ -161,7 +166,7 @@ async def world(package_pair, tmp_path, mock, monkeypatch):
 def snapshot(path):
     with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
         schema = db.execute('SELECT type,name,sql FROM sqlite_master ORDER BY type,name').fetchall()
-        tables = {name: sorted(db.execute('SELECT * FROM "' + name.replace('"', '""') + '"').fetchall(), key=repr)
+        tables = {name: snapshot_rows(db, name)
                   for kind, name, _ in schema if kind == 'table'}
         return hashlib.sha256(path.read_bytes()).hexdigest(), schema, tables, db.execute('PRAGMA user_version').fetchone()[0]
 
@@ -272,10 +277,10 @@ async def seeded(w, mock, monkeypatch):
         assert json.loads(pointer.read_text())['pid'] == os.getpid()
         pointer.unlink()
     with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
-        stable = {table: rows(db, table) for table in (
+        stable = {table: snapshot_rows(db, table) for table in (
             'work_items', 'work_attempts', 'session_results', 'work_inputs', 'api_principals', 'pr_creation_receipts')}
-        assert stable['work_inputs'] and stable['pr_creation_receipts']
-        events = rows(db, 'api_events')
+        assert stable['work_inputs']['rows'] and stable['pr_creation_receipts']['rows']
+        events = snapshot_rows(db, 'api_events')
         keys = {oid: db.execute('SELECT idem_key FROM operations WHERE operation_id=?', (oid,)).fetchone()[0]
                 for oid in (uncertain, pending, info['operation_id'])}
     return path, info, stable, events, keys, before_api, principal.actor
@@ -368,8 +373,8 @@ async def test_previous_package_recovers_publication_and_preserves_work_inputs_a
                 assert after_api == expected_api, differences(expected_api, after_api)
                 with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
                     for table, expected in stable.items():
-                        assert rows(db, table) == expected, table
-                    assert rows(db, 'api_events')[:len(events)] == events
+                        assert_rows_preserved(db, table, expected)
+                    assert_rows_preserved(db, 'api_events', events, allow_append=True)
                     for oid, key in keys.items():
                         assert db.execute('SELECT idem_key FROM operations WHERE operation_id=?', (oid,)).fetchone()[0] == key
                 assert len(w['posts']) == w['runner'].ran['publication-push'] == 1

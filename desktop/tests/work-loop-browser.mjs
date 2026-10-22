@@ -221,7 +221,10 @@ async function refusedAccess(active, workUrl) {
       name: frame.functionName, location: frame.location})), source_path: sourcePath};
     context.off('response', observePage);
   }
-  const refusal = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/events'
+  // The first refused read pauses the bearer. A source refresh can be that
+  // read, so a subsequent event poll must not be required to reach the server.
+  const refusalPath = refreshRace?.source_path || '/api/v1/events';
+  const refusal = page.waitForResponse(response => new URL(response.url()).pathname === refusalPath
     && response.status() === 401);
   send({stage: 'revoke-access'});
   assert.equal((await receive()).revoked, true);
@@ -293,23 +296,29 @@ async function refusedAccess(active, workUrl) {
   await unchanged();
   await shot('03-refused-settings');
   if (surface === 'work') {
+    // Navigation must not re-present a paused credential. Only this explicit
+    // retry may verify it again; the principal remains revoked in this journey.
+    const retry = page.waitForResponse(response => response.status() === 401
+      && new URL(response.url()).pathname === '/api/v1/capabilities');
+    await page.getByRole('button', {name: zh ? '重試已記住的權杖' : 'Retry remembered token', exact: true}).click();
+    await retry;
+    await unchanged();
     step = 'refused-work-return';
-    const returned = page.waitForResponse(response => response.status() === 401
-      && new URL(response.url()).pathname === `/api/v1/work-items/${f.work}`);
+    const beforeReturn = allRequests.length;
     await page.evaluate(hash => {location.hash = hash;}, new URL(workUrl).hash);
-    await returned;
     await expect(page).toHaveURL(workUrl);
     // Refused source reads cannot recreate actionable controls from cached data.
     await expect(page.locator('#main [data-api-error]')).toContainText('UNAUTHORIZED');
     await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
     await headerRefused();
     await unchanged();
+    assert.equal(allRequests.length, beforeReturn, 'Paused navigation must not send the remembered bearer');
   }
   assert.deepEqual(errors, []);
   await shot('04-refused-work-return');
   const proof = {surface, target, draft_key: draftKey, draft_unchanged: true, attempt: active.attempt, result_href: resultHref,
     result_outcome: resultOutcome, late_refresh: refreshRace,
-    events_status: response.status(), server_code: body.error.code,
+    refusal_path: refusalPath, refusal_status: response.status(), server_code: body.error.code,
     header_reason: await header.innerText(), settings_reason: settingsReason, draft_has_intent: false,
     reason_key: 'ui_connection_refused', gate_code: 'CLIENT_ACTION_REFUSED', operation_posts: 0};
   writeFileSync(resolve(f.shots, 'refused-access.json'), JSON.stringify({proof, requests: allRequests.slice(since)}, null, 2) + '\n');

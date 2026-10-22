@@ -189,6 +189,8 @@ class ApiV1:
         from . import pm_workspace_adapter
         pm_workspace_adapter.install(daemon.ops)
         pm_evidence.install(daemon.ops)
+        from . import board_github
+        board_github.install(daemon.ops)
         pm_snapshots.install(daemon.ops)
         pm_roadmap.install(daemon.ops)
         pm_sprints.install(daemon.ops)
@@ -469,13 +471,16 @@ class ApiV1:
                     await writer.drain()
                 return
             token = self._bearer(headers)
+            browser_session = False
             if not token and browser:
                 token = browser.credential(method, headers,
                     bootstrap=method == "GET" and path == "/api/v1/browser-session")
+                browser_session = bool(token)
             content = re.fullmatch(r"/api/v1/artifacts/uploads/(?P<op>op_[0-9a-f]{32})/content", path)
             download = re.fullmatch(r"/api/v1/artifacts/(?P<aid>art_[0-9a-f]{32})/revisions/(?P<revision>[1-9][0-9]*)/content", path)
             if content or download:
-                principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token)
+                principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token,
+                                                  browser_session=browser_session)
                 if principal is None:
                     raise ApiError(401, "UNAUTHORIZED", "a valid bearer token is required")
                 if content:
@@ -506,7 +511,8 @@ class ApiV1:
             body = await self._read_body(method, headers, reader)
             if method == "POST" and getattr(self.daemon, "managed_stopping", False):
                 raise ApiError(503, "SERVICE_STOPPING", "owned service is stopping; reopen Dashboard to reconnect")
-            principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token)
+            principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token,
+                                              browser_session=browser_session)
             if browser and path in {"/api/v1/browser-session", "/api/v1/browser-session/logout",
                                     "/api/v1/managed/browser-file", "/api/v1/managed/stop"}:
                 if principal is None:
@@ -548,7 +554,8 @@ class ApiV1:
                     raise ApiError(401, "UNAUTHORIZED", "a valid bearer token is required")
                 if not principal.allows("observe"):
                     raise ApiError(403, "FORBIDDEN", "this route needs the 'observe' scope")
-                await self._stream(query, headers, reader, writer, token=token, principal=principal, cors=cors)
+                await self._stream(query, headers, reader, writer, token=token, principal=principal, cors=cors,
+                                   browser_session=browser_session)
                 return
             fn, kwargs, scope = self._route(method, path)
             if fn != self.version:
@@ -560,7 +567,7 @@ class ApiV1:
                 from .session_observation import authorizer
                 query = parse_qs(parts.query, keep_blank_values=True)
                 kwargs.update(reader=reader, writer=writer,
-                              check_authorization=authorizer(self.daemon, token, principal))
+                              check_authorization=authorizer(self.daemon, token, principal, browser_session=browser_session))
             if fn in {self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
                       self.host_preferences, self.project_skills, self.work_item_results,
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
@@ -1360,6 +1367,7 @@ class ApiV1:
                                   "cleanup": True, "cleanup_task": True, "inventory": True, "session_history": True, "session_observation": {"read": True, "wait": True, "max_wait_s": 1800}, "resource_relations": True, "discovery_scope": True,
                                   "worktree_history": {"known_bindings_only": True}, "history": {"source": "journal", "legacy_transitions": "may_be_incomplete", "optional_adapters": ["delivery_part_a", "delivery_part_b"],
                                       "observed_event_kinds": [r[0] for r in self.daemon.journal.db.execute("SELECT DISTINCT kind FROM api_events ORDER BY kind")]}, "events_stream": True, "operations": True, "work_items": True,
+                                  "board_github_sync": {"version": 1, "interval_s": 300},
                                   "github": self.daemon.ops.context.get("github") is not None,
                                   "deploy": self.daemon.ops.context.get("github") is not None and any(r.verification for r in gh_cfg.recipes.values()),
                                   "deployment_history": True, "environment_generation": True,
@@ -1781,7 +1789,7 @@ class ApiV1:
 
     # ------------------------------------------------------------------ SSE
     async def _stream(self, query: dict, headers: dict[str, str], reader, writer, *, token: str,
-                      principal, cors: str = "") -> None:
+                      principal, cors: str = "", browser_session: bool = False) -> None:
         actor = principal.actor
         if self._streams >= MAX_STREAMS:
             raise ApiError(429, "TOO_MANY_STREAMS", "too many event streams are open")
@@ -1808,7 +1816,8 @@ class ApiV1:
             started = last_write = last_auth = time.monotonic()
             while time.monotonic() - started < STREAM_MAX_S:
                 if time.monotonic() - last_auth >= REAUTH_S:
-                    current = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token)
+                    current = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token,
+                                                    browser_session=browser_session)
                     if current is None or not current.allows("observe"):
                         return  # revoked or expired: stop sending; the client sees the stream end
                     if current != principal:

@@ -18,7 +18,8 @@ Web 與 Tauri 都是持續支援的入口；共用畫面、中央資料與操作
 - 回應帶 `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; …; frame-ancestors 'none'`、`X-Frame-Options: DENY`、`nosniff`、`Referrer-Policy: no-referrer`。頁面沒有 inline script 或 inline style，CSP 不需要放寬。
 - Session 標題、訊息、PR 標題等外部文字一律以 `textContent` 寫入（`desktop/src/app.js` 的 `h()`），不經 HTML 解析。
 - Host 必須是 loopback，與 `/api/v1` 同一條規則（擋 DNS rebinding）。
-- Browser token 預設只存在 `sessionStorage`；勾選「在這台電腦記住」才寫入 `localStorage`。不用 cookie，所以不依賴 cookie 型 CSRF 防護。
+- Browser token 預設只存在 `sessionStorage`；勾選「在這台電腦記住」才寫入 `localStorage`。API token 只走 bearer；受管理瀏覽器工作階段另走 HttpOnly cookie，保留 origin、fetch-metadata 與 CSRF 檢查。工作階段憑證不能當作 bearer。
+- 記住的 bearer 收到 401，或 Dashboard 必要讀取（capabilities、bootstrap、events）收到 403 時，顯示拒絕狀態並暫停自動送出。其他 403 保留個別資源／動作的拒絕訊息。拒絕記錄與權杖放在同一種 storage，依 endpoint 與具領域分隔的摘要識別；明確重試、斷線或成功換用新權杖才清除，草稿與操作鍵不變。相同 origin 的分頁會同步此記錄。
 - Tauri 只載入打包的 frontend，透過限縮 native command 連受信配置中的中央服務。Token 留在 Rust，不進 WebView storage；Windows 使用原生憑證對話框與 Credential Manager enrollment，啟動環境變數仍是相容輸入。Linux 目前使用 native-memory adapter，不能當成跨平台 OS vault 驗收。中央 actor／API／contract mismatch 拒絕連線，原生 HTTP 不跟隨 redirect。GitHub HTTPS links 由受限 native action 開系統瀏覽器。完整邊界見 [desktop.md](desktop.md)。
 
 ## 畫面

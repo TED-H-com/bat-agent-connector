@@ -1,0 +1,17 @@
+[
+  {
+    "family": "draft",
+    "suffix": "send.demo.session-1",
+    "raw": "Original session message"
+  },
+  {
+    "family": "draft",
+    "suffix": "send.demo.session-1.queue",
+    "raw": "false"
+  },
+  {
+    "family": "key",
+    "suffix": "send.demo.session-1.d5ab16c2fe781b937b6bfbb9",
+    "raw": "{\"key\":\"00000000-0000-4000-8000-000000000001\",\"op\":\"op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+  }
+]

@@ -1,4 +1,5 @@
-import {nativeDesktop, browserAuthHeaders, browserSessionToken} from "./index.ts";
+import {nativeDesktop, browserAuthHeaders, browserSessionToken, browserCredentialError} from "./index.ts";
+import {browserCredentialRefusals} from "../credential-refusals.js";
 
 export interface ArtifactReference {artifact_id: string; revision: number; digest: string}
 export const MAX_CONTENT_BYTES = 16 * 1024 * 1024;
@@ -14,6 +15,12 @@ export async function readArtifactContent(reference: ArtifactReference, size: nu
     method: "GET", headers: browserAuthHeaders(token), redirect: "error", cache: "no-store",
     credentials: token === browserSessionToken ? "same-origin" : "omit", mode: "same-origin", signal: AbortSignal.any([signal, AbortSignal.timeout(30000)])
   });
+  if (token !== browserSessionToken) browserCredentialRefusals.refuse(token, response.status, 'GET', `/artifacts/${reference.artifact_id}/revisions/${reference.revision}/content`);
+  if (response.status === 401 || response.status === 403) {
+    await response.body?.cancel();
+    throw browserCredentialError({status: response.status, code: response.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN',
+      credentialRefused: token !== browserSessionToken && response.status === 401});
+  }
   if (response.status !== 200 || response.redirected ||
       response.headers.get("Content-Length") !== String(size) || !response.body) {
     await response.body?.cancel();

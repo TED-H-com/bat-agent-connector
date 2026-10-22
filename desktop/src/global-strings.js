@@ -1,6 +1,8 @@
+import {boardGitHubStrings} from './board-github-strings.js';
 // Global-screen copy. One block per locale; i18n merges these next to the shared UI strings.
 export const globalStrings = {
   en: {
+    ...boardGitHubStrings.en,
     global_product: 'BAT Dashboard',
     global_first_sentence: 'Connect this dashboard to your Connector.',
     global_setup_guide: 'Setup guide',
@@ -88,6 +90,7 @@ export const globalStrings = {
     global_empty_unread: 'No unread updates',
     global_attempts: 'Attempts',
     global_token_rejected: 'Token not accepted.',
+    connection_retry_remembered: 'Retry remembered token',
     global_discussion: 'Discussion',
     global_plan: 'Plan',
     global_plan_version: 'Plan v{n}',
@@ -204,6 +207,7 @@ export const globalStrings = {
     action_work_item_pin: 'Pin work item',
   },
   'zh-TW': {
+    ...boardGitHubStrings['zh-TW'],
     global_product: 'BAT Dashboard',
     global_first_sentence: '將這個儀表板連到你的 Connector。',
     global_setup_guide: '設定說明',
@@ -291,6 +295,7 @@ export const globalStrings = {
     global_empty_unread: '沒有未讀更新',
     global_attempts: '嘗試次數',
     global_token_rejected: '權杖無效。',
+    connection_retry_remembered: '重試已記住的權杖',
     global_discussion: '討論',
     global_plan: '計畫',
     global_plan_version: '計畫 v{n}',

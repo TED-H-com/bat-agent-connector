@@ -1,6 +1,5 @@
+import {sourceModules} from './source-modules.ts';
 import type {Page} from '@playwright/test';
-import {readFile} from 'node:fs/promises';
-import {stripTypeScriptTypes} from 'node:module';
 
 export const workspaceId='ws_'+'a'.repeat(32), commit='b'.repeat(40), sourcePath='openspec/specs/membership/spec.md';
 export function fixture(){
@@ -45,19 +44,7 @@ export async function mount(page:Page,f:ReturnType<typeof fixture>,native=false)
     const result=await f.dispatch({method:request.method(),path:url.pathname.slice(7)+url.search});
     await route.fulfill({status:result.status,json:result.data});
   });
-  await page.route('**/__spec_src/**',async route=>{
-    const file=new URL(route.request().url()).pathname.slice('/__spec_src/'.length);
-    let source:string;
-    if(file==='transport.js')source=stripTypeScriptTypes(await readFile(new URL('../src/transport/index.ts',import.meta.url),'utf8'))
-      .replace('@tauri-apps/api/core','./tauri-core.js')
-      // This harness flattens transport/index.ts; retain its real locale dependency.
-      .replace('../i18n.js','/src/i18n.js');
-    else if(file==='tauri-core.js')source=await readFile(new URL('../node_modules/@tauri-apps/api/core.js',import.meta.url),'utf8');
-    else if(file==='external/tslib/tslib.es6.js')source=await readFile(new URL('../node_modules/@tauri-apps/api/external/tslib/tslib.es6.js',import.meta.url),'utf8');
-    else if(['pm-spec-sources.js','pm-spec-sources-strings.js'].includes(file))source=await readFile(new URL('../src/'+file,import.meta.url),'utf8');
-    else throw Error('Unexpected source module: '+file);
-    await route.fulfill({contentType:'text/javascript',body:source});
-  });
+  await sourceModules(page, '__spec_src');
   await page.route('**/__spec_harness',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><div class="pm-shell"><aside><h2>PM workspaces</h2><p>Membership</p></aside><main class="pm-main"><h1>Membership workspace</h1><p>Plan and specification evidence</p><div id="mount"></div></main></div>'}));
   await page.goto('/__spec_harness');
   await page.evaluate(async workspaceId=>{

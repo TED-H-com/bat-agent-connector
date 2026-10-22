@@ -27,6 +27,9 @@ on:
       - "tests/conftest.py"
       - "tests/fakegithub.py"
       - "tests/fakeverifier.py"
+      - "tests/fixtures/browser-credential-responses.json"
+      - "tests/fixtures/checkpoint-refusal-destination.json"
+      - "tests/fixtures/checkpoint-refusal-staging.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-evidence.json"
@@ -48,6 +51,7 @@ on:
       - "tests/test_artifact_capture.py"
       - "tests/test_artifact_managed.py"
       - "tests/test_artifacts.py"
+      - "tests/test_browser_credentials_browser.py"
       - "tests/test_checkpoints.py"
       - "tests/test_cleanup.py"
       - "tests/test_confinement.py"
@@ -127,6 +131,9 @@ on:
       - "tests/conftest.py"
       - "tests/fakegithub.py"
       - "tests/fakeverifier.py"
+      - "tests/fixtures/browser-credential-responses.json"
+      - "tests/fixtures/checkpoint-refusal-destination.json"
+      - "tests/fixtures/checkpoint-refusal-staging.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-evidence.json"
@@ -148,6 +155,7 @@ on:
       - "tests/test_artifact_capture.py"
       - "tests/test_artifact_managed.py"
       - "tests/test_artifacts.py"
+      - "tests/test_browser_credentials_browser.py"
       - "tests/test_checkpoints.py"
       - "tests/test_cleanup.py"
       - "tests/test_confinement.py"
@@ -265,13 +273,13 @@ jobs:
       - run: npm test
 
   browser-ui:
-    name: browser-ui (${{ matrix.shard }}/3)
+    name: browser-ui (${{ matrix.shard }}/5)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5]
     env:
       TZ: UTC
       PLAYWRIGHT_HTML_OPEN: never
@@ -308,7 +316,7 @@ jobs:
           fc-list | wc -l
       # The static server reads the committed dashboard assets; no Vite/native build needed.
       - name: Shared browser and native-transport UI tests
-        run: npx playwright test --shard=${{ matrix.shard }}/3 --reporter=line,html
+        run: npx playwright test --shard=${{ matrix.shard }}/5 --reporter=line,html
       - name: Preserve failed browser UI evidence
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -415,20 +423,23 @@ jobs:
   work-loop:
     name: work-loop (${{ matrix.part }})
     runs-on: ubuntu-24.04
-    # Five minutes for setup; each partition retains the three-minute script cap.
-    timeout-minutes: 8
+    # Allow twelve minutes for mirror/setup variance and evidence upload;
+    # each partition retains the separate three-minute script cap.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         include:
           - part: work
-            selection: not fixed_result and not foreground_recovery and not lost_start_reply and not refused_access and not other_form_refusal and not discussion_adopt_start
+            selection: not fixed_result and not foreground_recovery and not lost_start_reply and not refused_access and not other_form_refusal and not discussion_adopt_start and not browser_credentials
           - part: adoption
             selection: discussion_adopt_start
           - part: evidence
             selection: fixed_result or other_form_refusal
           - part: recovery
             selection: foreground_recovery or lost_start_reply or refused_access
+          - part: credentials
+            selection: browser_credentials
     env:
       TZ: UTC
       BATC_WORK_LOOP_BROWSER: "1"
@@ -448,15 +459,36 @@ jobs:
       - run: uv sync --locked --extra dev
       - run: npm ci
         working-directory: desktop
-      - run: npx playwright install --with-deps chromium
+      - name: Read Playwright version
+        id: playwright
         working-directory: desktop
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Chromium by Playwright version
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+      - name: Bound stalled apt downloads
+        run: |
+          # Shorter connection/data waits allow faster mirror failover; keep three retries.
+          sudo tee /etc/apt/apt.conf.d/99-playwright-ci > /dev/null <<'EOF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          EOF
+      - name: Chromium system dependencies
+        working-directory: desktop
+        run: npx playwright install-deps chromium
+      - name: Install Chromium
+        working-directory: desktop
+        run: npx playwright install chromium
       - name: Work loop through actual central
         timeout-minutes: 3
         run: |
           mkdir -p "$HOME/agent-work/tmp/pytest"
           loop_temp=$(mktemp -d "$HOME/agent-work/tmp/pytest/work-loop-XXXXXX")
           trap 'rm -rf -- "$loop_temp"' EXIT
-          uv run --extra dev pytest -q tests/test_pm_work_loop_browser.py tests/test_managed_setup_browser.py -k "$WORK_LOOP_SELECTION" --basetemp="$loop_temp/bt"
+          uv run --extra dev pytest -q tests/test_pm_work_loop_browser.py tests/test_managed_setup_browser.py tests/test_browser_credentials_browser.py -k "$WORK_LOOP_SELECTION" --basetemp="$loop_temp/bt"
       - name: Preserve Work loop evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -465,6 +497,8 @@ jobs:
           path: |
             desktop/test-results/work-loop/
             desktop/test-results/managed-setup-reading/
+            desktop/test-results/credential-service/
+            desktop/test-results/credential-service.log
           if-no-files-found: ignore
           retention-days: 7
 
