@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import shlex
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -18,8 +19,9 @@ async def test_prepare_preserves_preexisting_staging(kind, tmp_path, checkpoint_
     before = snapshot(human)
     managed = tmp_path / 'managed'
     managed.mkdir()
-    dest = managed / 'checkpoint-clone'
-    staging = managed / 'checkpoint-clone.batc-tmp-original'
+    dest = Path(checkpoints.clone_path(str(managed), 'test-host', str(human)))
+    suffix = '0123456789ab'
+    staging = Path(f'{dest}.batc-tmp-{suffix}')
     outside = tmp_path / 'unrelated-content'
     outside.mkdir()
     protected = outside / 'keep.txt'
@@ -35,10 +37,13 @@ async def test_prepare_preserves_preexisting_staging(kind, tmp_path, checkpoint_
     payload = (staging / 'keep.txt').read_bytes() if kind == 'directory' else staging.read_bytes() if kind == 'file' else None
     link = staging.readlink() if staging.is_symlink() else None
     head = git(human, 'rev-parse', 'HEAD')
-    script = checkpoints.prepare_script(str(human), str(dest), str(dest / '.bat-worktrees/new'),
-        'batc/cp-new', head, str(staging))
-    with pytest.raises(StepFailed):
-        await LocalRunner().run('test-host', script)
+    script = checkpoints.prepare_script(str(human), str(dest), str(dest / f'.bat-worktrees/batc-cp-{suffix}'),
+        f'batc/cp-{suffix}', head, str(staging))
+    runner = LocalRunner()
+    for _ in range(2):
+        with pytest.raises(StepFailed, match='^checkpoint staging already exists; creation is unproven$') as failure:
+            await runner.run('test-host', script)
+        assert failure.value.code == 'GIT_FAILED'
     after = staging.lstat()
     assert (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns) == (
         after.st_dev, after.st_ino, after.st_mode, after.st_size, after.st_mtime_ns)
@@ -57,8 +62,9 @@ async def test_prepare_keeps_staging_if_destination_appears_during_clone(
     before = snapshot(human)
     managed = tmp_path / 'managed'
     managed.mkdir()
-    dest = managed / 'checkpoint-clone'
-    staging = managed / 'checkpoint-clone.tmp'
+    dest = Path(checkpoints.clone_path(str(managed), 'test-host', str(human)))
+    suffix = '0123456789ab'
+    staging = Path(f'{dest}.batc-tmp-{suffix}')
     head = git(human, 'rev-parse', 'HEAD')
     executable = shutil.which('git')
     assert executable
@@ -70,11 +76,15 @@ async def test_prepare_keeps_staging_if_destination_appears_during_clone(
         + '; printf %s preserved > ' + shlex.quote(str(dest / 'keep.txt')) + '; fi\n')
     wrapper.chmod(0o700)
     monkeypatch.setenv('PATH', str(helpers) + os.pathsep + os.environ['PATH'])
-    script = checkpoints.prepare_script(str(human), str(dest), str(dest / '.bat-worktrees/new'),
-        'batc/cp-new', head, str(staging))
-    with pytest.raises(StepFailed):
+    script = checkpoints.prepare_script(str(human), str(dest), str(dest / f'.bat-worktrees/batc-cp-{suffix}'),
+        f'batc/cp-{suffix}', head, str(staging))
+    with pytest.raises(StepFailed, match='^checkpoint destination appeared; staging retained$') as failure:
         await LocalRunner().run('test-host', script)
+    assert failure.value.code == 'GIT_FAILED'
     assert staging.is_dir() and (staging / '.git').is_dir()
+    assert git(staging, 'rev-parse', 'HEAD') == head
+    assert git(staging, 'config', '--get', 'batc.managed-clone') == 'true'
+    assert git(staging, 'config', '--get', 'batc.source') == str(human)
     assert (dest / 'keep.txt').read_text() == 'preserved'
     assert not (dest / '.git').exists()
     assert snapshot(human) == before
