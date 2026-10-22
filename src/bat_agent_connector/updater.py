@@ -294,7 +294,6 @@ class Updater:
                 return self.status(state)
             try:
                 self.reconcile(state)
-                before = copy.deepcopy(state)
                 self.verify(state["versions"][state["current"]])
                 candidate = self.find_release(state["channel"])
                 current = state["versions"][state["current"]]["release"]
@@ -310,10 +309,10 @@ class Updater:
                     state["pending"] = {"id": secrets.token_hex(16), "from": state["current"], "to": candidate["commit"],
                                         "status": "installed_for_next_launch"}
                     self.save(state)
-                    before = copy.deepcopy(state)
                     self.reconcile(state)
-                if state != before:
-                    self.save(state)
+                    return self.status(state)
+                # Only release checks reach this save; install reconciliation already saved its result.
+                self.save(state)
                 return self.status(state)
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 self.failure(state, exc)
