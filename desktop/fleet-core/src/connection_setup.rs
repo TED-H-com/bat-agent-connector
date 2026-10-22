@@ -201,14 +201,12 @@ pub fn read_ssh(bytes: &[u8]) -> SetupResult<SshReferences> {
         if line.is_empty() {
             continue;
         }
-        let mut parts = line.splitn(2, |c: char| c.is_ascii_whitespace() || c == '=');
-        let key = parts.next().unwrap().to_ascii_lowercase();
-        let value = parts
-            .next()
-            .unwrap_or("")
-            .trim()
-            .trim_start_matches('=')
-            .trim();
+        let key_end = line
+            .find(|c: char| c.is_ascii_whitespace() || c == '=')
+            .unwrap_or(line.len());
+        let key = line[..key_end].to_ascii_lowercase();
+        let value = line[key_end..].trim();
+        let value = value.strip_prefix('=').unwrap_or(value).trim();
         match key.as_str() {
             "include" => return Err(Gap::UnsupportedInclude),
             "match" => return Err(Gap::UnsupportedMatch),

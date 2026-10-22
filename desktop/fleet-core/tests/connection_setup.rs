@@ -918,6 +918,26 @@ fn literal_alias_lists_and_repeated_blocks_collect_only_their_forwards() {
 }
 
 #[test]
+fn malformed_host_separators_cannot_become_literal_associations() {
+    for host in ["Host==bat-example", "Host = =bat-example"] {
+        let bytes = format!("{host}\n LocalForward 127.0.0.2:19001 127.0.0.1:9000\n");
+        assert_eq!(
+            read_ssh(bytes.as_bytes())
+                .unwrap()
+                .association("bat-example"),
+            Err(Gap::ForwardCompletenessUnproven)
+        );
+    }
+    for host in ["Host=bat-example", "Host = bat-example"] {
+        let bytes = format!("{host}\n LocalForward=127.0.0.2:19001 127.0.0.1:9000\n");
+        assert!(read_ssh(bytes.as_bytes())
+            .unwrap()
+            .association("bat-example")
+            .is_ok());
+    }
+}
+
+#[test]
 fn inline_hash_is_not_a_host_name_prefix_or_forward_comment() {
     assert_eq!(
         read_ssh(b"Host bat-example#x\n")
