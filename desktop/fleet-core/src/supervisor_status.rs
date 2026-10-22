@@ -55,9 +55,6 @@ fn observation_time(observed_ms: u64, clock_ms: u64, unix_ms: u64) -> Result<Str
     let age = clock_ms.checked_sub(observed_ms).ok_or("CLOCK_UNPROVEN")?;
     timestamp(unix_ms.checked_sub(age).ok_or("CLOCK_UNPROVEN")?)
 }
-fn route_failure(code: Option<&str>) -> bool {
-    matches!(code, Some("ROUTE_UNAVAILABLE" | "TAILSCALE_WAKING"))
-}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
@@ -148,12 +145,38 @@ impl Entry {
                 row.code = Some(code.into());
                 row.blocking = Some(layer);
                 row.layers = Layers::default();
-                if selected && route_failure(Some(code)) {
-                    row.route_requirement = route_requirement;
-                }
             }
         }
+        if row.unobserved_route_state() {
+            row.route_requirement = route_requirement;
+        }
         Ok(row)
+    }
+    /// A retained failed selection can explain waiting or recovery, but never
+    /// current probe evidence, a chosen route, or an unrelated failure.
+    fn unobserved_route_state(&self) -> bool {
+        self.selected
+            && self.observed_at.is_none()
+            && self.route.is_none()
+            && !self.layers.tunnel
+            && !self.layers.tls
+            && !self.layers.bat
+            && !self.layers.workspace
+            && self.layers.auth.is_none()
+            && self.layers.version.is_none()
+            && matches!(
+                (self.code.as_deref(), self.level.as_str(), self.blocking),
+                (
+                    Some("PROBE_PENDING"),
+                    "degraded",
+                    Some(Layer::Bat | Layer::Connector)
+                ) | (Some("TAILSCALE_WAKING"), "degraded", Some(Layer::Tunnel))
+                    | (
+                        Some("ROUTE_UNAVAILABLE" | "TUNNEL_DOWN" | "RECOVERY_EXHAUSTED"),
+                        "down",
+                        Some(Layer::Tunnel)
+                    )
+            )
     }
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -250,8 +273,7 @@ impl Snapshot {
                 || !["off", "ready", "degraded", "down"].contains(&row.level.as_str())
                 || row.selected == (row.level == "off")
                     && !(stop_unconfirmed && !row.selected && row.level == "down")
-                || row.route_requirement.is_some()
-                    && !(row.selected && route_failure(row.code.as_deref()))
+                || row.route_requirement.is_some() && !row.unobserved_route_state()
                 || row.code.as_ref().is_some_and(|s| {
                     s.is_empty()
                         || s.len() > 80

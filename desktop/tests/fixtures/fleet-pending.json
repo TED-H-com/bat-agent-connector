@@ -202,7 +202,8 @@
             "name": "node-1",
             "observed_at": null,
             "selected": true,
-            "stale": false
+            "stale": false,
+            "route_requirement": "CONFIGURED_ROUTES_EXHAUSTED"
           },
           {
             "blocking": null,
@@ -502,7 +503,8 @@
             "name": "node-1",
             "observed_at": null,
             "selected": true,
-            "stale": false
+            "stale": false,
+            "route_requirement": "DIRECT_TCP_UNREACHABLE"
           },
           {
             "blocking": null,
@@ -802,7 +804,8 @@
             "name": "node-1",
             "observed_at": null,
             "selected": true,
-            "stale": false
+            "stale": false,
+            "route_requirement": "DIRECT_PEER_UNKNOWN"
           },
           {
             "blocking": null,
