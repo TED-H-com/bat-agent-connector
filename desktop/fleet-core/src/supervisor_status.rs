@@ -3,6 +3,7 @@ use crate::{
     configuration::Configuration,
     ownership::{epoch_valid, ProbeGeneration},
     probe::{self, Authentication, Layer, Level, ProbeKind, ProbeObservation},
+    route::{RouteKind, RouteObservation},
     strict_json, Result,
 };
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,21 @@ pub struct Layers {
     pub auth: Option<Authentication>,
     pub version: Option<String>,
 }
+/// Public route evidence cannot contain native routing inputs.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Route {
+    pub kind: RouteKind,
+    pub observed_at: String,
+    pub generation: u64,
+}
+/// Convert age in the producer's observation clock against its Unix clock anchor.
+/// Never format a monotonic observation directly as a Unix timestamp. The native
+/// supervisor currently supplies Unix milliseconds for both clock coordinates.
+fn observation_time(observed_ms: u64, clock_ms: u64, unix_ms: u64) -> Result<String> {
+    let age = clock_ms.checked_sub(observed_ms).ok_or("CLOCK_UNPROVEN")?;
+    timestamp(unix_ms.checked_sub(age).ok_or("CLOCK_UNPROVEN")?)
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
@@ -51,13 +67,15 @@ pub struct Entry {
     pub observed_at: Option<String>,
     pub stale: bool,
     pub layers: Layers,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<Route>,
 }
 impl Entry {
     pub(crate) fn observed(
         identity: (&str, &str),
         selected: bool,
         kind: ProbeKind,
-        observation: Option<&ProbeObservation>,
+        (observation, route): (Option<&ProbeObservation>, Option<&RouteObservation>),
         generation: &ProbeGeneration,
         now: u64,
         failure: Option<(&'static str, Layer)>,
@@ -79,6 +97,7 @@ impl Entry {
             observed_at: None,
             stale: state.blocking == Some(Layer::Stale),
             layers: Layers::default(),
+            route: None,
         };
         if let Some(probe) = observation.filter(|p| {
             crate::ownership::probe_current(&p.generation, generation, p.observed_ms, now)
@@ -92,6 +111,13 @@ impl Entry {
                 auth: Some(probe.auth),
                 version: probe.version.clone(),
             };
+        }
+        if let Some(route) = route.filter(|r| selected && r.generation == *generation) {
+            row.route = Some(Route {
+                kind: route.kind,
+                observed_at: observation_time(route.observed_ms, now, now)?,
+                generation: route.generation.generation,
+            });
         }
         if selected {
             if let Some((code, layer)) = failure {
@@ -211,6 +237,15 @@ impl Snapshot {
             {
                 return Err("STATUS_UNPROVEN");
             }
+            if let Some(route) = &row.route {
+                if !row.selected
+                    || route.generation == 0
+                    || route.generation > 9_007_199_254_740_991
+                    || millis(&route.observed_at)? > now
+                {
+                    return Err("STATUS_UNPROVEN");
+                }
+            }
             row.label = label.into(); // Never trust file-supplied presentation text.
             let old = match &row.observed_at {
                 Some(at) => now.checked_sub(millis(at)?).ok_or("STATUS_UNPROVEN")? > 60_000,
@@ -242,11 +277,27 @@ mod contract_tests {
     use super::*;
     use serde_json::Value;
 
-    #[test]
-    fn observed_rows_match_native_status_fixture() {
+    struct FixtureRoutes;
+    impl crate::route::RouteProbe for FixtureRoutes {
+        fn tailscale_direct<'a>(
+            &'a self,
+            _: &'a str,
+            _: tokio::time::Instant,
+        ) -> crate::route::ProbeFuture<'a> {
+            Box::pin(async { true })
+        }
+        fn tcp<'a>(
+            &'a self,
+            _: &'a crate::inventory::Endpoint,
+            _: tokio::time::Instant,
+        ) -> crate::route::ProbeFuture<'a> {
+            Box::pin(async { true })
+        }
+    }
+    async fn observed_fixture() -> Value {
         // De-identified Context::status input for the Tauri sanitizer test.
         // Build with the real producer, including Connector's false BAT layers.
-        let raw: Value =
+        let mut raw: Value =
             serde_json::from_str(include_str!("../../tests/fixtures/fleet-status.json")).unwrap();
         let status = &raw["result"];
         let now = millis(status["readiness"]["observed_at"].as_str().unwrap()).unwrap();
@@ -256,6 +307,12 @@ mod contract_tests {
             selection_revision: "d".repeat(64),
             generation: 1,
         };
+        let mut inventory: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/inventory.json")).unwrap();
+        inventory["connector"]["ssh_alias"] = "fixture-connector".into();
+        let inventory =
+            crate::inventory::Inventory::parse(&serde_json::to_vec(&inventory).unwrap()).unwrap();
+        let mut rows = Vec::new();
         for expected in status["readiness"]["hosts"]
             .as_array()
             .unwrap()
@@ -282,6 +339,19 @@ mod contract_tests {
                 blocking: None,
                 reason: None,
             };
+            let routes = crate::route::Routes::from_inventory(
+                &inventory,
+                expected["name"].as_str().unwrap(),
+            )
+            .unwrap();
+            let policy = crate::route::HostPolicy::new(&routes, generation.clone());
+            let choice =
+                crate::route::SelectionRequest::new(&routes, &policy, generation.clone(), now)
+                    .unwrap()
+                    .run(&FixtureRoutes, std::time::Duration::from_secs(2))
+                    .await
+                    .unwrap();
+            let route = choice.observation();
             let row = Entry::observed(
                 (
                     expected["name"].as_str().unwrap(),
@@ -289,13 +359,36 @@ mod contract_tests {
                 ),
                 true,
                 probe.kind,
-                Some(&probe),
+                (Some(&probe), Some(&route)),
                 &generation,
                 now,
                 None,
             )
             .unwrap();
-            assert_eq!(serde_json::to_value(row).unwrap(), *expected);
+            rows.push(serde_json::to_value(row).unwrap());
         }
+        raw["result"]["readiness"]["connector"] = rows.pop().unwrap();
+        raw["result"]["readiness"]["hosts"] = rows.into();
+        raw
+    }
+    #[tokio::test]
+    async fn observed_rows_match_native_status_fixture() {
+        let raw: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-status.json")).unwrap();
+        assert_eq!(observed_fixture().await, raw);
+    }
+    #[tokio::test]
+    #[ignore = "explicit fixture regeneration only"]
+    async fn generate_route_status_fixture() {
+        println!("FLEET_RAW={}", observed_fixture().await);
+    }
+    #[test]
+    fn observation_clock_is_translated_against_the_producers_unix_anchor() {
+        assert_eq!(
+            observation_time(1000, 2000, 1_791_460_801_000).unwrap(),
+            "2026-10-08T12:00:00Z"
+        );
+        assert!(observation_time(2001, 2000, 1_791_460_801_000).is_err());
+        assert!(observation_time(0, 2000, 1000).is_err());
     }
 }

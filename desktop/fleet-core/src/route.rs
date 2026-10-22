@@ -5,7 +5,7 @@ use crate::{
     ownership::{probe_current, ProbeGeneration, Recovery},
     strict_json, Result,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -19,7 +19,7 @@ use tokio::{
     time::{timeout_at, Instant},
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RouteKind {
     Direct,
@@ -459,7 +459,22 @@ pub struct RouteChoice {
     policy_revision: u64,
     observed_ms: u64,
 }
+/// Latest chosen route only: no alias, endpoint or raw peer evidence.
+#[derive(Clone)]
+pub(crate) struct RouteObservation {
+    pub kind: RouteKind,
+    pub generation: ProbeGeneration,
+    pub observed_ms: u64,
+}
 impl RouteChoice {
+    pub(crate) fn observation(&self) -> RouteObservation {
+        RouteObservation {
+            kind: self.kind,
+            generation: self.generation.clone(),
+            observed_ms: self.observed_ms,
+        }
+    }
+
     pub fn kind(&self) -> RouteKind {
         self.kind
     }

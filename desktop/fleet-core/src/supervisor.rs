@@ -81,6 +81,7 @@ struct Host<C> {
     credential: Option<String>,
     worker: Option<Work>,
     observation: Option<ProbeObservation>,
+    route: Option<crate::route::RouteObservation>,
     owned: Option<Owned<C>>,
     failure: Option<(&'static str, Layer)>,
     next_probe: u64,
@@ -92,6 +93,7 @@ impl<C> Host<C> {
         }
         self.policy.stop_wake().await;
         self.observation = None;
+        self.route = None;
         self.next_probe = 0;
     }
 }
@@ -233,6 +235,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     credential: None,
                     worker: None,
                     observation: None,
+                    route: None,
                     owned: None,
                     failure: None,
                     next_probe: 0,
@@ -711,6 +714,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                 }
                 Work::Route(handle) => match handle.await {
                     Ok(Ok(choice)) => {
+                        host.route = None;
                         let alias = choice.alias(&host.policy, &host.generation, now)?;
                         self.verify()?;
                         let plan = Plan::new(
@@ -730,6 +734,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                         match self.effects.launch(&context, &plan) {
                             Ok(launch) => {
                                 let run = host.policy.started(&choice, &host.generation, now);
+                                host.route = run.as_ref().ok().map(|_| choice.observation());
                                 host.owned = Some(Owned {
                                     launch,
                                     run: run.ok(),
@@ -750,6 +755,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                         }
                     }
                     _ => {
+                        host.route = None;
                         host.failure = Some(("ROUTE_UNAVAILABLE", Layer::Tunnel));
                         host.next_probe = now.saturating_add(15000);
                     }
@@ -826,7 +832,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     (name, &h.label),
                     h.selected,
                     h.kind,
-                    h.observation.as_ref(),
+                    (h.observation.as_ref(), h.route.as_ref()),
                     &h.generation,
                     now,
                     if h.policy.waking() {
@@ -916,7 +922,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     (name, &h.label),
                     h.selected,
                     h.kind,
-                    None,
+                    (None, None),
                     &h.generation,
                     now,
                     if h.policy.waking() {

@@ -1409,3 +1409,80 @@ async fn chosen_route_is_published_without_private_transport_inputs() {
     assert_eq!(row["route"].as_object().unwrap().len(), 3);
     runtime.shutdown(2000).await.unwrap();
 }
+
+#[tokio::test]
+async fn route_observation_expires_independently_and_clears_on_generation_and_deselection() {
+    let (f, shared, mut runtime) = fixture();
+    let first = advance(&mut runtime, 1000).await;
+    let route = serde_json::to_value(&first.entries[0]).unwrap()["route"].clone();
+    assert!(!route.is_null());
+    // A current readiness probe does not renew the older choice's timestamp.
+    let renewed = advance(&mut runtime, 70_000).await;
+    assert_eq!(renewed.entries[0].level, "ready");
+    assert_eq!(
+        serde_json::to_value(&renewed.entries[0]).unwrap()["route"],
+        route
+    );
+    shared
+        .lock()
+        .unwrap()
+        .tokens
+        .insert("node-1".into(), "replacement".into());
+    let changed = advance(&mut runtime, 71_000).await;
+    assert!(changed
+        .entries
+        .iter()
+        .find(|r| r.name == "node-1")
+        .unwrap()
+        .route
+        .is_none());
+    let selection = f.0.join("BetterAgentTerminal/fleet-client.json");
+    std::fs::write(
+        selection,
+        br#"{"version":1,"connections":["connector"],"profiles":[],"dashboard":false}"#,
+    )
+    .unwrap();
+    let off = runtime.tick(72_000).await.unwrap();
+    assert!(off.entries.iter().all(|r| r.route.is_none()));
+    let shutdown = runtime.shutdown(73_000).await.unwrap();
+    assert!(shutdown.entries.iter().all(|r| r.route.is_none()));
+}
+
+#[tokio::test]
+async fn replacement_route_never_retains_the_previous_choices_time_or_generation() {
+    let (_f, shared, mut runtime) = fixture();
+    let first = advance(&mut runtime, 1000).await;
+    let before = first
+        .entries
+        .iter()
+        .find(|r| r.name == "node-1")
+        .unwrap()
+        .route
+        .as_ref()
+        .unwrap();
+    shared
+        .lock()
+        .unwrap()
+        .processes
+        .retain(|_, p| !p.arguments.iter().any(|a| a == "node-1-cf"));
+    let ended = runtime.tick(2000).await.unwrap();
+    assert!(ended
+        .entries
+        .iter()
+        .find(|r| r.name == "node-1")
+        .unwrap()
+        .route
+        .is_none());
+    let restarted = advance(&mut runtime, 8000).await;
+    let after = restarted
+        .entries
+        .iter()
+        .find(|r| r.name == "node-1")
+        .unwrap()
+        .route
+        .as_ref()
+        .unwrap();
+    assert_ne!(after.observed_at, before.observed_at);
+    assert_eq!(after.kind, before.kind);
+    runtime.shutdown(9000).await.unwrap();
+}

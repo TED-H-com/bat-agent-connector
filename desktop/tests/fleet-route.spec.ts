@@ -32,6 +32,6 @@ for (const locale of ['en-US', 'zh-TW']) test.describe(`Fleet route ${locale}`, 
     await mount(page, 0, true);
     await expect(page.locator('[data-fleet-route]')).toHaveCount(0);
     await expect(page.locator('.fleet-diagnosis-title')).toHaveText(locale === 'en-US'
-      ? 'Connection unavailable' : '連線無法使用');
+      ? 'This machine cannot be reached' : '目前連不到這台機器');
   });
 });

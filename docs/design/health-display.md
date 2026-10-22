@@ -38,7 +38,7 @@ their existing namespaces. No display state authorizes work or changes final gat
 | Needs attention | Session inventory's pending interaction or explicitly managed runtime status, never idle/streaming inference. | The same session observation; a stale recorded request remains visible as a last-known request, separately from staleness. |
 | Workspace membership used for the selected summary | Explicit session `host` + `workspace_id`; without a workspace ID only the explicitly selected session can be summarized. PM workspace `server_id` belongs to the activated Connector installation, not a Fleet alias. | Complete scoped page chain; invalidate currentness on bootstrap, discard withdrawn inventory, and preserve selection/last values only within the same verified namespace. No path/name matching. |
 | Native Fleet machine attention | Existing native `Entry::observed` readiness, through `fleet::sanitize_result` / `readiness_row`, consumed by the existing Fleet status/overview read. | Row `observed_at`, readiness stale state and the shared `fleetDiagnosis` (including monitor/selection state). Native aliases are a separate identity domain; never join them to central host names. |
-| Route kind, observation time, optional measured latency | Native route-selection observation, once the sanitized contract below exists. | Producer observation time/deadline and route generation. No new probes. |
+| Route kind and observation time | Native accepted `RouteChoice`, through `Entry::observed`, `Context::status` and the IPC allowlist. | Choice observation time, the shared 60-second deadline and active route generation. No new probes. |
 | Desktop and managed runtime versions | Existing native `app_build` and managed status producers; each remains its own version fact. | Bootstrap/version/build invalidation. Installed and launch-observed versions are separate. |
 | Loaded MCP process version (required, not built) | Missing process-owned MCP runtime identity producer; see the lifecycle follow-up below. Existing adapter/version facts cannot establish this identity. | The future observation must bind loaded version/build to process generation. Installing does not prove an existing process loaded new code. |
 
@@ -191,26 +191,58 @@ starts at the 120 px reading minimum and fills the remaining space. Standalone
 transcripts retain automatic content height: sharing `.session-workspace` message
 styling does not opt them into the column's height constraint.
 
-## Route quality follow-up
+## Chosen route observation
 
-The frontend currently receives readiness layers, not a sanitized route observation.
-`desktop/fleet-core/src/route.rs` has `RouteChoice.kind`, `generation`,
-`observed_ms`, and `TailscalePeer::{Direct, Idle, Unknown}`. These are insufficient
-to label idle as relay. Carry a latest-only route observation through the supervisor
-status producer to `desktop/src-tauri/src/fleet.rs::sanitize_result` and
-`readiness_row`. The latter currently allowlists readiness `layers` and drops any
-route evidence. Extend its shared sanitizer golden before using the fields in
-`desktop/src/fleet-status.js::fleetStatus` and the shared display projection.
+The native supervisor retains one accepted route choice per selected host, including
+Connector. `desktop/fleet-core/src/route.rs::Routes::from_inventory` and
+`SelectionRequest::run` produce exactly these `RouteKind` values:
 
-The sanitized observation needs `kind` (direct, relay, SSH fallback, idle, unknown),
-`observed_at`, generation and optional already-measured latency. Translate monotonic
-`observed_ms` at the producer; never treat it as a wall-clock timestamp. Include
-latency only when an existing probe measured it; do not add a probe or packet-loss
-metric. Omit aliases, endpoints, addresses, raw peer payload and process output.
-Keep only the latest observation for the active route generation in memory; clear
-it on replacement and persist no history. Route quality never establishes protocol,
-authentication or workspace readiness. Those checks remain separate. Native
-sanitizer CI and physical route acceptance are required for that follow-up.
+| Kind | Meaning from the producer | English / zh-TW row text |
+| --- | --- | --- |
+| `direct` | Tailscale genuine-direct peer proof plus the existing successful TCP probe | Route: Tailscale direct / 路徑：Tailscale 直連 |
+| `lan` | Configured LAN route with the existing successful TCP probe | Route: LAN / 路徑：區域網路 |
+| `cf` | Configured Cloudflare fallback selected by the existing policy | Route: Cloudflare / 路徑：Cloudflare |
+| `configured` | Connector's single configured SSH alias; this path has no route probe | Route: Configured SSH / 路徑：已設定的 SSH |
+
+`route.rs::tailscale_peer` distinguishes `TailscalePeer::{Direct, Idle, Unknown}`.
+Idle and unknown do not supply direct proof and never mean relay. They are peer
+states, not chosen route kinds. A later choice may be LAN or Cloudflare; without a
+choice there is no route line. No producer path emits relay or SSH fallback, so the
+IPC allowlist and display do not invent those values. See [route policy](fleet-routes.md).
+
+`supervisor.rs::tick_host` retains the safe choice only after revalidating it and
+binding a launched process to the policy run. `Host::invalidate` clears it on
+selection/generation/configuration changes, deselection, lost ownership or exit;
+a replacement choice replaces it. `supervisor_status.rs::Entry::observed` emits
+`route: {kind, observed_at, generation}` independently of readiness layers.
+`observation_time` translates the observation age against the producer's Unix clock
+anchor. The native caller `windows_supervisor.rs::now_ms` currently supplies Unix
+milliseconds for both clock coordinates; a monotonic observation must instead use
+its corresponding Unix anchor. A read or readiness probe never renews a route's time.
+There is one latest status snapshot, no route history or database persistence.
+
+`fleet.rs::readiness_route` rebuilds exactly `kind`, `observed_at`, `generation`
+and optional `latency_ms`. It accepts only the four kinds above, a required timestamp
+validated by the same `timestamp` sanitizer as readiness, and integer generation
+1–9007199254740991. Optional latency must be an integer 0–60000 ms. Current
+`RouteProbe` methods return boolean/peer eligibility, not measured latency, so the
+producer emits no latency and the row shows kind only. Extra keys are dropped;
+invalid declared fields refuse the response. Aliases, endpoints, addresses,
+hostnames, raw peer payload and process output never enter the typed observation or
+cross the IPC allowlist. No new probe, metric, timer, retry or fallback is added.
+
+`fleet-status.js::fleetStatus` uses #396's unchanged `displayFact` / `healthLabel`
+projection. At the inclusive 60-second deadline the last route kind remains with its
+age and **Checking / 檢查中**; the existing Fleet status/overview read supplies future
+observations. Missing route evidence adds no line. Failed/unavailable reads,
+unapplied selection, stopped monitoring, deselected/off rows and **down** rows hide
+it. In particular a last direct choice cannot reassure beside a down tunnel.
+Route age is independent of readiness age: even a current readiness observation
+cannot refresh the route. Route kind never changes readiness level, blocking layer,
+reason, protocol, authentication or workspace readiness, nor any action gate.
+Connector remains the name for the Connector service; a configured SSH route is not
+proof of Connector or BAT readiness. Native sanitizer fixtures do not establish
+physical route acceptance.
 
 ## Lifecycle ownership
 

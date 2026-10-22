@@ -733,6 +733,58 @@ fn configuration(value: &Value) -> Result<Value, String> {
     // The Kit validation report can contain local paths; only its status/count crosses IPC.
     Ok(json!({"valid":valid,"binding":binding,"issue_count":count,"connections":connections}))
 }
+/// Shared Context::status projection, also exercised by the cross-platform golden.
+/// A read keeps each producer's observation time; it never renews route evidence.
+#[cfg(any(windows, test))]
+pub(crate) fn native_readiness(
+    snapshot: Option<&bat_fleet_core::supervisor_status::Snapshot>,
+    now: u64,
+) -> bat_fleet_core::Result<Value> {
+    let mut hosts = Vec::new();
+    let mut connector = Value::Null;
+    if let Some(snapshot) = snapshot {
+        for row in &snapshot.entries {
+            let value = serde_json::to_value(row).map_err(|_| "STATUS_UNPROVEN")?;
+            if row.name == "connector" {
+                connector = value;
+            } else {
+                hosts.push(value);
+            }
+        }
+    }
+    let fresh =
+        snapshot.is_some_and(|s| s.is_fresh(now).unwrap_or(false) && s.lifecycle == "running");
+    Ok(
+        json!({"state":if fresh {"fresh"} else if snapshot.is_some() {"stale"} else {"unavailable"},
+        "observed_at":snapshot.map(|s| &s.observed_at), "hosts":hosts, "connector":connector}),
+    )
+}
+fn readiness_route(value: &Value) -> Result<Option<Value>, String> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    let invalid = || "Invalid Fleet route observation".to_owned();
+    value.as_object().ok_or_else(invalid)?;
+    let kind = value["kind"]
+        .as_str()
+        .filter(|s| ["direct", "lan", "cf", "configured"].contains(s))
+        .ok_or_else(invalid)?;
+    let generation = value["generation"]
+        .as_u64()
+        .filter(|n| (1..=9_007_199_254_740_991).contains(n))
+        .ok_or_else(invalid)?;
+    let observed_at = timestamp(&value["observed_at"])?.ok_or_else(invalid)?;
+    // Rebuild an exact allowlist; never forward an arbitrary native object.
+    let mut route = json!({"kind":kind,"observed_at":observed_at,"generation":generation});
+    if let Some(latency) = value.get("latency_ms") {
+        let latency = latency
+            .as_u64()
+            .filter(|n| *n <= 60_000)
+            .ok_or_else(invalid)?;
+        route["latency_ms"] = json!(latency);
+    }
+    Ok(Some(route))
+}
 fn readiness_row(value: &Value) -> Result<Value, String> {
     let invalid = || "Invalid Fleet readiness".to_owned();
     let name = value["name"]
@@ -781,9 +833,11 @@ fn readiness_row(value: &Value) -> Result<Value, String> {
     }) {
         layers.insert("version".into(), json!(version));
     }
-    Ok(
-        json!({"name":name,"label":label,"level":level,"selected":selected,"stale":stale,"code":code,"blocking":blocking,"observed_at":timestamp(&value["observed_at"])? ,"layers":layers}),
-    )
+    let mut row = json!({"name":name,"label":label,"level":level,"selected":selected,"stale":stale,"code":code,"blocking":blocking,"observed_at":timestamp(&value["observed_at"])? ,"layers":layers});
+    if let Some(route) = readiness_route(&value["route"])? {
+        row["route"] = route;
+    }
+    Ok(row)
 }
 
 #[cfg(test)]
@@ -792,17 +846,39 @@ mod tests {
     fn fixture() -> Value {
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-status.json")).unwrap()
     }
+    fn producer_status() -> Value {
+        let mut result = fixture()["result"].clone();
+        let readiness = &result["readiness"];
+        let mut entries = readiness["hosts"].as_array().unwrap().clone();
+        entries.push(readiness["connector"].clone());
+        let snapshot = serde_json::from_value(json!({
+            "schema_version":1,"monitor_epoch":result["monitor"]["epoch"],
+            "configuration_binding":result["configuration"]["binding"],
+            "applied_selection_revision":result["selection"]["applied_revision"],
+            "observed_at":readiness["observed_at"],"entries":entries,"lifecycle":"running"
+        }))
+        .unwrap();
+        // This is the same projection Context::status calls after its ownership
+        // checks. Platform discovery stays outside this synthetic fixture.
+        result["readiness"] = native_readiness(Some(&snapshot), 1_791_460_800_000).unwrap();
+        result
+    }
     #[test]
     fn sanitized_status_matches_shared_frontend_golden() {
-        // Context::status -> supervisor_status::Entry -> sanitize_result is the
-        // IPC boundary. The core test also verifies the producer's typed rows.
+        let raw = producer_status();
+        assert_eq!(raw, fixture()["result"]);
         let golden: Value = serde_json::from_str(include_str!(
             "../../tests/fixtures/fleet-status.golden.json"
         ))
         .unwrap();
-        assert_eq!(
-            sanitize_result(&fixture()["result"], "status").unwrap(),
-            golden
+        assert_eq!(sanitize_result(&raw, "status").unwrap(), golden);
+    }
+    #[test]
+    #[ignore = "explicit fixture regeneration only"]
+    fn generate_route_status_golden() {
+        println!(
+            "FLEET_GOLDEN={}",
+            sanitize_result(&producer_status(), "status").unwrap()
         );
     }
     #[test]
@@ -830,6 +906,39 @@ mod tests {
         ] {
             assert!(!text.contains(secret));
         }
+    }
+    #[test]
+    fn route_allowlist_refuses_unproduced_kinds_and_unbounded_values() {
+        let route = json!({"kind":"lan","observed_at":"2026-10-08T12:00:00Z","generation":1});
+        assert!(readiness_route(&Value::Null).unwrap().is_none());
+        for (field, value) in [
+            ("kind", json!("relay")),
+            ("kind", json!("ssh_fallback")),
+            ("kind", json!("idle")),
+            ("kind", json!("unknown")),
+            ("generation", json!(0)),
+            ("generation", json!(-1)),
+            ("generation", json!(9_007_199_254_740_992_u64)),
+            ("generation", json!(1.5)),
+            ("generation", json!("1")),
+            ("observed_at", Value::Null),
+            ("observed_at", json!("private.example")),
+            ("latency_ms", json!(-1)),
+            ("latency_ms", json!(60_001)),
+            ("latency_ms", json!(1.5)),
+            ("latency_ms", json!({"alias":"private"})),
+        ] {
+            let mut bad = route.clone();
+            bad[field] = value;
+            assert!(readiness_route(&bad).is_err(), "{field}");
+        }
+        for kind in ["direct", "lan", "cf", "configured"] {
+            let mut bounded = route.clone();
+            bounded["kind"] = json!(kind);
+            bounded["latency_ms"] = json!(60_000);
+            assert_eq!(readiness_route(&bounded).unwrap().unwrap(), bounded);
+        }
+        assert!(readiness_route(&json!([])).is_err());
     }
     fn contract() -> Value {
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-contract.json")).unwrap()

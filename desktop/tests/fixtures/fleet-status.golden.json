@@ -73,6 +73,11 @@
           "bat": true,
           "workspace": true,
           "version": "3.2.5"
+        },
+        "route": {
+          "generation": 1,
+          "kind": "direct",
+          "observed_at": "2026-10-08T12:00:00Z"
         }
       },
       {
@@ -91,6 +96,11 @@
           "bat": true,
           "workspace": true,
           "version": "3.2.5"
+        },
+        "route": {
+          "generation": 1,
+          "kind": "direct",
+          "observed_at": "2026-10-08T12:00:00Z"
         }
       },
       {
@@ -109,6 +119,11 @@
           "bat": true,
           "workspace": true,
           "version": "3.2.5"
+        },
+        "route": {
+          "generation": 1,
+          "kind": "direct",
+          "observed_at": "2026-10-08T12:00:00Z"
         }
       },
       {
@@ -127,6 +142,11 @@
           "bat": true,
           "workspace": true,
           "version": "3.2.5"
+        },
+        "route": {
+          "generation": 1,
+          "kind": "cf",
+          "observed_at": "2026-10-08T12:00:00Z"
         }
       },
       {
@@ -145,6 +165,11 @@
           "bat": true,
           "workspace": true,
           "version": "3.2.5"
+        },
+        "route": {
+          "generation": 1,
+          "kind": "direct",
+          "observed_at": "2026-10-08T12:00:00Z"
         }
       }
     ],
@@ -163,6 +188,11 @@
         "bat": false,
         "workspace": false,
         "auth": "ok"
+      },
+      "route": {
+        "generation": 1,
+        "kind": "configured",
+        "observed_at": "2026-10-08T12:00:00Z"
       }
     }
   }

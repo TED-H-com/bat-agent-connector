@@ -46,3 +46,18 @@ for (const locale of ['en', 'zh-TW']) {
     }
   });
 }
+
+test('an expired route cannot demote fresh readiness or change its checks', () => {
+  const base = fixture.readiness.hosts[0];
+  const row = {...base, observed_at: new Date(at + 60_000).toISOString(),
+    route: {kind: 'direct', observed_at: base.observed_at, generation: 1}};
+  const view = render(row, 'en', at + 60_000);
+  assert.equal(view.attrs['data-fleet-state'], 'ready');
+  assert.equal(view.attrs['data-freshness'], 'current');
+  assert.ok(JSON.stringify(view).includes('Route: Tailscale direct · 1 min ago · Checking'));
+  for (const code of ['BAT_AUTH_REFUSED', 'BAT_PROTOCOL_INVALID', 'WORKSPACE_BINDING_MISMATCH', 'PROBE_STALE']) {
+    const failed = {...row, code};
+    assert.deepEqual(fleetDiagnosis(failed, {snapshot: fixture, readable: true}),
+      fleetDiagnosis({...failed, route: undefined}, {snapshot: fixture, readable: true}));
+  }
+});
