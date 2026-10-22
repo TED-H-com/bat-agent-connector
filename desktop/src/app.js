@@ -1,5 +1,5 @@
 import {centralServiceStatus, clientActionGate, pollFailure} from "./central-service-status.js";
-import {browserCredentialRefusals} from './credential-refusals.js';
+import {browserCredentialRefusals, isCredentialRefusal, BROWSER_TOKEN_KEY as TOKEN_KEY} from './credential-refusals.js';
 import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
@@ -73,7 +73,6 @@ import {managedStorageScope, migrateManagedStorage} from './state/storage-identi
 import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
 import {observedText} from "./observed-resource-strings.js";
 
-const TOKEN_KEY = "batc.dashboard.token";
 const isWorkbench = layoutDecision.layout === 'workbench';
 
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, lastPoll: null, listeners: new Set(), namespace: "", scopeIdentity: null, epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
@@ -207,24 +206,39 @@ function saveCursor() {
 function disconnect() {
   if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
   withdrawDiagnostics(); recentErrors.clear();
-  state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
+  state.epoch++; const forgotten = clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
   state.scopeIdentity = null;
   state.online = false; state.viewReady = false; state.sync = null;
+  return forgotten;
 }
 
 function loadToken() {
   if (nativeDesktop) return null;
   try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
-function saveToken(token, remember) {
+async function saveToken(token, remember) {
   if (nativeDesktop) return;
+  const previous = new Set();
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const old = store.getItem(TOKEN_KEY); if (old && old !== token) previous.add(old);
+    }
+  } catch { /* unavailable */ }
+  await Promise.all([...previous].map(old => browserCredentialRefusals.forget(old)));
   try {
     sessionStorage.setItem(TOKEN_KEY, token);
     if (remember) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
   } catch { /* storage may be unavailable; the token stays in memory */ }
 }
 function clearToken() {
-  try { sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  const forgotten = new Set();
+  if (!nativeDesktop && state.token && state.token !== browserSessionToken) forgotten.add(state.token);
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const token = store.getItem(TOKEN_KEY); if (token) forgotten.add(token); store.removeItem(TOKEN_KEY);
+    }
+  } catch { /* unavailable */ }
+  return Promise.all([...forgotten].map(token => browserCredentialRefusals.forget(token)));
 }
 
 // ------------------------------------------------------------------ DOM helpers
@@ -331,7 +345,8 @@ async function api(method, path, body, key, collectReceipt) {
     return data;
   } catch(error) {
     if(epoch===state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
-      if (!nativeDesktop && state.token !== browserSessionToken && [401,403].includes(error.status)) {
+      if (!nativeDesktop && state.token !== browserSessionToken && (error.credentialRefused || isCredentialRefusal(error.status, method, path))) {
+        error.credentialRefused = true;
         state.connectionError = error;
         state.pollHealth = pollFailure(error, Date.now());
         updateOnline(false); paintConnection();
@@ -365,7 +380,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
   }
   catch (cause) {
     if (['FOREGROUND_READ_RETIRED', 'CONNECTION_CHANGED'].includes(cause?.code)) throw cause;
-    if ([401,403].includes(cause?.status)) throw new ApiError(cause.status, cause.code, cause.message);
+    if (cause?.credentialRefused) throw Object.assign(new ApiError(cause.status, cause.code, cause.message), {credentialRefused: true});
     const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
     throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
   }
@@ -3470,7 +3485,7 @@ function viewBrowserSettings(main) {
     facts,
     managed ? h("h2", {}, t("ui_local_connector")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
-    !managed && state.connectionError && [401,403].includes(state.connectionError.status)
+    !managed && state.connectionError?.credentialRefused
       ? h('button', {onclick: async () => {
         const token = state.token;
         await browserCredentialRefusals.retry(token);
@@ -3478,7 +3493,7 @@ function viewBrowserSettings(main) {
         catch (error) {state.connectionError = error;}
         await route();
       }}, t('connection_retry_remembered')) : null,
-    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
+    h("button", {class: "danger", onclick: async () => {await disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
   frame.panel("fleet").append(fleetEmpty());
   return () => {};
@@ -3489,7 +3504,7 @@ function viewBrowserSignedOut(main) {
   const info = h("div", {class: "global-connect-status"});
   const showConnectError = error => {
     info.setAttribute("role", "alert");
-    info.replaceChildren([401,403].includes(error?.status) ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
+    info.replaceChildren(error?.credentialRefused ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error, {within:info}));
   };
   if (state.connectionError) showConnectError(state.connectionError);
   const connect = async (token, saved = false) => {
@@ -3499,7 +3514,7 @@ function viewBrowserSignedOut(main) {
     await browserCredentialRefusals.retry(token);
     try {
       await activate(await api("GET", "/capabilities"));
-      if (!saved) saveToken(token, remember.checked);
+      if (!saved) await saveToken(token, remember.checked);
       location.hash = "#/home";
       await route();
     } catch (error) {state.token = null; state.caps = null; state.connectionError = error; showConnectError(error);}
@@ -5036,7 +5051,7 @@ async function start() {
   document.addEventListener('visibilitychange', foregroundChanged);
   window.addEventListener('pageshow', event => {if (event.persisted) foregroundChanged();});
   if (nativeDesktop) {
-    clearToken(); // discard obsolete browser credentials if an older build ever stored them
+    await clearToken(); // discard obsolete browser credentials if an older build ever stored them
     const attempt = ++state.nativeAttempt;
     let startupManaged = false;
     try {
@@ -5063,7 +5078,7 @@ async function start() {
     } finally { if (attempt === state.nativeAttempt) state.nativeBusy = false; }
   } else {
     const browserSession = await restoreBrowserSession().catch(() => false);
-    if (browserSession) clearToken();
+    if (browserSession) await clearToken();
     state.token = browserSession ? browserSessionToken : loadToken();
     if (state.token) {
       try { await activate(await api("GET", "/capabilities")); }

@@ -97,16 +97,24 @@ reads recheck the same credential class, expiry and revocation. This corrects th
 credential acceptance boundary; it adds no protocol channel or capability and
 does not change API request/response shapes or the contract version.
 
-When a remembered bearer receives HTTP 401 or 403, the Dashboard displays its
-localized refusal state and pauses further automatic presentations. This includes
-startup, page restore, polling, retries and file requests. The token remains in
-its original storage because it may still be valid for the original service.
-A separate refusal record contains only its digest, endpoint and refusal status.
-It survives reloads; remembered credentials also remain paused in new tabs.
-The person can Connect with a new token or choose Retry remembered token. Only
-that explicit action permits another attempt for the refused credential. Work
-drafts, pending intents and operation keys stay in their original namespaces.
-If browser storage is unavailable, the current page retains the pause in memory.
+When a remembered bearer receives HTTP 401, the Dashboard displays its localized
+refusal state and pauses further automatic presentations. HTTP 403 pauses it only
+on the reads required to run the Dashboard: capabilities, bootstrap and event
+polling. Other 403 responses retain the existing action or resource error; the
+connection and polling continue. One shared decision covers ordinary requests
+and file transfers. Once refused, the pause covers startup, page restore,
+polling, retries and file requests.
+
+The token remains stored because it may still be valid for the original service.
+A separate refusal record identifies its digest, endpoint and refusal status.
+It is kept in memory and in the same store as the token, preferring local storage
+when the token is remembered there; session-only tokens leave no durable refusal
+record. The pause survives reloads, and remembered tokens stay paused in new
+tabs. The person can Connect with a new token or choose Retry remembered token.
+Disconnect, successful replacement with a different token and explicit retry
+remove the corresponding refusal record. Work drafts, pending intents and
+operation keys stay in their original namespaces. If browser storage is
+unavailable, the current page retains the pause in memory.
 
 Cookies are scoped to a host, not a port: browsers can send them to other ports
 of the same host. Origin checks and HttpOnly do not provide port isolation or

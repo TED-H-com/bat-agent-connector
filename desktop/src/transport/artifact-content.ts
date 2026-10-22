@@ -15,7 +15,7 @@ export async function readArtifactContent(reference: ArtifactReference, size: nu
     method: "GET", headers: await browserAuthHeaders(token), redirect: "error", cache: "no-store",
     credentials: token === browserSessionToken ? "same-origin" : "omit", mode: "same-origin", signal: AbortSignal.any([signal, AbortSignal.timeout(30000)])
   });
-  if (token !== browserSessionToken) await browserCredentialRefusals.refuse(token, response.status);
+  if (token !== browserSessionToken) await browserCredentialRefusals.refuse(token, response.status, 'GET', `/artifacts/${reference.artifact_id}/revisions/${reference.revision}/content`);
   if (response.status !== 200 || response.redirected ||
       response.headers.get("Content-Length") !== String(size) || !response.body) {
     await response.body?.cancel();

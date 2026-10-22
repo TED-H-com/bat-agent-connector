@@ -122,7 +122,7 @@ export async function connectorRequest(method: string, path: string, body: unkno
   if (key) headers["Idempotency-Key"] = key;
   const res = await fetch(`/api/v1${path}`, { method, headers, credentials: "same-origin", redirect: "error",
     body: body === undefined ? undefined : JSON.stringify(body), signal });
-  if (browserToken !== browserSessionToken) await browserCredentialRefusals.refuse(browserToken, res.status);
+  if (browserToken !== browserSessionToken) await browserCredentialRefusals.refuse(browserToken, res.status, method, path);
   return { status: res.status, data: await res.json().catch(() => ({})) };
 }
 
@@ -136,6 +136,6 @@ export async function connectorUploadArtifact(operationId: string, bytes: ArrayB
   // Ignore content_url from operation metadata. Tokens only reach this same-origin fixed route.
   const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {method: "POST", redirect: "error",
     credentials: "same-origin", headers: {...await browserAuthHeaders(browserToken), "Content-Type": "application/octet-stream"}, body: bytes});
-  if (browserToken !== browserSessionToken) await browserCredentialRefusals.refuse(browserToken, res.status);
+  if (browserToken !== browserSessionToken) await browserCredentialRefusals.refuse(browserToken, res.status, 'POST', `/artifacts/uploads/${operationId}/content`);
   return {status: res.status, data: await res.json().catch(() => ({}))};
 }
