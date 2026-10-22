@@ -44,6 +44,75 @@ function h$1(tag, attrs = {}, ...children) {
 	return el;
 }
 //#endregion
+//#region src/health-strings.js
+var healthStrings;
+var init_health_strings = __esmMin((() => {
+	healthStrings = {
+		en: {
+			health_checking: "Checking",
+			health_age_recent: "Less than a minute ago",
+			health_age_minutes: "{count} min ago",
+			health_age_unknown: "Age unknown",
+			health_connection_problem: "Connection needs attention",
+			health_stale_value: "{value} · {age} · {checking}",
+			health_unknown_value: "{value} · {checking}",
+			health_other_machines_one: "{count} other machine needs attention",
+			health_other_machines_many: "{count} other machines need attention",
+			health_selected_work: "Selected work",
+			health_selected_workspace: "Selected workspace",
+			health_attention: "Needs attention",
+			health_stale: "Stale · Checking",
+			health_unknown: "Unknown · Checking",
+			health_working: "Working",
+			health_idle: "Idle",
+			health_activity: "Output activity",
+			health_attention_label: "Attention",
+			health_freshness: "Freshness",
+			health_summary: "Installation health",
+			health_pair: "{label}: {value}",
+			health_join: "{left} · {right}",
+			health_read_failed: "{value} · {age} · Could not confirm ({reason})",
+			health_unreachable_value: "{value} · Last attempt: {age}; host unreachable, last successful observation is stale",
+			health_capabilities_reload: "Capabilities changed; verification unavailable ({reason}). Reload to verify.",
+			health_reload: "Reload",
+			health_current: "Current",
+			health_none: "None observed",
+			health_capabilities_checking: "Capabilities changed · Checking"
+		},
+		"zh-TW": {
+			health_checking: "檢查中",
+			health_age_recent: "不到一分鐘前",
+			health_age_minutes: "{count} 分鐘前",
+			health_age_unknown: "時間未知",
+			health_connection_problem: "連線需要處理",
+			health_stale_value: "{value} · {age} · {checking}",
+			health_unknown_value: "{value} · {checking}",
+			health_other_machines_one: "另有 {count} 台機器需要處理",
+			health_other_machines_many: "另有 {count} 台機器需要處理",
+			health_selected_work: "所選工作",
+			health_selected_workspace: "所選工作區",
+			health_attention: "需要處理",
+			health_stale: "已過期 · 檢查中",
+			health_unknown: "未知 · 檢查中",
+			health_working: "工作中",
+			health_idle: "閒置",
+			health_activity: "輸出活動",
+			health_attention_label: "待處理事項",
+			health_freshness: "資料時效",
+			health_summary: "安裝狀態",
+			health_pair: "{label}：{value}",
+			health_join: "{left} · {right}",
+			health_read_failed: "{value} · {age} · 無法確認（{reason}）",
+			health_unreachable_value: "{value} · 上次嘗試：{age}；無法連至主機，上次成功觀察已過期",
+			health_capabilities_reload: "能力資料已變更；無法完成驗證（{reason}）。請重新載入以驗證。",
+			health_reload: "重新載入",
+			health_current: "目前有效",
+			health_none: "未觀察到",
+			health_capabilities_checking: "能力資料已變更 · 檢查中"
+		}
+	};
+}));
+//#endregion
 //#region src/result-sources-strings.js
 var resultSourcesStrings;
 var init_result_sources_strings = __esmMin((() => {
@@ -10179,6 +10248,7 @@ function t(key, vars = {}) {
 }
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
+	init_health_strings();
 	init_result_sources_strings();
 	init_earlier_drafts_strings();
 	init_pm_external_history_strings();
@@ -10219,6 +10289,7 @@ var init_i18n = __esmMin((() => {
 	init_fleet_strings();
 	STRINGS = {
 		"zh-TW": {
+			...healthStrings["zh-TW"],
 			...FLEET_STRINGS["zh-TW"],
 			...workbenchStrings$1["zh-TW"],
 			...resultSourcesStrings["zh-TW"],
@@ -10376,8 +10447,31 @@ var init_i18n = __esmMin((() => {
 			setup_language: "顯示語言",
 			setup_language_en: "English",
 			setup_language_zh: "繁體中文",
+			setup_review_connection: "預覽連線",
+			setup_reviewing_connection: "正在預覽連線",
+			setup_apply_connection: "套用連線",
+			setup_applying_connection: "正在套用連線",
+			setup_review_changed: "設定已變更，請重新預覽",
+			setup_review_unsupported: "此 Connector 尚不支援連線預覽，請先更新再繼續。",
+			error_code_SETUP_REVIEW_CHANGED: "設定已變更，請重新預覽。",
+			setup_review_back: "返回",
+			setup_review_cancel: "取消",
+			setup_review_field: "設定",
+			setup_review_before: "目前",
+			setup_review_after: "套用後",
+			setup_review_git: "Git 傳輸",
+			setup_review_unset: "未設定",
+			setup_review_yes: "允許",
+			setup_review_no: "不允許",
+			setup_review_source_bat_profile: "來源：BAT 設定檔 {reference}",
+			setup_review_source_staged_secret: "來源：已暫存的憑證參照 {reference}",
+			setup_review_source_existing_connection: "來源：既有連線 {reference}",
+			setup_review_source_available: "憑證參照可用；尚未測試連線。",
+			setup_review_source_unavailable: "憑證參照無法使用，套用時仍須通過驗證。",
+			setup_review_no_changes: "連線設定沒有變更。",
+			setup_review_effects: "預覽不儲存連線、不建立操作，也不測試 BAT 或 SSH。套用會先執行唯讀驗證，再儲存設定；不會啟動工作或服務。",
+			setup_review_staged: "貼上的憑證已先存入此安裝的私密暫存。取消不會儲存連線；未使用的參照依既有到期清理規則處理。",
 			setup_advanced: "進階設定",
-			setup_automatic: "自動設定",
 			setup_simple_help: "我們會幫你連接 BAT，完成基本設定。其他選項可以之後再調整。",
 			setup_checking: "正在確認連線，請稍候…",
 			setup_saving: "正在儲存設定，快好了…",
@@ -10388,7 +10482,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "請在 BAT 開啟「設定 → 遠端 → 遠端存取」，複製連線網址後貼到下方。如果尚未啟動，請先按「啟動伺服器」。",
 			setup_copy_label: "貼上從 BAT 複製的連線網址",
 			setup_continue: "繼續設定",
-			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「自動設定」。",
+			setup_choose_connection: "找到多個已儲存的連線。請選擇要使用的連線，再按「預覽連線」。",
 			setup_connection_choice: "要使用的連線",
 			setup_choose_placeholder: "請選擇連線",
 			setup_failed_operation: "設定尚未完成，請查看詳細資料。",
@@ -10426,7 +10520,7 @@ var init_i18n = __esmMin((() => {
 			setup_verification_invalid: "請輸入有效專案、執行程式、最多 63 個非空參數，以及 1–3600 秒逾時。",
 			setup_scope_required: "目前 Connector 帳號無權修改此設定。",
 			setup_roots_help: "指定專供新受管工作使用的遠端目錄；人工專案保持唯讀。Git 同步與成果操作使用你選擇的 SSH 連線。",
-			setup_save_host: "驗證並儲存主機",
+			setup_save_host: "預覽連線",
 			setup_repository_title: "2. 連結 GitHub 儲存庫",
 			setup_repository_help: "將儲存庫明確連結到選定主機與工作區。驗證只讀取資料，不會建立 PR 或推送。",
 			setup_repository: "GitHub 儲存庫",
@@ -11925,6 +12019,7 @@ var init_i18n = __esmMin((() => {
 			integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 		},
 		en: {
+			...healthStrings.en,
 			...FLEET_STRINGS.en,
 			...workbenchStrings$1.en,
 			...resultSourcesStrings.en,
@@ -12082,8 +12177,31 @@ var init_i18n = __esmMin((() => {
 			setup_language: "Language",
 			setup_language_en: "English",
 			setup_language_zh: "繁體中文",
+			setup_review_connection: "Review connection",
+			setup_reviewing_connection: "Reviewing connection",
+			setup_apply_connection: "Apply connection",
+			setup_applying_connection: "Applying connection",
+			setup_review_changed: "Settings changed; review again",
+			setup_review_unsupported: "This Connector does not support connection review. Update it before continuing.",
+			error_code_SETUP_REVIEW_CHANGED: "Settings changed; review again.",
+			setup_review_back: "Back",
+			setup_review_cancel: "Cancel",
+			setup_review_field: "Setting",
+			setup_review_before: "Current",
+			setup_review_after: "After applying",
+			setup_review_git: "Git transport",
+			setup_review_unset: "Not set",
+			setup_review_yes: "Allowed",
+			setup_review_no: "Not allowed",
+			setup_review_source_bat_profile: "Source: BAT profile {reference}",
+			setup_review_source_staged_secret: "Source: staged credential reference {reference}",
+			setup_review_source_existing_connection: "Source: existing connection {reference}",
+			setup_review_source_available: "Credential reference available; connection not tested yet.",
+			setup_review_source_unavailable: "Credential reference unavailable; Apply must still pass verification.",
+			setup_review_no_changes: "No connection settings will change.",
+			setup_review_effects: "Review does not save the connection, create an operation or probe BAT or SSH. Apply performs read-only verification before saving settings; it starts no work or service.",
+			setup_review_staged: "The pasted credential was already staged in this installation’s private storage. Cancel does not save the connection; unused references follow the existing expiry and cleanup rules.",
 			setup_advanced: "Advanced",
-			setup_automatic: "Set up automatically",
 			setup_simple_help: "We’ll help you connect to BAT and get things ready. You can adjust other options later.",
 			setup_checking: "Checking your connection. Please wait…",
 			setup_saving: "Saving your settings. Almost there…",
@@ -12094,7 +12212,7 @@ var init_i18n = __esmMin((() => {
 			setup_copy_help: "In BAT, open Settings → Remote → Remote Access, copy the connection URL and paste it below. If it is not running, choose Start Server first.",
 			setup_copy_label: "Paste the connection link copied from BAT",
 			setup_continue: "Continue setup",
-			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Set up automatically.",
+			setup_choose_connection: "More than one saved connection was found. Choose the one you want, then select Review connection.",
 			setup_connection_choice: "Connection to use",
 			setup_choose_placeholder: "Choose a connection",
 			setup_failed_operation: "Setup hasn’t finished. See details for more information.",
@@ -12132,7 +12250,7 @@ var init_i18n = __esmMin((() => {
 			setup_verification_invalid: "Enter a valid project, executable, at most 63 nonempty arguments and a 1–3600 second timeout.",
 			setup_scope_required: "Your Connector identity is not permitted to change this setting.",
 			setup_roots_help: "Choose remote directories dedicated to new managed work; human projects remain read-only. Git synchronization and artifact actions use your selected SSH connection.",
-			setup_save_host: "Verify and save host",
+			setup_save_host: "Review connection",
 			setup_repository_title: "2. Bind a GitHub repository",
 			setup_repository_help: "Bind the repository to an exact host and workspace. Verification only reads data; it creates no PR and pushes nothing.",
 			setup_repository: "GitHub repository",
@@ -13950,6 +14068,634 @@ var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
+//#region src/state/sessions.js
+var text$6 = (value) => typeof value === "string" ? value : "";
+function workspaceGroup(session) {
+	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
+	return {
+		key: JSON.stringify([
+			host,
+			id ? "id" : name ? "label" : "unknown",
+			id || name
+		]),
+		host,
+		id,
+		name
+	};
+}
+function groupedSessions(sessions) {
+	const groups = new Map();
+	for (const session of sessions) {
+		const group = workspaceGroup(session);
+		if (!groups.has(group.key)) groups.set(group.key, {
+			...group,
+			sessions: []
+		});
+		groups.get(group.key).sessions.push(session);
+	}
+	return [...groups.values()].sort((a, b) => a.host.localeCompare(b.host) || (a.name || a.id).localeCompare(b.name || b.id) || a.key.localeCompare(b.key));
+}
+function matchesSession(session, query) {
+	const haystack = [
+		session.title,
+		session.session_id,
+		session.host,
+		session.workspace,
+		session.workspace_id,
+		session.agent_kind,
+		session.model,
+		session.worktree_branch,
+		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
+	].map(text$6).join("\n").toLocaleLowerCase();
+	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
+}
+function runtimeStale(session) {
+	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
+}
+function sessionFacets(session) {
+	const source = session || {}, pending = source.pending;
+	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
+	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
+		"needs_ted",
+		"needs_you",
+		"needs_attention",
+		"waiting_permission",
+		"awaiting_approval",
+		"uncertain",
+		"blocked"
+	].includes(managedStatus) ? "needs_you" : "none";
+	const staleness = {
+		runtime: runtimeStale(source),
+		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
+		missing: source.state?.enumeration === "missing"
+	};
+	const lifecycle = source.state?.lifecycle || "unknown";
+	return {
+		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
+		attention,
+		staleness,
+		lifecycle,
+		pendingKind: pending?.kind,
+		hasPending: Boolean(pending),
+		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
+	};
+}
+function sessionActivity(session) {
+	const facets = sessionFacets(session);
+	if (facets.hasPending) return {
+		key: "pending_" + facets.pendingKind,
+		tone: "stale"
+	};
+	if (facets.attention === "failed") return {
+		key: "op_failed",
+		tone: "bad"
+	};
+	if (facets.attention === "needs_you") return {
+		key: "workspace_needs_you",
+		tone: "stale"
+	};
+	if (facets.lifecycle === "ended") return {
+		key: "obs_value_ended",
+		tone: ""
+	};
+	if (facets.staleness.gone || facets.staleness.missing) return {
+		key: "sessions_not_seen",
+		tone: "stale"
+	};
+	if (facets.staleness.runtime) return {
+		key: "sessions_stale",
+		tone: "stale"
+	};
+	if (facets.activity === "streaming") return {
+		key: "obs_value_streaming",
+		tone: "info"
+	};
+	if (facets.activity === "not_streaming") return {
+		key: "obs_value_not_streaming",
+		tone: ""
+	};
+	if (facets.notLoaded) return {
+		key: "sessions_not_loaded",
+		tone: ""
+	};
+	return {
+		key: "sessions_activity_unknown",
+		tone: ""
+	};
+}
+function sessionStatus(session) {
+	const facets = sessionFacets(session);
+	if (facets.attention !== "none") return facets.attention;
+	if (Object.values(facets.staleness).some(Boolean)) return "stale";
+	if (facets.activity === "streaming") return "running";
+	return null;
+}
+function sessionPill(session) {
+	const status = sessionStatus(session);
+	if (status === "asking_you" || status === "needs_you") return {
+		key: "sessions_pill_waiting",
+		tone: "stale",
+		status
+	};
+	if (status === "failed") return {
+		key: "op_failed",
+		tone: "bad",
+		status
+	};
+	if (status === "stale") return {
+		key: "sessions_pill_stale",
+		tone: "stale",
+		status
+	};
+	if (status === "running") return {
+		key: "sessions_pill_running",
+		tone: "info",
+		status
+	};
+	return null;
+}
+//#endregion
+//#region src/fleet-status.js
+function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
+	const layers = row?.layers || {};
+	const reason = row?.code || row?.blocking;
+	let state;
+	if (!readable) state = "unavailable";
+	else if (row?.selected === false || row?.level === "off") state = "off";
+	else if (lookup(codeReason, reason) === "ownership") state = "ownership";
+	else if (snapshot.monitor.state === "stopped") state = "stopped";
+	else if (snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable") state = "checking";
+	else if (snapshot.selection.applied_revision !== snapshot.selection.revision) state = "selection_pending";
+	else if (snapshot.readiness.state !== "fresh" || row?.stale || row?.blocking === "stale") state = "stale";
+	else if (!row || row.selected !== true) state = "checking";
+	else if (reason) state = lookup(codeReason, reason) || lookup(layerReason, row.blocking) || "unknown";
+	else if (row.level === "ready" && layers.tunnel === true && (kind === "connector" ? !["unknown", "refused"].includes(layers.auth) : layers.tls === true && layers.auth === "ok" && layers.bat === true && layers.workspace === true)) state = "ready";
+	else state = "checking";
+	const current = ![
+		"unavailable",
+		"configuration",
+		"off",
+		"stopped",
+		"stale",
+		"checking",
+		"selection_pending",
+		"unknown",
+		"ownership"
+	].includes(state);
+	const blockedAt = (reason === "BAT_PROTOCOL_INVALID" ? "service" : lookup(layerStep, row?.blocking)) || {
+		network: "network",
+		waking: "network",
+		trust: "identity",
+		identity: "identity",
+		service: "service",
+		version: "service",
+		workspace: "workspace",
+		local_endpoint: "network",
+		local_ssh: "network"
+	}[state];
+	const steps = [
+		["network", layers.tunnel === true],
+		["identity", layers.auth === "ok" && (kind === "connector" || layers.tls === true)],
+		["service", kind === "connector" ? state === "ready" : layers.bat === true],
+		...kind === "connector" ? [] : [["workspace", layers.workspace === true]]
+	];
+	let blocked = false;
+	return {
+		state,
+		kind,
+		steps: steps.map(([id, passed]) => {
+			if (id === blockedAt) blocked = true;
+			return {
+				id,
+				state: !current ? "unchecked" : blocked ? id === blockedAt && !["waking", "timeout"].includes(state) ? "attention" : "unchecked" : passed ? "passed" : "unchecked"
+			};
+		})
+	};
+}
+function rememberFleetDetails(content, detailsState) {
+	for (const details of content.querySelectorAll("details[data-fleet-details-key]")) detailsState.set(details.dataset.fleetDetailsKey, details.open);
+}
+function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
+	const { state, kind, steps } = fleetDiagnosis(row, {
+		snapshot,
+		readable,
+		name: entry.name,
+		kind: entry.kind
+	});
+	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
+	const details = h("details", {
+		open: detailsState?.get(key) === true,
+		"data-fleet-details-key": key
+	}, h("summary", { "data-fleet-details": entry.name }, t("fleet_status_details")), h("dl", { class: "fleet-checks" }, ...steps.flatMap((step) => [h("dt", {}, t("fleet_check_" + step.id)), h("dd", {
+		"data-fleet-check": step.id,
+		"data-check-state": step.state
+	}, t("fleet_check_" + step.state))])), ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index).map((value) => h("code", {}, value)));
+	const helpKey = [
+		"ready",
+		"identity",
+		"service",
+		"version"
+	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
+	return h("div", {
+		class: "fleet-diagnosis",
+		"data-fleet-diagnosis": entry.name,
+		"data-fleet-state": state
+	}, h("p", { class: "fleet-diagnosis-title" }, t("fleet_check_title_" + state)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
+}
+var codeReason, layerReason, layerStep, lookup;
+var init_fleet_status = __esmMin((() => {
+	codeReason = {
+		TAILSCALE_WAKING: "waking",
+		ROUTE_UNAVAILABLE: "network",
+		TUNNEL_DOWN: "network",
+		TLS_PIN_MISSING: "trust",
+		TLS_IDENTITY_MISMATCH: "trust",
+		TLS_FAILED: "trust",
+		CREDENTIAL_MISSING: "identity",
+		CREDENTIAL_CHANGED: "identity",
+		BAT_AUTH_REFUSED: "identity",
+		CONNECTOR_AUTH_REFUSED: "identity",
+		CONNECTOR_SCOPE_MISSING: "identity",
+		BAT_VERSION_UNSUPPORTED: "version",
+		CONNECTOR_CONTRACT_UNSUPPORTED: "version",
+		BAT_PROTOCOL_INVALID: "service",
+		CONNECTOR_UNAVAILABLE: "service",
+		CONNECTOR_CAPABILITY_MISSING: "service",
+		WORKSPACE_UNREADABLE: "workspace",
+		WORKSPACE_INVALID: "workspace",
+		WORKSPACE_BINDING_MISMATCH: "workspace",
+		INVENTORY_INVALID: "configuration",
+		OWNER_UNPROVEN: "ownership",
+		STOP_UNCONFIRMED: "ownership",
+		TUNNEL_START_UNSETTLED: "ownership",
+		TUNNEL_RECORD_CHANGED: "ownership",
+		OTHER_LOGIN_OWNER: "ownership",
+		ENDPOINT_IN_USE: "local_endpoint",
+		SSH_UNAVAILABLE: "local_ssh",
+		PROBE_PENDING: "checking",
+		PROBE_TIMEOUT: "timeout",
+		PROBE_STALE: "stale"
+	};
+	layerReason = {
+		inventory: "configuration",
+		tunnel: "network",
+		tls: "trust",
+		auth: "identity",
+		bat: "service",
+		connector: "service",
+		contract: "version",
+		workspace: "workspace",
+		stale: "stale"
+	};
+	layerStep = {
+		tunnel: "network",
+		tls: "identity",
+		auth: "identity",
+		bat: "service",
+		connector: "service",
+		contract: "service",
+		workspace: "workspace"
+	};
+	lookup = (table, key) => Object.hasOwn(table, key) ? table[key] : void 0;
+}));
+//#endregion
+//#region src/health-display.js
+init_fleet_status();
+var time$1 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
+var healthRevision = (caps) => JSON.stringify([
+	caps?.connector,
+	caps?.build?.version,
+	caps?.build?.commit,
+	caps?.build?.source,
+	caps?.contract_version
+]);
+var rowId = (row) => JSON.stringify([row.host, row.session_id]);
+var gone = (row) => Boolean(row.gone_at) || row.state?.enumeration === "gone";
+var selectedRows = (health) => (health.sessions || []).filter((row) => !gone(row) && row.host === health.selected?.host && (health.selected.workspaceId ? row.workspace_id === health.selected.workspaceId : row.session_id === health.selected.sessionId));
+function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
+	const observed = time$1(fact.observed_at), deadline = time$1(fact.valid_until);
+	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
+	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
+	return {
+		...fact,
+		freshness,
+		ageSeconds
+	};
+}
+function compactHealth({ attention, stale, unknown, activity }) {
+	return attention ? "attention" : stale ? "stale" : unknown || activity === "unknown" ? "unknown" : activity === "working" ? "working" : "idle";
+}
+function runtimeSummary$1(health, now) {
+	const selected = health.selected;
+	if (!selected) return null;
+	const rows = selectedRows(health);
+	const complete = health.sessionsComplete || health.completeHosts?.has(selected.host);
+	const facts = rows.map((row) => {
+		const facets = sessionFacets(row), evidence = row.state?.evidence?.activity;
+		const activity = displayFact({
+			value: row.state?.activity ?? facets.activity,
+			observed_at: evidence ? evidence.observed_at : row.observed_at,
+			valid_until: evidence?.valid_until,
+			error: health.readErrors?.get(health.rowSources?.get(rowId(row))),
+			stale: Object.values(facets.staleness).some(Boolean)
+		}, { now });
+		return {
+			attention: facets.attention !== "none" || row.api_access === "managed" && [
+				"blocked",
+				"failed",
+				"error",
+				"needs_attention",
+				"awaiting_approval"
+			].includes(row.runtime_status),
+			activity,
+			working: ["streaming", "starting"].includes(activity.value),
+			idle: ["not_streaming", "ended"].includes(activity.value)
+		};
+	});
+	const connection = rows.filter((row) => row.state?.connection).map((row) => displayFact({
+		value: row.state.connection,
+		...row.state.evidence?.connection
+	}, { now })).sort((a, b) => (time$1(b.observed_at) || 0) - (time$1(a.observed_at) || 0))[0] || null;
+	const attention = facts.some((row) => row.attention);
+	const stale = facts.some((row) => row.activity.freshness === "stale") || connection?.freshness === "stale";
+	const unknown = !facts.length || Boolean(selected.workspaceId && !complete) || facts.some((row) => row.activity.freshness === "unknown" || !row.idle && !row.working) || connection?.freshness === "unknown";
+	const activity = facts.some((row) => row.working && row.activity.freshness === "current") ? "working" : !facts.length || selected.workspaceId && !complete || facts.some((row) => !row.idle || row.activity.freshness !== "current") ? "unknown" : "idle";
+	return {
+		selected,
+		attention,
+		stale,
+		unknown,
+		activity,
+		connection,
+		compact: compactHealth({
+			attention,
+			stale,
+			unknown,
+			activity
+		}),
+		facts
+	};
+}
+function countFact(rows, now, href = null) {
+	const facts = rows.map((row) => displayFact(row, { now }));
+	return {
+		...displayFact({
+			value: rows.length,
+			observed_at: rows.length ? Math.min(...rows.map((row) => time$1(row.observed_at))) : null,
+			stale: facts.some((row) => row.freshness === "stale")
+		}, { now }),
+		href,
+		stale_reason: rows.length && rows.every((row) => row.stale_reason === "host_unreachable") ? "host_unreachable" : null,
+		freshness: facts.some((row) => row.freshness === "stale") ? "stale" : facts.some((row) => row.freshness === "unknown") ? "unknown" : "current"
+	};
+}
+function otherMachines(health, now) {
+	if (health.hostsLoaded) return countFact((health.hosts || []).filter((row) => row.host !== health.selected?.host && (row.error || row.reachable === false && row.last_attempt_at)).map((row) => ({
+		observed_at: row.last_attempt_at,
+		valid_until: row.valid_until,
+		stale: row.stale,
+		stale_reason: row.stale_reason
+	})), now);
+	const snapshot = health.fleet;
+	return countFact((health.selected ? [] : snapshot?.readiness?.hosts || []).filter((row) => {
+		return fleetDiagnosis(row, {
+			snapshot,
+			readable: true
+		}).steps.some((step) => step.state === "attention");
+	}).map((row) => ({
+		observed_at: row.observed_at,
+		stale: row.stale
+	})), now, "#/settings?section=fleet");
+}
+function healthDisplay(input, now = Date.now()) {
+	const health = input.health || {}, status = centralServiceStatus(input);
+	const pollAt = typeof input.pollHealth === "object" ? input.pollHealth?.at : input.pollHealth === "connected" && input.lastPoll?.namespace === input.namespace ? input.lastPoll.at : health.bootstrapAt;
+	const connection = {
+		...status,
+		...displayFact({
+			value: status.key,
+			observed_at: status.recoveryKey ? input.managedObservedAt : pollAt,
+			valid_until: typeof input.pollHealth === "object" ? input.pollHealth?.valid_until : input.lastPoll?.valid_until
+		}, { now })
+	};
+	if (!input.token && !status.recoveryKey) connection.freshness = "unconfigured";
+	const receipt = health.capabilities;
+	const capabilities = displayFact({
+		value: receipt?.data,
+		static: true,
+		bootstrap: receipt?.bootstrap,
+		version: healthRevision(receipt?.data)
+	}, {
+		now,
+		bootstrap: health.bootstrap,
+		version: healthRevision(health.currentCaps || input.caps)
+	});
+	if (!receipt) capabilities.freshness = "unknown";
+	capabilities.refresh = health.capabilityRefresh;
+	const other = otherMachines(health, now);
+	return {
+		connection,
+		capabilities,
+		summary: runtimeSummary$1(health, now),
+		otherAttention: other.value,
+		other
+	};
+}
+function selectHealthSession(health, host, sessionId) {
+	if (health.selected?.host !== host || health.selected?.sessionId !== sessionId) health.selected = {
+		host,
+		sessionId
+	};
+	const row = health.sessions?.find((row) => row.host === host && row.session_id === sessionId);
+	if (row) health.selected = {
+		...health.selected,
+		workspaceId: row.workspace_id || void 0,
+		label: row.workspace || row.host
+	};
+}
+function resetHealthBootstrap(previous = {}, { sameScope, caps, now = Date.now() }) {
+	previous ||= {};
+	const bootstrap = (previous.bootstrap || 0) + 1;
+	const result = {
+		bootstrap,
+		bootstrapAt: now,
+		capabilities: {
+			data: caps,
+			bootstrap
+		},
+		currentCaps: caps,
+		selected: sameScope ? previous.selected : null,
+		sessions: [],
+		hosts: [],
+		fleet: previous.fleet
+	};
+	if (sameScope) Object.assign(result, {
+		sessions: (previous.sessions || []).map((row) => ({
+			...row,
+			stale: true
+		})),
+		hosts: (previous.hosts || []).map((row) => ({
+			...row,
+			stale: true
+		})),
+		hostsLoaded: previous.hostsLoaded,
+		rowSources: new Map(previous.rowSources),
+		hostSources: new Map(previous.hostSources),
+		readers: new Map(previous.readers),
+		bootstrapRenewal: true
+	});
+	return result;
+}
+function rememberHealthRead(health, path, data) {
+	if (!data || typeof data !== "object") return;
+	path = path.replace(/\?$/, "");
+	const [pathname, query = ""] = path.split("?"), params = new URLSearchParams(query);
+	health.readErrors?.delete(path);
+	if (Array.isArray(data.hosts) && ["/hosts", "/sessions"].includes(pathname)) {
+		const full = pathname === "/sessions" || ![...params.keys()].some((key) => key !== "limit");
+		const hosts = new Map((full ? [] : health.hosts || []).map((row) => [row.host, row]));
+		health.hostSources ||= new Map();
+		for (const row of data.hosts) {
+			hosts.set(row.host, row);
+			health.hostSources.set(row.host, path);
+		}
+		health.hosts = [...hosts.values()];
+		if (full) health.hostsLoaded = true;
+	}
+	if (!/^\/sessions(?:\/[^/]+\/[^/]+)?$/.test(pathname)) return;
+	const rows = Array.isArray(data.sessions) ? data.sessions : data.session ? [data.session] : [];
+	const sessions = new Map((health.sessions || []).map((row) => [rowId(row), row]));
+	health.rowSources ||= new Map();
+	for (const row of rows) {
+		sessions.set(rowId(row), row);
+		health.rowSources.set(rowId(row), path);
+	}
+	if (Array.isArray(data.sessions) && [...params.keys()].every((key) => [
+		"order",
+		"include_gone",
+		"limit",
+		"cursor",
+		"host"
+	].includes(key))) {
+		health.chains ||= new Map();
+		health.completeHosts ||= new Set();
+		const chainParams = new URLSearchParams(params);
+		chainParams.delete("cursor");
+		chainParams.sort();
+		const key = chainParams.toString(), scope = params.get("host");
+		let chain = health.chains.get(key);
+		if (!params.has("cursor")) chain = {
+			next: null,
+			ids: new Set()
+		};
+		if (chain && (!params.has("cursor") || params.get("cursor") === chain.next)) {
+			for (const row of rows) chain.ids.add(rowId(row));
+			chain.next = data.next_cursor;
+			health.chains.set(key, chain);
+			if (data.next_cursor === null) {
+				for (const [id, row] of sessions) if ((!scope || row.host === scope) && !chain.ids.has(id)) sessions.delete(id);
+				if (scope) {
+					if (chain.ids.size <= 500) health.completeHosts.add(scope);
+					else health.completeHosts.delete(scope);
+				} else health.sessionsComplete = chain.ids.size <= 500;
+			}
+		}
+	}
+	const all = [...sessions.values()];
+	const selected = all.find((row) => row.host === health.selected?.host && row.session_id === health.selected?.sessionId);
+	const kept = all.filter((row) => row !== selected).slice(selected ? -499 : -500);
+	if (selected) kept.push(selected);
+	if (all.length > kept.length) {
+		health.sessionsComplete = false;
+		const ids = new Set(kept.map(rowId));
+		for (const row of all) if (!ids.has(rowId(row))) {
+			health.completeHosts?.delete(row.host);
+			health.rowSources.delete(rowId(row));
+		}
+	}
+	health.sessions = kept;
+	const retained = new Set(kept.map(rowId));
+	for (const id of health.rowSources.keys()) if (!retained.has(id)) health.rowSources.delete(id);
+	if (health.selected) selectHealthSession(health, health.selected.host, health.selected.sessionId);
+}
+function withdrawHealthRead(health, method, path, error) {
+	path = path.replace(/\?$/, "");
+	const pathname = path.split("?")[0], inventoryRead = method === "GET" && /^\/(hosts|sessions)(?:\/|$)/.test(pathname);
+	if (error.status === 401 || error.status === 403 && inventoryRead) Object.assign(health, {
+		sessions: [],
+		hosts: [],
+		hostsLoaded: false,
+		sessionsComplete: false,
+		inventoryRevision: (health.inventoryRevision || 0) + 1,
+		readers: new Map(),
+		completeHosts: new Set(),
+		chains: new Map(),
+		rowSources: new Map(),
+		hostSources: new Map(),
+		readErrors: new Map()
+	});
+	else if (error.status === 404 && method === "GET" && health.selected && pathname === `/sessions/${encodeURIComponent(health.selected.host)}/${encodeURIComponent(health.selected.sessionId)}`) health.sessions = (health.sessions || []).filter((row) => row.host !== health.selected.host || row.session_id !== health.selected.sessionId);
+	else if (inventoryRead) {
+		health.readErrors ||= new Map();
+		health.readErrors.set(path, {
+			status: error.status,
+			code: error.code
+		});
+	}
+}
+function takeHealthRenewal(health, now = Date.now()) {
+	const sources = new Map();
+	const add = (path, deadline) => {
+		const at = time$1(deadline);
+		if (path && Number.isFinite(at)) sources.set(path, Math.min(sources.get(path) ?? Infinity, at));
+	};
+	for (const row of selectedRows(health)) {
+		const path = health.rowSources?.get(rowId(row));
+		add(path, row.state?.evidence?.activity?.valid_until);
+		add(path, row.state?.evidence?.connection?.valid_until);
+	}
+	for (const row of health.hosts || []) add(health.hostSources?.get(row.host), row.valid_until);
+	health.renewed ||= new Map();
+	for (const [path, deadline] of sources) {
+		const key = `${health.bootstrap || 0}:${deadline}`;
+		if ((now >= deadline || health.bootstrapRenewal) && health.renewed.get(path) !== key) {
+			health.renewed.set(path, key);
+			return path;
+		}
+	}
+	health.bootstrapRenewal = false;
+	return null;
+}
+function healthAge(seconds, t) {
+	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
+}
+function healthLabel(fact, t, { age = true } = {}) {
+	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
+	if (fact.error) return t("health_read_failed", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		reason: fact.error.code || fact.error.status
+	});
+	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t)
+	});
+	if (fact.freshness === "stale" && age) return t("health_stale_value", {
+		value: label,
+		age: healthAge(fact.ageSeconds, t),
+		checking: t("health_checking")
+	});
+	if ([
+		"stale",
+		"unknown",
+		"invalidated"
+	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
+		value: label,
+		checking: t("health_checking")
+	});
+	return label;
+}
+//#endregion
 //#region src/credential-storage-key.js
 function credentialStorageDigest(token) {
 	const input = new TextEncoder().encode("batc.dashboard.credential-refusal.v1\0" + token);
@@ -15616,153 +16362,6 @@ function viewState(namespace, workspaceId, view) {
 	states$2.set(key, value);
 	if (states$2.size > 40) states$2.delete(states$2.keys().next().value);
 	return value;
-}
-//#endregion
-//#region src/state/sessions.js
-var text$6 = (value) => typeof value === "string" ? value : "";
-function workspaceGroup(session) {
-	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
-	return {
-		key: JSON.stringify([
-			host,
-			id ? "id" : name ? "label" : "unknown",
-			id || name
-		]),
-		host,
-		id,
-		name
-	};
-}
-function groupedSessions(sessions) {
-	const groups = new Map();
-	for (const session of sessions) {
-		const group = workspaceGroup(session);
-		if (!groups.has(group.key)) groups.set(group.key, {
-			...group,
-			sessions: []
-		});
-		groups.get(group.key).sessions.push(session);
-	}
-	return [...groups.values()].sort((a, b) => a.host.localeCompare(b.host) || (a.name || a.id).localeCompare(b.name || b.id) || a.key.localeCompare(b.key));
-}
-function matchesSession(session, query) {
-	const haystack = [
-		session.title,
-		session.session_id,
-		session.host,
-		session.workspace,
-		session.workspace_id,
-		session.agent_kind,
-		session.model,
-		session.worktree_branch,
-		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$6).join("\n").toLocaleLowerCase();
-	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
-}
-function runtimeStale(session) {
-	return Boolean(session.stale || session.fields_stale || session.state?.evidence?.activity?.stale);
-}
-function sessionFacets(session) {
-	const source = session || {}, pending = source.pending;
-	const managedStatus = source.api_access === "managed" ? source.status || source.state?.status : null;
-	const attention = pending?.kind === "permission" || pending?.kind === "ask_user" ? "asking_you" : pending ? "needs_you" : ["failed", "error"].includes(managedStatus) ? "failed" : [
-		"needs_ted",
-		"needs_you",
-		"needs_attention",
-		"waiting_permission",
-		"awaiting_approval",
-		"uncertain",
-		"blocked"
-	].includes(managedStatus) ? "needs_you" : "none";
-	const staleness = {
-		runtime: runtimeStale(source),
-		gone: Boolean(source.gone_at) || source.state?.enumeration === "gone",
-		missing: source.state?.enumeration === "missing"
-	};
-	const lifecycle = source.state?.lifecycle || "unknown";
-	return {
-		activity: Object.values(staleness).some(Boolean) ? "unknown" : lifecycle === "ended" ? "not_streaming" : source.streaming === true ? "streaming" : source.streaming === false ? "not_streaming" : "unknown",
-		attention,
-		staleness,
-		lifecycle,
-		pendingKind: pending?.kind,
-		hasPending: Boolean(pending),
-		notLoaded: source.loaded === false || source.state?.loading === "not_loaded"
-	};
-}
-function sessionActivity(session) {
-	const facets = sessionFacets(session);
-	if (facets.hasPending) return {
-		key: "pending_" + facets.pendingKind,
-		tone: "stale"
-	};
-	if (facets.attention === "failed") return {
-		key: "op_failed",
-		tone: "bad"
-	};
-	if (facets.attention === "needs_you") return {
-		key: "workspace_needs_you",
-		tone: "stale"
-	};
-	if (facets.lifecycle === "ended") return {
-		key: "obs_value_ended",
-		tone: ""
-	};
-	if (facets.staleness.gone || facets.staleness.missing) return {
-		key: "sessions_not_seen",
-		tone: "stale"
-	};
-	if (facets.staleness.runtime) return {
-		key: "sessions_stale",
-		tone: "stale"
-	};
-	if (facets.activity === "streaming") return {
-		key: "obs_value_streaming",
-		tone: "info"
-	};
-	if (facets.activity === "not_streaming") return {
-		key: "obs_value_not_streaming",
-		tone: ""
-	};
-	if (facets.notLoaded) return {
-		key: "sessions_not_loaded",
-		tone: ""
-	};
-	return {
-		key: "sessions_activity_unknown",
-		tone: ""
-	};
-}
-function sessionStatus(session) {
-	const facets = sessionFacets(session);
-	if (facets.attention !== "none") return facets.attention;
-	if (Object.values(facets.staleness).some(Boolean)) return "stale";
-	if (facets.activity === "streaming") return "running";
-	return null;
-}
-function sessionPill(session) {
-	const status = sessionStatus(session);
-	if (status === "asking_you" || status === "needs_you") return {
-		key: "sessions_pill_waiting",
-		tone: "stale",
-		status
-	};
-	if (status === "failed") return {
-		key: "op_failed",
-		tone: "bad",
-		status
-	};
-	if (status === "stale") return {
-		key: "sessions_pill_stale",
-		tone: "stale",
-		status
-	};
-	if (status === "running") return {
-		key: "sessions_pill_running",
-		tone: "info",
-		status
-	};
-	return null;
 }
 //#endregion
 //#region src/workbench-projection.js
@@ -55651,6 +56250,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	const key = `batc.managed.setup.${namespace}`;
 	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
 	const stagedSecrets = new Map();
+	let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
 	try {
 		saved = JSON.parse(localStorage.getItem(key) || "{}");
 	} catch {}
@@ -55758,6 +56358,14 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		if (!secret) node.value = typeof saved[name] === "string" ? saved[name] : "";
 		node.addEventListener("input", () => {
 			if (!alive() || saved.intent || busy) return;
+			if (!name.startsWith("verification_") && ![
+				"repository",
+				"repository_host",
+				"workspace_id",
+				"remote_url",
+				"github_secret"
+			].includes(name)) invalidateReview();
+			if (name === "bat_secret") stagedSecrets.delete("host");
 			if ([
 				"url",
 				"fingerprint",
@@ -55812,6 +56420,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		node.checked = saved[name] === true;
 		node.addEventListener("change", () => {
 			if (!alive() || saved.intent || busy) return;
+			invalidateReview();
 			saved[name] = node.checked;
 			try {
 				persist();
@@ -55836,6 +56445,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}, h("span", {}, t("setup_profile")), profile, profilesError);
 	profile.addEventListener("change", () => {
 		if (!alive() || saved.intent) return;
+		invalidateReview();
+		stagedSecrets.delete("host");
 		const selected = snapshot?.profiles?.find((row) => row.id === profile.value);
 		if (selected) clearPasteRead();
 		saved.import_profile_id = selected?.id || "";
@@ -55886,7 +56497,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	})), manual, h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("button", {
 		type: "submit",
 		class: "primary"
-	}, t("setup_save_host")));
+	}, t("setup_review_connection")));
 	const repoForm = h("form", {
 		novalidate: true,
 		"data-setup-repository": "",
@@ -56031,10 +56642,13 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		class: "primary setup-automatic",
 		disabled: true,
 		onclick: () => automatic().catch(showError)
-	}, t("setup_automatic"));
+	}, t("setup_review_connection"));
 	const connectionChoice = h("select", { "aria-label": t("setup_connection_choice") });
 	connectionChoice.addEventListener("change", () => {
 		if (!alive() || busy || saved.intent) return;
+		invalidateReview();
+		stagedSecrets.delete("host");
+		fields.get("bat_secret").value = "";
 		saved.import_profile_id = "";
 		try {
 			persist();
@@ -56104,10 +56718,20 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}, t("setup_continue")));
 	const simple = h("div", { "data-setup-simple": "" }, h("p", {}, t("setup_simple_help")), choiceField, automaticButton, copyForm);
 	const advanced = h("details", { "data-setup-advanced": "" }, h("summary", {}, t("setup_advanced")), hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm));
+	const applyReview = h("button", {
+		type: "button",
+		class: "primary",
+		onclick: () => applyConnectionReview()
+	}, t("setup_apply_connection"));
+	const reviewBox = h("section", {
+		hidden: true,
+		"data-setup-review": "",
+		"aria-label": t("setup_review_connection")
+	});
 	const box = h("section", {
 		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), simple, automaticStatus, reviewBox, connectionStatus, actions, message, receipt, advanced, h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), summary, operationReceipt, h("p", {}, t("setup_resume_help"))));
 	function defaultHost() {
 		if (fields.get("host").value || saved.intent) return;
 		const names = new Set((snapshot?.hosts || []).map((row) => row.name));
@@ -56124,6 +56748,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		fields.get("host").value = saved.host = name;
 	}
 	function applyConnection(parsed) {
+		invalidateReview();
 		fields.get("connection_url").value = "";
 		for (const [name, value] of Object.entries({
 			url: parsed.endpoint,
@@ -56284,8 +56909,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 			scope.hidden = !!allowed(kind);
 		}
-		automaticButton.disabled = !!locked || !allowed("host");
+		const supported = snapshot?.preview_contract_version === 1;
+		hostForm.querySelector("button[type=submit]").disabled ||= !supported || reviewing;
+		automaticButton.disabled = !!locked || !allowed("host") || !supported || reviewing;
+		automaticButton.hidden = !!review;
 		for (const field of copyForm.querySelectorAll("input,button")) field.disabled = !!locked || !allowed("host");
+		copyForm.querySelector("button").disabled ||= !supported || reviewing;
 		connectionChoice.disabled = !!locked || !allowed("host");
 		simple.hidden = !!snapshot?.hosts?.length;
 		connectionStatus.hidden = !readReady;
@@ -56295,7 +56924,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			hosts: snapshot?.hosts || [],
 			readReady
 		});
-		automaticStatus.replaceChildren(status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
+		const reviewStatus = !saved.intent && (!supported && snapshot ? "setup_review_unsupported" : reviewing ? "setup_reviewing_connection" : reviewChanged ? "setup_review_changed" : null);
+		automaticStatus.replaceChildren(reviewStatus ? t(reviewStatus) : busy && saved.intent?.request.action === "setup.host" ? t("setup_applying_connection") : status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
 			host: operation.target.host,
 			time: timeStamp(status.verifiedAt)
 		}) : status.key ? t(status.key) : "");
@@ -56320,6 +56950,104 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		sessions.hidden = !snapshot?.hosts?.length;
 		actions.hidden = sessions.hidden && retry.hidden && next.hidden;
 		hostForm.querySelector("button[type=submit]").className = sessions.hidden ? "primary" : "secondary";
+		reviewBox.hidden = !review;
+		applyReview.disabled = !!locked || !review || !supported;
+	}
+	function invalidateReview() {
+		reviewSerial++;
+		reviewChanged = !!review || reviewing;
+		review = null;
+		if (typeof reviewBox !== "undefined") {
+			reviewBox.hidden = true;
+			update();
+		}
+	}
+	function showReview(preview, request) {
+		if (preview?.contract_version !== 1 || preview.action !== "setup.host" || !equal(preview.target, request.target) || preview.config_revision !== request.preconditions.config_revision || !/^[a-f0-9]{64}$/.test(preview.review_digest) || !/^[a-f0-9]{64}$/.test(preview.after_revision) || !Array.isArray(preview.changes) || !preview.source || ![
+			"bat_profile",
+			"staged_secret",
+			"existing_connection"
+		].includes(preview.source.kind) || typeof preview.source.reference !== "string" || typeof preview.source.available !== "boolean" || !preview.effects || preview.effects.configuration_written !== false || preview.effects.operation_created !== false || preview.effects.probe_started !== false) throw Error(t("setup_receipt_mismatch"));
+		const labels = {
+			url: "setup_host_url",
+			fingerprint: "setup_fingerprint",
+			profile_id: "setup_workspace_profile",
+			git: "setup_review_git",
+			writes: "setup_allow_messages",
+			orchestrate: "setup_allow_start",
+			shared_clone_worktrees: "setup_shared_clone",
+			managed_roots: "setup_managed_roots",
+			ssh_alias: "setup_ssh_alias"
+		};
+		if (preview.changes.length > Object.keys(labels).length || preview.changes.some((row) => !labels[row.field])) throw Error(t("setup_receipt_mismatch"));
+		const value = (item) => item == null ? t("setup_review_unset") : typeof item === "boolean" ? t(item ? "setup_review_yes" : "setup_review_no") : Array.isArray(item) ? item.join("; ") || t("setup_review_unset") : String(item);
+		review = {
+			request: structuredClone(request),
+			digest: preview.review_digest
+		};
+		reviewChanged = false;
+		reviewBox.replaceChildren(h("h3", {}, t("setup_review_connection")), h("p", {}, t(`setup_review_source_${preview.source.kind}`, { reference: preview.source.reference })), h("p", {}, t(preview.source.available ? "setup_review_source_available" : "setup_review_source_unavailable")), preview.changes.length ? h("table", {}, h("thead", {}, h("tr", {}, ...[
+			"field",
+			"before",
+			"after"
+		].map((key) => h("th", {}, t(`setup_review_${key}`))))), h("tbody", {}, ...preview.changes.map((row) => h("tr", {}, h("th", {}, t(labels[row.field])), h("td", {}, value(row.before)), h("td", {}, value(row.after)))))) : h("p", {}, t("setup_review_no_changes")), h("p", {}, t("setup_review_effects")), preview.effects.credential_staged ? h("p", { class: "note" }, t("setup_review_staged")) : null, h("div", { class: "actions" }, applyReview, h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				invalidateReview();
+				update();
+				focusField("host");
+			}
+		}, t("setup_review_back")), h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				invalidateReview();
+				reviewChanged = false;
+				update();
+			}
+		}, t("setup_review_cancel"))));
+		update();
+		applyReview.focus();
+	}
+	async function applyConnectionReview() {
+		if (!alive() || busy || reviewing || !review || saved.intent || !readReady || snapshot.busy || !allowed("host")) return;
+		if (review.request.preconditions.config_revision !== snapshot.revision) {
+			invalidateReview();
+			update();
+			return;
+		}
+		busy = true;
+		update();
+		message.replaceChildren();
+		let sourceRefresh = false;
+		try {
+			saved.intent = {
+				key: crypto.randomUUID(),
+				request: {
+					...structuredClone(review.request),
+					preconditions: {
+						...review.request.preconditions,
+						review_digest: review.digest
+					}
+				}
+			};
+			try {
+				persist();
+			} catch (error) {
+				delete saved.intent;
+				throw error;
+			}
+			review = null;
+			await sendOriginal();
+			sourceRefresh = true;
+			await refresh();
+		} catch (error) {
+			handleSubmissionError(error, "host", { sourceRefresh });
+		} finally {
+			busy = false;
+			if (alive()) update();
+		}
 	}
 	function accept(candidate) {
 		const intent = saved.intent;
@@ -56358,8 +57086,13 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	async function run(kind, defaults = false) {
 		const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
-		if (!alive() || busy || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
-		busy = true;
+		if (!alive() || busy || reviewing || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && snapshot.preview_contract_version !== 1 || kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
+		const serial = ++reviewSerial;
+		if (kind === "host") {
+			reviewing = true;
+			review = null;
+			reviewChanged = false;
+		} else busy = true;
 		update();
 		message.replaceChildren();
 		let sourceRefresh = false;
@@ -56376,6 +57109,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 					value: tokenField.value
 				});
 				guard();
+				if (kind === "host" && serial !== reviewSerial) return;
 				secretRef = staged.secret_ref;
 				tokenField.value = "";
 				stagedSecrets.set(kind, {
@@ -56412,14 +57146,22 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			};
 			if (kind === "verification" && !validVerification(params)) throw Error(t("setup_verification_invalid"));
 			if (secretRef) params.secret_ref = secretRef;
+			const request = {
+				action: `setup.${kind}`,
+				target: kind === "host" ? { host: value("host") } : kind === "repository" ? { repository: value("repository") } : {},
+				params,
+				preconditions: { config_revision: kind === "verification" ? saved.verification_base?.revision || snapshot.revision : snapshot.revision }
+			};
+			if (kind === "host") {
+				const response = await api("POST", "/managed/setup/preview", request);
+				guard();
+				if (serial !== reviewSerial || disposed || request.preconditions.config_revision !== snapshot?.revision) return;
+				showReview(response.preview, request);
+				return;
+			}
 			saved.intent = {
 				key: crypto.randomUUID(),
-				request: {
-					action: `setup.${kind}`,
-					target: kind === "host" ? { host: value("host") } : kind === "repository" ? { repository: value("repository") } : {},
-					params,
-					preconditions: { config_revision: kind === "verification" ? saved.verification_base?.revision || snapshot.revision : snapshot.revision }
-				}
+				request
 			};
 			persist();
 			automaticStatus.textContent = t("setup_saving");
@@ -56427,9 +57169,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
+			if (kind === "host" && serial !== reviewSerial) return;
 			handleSubmissionError(error, kind, { sourceRefresh });
 		} finally {
 			busy = false;
+			reviewing = false;
 			if (alive()) update();
 		}
 	}
@@ -56514,6 +57258,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			guard();
 		} catch (error) {
 			if (alive() && serial === readSerial) {
+				invalidateReview();
 				readReady = false;
 				if ([403, 404].includes(error.status)) {
 					snapshot = null;
@@ -56540,6 +57285,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				timeout_s: 600
 			};
 		}
+		if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1)) invalidateReview();
 		snapshot = result;
 		readReady = true;
 		if (!hostDisclosureReady) {
@@ -60669,152 +61415,7 @@ function nativeAttachments({ h, t, guard, canWrite, draftId, onReceipt, onDiscar
 	};
 }
 //#endregion
-//#region src/fleet-status.js
-function fleetDiagnosis(row, { snapshot, readable, kind = "host" } = {}) {
-	const layers = row?.layers || {};
-	const reason = row?.code || row?.blocking;
-	let state;
-	if (!readable) state = "unavailable";
-	else if (row?.selected === false || row?.level === "off") state = "off";
-	else if (lookup(codeReason, reason) === "ownership") state = "ownership";
-	else if (snapshot.monitor.state === "stopped") state = "stopped";
-	else if (snapshot.monitor.state !== "running" || snapshot.readiness.state === "unavailable") state = "checking";
-	else if (snapshot.selection.applied_revision !== snapshot.selection.revision) state = "selection_pending";
-	else if (snapshot.readiness.state !== "fresh" || row?.stale || row?.blocking === "stale") state = "stale";
-	else if (!row || row.selected !== true) state = "checking";
-	else if (reason) state = lookup(codeReason, reason) || lookup(layerReason, row.blocking) || "unknown";
-	else if (row.level === "ready" && layers.tunnel === true && (kind === "connector" ? !["unknown", "refused"].includes(layers.auth) : layers.tls === true && layers.auth === "ok" && layers.bat === true && layers.workspace === true)) state = "ready";
-	else state = "checking";
-	const current = ![
-		"unavailable",
-		"configuration",
-		"off",
-		"stopped",
-		"stale",
-		"checking",
-		"selection_pending",
-		"unknown",
-		"ownership"
-	].includes(state);
-	const blockedAt = (reason === "BAT_PROTOCOL_INVALID" ? "service" : lookup(layerStep, row?.blocking)) || {
-		network: "network",
-		waking: "network",
-		trust: "identity",
-		identity: "identity",
-		service: "service",
-		version: "service",
-		workspace: "workspace",
-		local_endpoint: "network",
-		local_ssh: "network"
-	}[state];
-	const steps = [
-		["network", layers.tunnel === true],
-		["identity", layers.auth === "ok" && (kind === "connector" || layers.tls === true)],
-		["service", kind === "connector" ? state === "ready" : layers.bat === true],
-		...kind === "connector" ? [] : [["workspace", layers.workspace === true]]
-	];
-	let blocked = false;
-	return {
-		state,
-		kind,
-		steps: steps.map(([id, passed]) => {
-			if (id === blockedAt) blocked = true;
-			return {
-				id,
-				state: !current ? "unchecked" : blocked ? id === blockedAt && !["waking", "timeout"].includes(state) ? "attention" : "unchecked" : passed ? "passed" : "unchecked"
-			};
-		})
-	};
-}
-function rememberFleetDetails(content, detailsState) {
-	for (const details of content.querySelectorAll("details[data-fleet-details-key]")) detailsState.set(details.dataset.fleetDetailsKey, details.open);
-}
-function fleetStatus(row, { h, t, snapshot, readable, entry, detailsState }) {
-	const { state, kind, steps } = fleetDiagnosis(row, {
-		snapshot,
-		readable,
-		name: entry.name,
-		kind: entry.kind
-	});
-	const key = `${snapshot.configuration.binding}:machine:${entry.name}`;
-	const details = h("details", {
-		open: detailsState?.get(key) === true,
-		"data-fleet-details-key": key
-	}, h("summary", { "data-fleet-details": entry.name }, t("fleet_status_details")), h("dl", { class: "fleet-checks" }, ...steps.flatMap((step) => [h("dt", {}, t("fleet_check_" + step.id)), h("dd", {
-		"data-fleet-check": step.id,
-		"data-check-state": step.state
-	}, t("fleet_check_" + step.state))])), ...[row?.code, row?.blocking].filter((value, index, all) => value && all.indexOf(value) === index).map((value) => h("code", {}, value)));
-	const helpKey = [
-		"ready",
-		"identity",
-		"service",
-		"version"
-	].includes(state) ? `${state}_${kind === "connector" ? "connector" : "bat"}` : state;
-	return h("div", {
-		class: "fleet-diagnosis",
-		"data-fleet-diagnosis": entry.name,
-		"data-fleet-state": state
-	}, h("p", { class: "fleet-diagnosis-title" }, t("fleet_check_title_" + state)), h("p", { class: "muted" }, t("fleet_check_help_" + helpKey)), details);
-}
-var codeReason, layerReason, layerStep, lookup;
-var init_fleet_status = __esmMin((() => {
-	codeReason = {
-		TAILSCALE_WAKING: "waking",
-		ROUTE_UNAVAILABLE: "network",
-		TUNNEL_DOWN: "network",
-		TLS_PIN_MISSING: "trust",
-		TLS_IDENTITY_MISMATCH: "trust",
-		TLS_FAILED: "trust",
-		CREDENTIAL_MISSING: "identity",
-		CREDENTIAL_CHANGED: "identity",
-		BAT_AUTH_REFUSED: "identity",
-		CONNECTOR_AUTH_REFUSED: "identity",
-		CONNECTOR_SCOPE_MISSING: "identity",
-		BAT_VERSION_UNSUPPORTED: "version",
-		CONNECTOR_CONTRACT_UNSUPPORTED: "version",
-		BAT_PROTOCOL_INVALID: "service",
-		CONNECTOR_UNAVAILABLE: "service",
-		CONNECTOR_CAPABILITY_MISSING: "service",
-		WORKSPACE_UNREADABLE: "workspace",
-		WORKSPACE_INVALID: "workspace",
-		WORKSPACE_BINDING_MISMATCH: "workspace",
-		INVENTORY_INVALID: "configuration",
-		OWNER_UNPROVEN: "ownership",
-		STOP_UNCONFIRMED: "ownership",
-		TUNNEL_START_UNSETTLED: "ownership",
-		TUNNEL_RECORD_CHANGED: "ownership",
-		OTHER_LOGIN_OWNER: "ownership",
-		ENDPOINT_IN_USE: "local_endpoint",
-		SSH_UNAVAILABLE: "local_ssh",
-		PROBE_PENDING: "checking",
-		PROBE_TIMEOUT: "timeout",
-		PROBE_STALE: "stale"
-	};
-	layerReason = {
-		inventory: "configuration",
-		tunnel: "network",
-		tls: "trust",
-		auth: "identity",
-		bat: "service",
-		connector: "service",
-		contract: "version",
-		workspace: "workspace",
-		stale: "stale"
-	};
-	layerStep = {
-		tunnel: "network",
-		tls: "identity",
-		auth: "identity",
-		bat: "service",
-		connector: "service",
-		contract: "service",
-		workspace: "workspace"
-	};
-	lookup = (table, key) => Object.hasOwn(table, key) ? table[key] : void 0;
-}));
-//#endregion
 //#region \0vite/preload-helper.js
-init_fleet_status();
 var scriptRel = (function detectScriptRel() {
 	const relList = typeof document !== "undefined" && document.createElement("link").relList;
 	return relList && relList.supports && relList.supports("modulepreload") ? "modulepreload" : "preload";
@@ -60910,7 +61511,7 @@ var __vitePreload = function preload(baseModule, deps, importerUrl) {
 //#endregion
 //#region src/fleet-desktop.js
 var fleet_desktop_exports = __exportAll({ mountFleetDesktop: () => mountFleetDesktop });
-async function mountFleetDesktop(main, { h, t }) {
+async function mountFleetDesktop(main, { h, t, onStatus = () => {} }) {
 	const panel = h("section", {
 		class: "panel fleet-desktop",
 		"aria-label": t("fleet_desktop_title")
@@ -61015,6 +61616,7 @@ async function mountFleetDesktop(main, { h, t }) {
 		}
 		snapshot = value;
 		readable = true;
+		onStatus(value);
 		const automatic = value.login_launch;
 		if (!launch && automatic?.configuration_binding === binding && validId(automatic.preview_id) && validSummary(automatic.summary, automatic.preview_id)) {
 			launch = {
@@ -61463,6 +62065,7 @@ async function mountFleetDesktop(main, { h, t }) {
 	};
 }
 var init_fleet_desktop = __esmMin((() => {
+	init_fleet_status();
 	init_transport();
 }));
 //#endregion
@@ -61626,7 +62229,7 @@ var init_fleet_bootstrap = __esmMin((() => {
 //#region src/fleet.js
 init_fleet_status();
 init_transport();
-async function mountFleet(main, { h, t }) {
+async function mountFleet(main, { h, t, onStatus = () => {} }) {
 	if (!main.isConnected) return () => {};
 	const panel = h("section", {
 		class: "panel",
@@ -61825,6 +62428,7 @@ async function mountFleet(main, { h, t }) {
 		}
 		snapshot = value;
 		readable = true;
+		onStatus(value);
 		if (draft && same(draft.connections, value.selection.connections)) {
 			draft = null;
 			save();
@@ -61886,7 +62490,8 @@ async function mountFleet(main, { h, t }) {
 				panel.remove();
 				nativeCleanup = await mountFleetDesktop(main, {
 					h,
-					t
+					t,
+					onStatus
 				});
 				if (availability.bootstrap_controls === true && !disposed && main.isConnected) {
 					const { mountFleetBootstrap } = await __vitePreload(async () => {
@@ -67849,6 +68454,7 @@ function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = s
 		data,
 		at
 	};
+	if (key === "capabilities" && data && state.health) state.health.currentCaps = data;
 	paintVersions();
 }
 async function readNativeVersions() {
@@ -68102,7 +68708,11 @@ function scanEarlierDrafts(identity) {
 		}
 	}, 0);
 }
-async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false) {
+function validateHealthBootstrap(caps, bootstrap) {
+	const sync = bootstrap?.sync;
+	if (sync?.version !== 1 || !sync.server_id || !sync.principal_id || !Number.isSafeInteger(sync.checkpoint?.cursor) || sync.checkpoint.cursor < 0 || !sync.checkpoint.token || bootstrap.capabilities?.actor !== caps.actor || caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id)) throw new Error("Invalid central bootstrap identity");
+}
+async function activate(caps, endpoint = location.origin, reset = false, configurationSource = state.scopeIdentity?.configurationSource, retainView = false, verifiedBootstrap) {
 	if (reset && earlierIdentity) {
 		earlierScan++;
 		earlierScanState = "waiting";
@@ -68110,28 +68720,36 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 	} else clearEarlierDrafts();
 	withdrawDiagnostics();
 	recentErrors.clear();
+	const previousHealthScope = {
+		namespace: state.namespace,
+		health: state.health
+	};
 	const retained = retainView ? {
 		namespace: state.namespace,
 		ready: state.viewReady
 	} : null;
 	if (!retained) state.epoch++;
 	if (!retained) state.observations = new Map();
-	state.connectionError = null;
+	if (!verifiedBootstrap) state.connectionError = null;
 	state.online = false;
 	state.pollHealth = "initial";
 	state.viewReady = false;
+	state.health ||= {
+		sessions: [],
+		hosts: []
+	};
 	state.caps = caps;
 	state.endpoint = endpoint;
 	state.sync = null;
 	let bootstrap;
 	try {
-		bootstrap = await api("GET", "/bootstrap");
+		bootstrap = verifiedBootstrap || await api("GET", "/bootstrap");
 	} catch (e) {
 		if (nativeDesktop || e.status !== 404) throw e;
 	}
 	if (bootstrap) {
 		const sync = bootstrap.sync;
-		if (sync?.version !== 1 || !sync.server_id || !sync.principal_id || !Number.isSafeInteger(sync.checkpoint?.cursor) || sync.checkpoint.cursor < 0 || !sync.checkpoint.token || bootstrap.capabilities?.actor !== caps.actor || caps.desktop_identity && (caps.desktop_identity.server_id !== sync.server_id || caps.desktop_identity.principal_id !== sync.principal_id)) throw new Error("Invalid central bootstrap identity");
+		validateHealthBootstrap(caps, bootstrap);
 		state.caps = bootstrap.capabilities;
 		const identity = {
 			actor: caps.actor,
@@ -68167,6 +68785,10 @@ async function activate(caps, endpoint = location.origin, reset = false, configu
 		}
 	}
 	state.online = true;
+	state.health = resetHealthBootstrap(previousHealthScope.health, {
+		sameScope: state.namespace === previousHealthScope.namespace,
+		caps: state.caps
+	});
 }
 function saveCursor() {
 	if (state.sync) try {
@@ -68183,6 +68805,7 @@ function resetConnection() {
 	state.lastEvent = 0;
 	state.lastEventAt = 0;
 	state.scopeIdentity = null;
+	state.health = null;
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
@@ -68364,10 +68987,18 @@ function dropKey(scope, namespace) {
 	} catch {}
 }
 async function api(method, path, body, key, collectReceipt) {
-	const revision = diagnosticRevision, epoch = state.epoch;
+	const revision = diagnosticRevision, epoch = state.epoch, readHealth = state.health, inventoryRevision = state.health?.inventoryRevision;
 	try {
 		const data = await apiRequest(method, path, body, key, collectReceipt);
 		if (epoch === state.epoch && method === "GET") {
+			if (state.health && state.health === readHealth && state.health.inventoryRevision === inventoryRevision) {
+				rememberHealthRead(state.health, path, data);
+				if (data && (Array.isArray(data.hosts) || Array.isArray(data.sessions) || data.session)) {
+					state.health.readers ||= new Map();
+					state.health.readers.set(path, api.bind(null, "GET", path));
+				}
+				if (/^\/(hosts|sessions)(?:[/?]|$)/.test(path)) paintConnection(...connectionPaintFlags);
+			}
 			if (path === "/capabilities" || path === "/bootstrap") rememberVersionRead("capabilities", path === "/bootstrap" ? data.capabilities : data, void 0, epoch);
 			if (/^\/pm\/(?:installation-capabilities|workspaces\/[^/?]+\/capabilities)(?:\?|$)/.test(path)) rememberVersionRead("adapter", { native_analysis: { required_version: data.native_analysis?.required_version } }, void 0, epoch);
 			if (/^\/pm\/workspaces\/[^/?]+\/runs\/[^/?]+(?:\?|$)/.test(path) && data.run) rememberVersionRead("adapterRun", {
@@ -68426,6 +69057,7 @@ async function api(method, path, body, key, collectReceipt) {
 				admissionRefused: error.admissionRefused,
 				operation: error.operation
 			});
+			if (state.health && state.health === readHealth) withdrawHealthRead(state.health, method, path, error);
 			if ([
 				401,
 				403,
@@ -69250,13 +69882,23 @@ function updateOnline(value) {
 	for (const fn of onlineListeners) fn();
 }
 var connectionPainters = new Set();
+var connectionPaintFlags = [false, false];
 function paintConnection(waiting = false, paused = false) {
+	connectionPaintFlags = [waiting, paused];
 	const live = document.getElementById("live");
-	const { key, tone, connection: status, recoveryKey } = centralServiceStatus(state);
+	const projection = healthDisplay(state);
+	const { key, tone, connection: status, recoveryKey, freshness } = projection.connection;
+	const label = healthLabel(projection.connection, t, { age: false });
 	live.dataset.connection = status;
-	live.className = "live tone-" + tone;
-	live.replaceChildren(h("span", { class: "central-service-state" }, t(key)));
-	const scoped = t("ui_connector_status", { status: t(key) });
+	live.dataset.freshness = freshness;
+	live.className = "live tone-" + (["stale", "unknown"].includes(freshness) ? "neutral" : tone);
+	let labelNode = live.querySelector(".central-service-state");
+	if (!labelNode) {
+		labelNode = h("span", { class: "central-service-state" });
+		live.append(labelNode);
+	}
+	if (labelNode.textContent !== label) labelNode.textContent = label;
+	const scoped = t("ui_connector_status", { status: label });
 	live.setAttribute("aria-label", scoped);
 	const central = document.getElementById("central-service-status");
 	central.title = scoped;
@@ -69278,8 +69920,154 @@ function paintConnection(waiting = false, paused = false) {
 	}
 	const helpKey = recoveryKey ? recoveryKey + "_help" : key === "ui_not_connected" ? "ui_not_connected_help" : key === "ui_connecting" ? "ui_connecting_help" : key === "ui_reconnecting" ? "offline_actions_paused" : key === "ui_connection_refused" ? "error_code_CLIENT_ACTION_REFUSED" : key === "ui_service_error" ? "error_code_CLIENT_ACTION_SERVICE_ERROR" : key === "ui_invalid_response" ? "error_code_CLIENT_ACTION_INVALID_RESPONSE" : paused ? "sync_actions_paused" : waiting ? "sync_waiting" : "desktop_polling";
 	live.title = scoped + " — " + t(helpKey);
+	paintHealthSummary(projection);
 	for (const paint of [...connectionPainters]) paint();
 	paintVersions();
+}
+function healthSummaryContent(projection) {
+	const summary = projection.summary;
+	const pair = (label, value) => t("health_pair", {
+		label: t(label),
+		value
+	});
+	const join = (values) => values.reduce((left, right) => t("health_join", {
+		left,
+		right
+	}));
+	const last = summary?.facts.filter((row) => row.activity.freshness === "stale").sort((a, b) => (b.activity.ageSeconds || 0) - (a.activity.ageSeconds || 0))[0];
+	const refresh = projection.capabilities.refresh;
+	return [
+		summary ? h("span", {
+			"data-health-key": "selected",
+			"data-health-selected": "",
+			class: "health-selected"
+		}, h("span", {}, pair(summary.selected.workspaceId ? "health_selected_workspace" : "health_selected_work", summary.selected.label || summary.selected.host)), h("span", {
+			class: "ui-pill",
+			"data-health-compact": summary.compact
+		}, t("health_" + summary.compact)), summary.connection ? h("span", { class: "health-installation-connection" }, healthLabel({
+			...summary.connection,
+			key: summary.connection.value === "connected" ? "ui_connected" : summary.connection.value === "not_connected" ? "health_connection_problem" : "health_unknown"
+		}, t)) : null, h("span", { class: "health-facets" }, join([
+			pair("health_attention_label", t(summary.attention ? "health_attention" : "health_none")),
+			pair("health_activity", t("health_" + summary.activity)),
+			pair("health_freshness", t(summary.stale ? "health_stale" : summary.unknown ? "health_unknown" : "health_current"))
+		])), last ? h("span", { class: "health-last-value" }, healthLabel({
+			...last.activity,
+			key: ["streaming", "starting"].includes(last.activity.value) ? "health_working" : last.activity.value === "not_streaming" ? "health_idle" : "health_unknown"
+		}, t)) : null) : null,
+		projection.connection.freshness === "stale" ? h("span", {
+			"data-health-key": "connection-age",
+			"data-health-age": "",
+			"aria-live": "off"
+		}, healthAge(projection.connection.ageSeconds, t)) : null,
+		projection.capabilities.freshness === "invalidated" ? h("span", { "data-health-key": "capabilities" }, t(refresh?.state === "loading" ? "health_capabilities_checking" : "health_capabilities_reload", { reason: refresh?.reason || "IDENTITY_UNVERIFIED" })) : null,
+		projection.capabilities.freshness === "invalidated" && refresh?.state !== "loading" ? h("button", {
+			"data-health-key": "reload",
+			onclick: () => location.reload()
+		}, t("health_reload")) : null,
+		projection.otherAttention ? h(projection.other.href ? "a" : "span", {
+			href: projection.other.href,
+			"data-health-key": "other",
+			"data-health-other": ""
+		}, healthLabel({
+			...projection.other,
+			key: projection.otherAttention === 1 ? "health_other_machines_one" : "health_other_machines_many"
+		}, (key, vars) => t(key, {
+			count: projection.otherAttention,
+			...vars
+		}))) : null
+	].filter(Boolean);
+}
+function renderHealthContent(container, projection) {
+	const content = healthSummaryContent(projection), signature = content.map((node) => node.outerHTML).join("");
+	if (container.dataset.signature === signature) return;
+	const focused = container.contains(document.activeElement) ? document.activeElement.dataset.healthKey : null;
+	const existing = new Map([...container.children].map((node) => [node.dataset.healthKey, node]));
+	const next = content.map((node) => {
+		const previous = existing.get(node.dataset.healthKey);
+		if (previous && previous.tagName === node.tagName && ["A", "BUTTON"].includes(node.tagName)) {
+			if (previous.textContent !== node.textContent) previous.textContent = node.textContent;
+			if (node.hasAttribute("href")) previous.setAttribute("href", node.getAttribute("href"));
+			return previous;
+		}
+		return previous?.outerHTML === node.outerHTML ? previous : node;
+	});
+	for (const child of [...container.children]) if (!next.includes(child)) child.remove();
+	next.forEach((node, i) => {
+		if (container.children[i] !== node) container.insertBefore(node, container.children[i] || null);
+	});
+	container.dataset.signature = signature;
+	if (focused && !container.contains(document.activeElement)) container.querySelector(`[data-health-key="${focused}"]`)?.focus({ preventScroll: true });
+}
+var healthResize;
+function paintHealthSummary(projection) {
+	let summary = document.getElementById("installation-health");
+	if (!summary) {
+		summary = h("div", {
+			id: "installation-health",
+			class: "health-summary",
+			role: "group"
+		});
+		document.querySelector("header.top").after(summary);
+		healthResize = new ResizeObserver(() => {
+			const height = document.querySelector("header.top").getBoundingClientRect().height + summary.getBoundingClientRect().height;
+			document.documentElement.style.setProperty("--shell-header-height", `${height}px`);
+		});
+		healthResize.observe(summary);
+		healthResize.observe(document.querySelector("header.top"));
+	}
+	summary.setAttribute("aria-label", t("health_summary"));
+	renderHealthContent(summary, projection);
+	summary.hidden = !summary.children.length;
+}
+var healthRenewal = null;
+async function refreshHealthCapabilities() {
+	const health = state.health, epoch = state.epoch;
+	if (!health || healthDisplay(state).capabilities.freshness !== "invalidated") return;
+	const revision = healthRevision(health.currentCaps);
+	if (health.capabilityRefresh?.revision === revision) return;
+	const refresh = health.capabilityRefresh = {
+		revision,
+		state: "loading",
+		startedAt: Date.now()
+	};
+	try {
+		if (!state.scopeIdentity || state.nativeBusy) throw { code: "IDENTITY_UNVERIFIED" };
+		const bootstrap = await api("GET", "/bootstrap");
+		if (epoch !== state.epoch || state.health !== health) return;
+		validateHealthBootstrap(state.caps, bootstrap);
+		if (bootstrap.sync.server_id !== state.scopeIdentity.server_id || bootstrap.sync.principal_id !== state.scopeIdentity.principal_id) throw { code: "CONNECTION_CHANGED" };
+		await activate(bootstrap.capabilities, state.endpoint, false, state.scopeIdentity.configurationSource, true, bootstrap);
+	} catch (error) {
+		refresh.revision = healthRevision(health.currentCaps);
+		refresh.state = "failed";
+		refresh.reason = error.code || "BOOTSTRAP_VERIFICATION_FAILED";
+	}
+}
+function tickHealth() {
+	if (document.hidden) return;
+	const verification = state.health?.capabilityRefresh;
+	if (verification?.state === "loading" && Date.now() - verification.startedAt >= 6e4) {
+		verification.state = "failed";
+		verification.reason = "VERIFICATION_PENDING";
+	}
+	paintConnection(...connectionPaintFlags);
+	refreshHealthCapabilities();
+	if (healthRenewal || !state.health || !state.token) return;
+	const path = takeHealthRenewal(state.health);
+	const read = state.health.readers?.get(path);
+	if (read) healthRenewal = read().catch(() => {}).finally(() => {
+		healthRenewal = null;
+		paintConnection(...connectionPaintFlags);
+	});
+}
+function rememberFleetHealth(snapshot) {
+	state.health ||= {
+		sessions: [],
+		hosts: []
+	};
+	state.health.fleet = snapshot;
+	paintConnection(...connectionPaintFlags);
 }
 var managedStatusAt = 0;
 async function refreshManagedRecovery() {
@@ -69290,8 +70078,9 @@ async function refreshManagedRecovery() {
 		const status = await nativeStatus();
 		if (epoch !== state.epoch) return;
 		state.managedRecovery = status.managed_recovery || null;
+		state.managedObservedAt = Date.now();
 		if (status.configuration_source === "managed" && status.endpoint) state.endpoint = status.endpoint;
-		paintConnection();
+		paintConnection(...connectionPaintFlags);
 		if (status.configuration_source === "managed" && Number.isSafeInteger(status.managed_rebind) && status.managed_rebind > (state.managedRebind || 0)) {
 			state.managedRebind = status.managed_rebind;
 			if (state.nativeBusy) return;
@@ -69420,6 +70209,10 @@ async function streamEvents() {
 				};
 				const accessChanged = !IDENTITY_PRESERVING_RESETS.has(error.reason);
 				if (accessChanged) {
+					state.health = null;
+					state.lastPoll = null;
+					state.pollHealth = "initial";
+					paintConnection(true);
 					clearEarlierDrafts();
 					generation++;
 					state.viewReady = false;
@@ -73130,13 +73923,17 @@ function fleetEmpty() {
 }
 function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
-	const stateCell = h("dd");
+	const statePill = h("span", { class: "ui-pill" }), stateCell = h("dd", {}, statePill);
 	const eventCell = h("dd", { "data-last-event": "" });
 	const pollCell = h("dd", { "data-last-successful-poll": "" });
+	const summaryCell = h("div", { "data-health-settings": "" });
 	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("ui_last_poll")), pollCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
-		const { key, tone } = centralServiceStatus(state);
-		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
+		const projection = healthDisplay(state);
+		const { tone, freshness } = projection.connection;
+		statePill.className = `ui-pill tone-${freshness === "current" ? tone : "neutral"}`;
+		statePill.textContent = healthLabel(projection.connection, t);
+		renderHealthContent(summaryCell, projection);
 		eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
 		eventCell.dataset.observedAt = state.lastEventAt ? new Date(state.lastEventAt).toISOString() : "";
 		const pollAt = state.lastPoll?.namespace === state.namespace ? state.lastPoll.at : 0;
@@ -73152,7 +73949,7 @@ function connectionFacts() {
 		render();
 	};
 	connectionPainters.add(paint);
-	return dl;
+	return h("div", {}, dl, summaryCell);
 }
 function connectionAccess() {
 	const known = [
@@ -73551,7 +74348,8 @@ async function viewManagedSettings(main) {
 		}
 		disposeFleet = await mountFleet(fleetRoot, {
 			h,
-			t
+			t,
+			onStatus: rememberFleetHealth
 		});
 		disposeTailscale = await fleetTailscale(fleetRoot, guard);
 	} else {
@@ -73802,7 +74600,8 @@ async function viewNativeSettings(main) {
 	frame.show("desktop");
 	const disposeFleet = await mountFleet(fleetRoot, {
 		h,
-		t
+		t,
+		onStatus: rememberFleetHealth
 	});
 	if (mine !== generation || !main.isConnected) {
 		disposeFleet?.();
@@ -75926,6 +76725,10 @@ var generation = 0;
 async function route() {
 	diagnosticsPreview?.close();
 	let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split("?")[0].replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
+	if (state.health && nextName !== "settings") {
+		if (nextName === "session") selectHealthSession(state.health, nextWorkspace, nextView);
+		else state.health.selected = null;
+	}
 	if (nextName === "pm") {
 		if (nextView?.startsWith("pmt_")) {
 			nextThread = nextView;
@@ -76126,6 +76929,7 @@ async function start() {
 			state.connectionError = error;
 		}
 	}
+	setInterval(tickHealth, 1e3);
 	await route();
 	streamEvents();
 }

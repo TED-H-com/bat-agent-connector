@@ -10,6 +10,31 @@ test.beforeAll(async () => {
   await promisify(execFile)('npm', ['run', 'build:demo'], {cwd: new URL('..', import.meta.url)});
 });
 
+for (const lang of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
+  test(`public demo session keeps transcript and read-only notice separate ${lang} ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: 480});
+    const {ids} = demoProject(lang);
+    await page.goto(`/demo/?lang=${lang}#/session/${ids.host}/${ids.sessions.manual}`);
+    await expect(page.locator('#installation-health')).toBeVisible();
+    await expect(page.locator('.conversation .msg')).not.toHaveCount(0);
+    const notice = page.locator('[data-session-readonly]');
+    await notice.scrollIntoViewIfNeeded();
+    const geometry = await notice.evaluate(node => {
+      const conversation = node.parentElement!.querySelector('.conversation')!;
+      const transcript = conversation.querySelector('.conversation-scroll')!.getBoundingClientRect();
+      const toolbar = conversation.querySelector('.conversation-toolbar')!.getBoundingClientRect();
+      const notice = node.getBoundingClientRect();
+      return {height: transcript.height, transcriptBottom: transcript.bottom, toolbarTop: toolbar.top,
+        toolbarBottom: toolbar.bottom, noticeTop: notice.top};
+    });
+    expect(geometry.height).toBeLessThanOrEqual(480);
+    expect(geometry.transcriptBottom).toBeLessThanOrEqual(geometry.toolbarTop + 1);
+    expect(geometry.toolbarBottom).toBeLessThanOrEqual(geometry.noticeTop + 1);
+    await expect(notice).toBeVisible();
+    await expect(page.locator('#workspace-message-input')).toBeHidden();
+  });
+}
+
 for (const lang of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) {
   test(`public demo uses the product views without a backend ${lang} ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: 960});
