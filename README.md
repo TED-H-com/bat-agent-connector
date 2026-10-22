@@ -14,7 +14,7 @@ expand requirements, inspect delivery evidence and browse sessions. The demo als
 the v1.3 workflow preview, which simulates the proposed start, follow-up and decision flow.
 Neither example connects to a BAT host or model.
 The real Start work panel is on `main` and needs a configured BAT host and a bound repository.
-Merged main at `14c62830` (through #314, October 19, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.
+Published preview source `437ee6a7` (through #395, October 22, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.
 
 ![Overview: live project progress, blockers and pending decisions.](site/images/overview-en.png)
 
@@ -22,7 +22,7 @@ Merged main at `14c62830` (through #314, October 19, 2026) connects reviewed pla
 
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-> **Development preview.** The screenshots come from merged `main` at `14c62830` (October 19, 2026, through #314).
+> **Development preview.** The screenshots come from the published prerelease source `437ee6a7` (October 22, 2026, through #395).
 > The gallery uses synthetic data; release, installation and live acceptance have separate evidence.
 > The [progress report](docs/product/implementation-status.md) separates branch, merged, installed and live-tested status.
 > Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.
@@ -73,7 +73,11 @@ Policy-bounded delivery and maintenance remain available through the project's s
 
 ## Install and connect
 
-Download the [published release](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12): Connector **0.2.12** and desktop **0.1.8**, pinned to `14c62830`. It includes Python packages, Windows/Linux/macOS desktop packages, a source manifest and SHA-256 checksums. These are unsigned or ad-hoc-signed development packages. For later candidates, use the [desktop workflow on main](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and match a successful platform job to its source; Actions artifacts can expire.
+The latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12) is Connector **0.2.12** / desktop **0.1.8**, pinned to `14c62830`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, pinned to `437ee6a7143a82e32eae1d6a008203b2df072aaf` (`437ee6a7`). Each release has eight assets: a Python wheel and sdist, a Linux deb, two macOS DMGs, a Windows installer, `release-manifest.json` and `SHA256SUMS`. Choose the desktop asset on the release page and check its manifest and checksums. These remain unsigned or ad-hoc-signed development builds, not a stable signed update channel.
+
+For Connector, follow the [verified installer instructions](docs/getting-started.md#2-install-connector). Use `--tag v0.2.12 --channel-check stable` for stable, or `--tag v0.2.13-preview.20261022 --channel-check preview` for this preview, with the bootstrap from the same tag. The installer requires a tag; its default channel check is `preview`, which accepts stable releases and prereleases. `stable` refuses a preview. On Linux, `--enable-updates` enrolls and schedules that same channel; without it, installation alone does not enable updates. See the [installer source](scripts/install_connector.py) and [update guide](docs/connector-updates.md).
+
+The enrolled updater offers eligible newer stable releases on `stable`, and eligible newer stable releases or prereleases on `preview`. It does not offer this preview to the stable channel. For later development builds, match a successful [desktop workflow on main](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) to its source; Actions artifacts can expire.
 
 | Entry | Package / local features | Boundary |
 | --- | --- | --- |
@@ -125,7 +129,7 @@ flowchart TB
 | Status | Scope |
 | --- | --- |
 | Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
-| Merged workspace | Merged main at `14c62830` (through #314, October 19, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate. |
+| Merged workspace | Published preview source `437ee6a7` (through #395, October 22, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate. |
 | Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |
 
 Local Codex/Claude usage collection exists; the redesign's Agents view adds sourced daily trends and reported quota windows.
