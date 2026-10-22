@@ -17,7 +17,7 @@ const zh = f.locale === 'zh-TW';
 const errors = [], operations = [], requests = [], responses = [], pending = new Map(), results = new Map();
 const resumedOperations = [];
 const allRequests = [], requestRecords = new Map();
-let browser, context, page, events, step = 'start', closeRestart = null;
+let browser, context, page, eventWrites, step = 'start', closeRestart = null;
 let observedBootstrap;
 const launch = async () => {
   const options = {locale: zh ? 'zh-TW' : 'en-US',
@@ -42,7 +42,7 @@ const launch = async () => {
   context.on('requestfailed', request => Object.assign(requestRecords.get(request), {
     end: Date.now(), end_step: step, failure: request.failure()?.errorText}));
   page = context.pages()[0] || await context.newPage();
-  events = await httpEventDelivery(page);
+  eventWrites = await httpEventDelivery(page);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') console.error(message.text());});
   page.on('request', request => {
@@ -75,11 +75,11 @@ const operation = async response => {
 const clickOperation = async (action, button) => {
   // Observe both promises immediately so a response timeout reaches diagnostics.
   await expect(button).toBeEnabled();
-  await events.pause();
+  await eventWrites.pause();
   try {
     const [response] = await Promise.all([post(action), button.click()]);
     return await operation(response);
-  } finally {events.resume();}
+  } finally {eventWrites.resume();}
 };
 const shot = name => page.screenshot({path: resolve(f.shots, name + '.png'), animations: 'disabled'});
 const deferred = () => {
@@ -477,7 +477,7 @@ async function foregroundRecovery(active, workUrl) {
     await shot('02-foreground-recovered');
     holdAdmission = true;
     step = 'explicit-send';
-    const sending = Promise.all([post('session.send'), events.post(submit)]);
+    const sending = Promise.all([post('session.send'), eventWrites.post(submit)]);
     await expect.poll(() => operationPosts(recoveryStart).length).toBe(1);
     intent = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).intent, draftKey);
     const request = operationPosts(recoveryStart)[0];
@@ -552,7 +552,7 @@ try {
     const row = page.locator(`[data-adopt-work="${f.work}"]`);
     await row.locator('.pm-adopt-choice > input').first().check();
     await row.getByLabel('付費會員可使用 Email 登入', {exact: true}).check();
-    await events.post(page.getByRole('button', {name: zh ? '檢查就緒' : 'Check readiness', exact: true}));
+    await eventWrites.post(page.getByRole('button', {name: zh ? '檢查就緒' : 'Check readiness', exact: true}));
     const submit = page.getByRole('button', {name: zh ? '採用並開始' : 'Adopt and start', exact: true});
     await expect(submit).toBeEnabled();
     await submit.scrollIntoViewIfNeeded();
@@ -565,7 +565,7 @@ try {
     const instruction = page.locator('[data-work-start-instruction]');
     await expect(instruction).toBeVisible();
     await instruction.fill(zh ? '修正登入重複送出，補測試，先開 PR。' : 'Fix duplicate login submission, add tests and prepare a PR.');
-    await events.post(page.locator('[data-work-start-check]'));
+    await eventWrites.post(page.locator('[data-work-start-check]'));
     const submit = page.locator('[data-pm-action="work.start"] button[type="submit"]');
     await expect(submit).toBeEnabled();
     start = await clickOperation('work.start', submit);
@@ -596,7 +596,7 @@ try {
       const [resumed] = await Promise.all([
         page.waitForResponse(response => response.request().method() === 'POST'
           && new URL(response.url()).pathname === `/api/v1/operations/${recovery[kind]}/resume`),
-        events.post(page.getByRole('button', {name: 'Resume', exact: true})),
+        eventWrites.post(page.getByRole('button', {name: 'Resume', exact: true})),
       ]);
       assert.ok([200, 202].includes(resumed.status()), await resumed.text());
       assert.equal((await resumed.json()).operation.operation_id, recovery[kind]);
