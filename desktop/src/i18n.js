@@ -1,4 +1,5 @@
 import {resultSourcesStrings} from './result-sources-strings.js';
+import {earlierDraftStrings} from './earlier-drafts-strings.js';
 import {externalHistoryStrings} from './pm-external-history-strings.js';
 import {adoptStartStrings} from './pm-adopt-start-strings.js';
 import {workProfileStrings} from './pm-work-profile-strings.js';
@@ -43,6 +44,7 @@ export const STRINGS = {
     ...resultSourcesStrings["zh-TW"],
     ...externalHistoryStrings["zh-TW"],
     ...diagnosticsStrings["zh-TW"],
+    ...earlierDraftStrings['zh-TW'],
     ...workStartStrings["zh-TW"],
     ...workProfileStrings["zh-TW"],
     ...workResultStrings["zh-TW"],
@@ -1137,6 +1139,7 @@ export const STRINGS = {
     ...resultSourcesStrings.en,
     ...externalHistoryStrings.en,
     ...diagnosticsStrings.en,
+    ...earlierDraftStrings.en,
     ...workStartStrings.en,
     ...workProfileStrings.en,
     ...workResultStrings.en,

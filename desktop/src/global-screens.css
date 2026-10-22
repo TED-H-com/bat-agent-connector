@@ -1,4 +1,10 @@
 /* Global screens. Tokens only; the shell and PM views keep their own files. */
+.earlier-drafts-notice { padding: var(--space-2) var(--space-4); color: var(--text-2); font-size: var(--fs-small); }
+.earlier-drafts { margin-block: var(--space-4); min-width: 0; }
+.earlier-drafts summary { cursor: pointer; }
+.earlier-drafts textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.earlier-drafts p { overflow-wrap: anywhere; }
+.earlier-drafts .actions { flex-wrap: wrap; }
 .global-inbox { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .global-inbox-tabs { margin: 0 0 var(--space-4); }
 .global-pending-alert:empty { display: none; }
