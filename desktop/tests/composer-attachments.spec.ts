@@ -284,6 +284,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const target of ['.attachments', '
       const before = state.invokes.length;
       await pasteFile(page, '[data-published-start] ' + target, 'screenshot.png', 'image/png', pngBuffer);
       await expect(form(page).locator('.attachments [data-error-summary]')).toHaveText(message);
+      await expect(form(page).getByText(message, {exact: true}).and(page.locator(':visible'))).toHaveCount(1);
       await expect(form(page).locator('.attachments [data-api-error]')).toHaveCount(1);
       await expect(form(page).locator('.attachment-list')).toBeEmpty();
       await expect(form(page).locator('img.attachment-thumb')).toHaveCount(0);
@@ -396,7 +397,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect(form(page).locator('.attachments [data-error-summary]')).toHaveText('Native upload interrupted');
       await expect(form(page).locator('.native-transfers')).toContainText(locale === 'zh-TW'
         ? '已停止，結果保留 · 0 / 1024 B' : 'Stopped; original result retained · 0 / 1024 B');
-      await expect(form(page).locator('.native-files > [role="status"]')).toHaveText('Native upload interrupted');
+      await expect(form(page).getByText('Native upload interrupted', {exact: true}).and(page.locator(':visible'))).toHaveCount(1);
       const upload = state.invokes.findIndex(call => call.command === 'native_files_upload');
       expect(state.invokes.slice(upload + 1).some(call => call.command === 'native_files_status')).toBe(true);
       expect(state.invokes.filter(call => call.command === 'native_files_upload')).toHaveLength(1);
