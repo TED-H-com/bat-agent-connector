@@ -124,14 +124,24 @@ The picker renews through its existing `read()` and contract/workspace/profile/
 revision/digest/ticket checks, following the delegated renewal rule below. One
 scheduled wakeup at the earliest declared deadline re-reads that same readiness
 path once per producer deadline. No renewal starts while hidden; returning to the
-page checks that same deadline. Failed or unchanged renewal preserves the last
-response and age with `health_read_failed` (`OBSERVATION_NOT_RENEWED` for unchanged
-validity), and does not retry. A later normal read with a new deadline permits
-renewal again. The existing shell display clock only repaints ages; it cannot
+page checks that same deadline. Every validated renewal response is stored and
+painted, even when its deadline is unchanged. With an unchanged deadline,
+`host_unreachable` keeps the shared unreachable wording and the newest attempt's
+age without a read error;
+other declared states show `health_read_failed` with `OBSERVATION_NOT_RENEWED`.
+An actual failed read preserves the last response and shows `health_read_failed`
+with the read's code for every reason, including `host_unreachable`. Each attempted
+deadline remains spent, with no retry on clock ticks or visibility changes.
+A later normal read with a new deadline permits renewal again. The existing shell
+display clock only repaints ages; it cannot
 start reads. Selection changes invalidate pending renewal tickets, disposal clears
 the wakeup/listeners, and renewal patches mounted content without changing the
 selection, focus, scroll or open disclosure. No new endpoint, probe, authorization,
 DDL, data step or action admission rule is involved.
+
+The header still shows Checking after an unchanged renewal of a non-unreachable
+fact; that known difference remains an orchestrator-owned follow-up and is
+unchanged here.
 
 Fleet's existing status/overview renders consume the projection; updating mounted
 rows while a native read is pending still requires wiring the existing `app.js`

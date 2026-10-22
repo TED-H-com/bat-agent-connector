@@ -41454,6 +41454,7 @@ function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 	const past = state?.verified && typeof state.verified === "object" && !Array.isArray(state.verified) ? state.verified : null;
 	const pastAt = profileTimestamp(past?.observed_at), lastSuccessAt = profileTimestamp(state?.evidence_ref?.last_success_at);
 	const observed = profileTimestamp(state?.observed_at), deadline = typeof state?.valid_until === "string" ? Date.parse(state.valid_until) : NaN;
+	const readError = reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
 	return {
 		fact: observed !== null && Number.isFinite(deadline) ? displayFact({
 			key: valueKey(state?.value),
@@ -41461,7 +41462,7 @@ function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 			valid_until: deadline,
 			stale: ["host_unreachable", "host_not_refreshed"].includes(reason),
 			stale_reason: reason,
-			error
+			error: readError
 		}, { now }) : null,
 		valueKey: valueKey(state?.value),
 		reasonKey: reasons.has(reason) ? "wpf_reason_" + reason : "wpf_unverified",
@@ -41561,10 +41562,13 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		else renew(observation, at);
 	}
 	async function renew(current, at) {
-		const attempt = { error: { code: "OBSERVATION_NOT_RENEWED" } };
+		const attempt = { error: {
+			code: "OBSERVATION_NOT_RENEWED",
+			unchangedDeadline: true
+		} };
 		renewed.set(renewalKey(current.row, at), attempt);
 		try {
-			await read(current.row, current.ticket, { deadline: at });
+			await read(current.row, current.ticket, true);
 		} catch (error) {
 			if (!valid(current.ticket) || observation !== current) return;
 			attempt.error = { code: error.code || error.status || "READ_FAILED" };
@@ -41731,12 +41735,11 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 			node.scrollTop = top;
 		}
 	}
-	async function read(row, ticket, renewal = null) {
+	async function read(row, ticket, renewal = false) {
 		const data = await api("GET", `${base}/${row.profile_id}/readiness`);
 		if (!valid(ticket)) return;
 		if (data.contract !== "work-profile-readiness/v1" || data.workspace_id !== workspaceId || data.profile_id !== row.profile_id || data.revision !== row.revision || data.digest !== row.digest || data.calls_bat !== false || states$1.some((name) => !values.includes(data.states?.[name]?.value))) throw Error(t("wpf_invalid"));
 		const at = deadline(data);
-		if (renewal && at === renewal.deadline) throw Object.assign(Error("Observation not renewed"), { code: "OBSERVATION_NOT_RENEWED" });
 		observation = {
 			data,
 			row,

@@ -55,9 +55,9 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
   async function renew(current,at){
     // Retire the deadline before awaiting. A later selection/read of this same
     // deadline must not inherit a Checking label from a discarded ticket.
-    const attempt={error:{code:'OBSERVATION_NOT_RENEWED'}};
+    const attempt={error:{code:'OBSERVATION_NOT_RENEWED',unchangedDeadline:true}};
     renewed.set(renewalKey(current.row,at),attempt);
-    try{await read(current.row,current.ticket,{deadline:at});}
+    try{await read(current.row,current.ticket,true);}
     catch(error){
       if(!valid(current.ticket)||observation!==current)return;
       attempt.error={code:error.code||error.status||'READ_FAILED'};
@@ -162,13 +162,15 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
     request()?.update();
     for(const [node,left,top] of scroll){node.scrollLeft=left;node.scrollTop=top;}
   }
-  async function read(row,ticket,renewal=null){
+  async function read(row,ticket,renewal=false){
     const data=await api('GET',`${base}/${row.profile_id}/readiness`);if(!valid(ticket))return;
     if(data.contract!=='work-profile-readiness/v1'||data.workspace_id!==workspaceId||data.profile_id!==row.profile_id
       ||data.revision!==row.revision||data.digest!==row.digest||data.calls_bat!==false
       ||states.some(name=>!values.includes(data.states?.[name]?.value)))throw Error(t('wpf_invalid'));
     const at=deadline(data);
-    if(renewal&&at===renewal.deadline)throw Object.assign(Error('Observation not renewed'),{code:'OBSERVATION_NOT_RENEWED'});
+    // A failed host attempt can advance observed_at without moving the
+    // success-based deadline. Store every validated read; the spent deadline's
+    // outcome controls each state's wording without discarding newer evidence.
     const prior=renewed.get(renewalKey(row,at));
     observation={data,row,ticket,error:prior?.error||null};
     display(data,row,Boolean(renewal));scheduleExpiry();
