@@ -582,7 +582,7 @@ try {
     await expect(landing.getByRole('link', {name: 'Resume reconciliation', exact: true}))
       .toHaveAttribute('href', '#/op/' + recovery.handoff);
     const boardUrl = page.url();
-    await page.reload();
+    eventWrites.resume(); await page.reload();
     await expect(landing.getByRole('link', {name: 'Resume reconciliation', exact: true})).toBeVisible();
     await shot('00-unconfirmed-start');
     send({stage: 'unknown-shown'});
@@ -699,7 +699,7 @@ try {
     await expect(page.locator('[data-work-result]')).toContainText('Fixed double submission.');
     await expect.poll(() => results.get(active.attempt)?.changes?.fixed_result_commit?.commit_sha).toBe(fixed.candidate);
     await expect(page.locator('[data-work-publish-submit]')).toHaveCount(0);
-    await page.reload();
+    eventWrites.resume(); await page.reload();
     await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
     await expect(page.locator('[data-follow-up-input]')).toHaveCount(0);
     await expect(page.locator('.workspace-composer')).toBeHidden();
@@ -738,12 +738,15 @@ try {
   await expect(back).toHaveAttribute('href', returnHref);
   await expect(back).toBeVisible();
   await shot('03-discussion');
-  await page.reload();
+  eventWrites.resume(); await page.reload();
   await expect(back).toHaveAttribute('href', returnHref);
   await back.click();
   await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
   await expect(page.locator('[data-follow-up-receipt]')).toContainText(text);
   assert.equal(requests.length, expectedOperations - 1, 'Discuss and return must not create or dispatch an operation');
+  // Opening this drawer holds the linked Work's deferred render. Fence
+  // delivery before opening it, not while that render is waiting for close.
+  await eventWrites.pause();
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-result]')).toContainText('Added the retry-after-failure case.');
   await expect(page.locator('[data-work-publish-commit]')).toHaveAttribute('title', fixed.candidate);
@@ -833,7 +836,7 @@ try {
     const answer=page.locator('[data-pm-role="assistant"]');
     await expect(answer).toContainText(fixed.candidate.slice(0,12));
     await expect(answer).toContainText(zh ? '還缺固定版本的驗證證據' : 'Fixed-revision verification evidence is missing');
-    await page.reload();
+    eventWrites.resume(); await page.reload();
     await expect(page.locator('[data-pm-role="assistant"]')).toHaveCount(1);
     await expect(page.locator('[data-pm-role="assistant"]')).toContainText(fixed.candidate.slice(0,12));
     await expect(page.locator('.pd-context [data-discussion-context="quality_assessment"]')).toBeVisible();
@@ -850,6 +853,7 @@ try {
     await page.keyboard.press('Escape');
     await page.locator('[data-discussion-back]').click();
     await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
+    await eventWrites.pause();
     await page.getByRole('button', {name:zh ? '成果' : 'Results',exact:true}).click();
     await page.getByRole('button', {name:zh ? '審閱這份成果' : 'Review this result',exact:true}).click();
     await expect(page.locator('[data-work-quality]').getByLabel(zh ? '已保存審查' : 'Saved review',{exact:true})).toHaveValue(savedReviewId);
@@ -861,7 +865,7 @@ try {
   const published = await clickOperation('github.pr.publish', page.locator('[data-work-publish-submit]'));
   send({stage: 'published', operation_id: published.operation_id});
   assert.equal((await receive()).verified, true);
-  await page.reload();
+  eventWrites.resume(); await page.reload();
   await expect(page.locator('[data-follow-up-input]')).toHaveValue(draft);
   await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
   await expect(page.locator('[data-work-publish-pr]')).toContainText('21');
