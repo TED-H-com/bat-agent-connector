@@ -173,8 +173,8 @@ for (const locale of ['en-US', 'zh-TW']) {
 
 
 for (const locale of ['en-US', 'zh-TW']) {
-  test(`retained multi-port requests are separate from ordinary drafts (${locale})`, async ({browser}) => {
-    const context = await browser.newContext({locale}); const page = await context.newPage();
+  for (const width of [390, 1440]) test(`retained multi-port requests are separate from ordinary drafts (${locale}, ${width})`, async ({browser}, testInfo) => {
+    const context = await browser.newContext({locale, viewport: {width, height: 900}}); const page = await context.newPage();
     await setup(page, {legacy: true, legacyCursors: [1, 2]});
     const before = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('http%3A%2F%2F')).sort());
     await page.evaluate(() => {location.hash = '#/settings?section=about&drafts=earlier';});
@@ -186,6 +186,8 @@ for (const locale of ['en-US', 'zh-TW']) {
     await expect(pending.locator('a[href="#/op/op_' + 'b'.repeat(32) + '"]')).toHaveCount(2);
     await expect(slot.locator('[data-earlier-group="draft"] textarea')).toHaveCount(0);
     await expect(pending.getByRole('button', {name: labels(locale).copy, exact: true})).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await pending.screenshot({path: testInfo.outputPath('possibly-sent-requests.png')});
     expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('http%3A%2F%2F')).sort())).toEqual(before);
     expect(await page.evaluate(() => (window as any).__storage.writes)).toBe(0);
     await context.close();
