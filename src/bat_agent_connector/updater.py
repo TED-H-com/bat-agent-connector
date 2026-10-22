@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import stat
 import sys
@@ -54,7 +55,7 @@ def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 
-def snapshot(path):
+def snapshot(path, *, links_only=False):
     try:
         info = path.lstat()
     except FileNotFoundError:
@@ -62,6 +63,8 @@ def snapshot(path):
     require(info.st_uid == os.getuid(), "entrypoint_owner_mismatch")
     if stat.S_ISLNK(info.st_mode):
         return {"link": os.readlink(path)}
+    if links_only:
+        return {}  # Status only compares link targets; never read an entrypoint's contents.
     require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and not info.st_mode & 0o022,
             "entrypoint_not_owned")
     require(info.st_size <= 1024 * 1024, "entrypoint_size_limit")
@@ -282,17 +285,23 @@ class Updater:
             self.reconcile(state)
             return self.status(state)
 
-    def status(self, state=None):
-        state = state or self.read()
+    def _status_snapshot(self, state=None):
+        """One bounded private read, with no lease, reconciliation or writes."""
+        state = self.read() if state is None else state
         current = state["versions"][state["current"]]
-        matches = (snapshot(self.root / "current") == {"link": current["root"]}
-                   and all(snapshot(path) == {"link": str(target)} for path, target in self.links().items()))
-        return {"enabled": state["enabled"], "channel": state["channel"],
-                "installed": current["release"] if matches else None, "installation_matches_state": matches,
-                "previous": state["previous"], "last": state.get("last"),
-                "pending": bool(state.get("pending") or state.get("enrollment")),
-                "activation": "next_launch", "processes_restarted": False,
-                "scheduler_configured": bool(state.get("schedule_complete"))}
+        matches = (snapshot(self.root / "current", links_only=True) == {"link": current["root"]}
+                   and all(snapshot(path, links_only=True) == {"link": str(target)}
+                           for path, target in self.links().items()))
+        result = {"enabled": state["enabled"], "channel": state["channel"],
+                  "installed": current["release"] if matches else None, "installation_matches_state": matches,
+                  "previous": state["previous"], "last": state.get("last"),
+                  "pending": bool(state.get("pending") or state.get("enrollment")),
+                  "activation": "next_launch", "processes_restarted": False,
+                  "scheduler_configured": bool(state.get("schedule_complete"))}
+        return state, current, result
+
+    def status(self, state=None):
+        return self._status_snapshot(state)[2]
 
     def apply(self):
         with self.locked():
@@ -391,6 +400,80 @@ class Updater:
             state["schedule_complete"] = True
             self.save(state)
             return self.status(state)
+
+
+def _public_status(result):
+    """Explicit public fields only; private receipts and installation proofs stay local."""
+    require(result["installation_matches_state"], "update_installation_mismatch")
+    installed = result["installed"]
+    version(installed["version"])
+    sha = commit(installed["commit"])
+    require(type(result["enabled"]) is bool and result["channel"] in {"stable", "preview"},
+            "update_state_unreadable")
+    last = result["last"]
+    if last is not None:
+        require(last["status"] in {"enrolled_for_next_launch", "installed_for_next_launch", "rolled_back_updates_disabled",
+                                  "no_newer_release", "up_to_date", "failed"}, "update_state_unreadable")
+        at = last["at"]
+        require(isinstance(at, str) and len(at) <= 40 and datetime.fromisoformat(at).tzinfo is not None,
+                "update_state_unreadable")
+        public_last = {"status": last["status"], "at": at}
+        if "code" in last:
+            code = last["code"]
+            require(isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,95}", code), "update_state_unreadable")
+            public_last["code"] = code
+        last = public_last
+    return {"state": "reported", "enabled": result["enabled"], "channel": result["channel"],
+            "installed": {"version": installed["version"], "commit": sha}, "pending": result["pending"],
+            "last": last, "activation": "next_launch"}
+
+
+def _capture_process_installation():
+    """Pin launch ownership before current can move; never cache mutable update facts."""
+    from .build_identity import build_identity
+    try:
+        observer = Updater()
+        state, current, _ = observer._status_snapshot()
+        sha = commit(build_identity()["commit"])
+        root = Path(current["root"]).resolve()
+        package = Path(__file__).resolve().parent
+        if sha == state["current"] == current["release"]["commit"] and package.is_relative_to(root):
+            return observer.root, sha, root, package
+    except Exception:
+        return None  # Capabilities report read errors, never an import/startup failure.
+    return None
+
+
+def connector_update_status(build):
+    """Sanitized self-report; one fresh private-file read, no network or mutations."""
+    base = {"activation": "next_launch"}
+    if not sys.platform.startswith("linux"):
+        return {**base, "state": "unsupported"}
+    try:
+        observer = Updater()
+        state, _, result = observer._status_snapshot()
+        identity = _PROCESS_INSTALLATION
+        if identity is None:
+            return {**base, "state": "not_managed"}
+        update_root, sha, root, package = identity
+        record = state["versions"].get(sha)
+        if (observer.root != update_root or build.get("commit") != sha or not record
+                or record["release"]["commit"] != sha or Path(record["root"]).resolve() != root
+                or not package.is_relative_to(root)):
+            return {**base, "state": "not_managed"}
+        return _public_status(result)
+    except FileNotFoundError:
+        return {**base, "state": "not_enrolled"}
+    except Exception as exc:
+        # Never expose exception text: it can contain paths or private state bytes.
+        code = str(exc) if isinstance(exc, UpdateError) and str(exc) in {
+            "update_state_incompatible", "update_installation_mismatch"} else "update_state_unreadable"
+        return {**base, "state": "unreadable", "code": code}
+
+
+# ApiV1 imports this module at startup, alongside its loaded build snapshot.
+# This is process ownership evidence, not a status cache; every API call re-reads state.
+_PROCESS_INSTALLATION = _capture_process_installation()
 
 
 def main(argv=None):

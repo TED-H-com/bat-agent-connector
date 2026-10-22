@@ -33,6 +33,10 @@
       "commit": null,
       "source": "package"
     },
+    "connector_update": {
+      "activation": "next_launch",
+      "state": "not_enrolled"
+    },
     "hosts": [],
     "frontend": {
       "digest": null

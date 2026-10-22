@@ -1,7 +1,7 @@
 // All surfaces render the same explicit projection, including unknown rows.
 export function versionFactText(row, t) {
   const unknown=t('diag_unknown');
-  if(['desktop','connector','bundled_runtime','running_runtime'].includes(row.id))
+  if(['desktop','connector','connector_installed','bundled_runtime','running_runtime'].includes(row.id))
     return t('diag_version_number',{version:row.version||unknown})+' · '+t('diag_version_commit',{commit:row.commit||unknown});
   if(['loaded_ui','served_ui'].includes(row.id))return t('diag_version_digest',{digest:row.digest||unknown});
   if(['adapter_bat_observed','bat_observed'].includes(row.id))return t('diag_version_commit',{commit:row.commit||unknown});
@@ -16,6 +16,13 @@ export function versionFacts({h, t, projection}) {
       h('dd', {}, h('p', {class:'mono'}, versionFactText(row,t)),
         h('p', {class:'muted'}, t('diag_version_source_'+row.source), ' · ', t('diag_version_period_'+row.period),
           ' · ', row.observed_at || t('diag_version_time_unknown')),
+        row.id === 'connector_installed' ? h('div', {},
+          row.state !== 'reported' ? h('p', {class:'muted'}, t('diag_version_update_'+row.state), row.code ? ' · '+row.code : '') : null,
+          row.channel ? h('p', {class:'muted'}, t('diag_version_update_channel',{channel:t('diag_version_channel_'+row.channel)})) : null,
+          row.enabled !== null ? h('p', {class:'muted'}, t('diag_version_update_'+(row.enabled?'enabled':'disabled'))) : null,
+          row.pending === true ? h('p', {class:'muted'}, t('diag_version_update_pending')) : null,
+          row.last ? h('p', {class:'muted'}, t('diag_version_update_last',{result:t('diag_version_result_'+row.last.status),at:row.last.at||t('diag_version_time_unknown')}), row.last.code ? ' · '+row.last.code : '') : null,
+          h('p', {'data-connector-installation-difference':''}, t('diag_version_installation_'+projection.connector_installation_difference))) : null,
         row.recorded_at ? h('p',{class:'muted'},t('diag_version_run_updated',{time:row.recorded_at})) : null)))),
     h('p', {'data-runtime-difference':''}, t('diag_runtime_'+projection.runtime_difference)),
     h('p', {class:'muted'}, t('diag_adapter_observed_unknown')));
