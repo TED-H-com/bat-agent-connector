@@ -31,11 +31,6 @@ async def served_setup(installed):
     async def request(method, path, body=None, *, credential=bearer, key=None):
         return await http(port, method, path, tok=credential, body=body,
             headers={"Idempotency-Key": key} if key else None)
-    async def disconnect():
-        _, writer = await asyncio.open_connection("127.0.0.1", port)
-        writer.close()
-        await writer.wait_closed()
-    request.disconnect = disconnect
     async def raw_request(path, raw):
         reader, writer = await asyncio.open_connection("127.0.0.1", port)
         headers = (f"POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {bearer}\r\n"
@@ -236,7 +231,7 @@ async def test_h_disk_participant_disconnect_expiry_and_third_value(installed, s
     if phase == "after_effect":
         participant.effect(handoff)
         written = participant.path.stat().st_mtime_ns
-        await served_setup.disconnect()  # Local effect sent, receipt not delivered.
+        # Withhold receipt delivery after the disk effect, then reopen the participant.
         assert not daemon.journal.db.execute("SELECT response FROM operation_steps WHERE name='native_effects'").fetchone()[0]
         participant = DiskParticipant(participant.path)
     if phase == "late_first":
