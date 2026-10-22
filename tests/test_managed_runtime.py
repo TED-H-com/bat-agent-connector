@@ -407,9 +407,11 @@ def test_ensure_and_stop_serialize_before_stop_request(installation, monkeypatch
     assert len(children) == 1
 
 
-@pytest.mark.parametrize('invalid', ['symlink', 'foreign', 'version', 'bytes'])
+@pytest.mark.parametrize('invalid', ['symlink', 'foreign', 'version', 'bytes', 'state'])
 def test_untrusted_hold_refuses_start_and_resume(installation, monkeypatch, invalid):
     from bat_agent_connector import platform_files
+    if os.name == 'nt' and invalid in ('foreign', 'symlink'):
+        pytest.skip('POSIX owner/symlink injection; Windows private-handle fixtures cover ACL/reparse checks')
     root, children = installation
     runtime.ensure(root, timeout=15)
     runtime.stop(root)
@@ -429,6 +431,8 @@ def test_untrusted_hold_refuses_start_and_resume(installation, monkeypatch, inva
         monkeypatch.setattr(platform_files, '_check_private_stat', foreign)
     elif invalid == 'version':
         runtime._write(path, {**hold(root), 'version': 999})
+    elif invalid == 'state':
+        runtime._write(path, {**hold(root), 'state': []})
     else:
         path.write_bytes(b'\xff')
     for action in (runtime.ensure, runtime.resume):

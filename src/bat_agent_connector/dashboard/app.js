@@ -51,6 +51,10 @@ async function managedServiceControls(root, { h, t, managedControl, errorBox, gu
 			} catch {
 				return;
 			}
+			try {
+				status = await managedControl({ action: "status" });
+				guard();
+			} catch {}
 			errors.replaceChildren(errorBox(error, {
 				sourceRefresh: false,
 				within: errors

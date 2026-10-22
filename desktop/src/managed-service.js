@@ -17,6 +17,8 @@ export async function managedServiceControls(root, {h, t, managedControl, errorB
       if (action === 'start' && status.mode === 'managed') await onStarted?.();
     } catch (error) {
       try {guard();} catch {return;}
+      // Read the owner's hold after refusal/uncertainty; never repeat the effect.
+      try {status = await managedControl({action: 'status'}); guard();} catch { /* retain the last observation */ }
       errors.replaceChildren(errorBox(error, {sourceRefresh: false, within: errors}));
     } finally {busy = false; paint();}
   };

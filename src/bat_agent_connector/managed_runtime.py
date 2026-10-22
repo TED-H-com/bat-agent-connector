@@ -232,7 +232,7 @@ def lifecycle(raw):
     except (OSError, ValueError):
         raise LifecycleRefusal("SERVICE_LIFECYCLE_UNPROVEN", "service stop hold cannot be verified") from None
     if (not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 1
-            or doc.get("state") not in {"stop_pending", "stopped"}
+            or doc.get("state") not in ("stop_pending", "stopped")
             or not _timestamp(doc.get("requested_at"))
             or (doc["state"] == "stopped" and not _timestamp(doc.get("stopped_at")))
             or (doc["state"] == "stop_pending" and doc.get("stopped_at") is not None)):

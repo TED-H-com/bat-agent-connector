@@ -42,3 +42,25 @@ for (const locale of ['en', 'zh-TW']) {
     }
   });
 }
+
+for (const locale of ['en', 'zh-TW']) test(`stopped native startup opens Settings normally ${locale}`, async ({page}) => {
+  const fixture = await managedSetupFixture(page, true, locale);
+  fixture.managed.ready = false;
+  fixture.managed.lifecycle = {state: 'stopped', requested_at: 1800000000, stopped_at: 1800000001};
+  await page.addInitScript(() => {
+    const invoke = (window as any).__TAURI_INTERNALS__.invoke;
+    (window as any).__TAURI_INTERNALS__.invoke = (command: string, args: any) => command === 'native_status' ? {
+      endpoint: null, expected_actor: null, error: null, credential_available: false, credential_source: null,
+      credential_saved: false, enrollment_supported: true, configuration_reload: false, configuration_setup: true,
+      configuration_source: 'managed', configuration_file: null, connected: false, managed_recovery: null, managed_rebind: 0,
+      startup_role: {role: 'provider', generation: 1, installation_ref: '00000000-0000-4000-8000-000000000001'},
+      updates: false, file_transfers: true, brief_exports: true, diagnostics_save: true,
+      app_build: {version: '0.1.9', commit: null},
+    } : invoke(command, args);
+  });
+  await page.goto('/dashboard/#/settings');
+  await expect(page.locator('[data-managed-lifecycle]')).toHaveText(locale === 'en' ? 'Background service stopped' : '背景服務已停止');
+  await expect(page.getByRole('button', {name: locale === 'en' ? 'Start background service' : '啟動背景服務', exact: true})).toBeVisible();
+  await expect(page.locator('[data-native-setup]')).toBeHidden();
+  expect(fixture.managedCalls.every(action => action === 'status')).toBe(true);
+});

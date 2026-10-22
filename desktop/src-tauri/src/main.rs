@@ -76,7 +76,7 @@ async fn managed_control(
             .map_err(|_| "MANAGED_SERVICE_BUSY")?;
         match input {
             ManagedRequest::Stop | ManagedRequest::Start => unreachable!(),
-            ManagedRequest::Status => Ok(state.status()),
+            ManagedRequest::Status => state.read_status(),
             ManagedRequest::SetLogin { enabled } => state.set_login(enabled),
             ManagedRequest::OpenBrowser => {
                 let path = state.browser_file()?;

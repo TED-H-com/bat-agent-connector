@@ -80,9 +80,9 @@ makes it unknown. `differs` means the running service is not that bundle and the
 change waits for the service's next launch. These facts do not trigger replacement,
 restart, stop or refusal. Same-version reuse and the existing version upgrade gates
 are unchanged; readiness is not a build comparison. Native launch/status fields are
-additive and optional, and recovery refreshes the recorded observations. Same-version
-restart/refusal policy and each platform's ensure/stop ownership are owner decisions
-that have not been made.
+additive and optional, and recovery refreshes the recorded observations. Build
+differences do not trigger a restart. Explicit owned-service stop/resume follows
+the lifecycle contract below, with Python as its sole owner.
 
 - The persistent installation manifest binds runtime version, data location, installation actor, server ID and principal ID. Reopening and concurrent clients recover that installation.
 - Central uses kernel file leases, not an occupied port, stale PID or matching path, to enforce a single owner. The endpoint pointer is checked against the owned database, then a challenge verifies the live service before any bearer is sent.

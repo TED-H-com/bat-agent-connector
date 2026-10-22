@@ -383,6 +383,26 @@ impl Managed {
         status
     }
 
+    pub fn read_status(&self) -> Result<Status, String> {
+        if !self.status.lock().unwrap().background {
+            return Ok(self.status());
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Reply {
+            protocol: u8,
+            lifecycle: Lifecycle,
+        }
+        let bytes = self.request("status")?;
+        let reply: Reply =
+            serde_json::from_slice(&bytes).map_err(|_| "MANAGED_RUNTIME_REPLY_INVALID")?;
+        if reply.protocol != 1 || !reply.lifecycle.valid() {
+            return Err("MANAGED_RUNTIME_REPLY_INVALID".into());
+        }
+        self.status.lock().unwrap().lifecycle = Some(reply.lifecycle);
+        Ok(self.status())
+    }
+
     fn require_owned(&self) -> Result<(), String> {
         if !self
             .role
@@ -830,6 +850,31 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn status_reads_an_external_stop_hold_without_another_ensure() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = startup_fixture(root.path());
+        let data = root.path().join("app");
+        let (managed, _) = Managed::prepare(&resources, &data, &root.path().join("config"));
+        managed.select_role(Role::Provider, 0).unwrap();
+        fs::write(data.join("managed-central/held"), b"hold").unwrap();
+        for _ in 0..3 {
+            assert_eq!(
+                managed.read_status().unwrap().lifecycle.unwrap().state,
+                "stopped"
+            );
+        }
+        assert_eq!(
+            fs::read(data.join("managed-central/ensure-count")).unwrap(),
+            b"ensure\n"
+        );
+        assert_eq!(
+            fs::read(data.join("managed-central/service-count")).unwrap(),
+            b"service\n"
+        );
+    }
+
     #[test]
     fn status_serialization_keeps_all_existing_fields_and_adds_lifecycle() {
         let value = serde_json::to_value(identity_status()).unwrap();
@@ -876,8 +921,16 @@ mod tests {
         fs::create_dir(&resources).unwrap();
         let script = br##"#!/bin/sh
 set -eu
-[ "$1" = ensure ]
 root="$3"
+if [ "$1" = status ]; then
+ if [ -f "$root/held" ]; then
+  printf '%s' '{"protocol":1,"lifecycle":{"state":"stopped","requested_at":1800000000,"stopped_at":1800000001}}'
+ else
+  printf '%s' '{"protocol":1,"lifecycle":{"state":"running","requested_at":null,"stopped_at":null}}'
+ fi
+ exit 0
+fi
+[ "$1" = ensure ]
 mkdir -p "$root/state"
 printf 'ensure\n' >> "$root/ensure-count"
 if [ -f "$root/held" ]; then
