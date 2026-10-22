@@ -1,0 +1,13 @@
+[data-board-github] { padding: var(--space-3); }
+[data-board-github] h3 { margin: 0 0 var(--space-2); }
+[data-board-github] .capture-fields { align-items: end; }
+[data-board-github] .capture-fields .capture-choice { display: flex; justify-content: flex-start; align-items: center; flex: 0 0 auto; align-self: end; margin: 0; }
+[data-board-github] .capture-choice input[type=checkbox] { display: inline-block; width: auto; margin: 0; }
+[data-board-github] form { margin-bottom: var(--space-2); }
+[data-board-github] p:empty { display: none; }
+[data-board-github] details { color: var(--muted); font-size: var(--fs-small); }
+@media (max-width: 600px) {
+  [data-board-github] .capture-fields label { flex-basis: 100%; }
+  [data-board-github] .capture-fields .capture-choice { flex-basis: 100%; }
+  [data-board-github] button { min-height: 44px; }
+}

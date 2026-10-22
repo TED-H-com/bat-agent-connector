@@ -11,6 +11,9 @@ import {milestoneDelta, scheduleRef, sessionAttempt, notObserved} from './pm-sch
 import {scheduleTitle, scheduleFirstLine} from './pm-schedule-labels.js';
 
 export function rowStatus(row, data) {
+  if (['github_closed', 'github_completed', 'github_done'].includes(row.refs?.source_lane)) {
+    return h('span', {}, statusPill(row.refs.source_lane), ...(['merged', 'deployed'].includes(row.status) ? [' ', statusPill(row.status)] : []));
+  }
   return notObserved(row, data) ? h('span', {class: 'ui-pill tone-neutral'}, t('sched_not_observed')) : statusPill(row.status);
 }
 export function dateRange(span) {

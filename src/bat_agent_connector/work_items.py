@@ -35,7 +35,7 @@ from .operations import ActionDef, OpContext, OperationError, OperationService
 PROJECT_ID = re.compile(r"prj_[0-9a-f]{20}")
 WORK_ITEM_ID = re.compile(r"wi_[0-9a-f]{20}")
 STATES = ("todo", "doing", "waiting", "done")
-LINK_KINDS = ("session", "checkpoint", "operation", "task", "pull_request")
+LINK_KINDS = ("session", "checkpoint", "operation", "task", "pull_request", "github_source")
 STARTS_SESSION = ("checkpoint.continue", "integration.handoff", "repository.continue")  # their result names the session they started
 NAME_MAX = {"project": 80, "work_item": 120}
 TEXT_MAX = 20_000
@@ -96,6 +96,33 @@ def completion(item: dict) -> dict:
             "claimed_by": item["done_by"] if item["state"] == "done" else None,
             "approved_by": item["approved_by"] if approved else None,
             "approved_at": item["approved_at"] if approved else None}
+
+
+GITHUB_CLOSED_LANES = frozenset({'github_closed', 'github_completed', 'github_done'})
+
+
+def source_lane(item: dict) -> str | None:
+    """Display-only source stage; genuine local claims/approval and archives win."""
+    external = item.get('external')
+    if not external or item.get('archived'):
+        return None
+    claim = item.get('completion') or completion(item)
+    if claim['approved'] or claim['pending']:
+        return None
+    lane = external.get('board_lane')
+    return lane if lane in (*GITHUB_CLOSED_LANES, 'todo', 'doing') else None
+
+
+def display_state(item: dict) -> str:
+    return source_lane(item) or (item.get('completion') or completion(item))['display_state']
+
+
+def github_observation(item: dict) -> dict | None:
+    external = item.get('external')
+    if not external:
+        return None
+    return {key: external[key] for key in ('source', 'repository', 'repository_id', 'number', 'node_id',
+        'url', 'kind', 'state', 'state_reason', 'draft', 'availability') if key in external}
 
 
 # ------------------------------------------------------------------ input checks
@@ -206,12 +233,15 @@ def _item(row) -> dict:
             "pinned": bool(row["pinned"]), "archived": row["archived_at"] is not None,
             "archived_at": row["archived_at"], "archived_by": row["archived_by"], "version": row["version"],
             "created_by": row["created_by"], "created_at": row["created_at"], "updated_at": row["updated_at"]}
+    item['external'] = json.loads(row['github_external']) if 'github_external' in row.keys() and row['github_external'] else None
     return item
 
 
 def _public(item: dict) -> dict:
     out = {k: v for k, v in item.items() if k not in {"approved_fingerprint", "continued_steps"}}
     out["completion"] = completion(item)
+    if item.get("external"):
+        out.update(display_state=display_state(item), source_lane=source_lane(item))
     return out
 
 
@@ -456,6 +486,10 @@ def _link_ref(ops: OperationService, kind, ref) -> str:
     elif kind == "task":
         if not _TASK.fullmatch(ref) or not db.execute("SELECT 1 FROM tasks WHERE task_id=?", (ref,)).fetchone():
             raise _bad("LINK_TARGET_NOT_FOUND", "no such task", 404)
+    elif kind == "github_source":
+        from .board_github import URL
+        if not URL.fullmatch(ref):
+            raise _bad("INVALID_PARAMS", "a github_source ref is a canonical GitHub issue or PR URL")
     elif not _PULL.fullmatch(ref):
         raise _bad("INVALID_PARAMS", "a pull_request ref is owner/name#number")
     return ref
@@ -491,6 +525,8 @@ def _link_summary(db, kind: str, ref: str) -> dict:
         row = db.execute("SELECT project,host,workspace,state,submitted_at FROM tasks WHERE task_id=?",
                          (ref,)).fetchone()
         return {"found": False} if row is None else {"found": True, **dict(row)}
+    if kind == "github_source":
+        return {"found": True, "url": ref, "source": "github"}
     m = _PULL.fullmatch(ref)
     return {"found": True, "repository": m.group(1), "number": int(m.group(2))} if m else {"found": False}
 
@@ -763,6 +799,13 @@ def _admit_item_update(ops, principal, target, params, pre) -> None:
     _check_item_update(ops, target, params, pre)
 
 
+def _manual_state(db, item):
+    if item.get('external'):
+        external = {**item['external'], 'manual': True, 'board_lane': None}
+        db.execute('UPDATE work_items SET github_external=? WHERE work_item_id=?',
+                   (json.dumps(external), item['work_item_id']))
+
+
 async def _run_item_update(ctx: OpContext) -> dict:
     actor = ctx.op["actor"]
 
@@ -799,6 +842,7 @@ async def _run_item_update(ctx: OpContext) -> dict:
         if fields:
             _event(ctx, "work_item", wid, "work_item.updated", {"fields": fields})
         if "state" in changes:
+            _manual_state(db, item)
             _event(ctx, "work_item", wid, "work_item.state", {"from": item["state"], "to": changes["state"]})
         return {"work_item_id": wid, "version": item["version"] + 1, "changed": True, "fields": sorted(changes),
                 "completion": completion(after)}
@@ -911,6 +955,7 @@ async def _run_approve(ctx: OpContext) -> dict:
         if completion(item)["approved"]:
             return {"work_item_id": item["work_item_id"], "version": item["version"], "fingerprint": fp,
                     "approved_by": item["approved_by"], "changed": False}
+        _manual_state(db, item)
         claimed = item["done_by"] if item["state"] == "done" else actor
         db.execute("""UPDATE work_items SET state='done',done_by=?,done_at=COALESCE(?,done_at),approved_fingerprint=?,
             approved_by=?,approved_at=?,continued_steps=NULL,version=version+1,updated_at=? WHERE work_item_id=?""",
@@ -926,6 +971,7 @@ async def _run_continue(ctx: OpContext) -> dict:
     def change(db, now):
         item = _check_decide(ctx.service, ctx.target, ctx.params, ctx.preconditions)
         _undecided(item)
+        _manual_state(db, item)
         state = "doing" if item["state"] == "done" else item["state"]
         db.execute("""UPDATE work_items SET state=?,done_by=CASE WHEN ?='done' THEN NULL ELSE done_by END,
             done_at=CASE WHEN ?='done' THEN NULL ELSE done_at END,approved_fingerprint=NULL,approved_by=NULL,
@@ -994,7 +1040,8 @@ def _counts(items: list[dict]) -> dict:
     for x in items:
         c = completion(x)
         out["total"] += 1
-        out[c["display_state"]] += 1
+        stage = display_state(x)
+        out[stage] = out.get(stage, 0) + 1
         out["pending"] += int(c["pending"])
     return out
 
@@ -1030,7 +1077,8 @@ def _project_path(db, project: dict) -> list[dict]:
 
 def _navigation_item(item):
     state = completion(item)
-    return {**{key: item[key] for key in ('work_item_id', 'project_id', 'parent_id', 'derived_from',
+    source = {'display_state': display_state(item), 'source_lane': source_lane(item), 'external': github_observation(item)} if item.get('external') else {}
+    return {**source, **{key: item[key] for key in ('work_item_id', 'project_id', 'parent_id', 'derived_from',
             'title', 'state', 'pinned', 'archived', 'version', 'updated_at')},
         'completion': {key: state[key] for key in ('display_state', 'pending', 'approved')},
         'step_summary': {'total': len(item['steps']), 'done': sum(step['done'] for step in item['steps']),
@@ -1053,6 +1101,9 @@ def project_get(db, project_id: str, *, include_archived: bool = False, ops=None
            "sub_projects": [{"project_id": p["project_id"], "name": p["name"], "pinned": p["pinned"]}
                             for p in children],
            "work_items": _tree(items, _item_scope(project_id), db, "work_item_id", present)}
+    if ops is not None and 'project.github.sync' in ops.actions:
+        from .board_github import settings
+        out['github_sync'] = settings(db, project_id, ops)
     if projection == 'navigation':
         out['projection'] = 'navigation'
     if ops is not None:
@@ -1080,7 +1131,7 @@ def work_items_list(db, *, project_id: str | None = None, state: str | None = No
     limit = max(1, min(LIST_MAX, int(limit)))
     if unread is not None and (type(unread) is not bool or not principal_id):
         raise _bad("INVALID_FILTER", "unread must be a boolean with an authenticated reading identity")
-    if state is not None and state not in (*STATES, "awaiting_approval"):
+    if state is not None and state not in (*STATES, "awaiting_approval", *GITHUB_CLOSED_LANES):
         raise _bad("INVALID_FILTER", f"unknown state {state!r}")
     sql = """SELECT w.*, p.name AS project_name FROM work_items w JOIN projects p ON p.project_id=w.project_id
         WHERE 1=1"""
@@ -1089,10 +1140,6 @@ def work_items_list(db, *, project_id: str | None = None, state: str | None = No
         sql += " AND w.archived_at IS NULL AND p.archived_at IS NULL"
     if project_id:
         sql, args = sql + " AND w.project_id=?", [*args, project_id]
-    if state in STATES and state != "done":
-        sql, args = sql + " AND w.state=?", [*args, state]
-    elif state in ("done", "awaiting_approval"):
-        sql += " AND w.state='done'"
     if cursor:
         at, wid = _cursor(cursor)
         sql += " AND (w.updated_at<? OR (w.updated_at=? AND w.work_item_id>?))"
@@ -1102,7 +1149,7 @@ def work_items_list(db, *, project_id: str | None = None, state: str | None = No
     for r in db.execute(sql, args):  # completion is computed, so filter it here, then page
         x = _public(_item(r))
         c = x["completion"]
-        if (pending is not None and c["pending"] != pending) or (state and c["display_state"] != state):
+        if (pending is not None and c["pending"] != pending) or (state and x.get("display_state", c["display_state"]) != state):
             continue
         if principal_id:
             from .work_item_reads import reading

@@ -94,7 +94,7 @@ pytest versions; the `desktop.yml` summary explains only native builds.
 | `ci.yml` | `pytest <version> (i/5)` | Five runners per selected version: 3.10 for PRs without Python source/tooling changes; 3.10–3.13 otherwise and on `main` |
 | `ci.yml` | `pytest-complete` | Successful shards and exact collection coverage for exactly the selected versions |
 | `desktop.yml` | `frontend` | Regenerate/check browser assets and run Node tests |
-| `desktop.yml` | `browser-ui (i/3)` | Three Playwright shards on committed browser assets |
+| `desktop.yml` | `browser-ui (i/5)` | Five Playwright shards on committed browser assets |
 | `desktop.yml` | `central-ui` | Twenty-one named central-service UI script steps |
 | `desktop.yml` | `build` | PRs select no builds, Linux only, or all four builds; triggered `main` runs always select all four. Selected entries retain every native/packaged fixture |
 | `desktop.yml` | `windows-endpoint-oracle` | Windows endpoint fixtures on every run |

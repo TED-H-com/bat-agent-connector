@@ -8,8 +8,38 @@ from pathlib import Path
 from urllib.parse import unquote
 
 
-def rows(db, table, *, where='', args=()):
-    return [tuple(row) for row in db.execute(f'SELECT * FROM {table} {where} ORDER BY rowid', args)]
+def _identifier(name):
+    return '"' + name.replace('"', '""') + '"'
+
+
+def snapshot_rows(db, table, *, where='', args=()):
+    """Keep the producer's column names and values, including across JSON transport."""
+    cursor = db.execute(f'SELECT * FROM {_identifier(table)} {where} ORDER BY rowid', args)
+    return {'columns': [column[0] for column in cursor.description], 'rows': [list(row) for row in cursor]}
+
+
+def assert_rows_preserved(db, table, saved, *, where='', args=(), allow_append=False):
+    """Old columns are exact; added columns retain their declared defaults on old rows."""
+    columns, expected = saved['columns'], saved['rows']
+    current = db.execute(f'PRAGMA table_info({_identifier(table)})').fetchall()
+    missing = set(columns) - {column[1] for column in current}
+    assert not missing, f'{table}: missing preserved columns {sorted(missing)}'
+    selection = ','.join(_identifier(column) for column in columns)
+    actual = [list(row) for row in db.execute(
+        f'SELECT {selection} FROM {_identifier(table)} {where} ORDER BY rowid', args)]
+    assert actual[:len(expected)] == expected, f'{table}: preserved values changed'
+    if not allow_append:
+        assert len(actual) == len(expected), f'{table}: row count changed'
+    for column in current:
+        if column[1] in columns:
+            continue
+        default = column[4] if column[4] is not None else 'NULL'
+        # SQLite applies the column's storage affinity to its declared default.
+        # BINARY prevents a column collation from accepting a changed text value.
+        matches = [row[0] for row in db.execute(
+            f'SELECT ({_identifier(column[1])} COLLATE BINARY) IS ({default}) '
+            f'FROM {_identifier(table)} {where} ORDER BY rowid', args)]
+        assert all(matches[:len(expected)]), f'{table}.{column[1]}: added column differs from its declared default'
 
 
 def checkout_files(directory):
@@ -42,7 +72,7 @@ async def crash_after_201(w, monkeypatch, envelope, principal):
     receipt = pr_publication._raw_receipt(ops, operation['operation_id'])
     assert receipt['http_status'] == 201 and receipt['native_pr_id'] == 801 and receipt['target_verified'] is True
     assert len(w['posts']) == w['runner'].ran['publication-push'] == 1
-    return envelope, operation, rows(ops.db, 'pr_creation_receipts')
+    return envelope, operation, snapshot_rows(ops.db, 'pr_creation_receipts')
 
 
 async def seed_publication(w, mock, monkeypatch, data):
@@ -109,11 +139,11 @@ async def seed_publication(w, mock, monkeypatch, data):
     result = await _result(w, attempt)
     return {'operation_id': operation['operation_id'], 'request': envelope, 'token': w['owner_token'],
         'attempt': attempt, 'receipt': receipt,
-        'rows': {table: rows(w['d'].ops.db, table) for table in ('work_items', 'work_attempts', 'session_results')},
+        'rows': {table: snapshot_rows(w['d'].ops.db, table) for table in ('work_items', 'work_attempts', 'session_results')},
         'work_item_view': work['work_item'], 'result_results': result['results'],
         'manual_checkout': str(w['human']), 'manual_files': checkout_files(w['human']),
         'producer_version': __version__, 'producer_root': str(Path(pr_publication.__file__).resolve().parents[1]),
         'handlers': {name: hashlib.sha256(Path(pr_publication.__file__).with_name(name + '.py').read_bytes()).hexdigest()
             for name in ('pr_publication', 'pm_work_start', 'pm_attempt_results')},
         'effects': {'create_pull': len(w['posts']), 'push': w['runner'].ran['publication-push']},
-        'operation_events': rows(w['d'].ops.db, 'api_events', where='WHERE resource_id=?', args=(operation['operation_id'],))}
+        'operation_events': snapshot_rows(w['d'].ops.db, 'api_events', where='WHERE resource_id=?', args=(operation['operation_id'],))}

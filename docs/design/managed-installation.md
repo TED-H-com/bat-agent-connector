@@ -26,6 +26,26 @@ Setup now uses an authenticated active write connection or existing inventory ev
 
 A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
 
+## 與「加入機器」共用的契約（已定，尚未實作）
+
+本節補充上方現行首次設定，未實作新的角色精靈。程式查核基線為 `5615d6c0`
+（合併 main `f7a71405`），下列 `file:line` 已按此基線重核。
+責任分工只維護於 [Fleet 唯一責任表](fleet-configuration.md#責任表與退休條件)；
+共用欄位、狀態、變更、lifecycle、健康投影、驗收與 D1–D8 的產品決定／技術預設
+均引用 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約已定尚未實作)，本處不另訂一份。
+
+| 首次設定特有行為（現況） | 可核對的輸入／輸出 |
+| --- | --- |
+| UI 選 BAT 來源 | 自動模式沿用可讀 BAT profile，多項時選擇，無可用項目時貼遮蔽連結；parser 拆出 endpoint／pin／token。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[managed-setup.js:332](../../desktop/src/managed-setup.js#L332) |
+| 自動設定送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:481](../../desktop/src/managed-setup.js#L481) |
+| UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:440](../../desktop/src/managed-setup.js#L440)、[managed-setup.js:455](../../desktop/src/managed-setup.js#L455) |
+
+2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，角色入口須移至本機服務準備前，
+完整保留與驗收規則只維護於 [已定契約](fleet-configuration.md#已決定的產品契約2026-10-22經-owner-授權)。
+這是上方 managed-first 旅程的後續改接，尚不代表現有首次設定可免建本機服務。
+後端對帳與新 setup 阻擋規則只引用
+[Fleet 的現況／規範狀態表](fleet-configuration.md#預覽--套用--讀回)。
+
 ## First-run visual evidence
 
 Synthetic shared-browser fixtures, identical data and light theme, 1440×900 and 390×844. These are not installed Windows or live BAT acceptance. Before captures use the original `origin/main` UI; after captures use this implementation. Every PNG is under 90 KB.
@@ -78,6 +98,49 @@ that have not been made.
 - The package pins its compressed runtime and executable digests. Installation does not download and execute an unversioned script. The frozen runtime starts without Python or uv on the user's PATH.
 - Browser handoff is short-lived and single-use. The resulting session uses an HttpOnly SameSite cookie plus origin/CSRF checks; this is not a public unauthenticated hosting mode.
 - Setup mutations use central durable actions, opaque staged credential references and the reviewed configuration revision. Publication is atomic. Recovery reads the original revision/receipt rather than inventing a new intent; live configuration changes wait for a safe point.
+
+### Credentials and browser connections
+
+API tokens are bearer credentials for HTTP and `/rpc`, with their existing actor
+and scopes. A managed browser-session credential is accepted only through the
+browser cookie path. It requires the existing exact-origin, fetch-metadata and
+CSRF checks. Only the session restore GET omits the CSRF header; it still requires
+the origin and fetch metadata. Browser-session credentials presented as bearers
+receive exactly the same status and error as unknown credentials on that path.
+Managed browser entry and service stop continue to require an API bearer.
+
+Existing session records identify the cookie-only credentials, including sessions
+created before an upgrade. Opening the journal creates the session table
+idempotently without changing the schema data-step version or rewriting tokens.
+Cookie sessions retain their lifetime, parent binding, actor and scopes. Long
+reads recheck the same credential class, expiry and revocation. This corrects the
+credential acceptance boundary; it adds no protocol channel or capability and
+does not change API request/response shapes or the contract version.
+
+When a remembered bearer receives HTTP 401, the Dashboard displays its localized
+refusal state and pauses further automatic presentations. HTTP 403 pauses it only
+on the reads required to run the Dashboard: capabilities, bootstrap and event
+polling. Other 403 responses retain the existing action or resource error; the
+connection and polling continue. One shared decision covers ordinary requests
+and file transfers. Once refused, the pause covers startup, page restore,
+polling, retries and file requests.
+
+The token remains stored because it may still be valid for the original service.
+A separate refusal record identifies its domain-separated digest, endpoint and refusal status.
+It is kept in memory and in the same store as the token, preferring local storage
+when the token is remembered there; session-only tokens leave no durable refusal
+record. The pause survives reloads, and remembered tokens stay paused in new
+tabs. The person can Connect with a new token or choose Retry remembered token.
+Disconnect, successful replacement with a different token and explicit retry
+remove the corresponding refusal record. Tabs at the same origin observe stored refusal changes, including an explicit retry in another tab. Credential checks before requests are synchronous; preparing the storage key does not delay Connect or Retry. Work drafts, pending intents and
+operation keys stay in their original namespaces. If browser storage is
+unavailable, the current page retains the pause in memory.
+
+Cookies are scoped to a host, not a port: browsers can send them to other ports
+of the same host. Origin checks and HttpOnly do not provide port isolation or
+prove which installation is listening. Per-installation channel binding remains
+future work. Pausing after a refusal also does not prevent the first credential
+presentation or establish server identity.
 
 On Windows, a private reader can temporarily block replacement of a manifest or
 endpoint pointer. Atomic replacement retries only native rename errors 5 and 32,
