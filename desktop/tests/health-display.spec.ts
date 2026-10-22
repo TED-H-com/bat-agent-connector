@@ -17,6 +17,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     for (const row of doc.readiness.hosts.slice(0, 2)) Object.assign(row, {level: 'down', blocking: 'auth', code: 'BAT_AUTH_REFUSED',
       layers: {tunnel: true, tls: true, auth: 'refused', bat: false, workspace: false}});
     await page.clock.install({time: at});
+    await page.clock.pauseAt(at);
     await mountConversation(page, true, fixture.dispatch);
     await page.addInitScript(doc => {
       const original = (window as any).__TAURI_INTERNALS__.invoke;
@@ -30,7 +31,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
       await page.goto('/dashboard/#/settings');
       await expect(page.locator('#live')).toHaveText(copy.ui_connected);
       const count = page.locator('#installation-health [data-health-other]');
-      await expect(count).toHaveText(copy.health_other_machines.replace('{count}', '2'));
+      await expect(count).toHaveText(copy.health_other_machines_many.replace('{count}', '2'));
       await count.click();
       await expect(page).toHaveURL(/section=fleet/);
       await expect(page.locator('[data-fleet-diagnosis="node-1"]')).toHaveAttribute('data-fleet-state', 'identity');
@@ -65,6 +66,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     let release!: () => void;
     const held = new Promise<void>(resolve => {release = resolve;});
     await page.clock.install({time: at});
+    await page.clock.pauseAt(at);
     await mountConversation(page, false, async input => {
       const path = new URL(input.path, 'http://fixture').pathname;
       if (path === '/events') await held;
@@ -87,3 +89,39 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     } finally {release(); await context.close();}
   });
 }
+
+for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 1440]) {
+  test(`wrapped health summary keeps the session composer reachable ${locale} ${width}`, async ({browser}) => {
+    const {openSession, fromRequirements} = await import('./session-fixture');
+    const s = await openSession(browser, {locale: locale === 'zh-TW' ? 'zh-TW' : 'en', width, height: 844});
+    s.overrides.push(async (input, url) => {
+      if (url.pathname !== `/sessions/${s.ids.host}/${s.ids.sessions.review}`) return;
+      const result = await s.fixture.dispatch(input);
+      result.data.session.workspace = 'A workspace with a deliberately long display name for wrapping';
+      return result;
+    });
+    try {
+      await fromRequirements(s.page, s.ids, 'review');
+      await expect(s.page.locator('#installation-health')).toBeVisible();
+      if (width === 390) expect((await s.page.locator('#installation-health').boundingBox())!.height).toBeGreaterThan(48);
+      await expect(s.page.getByRole('button', {name: locale === 'zh-TW' ? '送出' : 'Send', exact: true})).toBeInViewport({ratio: 1});
+      await expect(s.page.getByRole('banner')).toHaveCount(1);
+    } finally {await s.context.close();}
+  });
+}
+
+test('a held first session read does not prevent the display clock from starting', async ({page}) => {
+  await page.clock.install({time: at}); await page.clock.pauseAt(at);
+  const fixture = conversationFixture(); let release!: () => void;
+  const held = new Promise<void>(resolve => {release = resolve;});
+  await mountConversation(page, false, async input => {
+    if (input.path === '/sessions/demo/session-1') await held;
+    return fixture.dispatch(input);
+  });
+  try {
+    await page.goto('/dashboard/#/session/demo/session-1');
+    await expect(page.locator('#live')).toHaveAttribute('data-freshness', 'current');
+    await page.clock.runFor(61_000);
+    await expect(page.locator('#live')).toHaveAttribute('data-freshness', 'stale');
+  } finally {release();}
+});
