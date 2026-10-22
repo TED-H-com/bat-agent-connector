@@ -166,7 +166,7 @@ repository, not imported, no open issues, unreachable, rate limited, authorizati
 conflicts, missing sources, invalid source data and local/scheduler failures.
 Closed history is a separate unchecked option. Existing durable form drafts and original operation keys are reused.
 
-## Decided product choices (owner-confirmed 2026-10-22)
+## Decided product choices (2026-10-22, under the owner's delegation)
 
 - Create open items only by default; closed history requires explicit opt-in.
 - Use “Closed (not completed) / 已關閉（未完成）” for unmerged PRs and every
