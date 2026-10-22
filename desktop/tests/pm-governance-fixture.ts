@@ -1,7 +1,5 @@
+import {sourceModules} from './source-modules.ts';
 import {expect, type Page} from '@playwright/test';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
-import {stripTypeScriptTypes} from 'node:module';
 import {unavailableBriefTransport} from './pm-source-transport-fixture.ts';
 
 export const workspaceId = 'ws_' + '1'.repeat(32), snapshotId = 'pmsnap_' + '2'.repeat(32), planId = 'pmrev_' + '3'.repeat(32);
@@ -151,19 +149,7 @@ export async function mount(page: Page, fixture: ReturnType<typeof governanceFix
       body: request.postData() ? request.postDataJSON() : null, idempotency_key: request.headers()['idempotency-key']});
     await route.fulfill({status: result.status, json: result.data});
   });
-  await page.route('**/__governance_src/**', async route => {
-    const file = new URL(route.request().url()).pathname.slice('/__governance_src/'.length);
-    let source: string;
-    if (file === 'transport.js') source = stripTypeScriptTypes(await readFile(new URL('../src/transport/index.ts', import.meta.url), 'utf8'))
-      .replace('@tauri-apps/api/core', './tauri-core.js')
-      // This harness flattens transport/index.ts; retain its real locale dependency.
-      .replace('../i18n.js', '/src/i18n.js');
-    else if (file === 'tauri-core.js') source = await readFile(new URL('../node_modules/@tauri-apps/api/core.js', import.meta.url), 'utf8');
-    else if (file === 'external/tslib/tslib.es6.js') source = await readFile(new URL('../node_modules/@tauri-apps/api/external/tslib/tslib.es6.js', import.meta.url), 'utf8');
-    else source = await readFile(new URL('../src/' + path.basename(file), import.meta.url), 'utf8');
-    if (file === 'pm-workspace.js') source = source.replace('function durableForm(', 'export function durableForm(');
-    await route.fulfill({contentType: 'text/javascript', body: source});
-  });
+  await sourceModules(page, '__governance_src');
   await unavailableBriefTransport(page,'__governance_src');
   await page.route('**/__governance_harness', route => route.fulfill({contentType: 'text/html', body:
     '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><div class="pm-shell"><aside><h2>PM workspace</h2><p>Membership service</p></aside><main class="pm-main" id="mount"></main></div>'}));

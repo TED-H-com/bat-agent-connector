@@ -1,6 +1,22 @@
 import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect, type Page} from "@playwright/test";
 import {createHash} from "node:crypto";
+import {STRINGS} from '../src/i18n.js';
+
+for (const locale of ['en-US', 'zh-TW']) test(`a direct upload refusal is localized ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+  try {
+    await fixture(page, false);
+    await page.route('**/api/v1/artifacts/uploads/*/content', route => route.fulfill({status: 401,
+      json: {error: {code: 'UNAUTHORIZED', message: 'a valid bearer token is required'}}}));
+    await page.goto('/dashboard/#/item/' + wid);
+    await page.getByRole('button', {name: locale === 'zh-TW' ? '更多' : 'More', exact: true}).click();
+    await page.locator('input[type=file]').setInputFiles({name: 'example.txt', mimeType: 'text/plain', buffer: Buffer.from('example')});
+    await expect(page.locator('.attachment-list')).toContainText(copy.global_token_rejected);
+    await expect(page.locator('.attachment-list')).not.toContainText('a valid bearer token is required');
+  } finally {await context.close();}
+});
 const aid = "art_" + "a".repeat(32), uploadId = "op_" + "b".repeat(32), applyId = "op_" + "c".repeat(32);
 const wid = "wi_" + "d".repeat(20), cp = "cp_" + "e".repeat(32);
 const binary = Buffer.from([0, 255, 128, 13, 10, 60, 38, 34, 195, 169]);

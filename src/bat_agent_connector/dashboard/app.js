@@ -2120,6 +2120,7 @@ var init_global_strings = __esmMin((() => {
 			global_empty_unread: "No unread updates",
 			global_attempts: "Attempts",
 			global_token_rejected: "Token not accepted.",
+			connection_retry_remembered: "Retry remembered token",
 			global_discussion: "Discussion",
 			global_plan: "Plan",
 			global_plan_version: "Plan v{n}",
@@ -2326,6 +2327,7 @@ var init_global_strings = __esmMin((() => {
 			global_empty_unread: "沒有未讀更新",
 			global_attempts: "嘗試次數",
 			global_token_rejected: "權杖無效。",
+			connection_retry_remembered: "重試已記住的權杖",
 			global_discussion: "討論",
 			global_plan: "計畫",
 			global_plan_version: "計畫 v{n}",
@@ -13538,7 +13540,238 @@ var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
+//#region src/credential-storage-key.js
+function credentialStorageDigest(token) {
+	const input = new TextEncoder().encode("batc.dashboard.credential-refusal.v1\0" + token);
+	const bytes = new Uint8Array(Math.ceil((input.length + 9) / 64) * 64);
+	bytes.set(input);
+	bytes[input.length] = 128;
+	const view = new DataView(bytes.buffer);
+	view.setUint32(bytes.length - 8, Math.floor(input.length / 536870912));
+	view.setUint32(bytes.length - 4, input.length * 8);
+	const hash = [
+		1779033703,
+		3144134277,
+		1013904242,
+		2773480762,
+		1359893119,
+		2600822924,
+		528734635,
+		1541459225
+	];
+	const words = new Uint32Array(64);
+	for (let block = 0; block < bytes.length; block += 64) {
+		for (let i = 0; i < 16; i++) words[i] = view.getUint32(block + i * 4);
+		for (let i = 16; i < 64; i++) {
+			const x = words[i - 15], y = words[i - 2];
+			words[i] = words[i - 16] + (rotate(x, 7) ^ rotate(x, 18) ^ x >>> 3) + words[i - 7] + (rotate(y, 17) ^ rotate(y, 19) ^ y >>> 10);
+		}
+		let [a, b, c, d, e, f, g, h] = hash;
+		for (let i = 0; i < 64; i++) {
+			const first = h + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25)) + (e & f ^ ~e & g) + rounds[i] + words[i];
+			const second = (rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + (a & b ^ a & c ^ b & c);
+			[a, b, c, d, e, f, g, h] = [
+				first + second | 0,
+				a,
+				b,
+				c,
+				d + first | 0,
+				e,
+				f,
+				g
+			];
+		}
+		for (const [i, word] of [
+			a,
+			b,
+			c,
+			d,
+			e,
+			f,
+			g,
+			h
+		].entries()) hash[i] = hash[i] + word >>> 0;
+	}
+	return hash.map((word) => word.toString(16).padStart(8, "0")).join("");
+}
+var rounds, rotate;
+var init_credential_storage_key = __esmMin((() => {
+	rounds = [
+		1116352408,
+		1899447441,
+		3049323471,
+		3921009573,
+		961987163,
+		1508970993,
+		2453635748,
+		2870763221,
+		3624381080,
+		310598401,
+		607225278,
+		1426881987,
+		1925078388,
+		2162078206,
+		2614888103,
+		3248222580,
+		3835390401,
+		4022224774,
+		264347078,
+		604807628,
+		770255983,
+		1249150122,
+		1555081692,
+		1996064986,
+		2554220882,
+		2821834349,
+		2952996808,
+		3210313671,
+		3336571891,
+		3584528711,
+		113926993,
+		338241895,
+		666307205,
+		773529912,
+		1294757372,
+		1396182291,
+		1695183700,
+		1986661051,
+		2177026350,
+		2456956037,
+		2730485921,
+		2820302411,
+		3259730800,
+		3345764771,
+		3516065817,
+		3600352804,
+		4094571909,
+		275423344,
+		430227734,
+		506948616,
+		659060556,
+		883997877,
+		958139571,
+		1322822218,
+		1537002063,
+		1747873779,
+		1955562222,
+		2024104815,
+		2227730452,
+		2361852424,
+		2428436474,
+		2756734187,
+		3204031479,
+		3329325298
+	];
+	rotate = (word, bits) => word >>> bits | word << 32 - bits;
+}));
+//#endregion
+//#region src/credential-refusals.js
+function isCredentialRefusal(status, method, path) {
+	return status === 401 || status === 403 && method === "GET" && [
+		"/capabilities",
+		"/bootstrap",
+		"/events"
+	].includes(path.split("?")[0].replace(/\/+$/, ""));
+}
+function credentialRefusals({ stores = () => [sessionStorage, localStorage], endpoint = () => location.origin } = {}) {
+	const memory = new Map();
+	const identity = (token) => endpoint() + "\0" + token;
+	const storage = () => {
+		try {
+			return stores();
+		} catch {
+			return [];
+		}
+	};
+	const prepare = (token) => {
+		if (!token) return;
+		const id = identity(token);
+		if (!memory.has(id)) memory.set(id, {
+			key: `batc.credential-refused.${encodeURIComponent(endpoint())}.${credentialStorageDigest(token)}`,
+			token,
+			value: null,
+			persisted: false
+		});
+		return memory.get(id);
+	};
+	const forget = (token) => {
+		const entry = prepare(token);
+		if (!entry) return;
+		entry.value = null;
+		entry.persisted = false;
+		for (const store of storage()) try {
+			store.removeItem(entry.key);
+		} catch {}
+	};
+	return {
+		prepare,
+		read(token) {
+			const entry = memory.get(identity(token));
+			if (!entry) return null;
+			let ownerHasToken = false;
+			for (const store of storage()) try {
+				const value = JSON.parse(store.getItem(entry.key));
+				if (store === entry.owner) ownerHasToken = store.getItem(BROWSER_TOKEN_KEY) === token;
+				if (value?.status === 401 || value?.status === 403) {
+					entry.persisted = true;
+					entry.owner = store;
+					return entry.value = {
+						...value,
+						credentialRefused: true
+					};
+				}
+			} catch {}
+			if (ownerHasToken && entry.persisted) {
+				entry.value = null;
+				entry.persisted = false;
+			}
+			return entry.value;
+		},
+		refuse(token, status, method, path) {
+			if (!token || !isCredentialRefusal(status, method, path)) return;
+			const entry = prepare(token), value = {
+				status,
+				code: status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+				credentialRefused: true
+			};
+			entry.value = value;
+			const stores = storage();
+			const owner = [...stores].reverse().find((store) => {
+				try {
+					return store.getItem(BROWSER_TOKEN_KEY) === token;
+				} catch {
+					return false;
+				}
+			});
+			for (const store of stores) try {
+				if (store === owner) {
+					store.setItem(entry.key, JSON.stringify(value));
+					entry.persisted = true;
+					entry.owner = store;
+				} else store.removeItem(entry.key);
+			} catch {}
+		},
+		storageChanged(event) {
+			for (const entry of memory.values()) if (entry.persisted && (!event.key || event.key === entry.key)) try {
+				if (entry.owner.getItem("batc.dashboard.token") === entry.token) {
+					entry.value = null;
+					entry.persisted = false;
+				}
+			} catch {}
+		},
+		retry: forget,
+		forget
+	};
+}
+var BROWSER_TOKEN_KEY, browserCredentialRefusals;
+var init_credential_refusals = __esmMin((() => {
+	init_credential_storage_key();
+	BROWSER_TOKEN_KEY = "batc.dashboard.token";
+	browserCredentialRefusals = credentialRefusals();
+}));
+//#endregion
 //#region src/workbench-mode.js
+init_credential_refusals();
 function decideLayout({ search = "", policy } = {}) {
 	const requested = new URLSearchParams(search).get("workbench");
 	const blocked = requested === "1" && policy?.allowWorkbench === false;
@@ -23883,12 +24116,19 @@ async function restoreBrowserSession() {
 	browserCsrf = data.csrf;
 	return true;
 }
+function browserCredentialError(refusal) {
+	return Object.assign(new Error(t(refusal.status === 401 || refusal.credentialRefused ? "global_token_rejected" : "error_code_FORBIDDEN")), refusal, { localized: true });
+}
 function browserAuthHeaders(token) {
-	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
+	if (token !== "managed-browser-session") {
+		const refusal = browserCredentialRefusals.read(token);
+		if (refusal) throw browserCredentialError(refusal);
+		return { Authorization: `Bearer ${token}` };
+	}
 	if (!browserCsrf) throw new Error("Browser session needs to be restored");
 	return { "X-Batc-CSRF": browserCsrf };
 }
-function forgetBrowserSession() {
+async function forgetBrowserSession() {
 	if (!browserCsrf) return;
 	const headers = {
 		...browserAuthHeaders(browserSessionToken),
@@ -23928,6 +24168,7 @@ async function connectorRequest(method, path, body, key, browserToken, signal) {
 		body: body === void 0 ? void 0 : JSON.stringify(body),
 		signal
 	});
+	if (browserToken !== "managed-browser-session") browserCredentialRefusals.refuse(browserToken, res.status, method, path);
 	return {
 		status: res.status,
 		data: await res.json().catch(() => ({}))
@@ -23949,6 +24190,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		},
 		body: bytes
 	});
+	if (browserToken !== "managed-browser-session") browserCredentialRefusals.refuse(browserToken, res.status, "POST", `/artifacts/uploads/${operationId}/content`);
 	return {
 		status: res.status,
 		data: await res.json().catch(() => ({}))
@@ -57044,6 +57286,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 //#endregion
 //#region src/transport/artifact-content.ts
 init_transport();
+init_credential_refusals();
 async function readArtifactContent(reference, size, token, signal) {
 	if (nativeDesktop || !/^art_[0-9a-f]{32}$/.test(reference.artifact_id) || !Number.isSafeInteger(reference.revision) || reference.revision < 1 || !/^[0-9a-f]{64}$/.test(reference.digest) || !Number.isSafeInteger(size) || size < 0 || size > 16777216) throw new Error("Artifact content exceeds the supported bound or has an invalid reference");
 	const response = await fetch(`/api/v1/artifacts/${reference.artifact_id}/revisions/${reference.revision}/content`, {
@@ -57055,6 +57298,15 @@ async function readArtifactContent(reference, size, token, signal) {
 		mode: "same-origin",
 		signal: AbortSignal.any([signal, AbortSignal.timeout(3e4)])
 	});
+	if (token !== "managed-browser-session") browserCredentialRefusals.refuse(token, response.status, "GET", `/artifacts/${reference.artifact_id}/revisions/${reference.revision}/content`);
+	if (response.status === 401 || response.status === 403) {
+		await response.body?.cancel();
+		throw browserCredentialError({
+			status: response.status,
+			code: response.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+			credentialRefused: token !== "managed-browser-session" && response.status === 401
+		});
+	}
 	if (response.status !== 200 || response.redirected || response.headers.get("Content-Length") !== String(size) || !response.body) {
 		await response.body?.cancel();
 		throw new Error("Artifact content response does not match the exact revision");
@@ -66703,9 +66955,9 @@ function renderDeliveryWork(item, repositories = [], compact = false, { h, caps,
 }
 //#endregion
 //#region src/app.js
+init_credential_refusals();
 init_transport();
 init_i18n();
-var TOKEN_KEY = "batc.dashboard.token";
 var isWorkbench = layoutDecision.layout === "workbench";
 var state = {
 	token: null,
@@ -66954,12 +67206,10 @@ function saveCursor() {
 		localStorage.setItem(`batc.sync.${state.namespace}`, JSON.stringify(state.sync));
 	} catch {}
 }
-function disconnect() {
-	if (state.token === "managed-browser-session") forgetBrowserSession()?.catch(() => {});
+function resetConnection() {
 	withdrawDiagnostics();
 	recentErrors.clear();
 	state.epoch++;
-	clearToken();
 	state.token = null;
 	state.caps = null;
 	state.lastEvent = 0;
@@ -66968,28 +67218,93 @@ function disconnect() {
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
+	state.namespace = "";
+	state.endpoint = "";
+	state.lastPoll = null;
+	state.pollHealth = "initial";
+	state.connectionError = null;
+	state.refreshCycle = null;
+}
+function disconnect() {
+	if (state.token === "managed-browser-session") forgetBrowserSession()?.catch(() => {});
+	clearToken();
+	resetConnection();
+}
+async function connectBrowserToken(token) {
+	resetConnection();
+	browserCredentialRefusals.prepare(token);
+	browserCredentialRefusals.retry(token);
+	state.token = token;
+	paintConnection();
+	const connection = {
+		epoch: state.epoch,
+		namespace: state.namespace
+	};
+	const caps = await api("GET", "/capabilities");
+	assertConnection(connection);
+	await activate(caps);
+}
+function retryRememberedTokenButton() {
+	const retry = h("button", { onclick: async () => {
+		try {
+			await connectBrowserToken(state.token);
+		} catch (error) {
+			if (error.code !== "CONNECTION_CHANGED") {
+				state.caps = null;
+				state.connectionError = error;
+			}
+		}
+		await route();
+	} }, t("connection_retry_remembered"));
+	const render = () => {
+		retry.hidden = !state.token || state.token === "managed-browser-session" || !state.connectionError?.credentialRefused;
+	};
+	render();
+	const paint = () => {
+		if (!retry.isConnected) connectionPainters.delete(paint);
+		else render();
+	};
+	connectionPainters.add(paint);
+	return retry;
 }
 function loadToken() {
 	if (nativeDesktop) return null;
 	try {
-		return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+		const token = sessionStorage.getItem("batc.dashboard.token") || localStorage.getItem("batc.dashboard.token");
+		browserCredentialRefusals.prepare(token);
+		return token;
 	} catch {
 		return null;
 	}
 }
 function saveToken(token, remember) {
 	if (nativeDesktop) return;
+	const previous = new Set();
 	try {
-		sessionStorage.setItem(TOKEN_KEY, token);
-		if (remember) localStorage.setItem(TOKEN_KEY, token);
-		else localStorage.removeItem(TOKEN_KEY);
+		for (const store of [sessionStorage, localStorage]) {
+			const old = store.getItem(BROWSER_TOKEN_KEY);
+			if (old && old !== token) previous.add(old);
+		}
+	} catch {}
+	for (const old of previous) browserCredentialRefusals.forget(old);
+	browserCredentialRefusals.prepare(token);
+	try {
+		sessionStorage.setItem(BROWSER_TOKEN_KEY, token);
+		if (remember) localStorage.setItem(BROWSER_TOKEN_KEY, token);
+		else localStorage.removeItem(BROWSER_TOKEN_KEY);
 	} catch {}
 }
 function clearToken() {
+	const forgotten = new Set();
+	if (!nativeDesktop && state.token && state.token !== "managed-browser-session") forgotten.add(state.token);
 	try {
-		sessionStorage.removeItem(TOKEN_KEY);
-		localStorage.removeItem(TOKEN_KEY);
+		for (const store of [sessionStorage, localStorage]) {
+			const token = store.getItem(BROWSER_TOKEN_KEY);
+			if (token) forgotten.add(token);
+			store.removeItem(BROWSER_TOKEN_KEY);
+		}
 	} catch {}
+	for (const token of forgotten) browserCredentialRefusals.forget(token);
 }
 function h(tag, attrs = {}, ...children) {
 	const el = h$1(tag, attrs, ...children);
@@ -67126,6 +67441,13 @@ async function api(method, path, body, key, collectReceipt) {
 		return data;
 	} catch (error) {
 		if (epoch === state.epoch && !["VIEW_CHANGED", "FOREGROUND_READ_RETIRED"].includes(error.code)) {
+			if (!nativeDesktop && state.token && state.token !== "managed-browser-session" && (error.credentialRefused || isCredentialRefusal(error.status, method, path))) {
+				error.credentialRefused = true;
+				state.connectionError = error;
+				state.pollHealth = pollFailure(error, Date.now());
+				updateOnline(false);
+				paintConnection();
+			}
 			if (method === "GET" && (path === "/capabilities" || path === "/bootstrap")) rememberVersionRead("capabilities", null, void 0, epoch);
 			recentErrors.record({
 				at: new Date().toISOString(),
@@ -67162,6 +67484,7 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 		response = !resumable ? await request() : /^\/events(?:\?|$)/.test(path) ? await retiredRead(request(foregroundReads.signal), foregroundReads.signal) : await readThroughResume(request, () => foregroundReads.signal, guard);
 	} catch (cause) {
 		if (["FOREGROUND_READ_RETIRED", "CONNECTION_CHANGED"].includes(cause?.code)) throw cause;
+		if (cause?.credentialRefused) throw Object.assign(new ApiError(cause.status, cause.code, cause.message, { localized: cause.localized === true }), { credentialRefused: true });
 		throw new ApiError(0, ["AbortError", "TimeoutError"].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause)) ? "TIMEOUT" : "NETWORK_ERROR", cause?.message || String(cause));
 	}
 	const { status, data } = response;
@@ -67215,7 +67538,7 @@ async function submit(action, target, params, preconditions, scope) {
 		else rememberOp(scope, key, out.operation.operation_id, connection.namespace);
 		return out.operation;
 	} catch (e) {
-		if (e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace);
+		if (!e.credentialRefused && e.status && e.status < 500 && e.status !== 409) dropKey(scope, connection.namespace);
 		throw e;
 	}
 }
@@ -67582,6 +67905,11 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 				const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
 				guard(true);
 				if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed during upload");
+				if (response.status === 401) throw browserCredentialError({
+					status: 401,
+					code: "UNAUTHORIZED",
+					credentialRefused: !nativeDesktop && state.token !== "managed-browser-session"
+				});
 				if (response.status < 200 || response.status >= 300) throw new ApiError(response.status, response.data.error?.code, response.data.error?.message);
 				do
 					op = await readNext();
@@ -68042,7 +68370,20 @@ function foregroundChanged() {
 async function streamEvents() {
 	for (;;) {
 		await refreshManagedRecovery();
-		if (state.nativeBusy || !state.token || !state.viewReady || document.visibilityState === "hidden") {
+		if (!nativeDesktop && state.token && state.token !== "managed-browser-session") {
+			const token = state.token, epoch = state.epoch;
+			const refusal = browserCredentialRefusals.read(token);
+			if (token !== state.token || epoch !== state.epoch) continue;
+			if (refusal) {
+				state.connectionError = refusal;
+				state.pollHealth = pollFailure(refusal, Date.now());
+				updateOnline(false);
+				paintConnection();
+				await waitForEventPoll(1e3);
+				continue;
+			}
+		}
+		if (state.nativeBusy || !state.token || !state.namespace || !state.viewReady || document.visibilityState === "hidden") {
 			paintConnection(true);
 			await waitForEventPoll(1e3);
 			continue;
@@ -68056,6 +68397,7 @@ async function streamEvents() {
 			if (epoch !== state.epoch || foreground !== foregroundVersion) continue;
 			pollSucceeded = true;
 			state.pollHealth = "connected";
+			if (state.connectionError?.credentialRefused) state.connectionError = null;
 			state.lastPoll = {
 				at: Date.now(),
 				namespace: state.namespace
@@ -71994,10 +72336,10 @@ function viewBrowserSettings(main) {
 	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("ui_local_connector")) : null, disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
-	}), h("button", {
+	}), retryRememberedTokenButton(), h("button", {
 		class: "danger",
-		onclick: () => {
-			disconnect();
+		onclick: async () => {
+			await disconnect();
 			route();
 		}
 	}, t("disconnect"))));
@@ -72015,9 +72357,25 @@ function viewBrowserSignedOut(main) {
 	const info = h("div", { class: "global-connect-status" });
 	const showConnectError = (error) => {
 		info.setAttribute("role", "alert");
-		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
+		info.replaceChildren(error?.credentialRefused ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
 	};
 	if (state.connectionError) showConnectError(state.connectionError);
+	const connect = async (token, saved = false) => {
+		if (!token) return;
+		try {
+			await connectBrowserToken(token);
+			if (!saved) saveToken(token, remember.checked);
+			location.hash = "#/home";
+			await route();
+		} catch (error) {
+			if (error.code !== "CONNECTION_CHANGED") {
+				state.token = null;
+				state.caps = null;
+				state.connectionError = error;
+				showConnectError(error);
+			}
+		}
+	};
 	const root = firstRunCard({
 		h,
 		t,
@@ -72025,22 +72383,15 @@ function viewBrowserSignedOut(main) {
 			class: "global-connect-form",
 			onsubmit: async (event) => {
 				event.preventDefault();
-				disconnect();
-				state.token = input.value.trim();
-				try {
-					await activate(await api("GET", "/capabilities"));
-					saveToken(state.token, remember.checked);
-					location.hash = "#/home";
-					await route();
-				} catch (e) {
-					state.token = null;
-					showConnectError(e);
-				}
+				await connect(input.value.trim());
 			}
 		}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
 			class: "primary",
 			type: "submit"
-		}, t("connect")), h("a", {
+		}, t("connect")), loadToken() ? h("button", {
+			type: "button",
+			onclick: () => connect(loadToken(), true)
+		}, t("connection_retry_remembered")) : null, h("a", {
 			class: "global-quiet-link",
 			href: setupGuide()
 		}, t("global_setup_guide"))), disclosure({
@@ -72227,13 +72578,13 @@ async function viewManagedSettings(main) {
 		});
 		disposeTailscale = await fleetTailscale(fleetRoot, guard);
 	} else {
-		local.append(h("button", {
+		local.append(...[retryRememberedTokenButton(), h("button", {
 			class: "danger",
 			onclick: () => {
 				disconnect();
 				route();
 			}
-		}, t("disconnect")));
+		}, t("disconnect"))].filter(Boolean));
 		fleetRoot.append(fleetEmpty());
 	}
 	return () => {
@@ -74745,12 +75096,17 @@ async function start() {
 	setLocale(locale);
 	observeViewport();
 	window.addEventListener("hashchange", route);
+	window.addEventListener("storage", (event) => {
+		if (event.key && !event.key.startsWith("batc.credential-refused.")) return;
+		browserCredentialRefusals.storageChanged(event);
+		wakeEventPoll?.();
+	});
 	document.addEventListener("visibilitychange", foregroundChanged);
 	window.addEventListener("pageshow", (event) => {
 		if (event.persisted) foregroundChanged();
 	});
 	if (nativeDesktop) {
-		clearToken();
+		await clearToken();
 		const attempt = ++state.nativeAttempt;
 		let startupManaged = false;
 		try {
@@ -74776,12 +75132,14 @@ async function start() {
 		}
 	} else {
 		const browserSession = await restoreBrowserSession().catch(() => false);
-		if (browserSession) clearToken();
+		if (browserSession) await clearToken();
 		state.token = browserSession ? browserSessionToken : loadToken();
 		if (state.token) try {
 			await activate(await api("GET", "/capabilities"));
-		} catch {
+		} catch (error) {
 			state.token = null;
+			state.caps = null;
+			state.connectionError = error;
 		}
 	}
 	await route();

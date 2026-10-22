@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import {locale} from "../i18n.js";
+import {locale, t} from "../i18n.js";
+import {browserCredentialRefusals} from "../credential-refusals.js";
 
 export const nativeDesktop = isTauri();
 export interface ConnectorResponse { status: number; data: any }
@@ -27,12 +28,20 @@ export async function restoreBrowserSession(): Promise<boolean> {
   browserCsrf = data.csrf;
   return true;
 }
+export function browserCredentialError(refusal: {status: number; code: string; credentialRefused?: boolean}) {
+  return Object.assign(new Error(t(refusal.status === 401 || refusal.credentialRefused ? 'global_token_rejected' : 'error_code_FORBIDDEN')),
+    refusal, {localized: true});
+}
 export function browserAuthHeaders(token: string): Record<string, string> {
-  if (token !== browserSessionToken) return {Authorization: `Bearer ${token}`};
+  if (token !== browserSessionToken) {
+    const refusal = browserCredentialRefusals.read(token);
+    if (refusal) throw browserCredentialError(refusal);
+    return {Authorization: `Bearer ${token}`};
+  }
   if (!browserCsrf) throw new Error("Browser session needs to be restored");
   return {"X-Batc-CSRF": browserCsrf};
 }
-export function forgetBrowserSession() {
+export async function forgetBrowserSession() {
   if (!browserCsrf) return;
   const headers = {...browserAuthHeaders(browserSessionToken), "Content-Type": "application/json"};
   browserCsrf = null;
@@ -117,6 +126,7 @@ export async function connectorRequest(method: string, path: string, body: unkno
   if (key) headers["Idempotency-Key"] = key;
   const res = await fetch(`/api/v1${path}`, { method, headers, credentials: "same-origin", redirect: "error",
     body: body === undefined ? undefined : JSON.stringify(body), signal });
+  if (browserToken !== browserSessionToken) browserCredentialRefusals.refuse(browserToken, res.status, method, path);
   return { status: res.status, data: await res.json().catch(() => ({})) };
 }
 
@@ -130,5 +140,6 @@ export async function connectorUploadArtifact(operationId: string, bytes: ArrayB
   // Ignore content_url from operation metadata. Tokens only reach this same-origin fixed route.
   const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {method: "POST", redirect: "error",
     credentials: "same-origin", headers: {...browserAuthHeaders(browserToken), "Content-Type": "application/octet-stream"}, body: bytes});
+  if (browserToken !== browserSessionToken) browserCredentialRefusals.refuse(browserToken, res.status, 'POST', `/artifacts/uploads/${operationId}/content`);
   return {status: res.status, data: await res.json().catch(() => ({}))};
 }
