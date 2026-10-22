@@ -3897,7 +3897,10 @@ async function viewNativeSettings(main) {
         setup.append(h("h3", {}, t("managed_recovery_title")), h("p", {}, t("managed_recovery_help")),
           h("details", {}, h("summary", {}, t("setup_advanced")), h("h3", {}, t("managed_join_existing")), form));
         introduction.hidden = true;
-      } else setup.append(status.startup_role?.role === "client" ? h("h3", {}, t("managed_join_existing")) : null, form);
+      } else {
+        if (status.startup_role?.role === "client") setup.append(h("h3", {}, t("managed_join_existing")));
+        setup.append(form);
+      }
       // Keep configuration recovery accessible without making it compete with the first step.
       connectionDetails.append(h("div", {class: "actions"}, reload));
     }
