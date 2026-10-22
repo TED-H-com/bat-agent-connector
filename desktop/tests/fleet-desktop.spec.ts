@@ -4,7 +4,9 @@ import {fleetDiagnosticsTests} from './fleet-diagnostics';
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/fleet-status.golden.json',import.meta.url),'utf8'));
 fleetDiagnosticsTests(setup, true);
 async function setup(page:any,options:any={}) {
- if(options.clock)await page.clock.install();
+ // Keep the golden observation current until the test explicitly advances it.
+ if(options.clock)await page.clock.install({time:new Date(fixture.readiness.observed_at)});
+ else await page.clock.setFixedTime(new Date(fixture.readiness.observed_at));
  await page.addInitScript(({doc,options}:any)=>{
  Object.assign(doc,{control_version:1,backend:'powershell',login:{show_picker:true,revision:'f'.repeat(64)},pending_migration:null,profiles:[{id:'default',label:'Local BAT',connection:null},{id:'profile-1',label:'Fixture 1',connection:'node-1'},{id:'profile-2',label:'Fixture 2',connection:'node-2'}]});Object.assign(doc.selection,{profiles:['profile-1'],dashboard:true});
  const env:any={doc,calls:[],receipt:null,migration:null,lose:null,wrongReceipt:false,hold:null,...options};

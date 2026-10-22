@@ -68,14 +68,40 @@ but cannot claim output is currently arriving. Gone rows are historical and supp
 neither aggregate attention/activity nor last-value spans. Connection problems are
 separate facts; only pending interactions or managed runtime status produce attention. Both locales preserve these meanings.
 
-The first consumer is `healthDisplay` in `desktop/src/health-display.js`, shared by
-the header and Connection settings. It reuses existing reads and `sessionFacets`;
+The header and Connection settings use `healthDisplay` in
+`desktop/src/health-display.js`. It reuses existing reads and `sessionFacets`;
 the local display clock also expires observations while a request is pending.
 It replaces those consumers' direct transport-label projection. Action admission
 continues using `clientActionGate`; no TTL relaxes or adds a mutation requirement.
-Fleet rows, Work, Workbench, Diagnostics and Result sources still need adoption of
-this freshness/compact contract. Existing source-specific facets are not replaced
-by a global boolean. Native and backend lifecycle behavior is unchanged here.
+Fleet rows and the Work profile picker also use its `displayFact` and `healthLabel`
+projection/formatter, now in the shared `desktop/src/health-fact.js` module and
+re-exported from `health-display.js`. Fleet retains `fleetDiagnosis` as the single
+native reason/step interpretation. `fleetHealth` applies the same local display
+clock at render time: an expired connected observation keeps Connected, its age
+and Checking; missing observations use Unknown and Checking. Expired layers cannot
+claim current success. Unconfirmed stop and unsupported-version reasons remain
+visible, and each row expires independently. Native Fleet identities are never
+joined to central hosts by name, port, address or server string.
+
+Work retains six independent producer values, reason codes and past verification,
+separate from PM analysis and from the saved profile. The profile response's
+`observed_at` dates the read, not a BAT observation. Its states currently lack
+`valid_until` and Inventory's `stale_after_s`; current evidence sometimes includes
+only `last_success_at`. The shared projection retains that age, but marks validity
+unknown instead of applying the event reader's 60-second fallback to Inventory.
+An explicit `host_not_refreshed` remains stale. Past verification never becomes
+current evidence, and a reachable Connector never supplies a missing capability.
+No readiness display changes admission, starts a check or adds a cache policy.
+
+Fleet's existing status/overview renders consume the projection; updating mounted
+rows while a native read is pending still requires wiring the existing `app.js`
+display clock to the Fleet painter. `fleetHealth(row, {snapshot, readable, kind,
+now})` is the tested pure entry point; this change does not add another timer or
+alter those mounts. Work's missing per-capability validity needs producer evidence
+before timed currentness can be claimed. Workbench, Diagnostics and Result sources
+still need adoption of this freshness/compact contract. Existing source-specific
+facets are not replaced by a global boolean. Native and backend lifecycle behavior
+is unchanged here.
 
 ## Delegated production display decisions
 

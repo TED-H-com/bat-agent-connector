@@ -3,6 +3,7 @@ import {button} from './ui/components.js';
 import {timeLabel,timeStamp} from './ui/stamps.js';
 import {internalFrom} from './work-paths.js';
 import {profileStateFacts,profileTimestamp} from './pm-work-profile-state.js';
+import {healthLabel} from './health-fact.js';
 import {hasEffectivePmRoute,renderEffectivePmRoute} from './pm-effective-route.js';
 
 const identity = value => typeof value === 'string' && /^wpf_[0-9a-f]{32}$/.test(value);
@@ -56,7 +57,7 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
     for(const name of states){
       const state=profileStateFacts(data.states[name]);
       const value=h('dd',{'data-work-profile-state':name},
-        h('p',{'data-work-profile-value':''},t(state.valueKey)),
+        h('p',{'data-work-profile-value':'','data-freshness':state.display.freshness},healthLabel(state.display,t)),
         h('p',{'data-work-profile-reason':''},t(state.reasonKey),' · ',h('code',{},state.reasonCode||t('wpf_reason_absent'))));
       list.append(h('dt',{},t('wpf_'+name)),value);
       const operationLink=op=>h('a',{href:`#/op/${op}`},t('pm_operation'));

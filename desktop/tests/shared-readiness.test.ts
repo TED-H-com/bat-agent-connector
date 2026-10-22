@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {fleetStatus, fleetDiagnosis} from '../src/fleet-status.js';
+import {fleetStatus, fleetDiagnosis, fleetHealth} from '../src/fleet-status.js';
 import {profileStateFacts} from '../src/pm-work-profile-state.js';
 import {displayFact, healthDisplay, healthLabel} from '../src/health-display.js';
 import {pollFailure} from '../src/central-service-status.js';
@@ -80,4 +80,40 @@ test('a broken Fleet host leaves the other host and central Connector healthy', 
   const result = healthDisplay({...input(), health: {fleet: snapshot}}, at);
   assert.equal(result.connection.key, 'ui_connected');
   assert.equal(result.otherAttention, 1);
+});
+
+test('unconfirmed stop and unsupported version reasons survive display expiry', () => {
+  for (const [code, blocking, state] of [['STOP_UNCONFIRMED', 'tunnel', 'ownership'],
+    ['BAT_VERSION_UNSUPPORTED', 'bat', 'version']]) {
+    const row = {...fleet.readiness.hosts[0], code, blocking, level: 'down'};
+    const result = fleetHealth(row, {snapshot: fleet, readable: true, now: at + 60_000});
+    assert.equal(result.state, state);
+    assert.equal(result.fact.freshness, 'stale');
+    assert.ok(result.steps.every(step => step.state === 'unchecked'));
+    for (const locale of ['en', 'zh-TW']) {
+      const t = translate(locale);
+      assert.ok(healthLabel(result.fact, t).startsWith(t('fleet_check_title_' + state)));
+    }
+  }
+});
+
+test('Work host success without Inventory validity retains age but cannot borrow the live-reader timeout', () => {
+  const body = profiles.cases.owned_execution, state = body.states.can_observe;
+  for (const now of [body.observed_at * 1000, body.observed_at * 1000 + 600_000]) {
+    const facts = profileStateFacts(state, {now});
+    assert.equal(facts.display.freshness, 'unknown');
+    assert.equal(facts.display.ageSeconds, (now - state.evidence_ref.last_success_at * 1000) / 1000);
+    assert.equal(facts.valueKey, 'wpf_ready');
+    assert.equal(facts.lastSuccessAt, null); // The existing past section already shows this instant.
+    assert.equal(facts.past.at, state.verified.observed_at);
+  }
+});
+
+test('Fleet expiry is per row, with no cross-host or cross-domain inference', () => {
+  const snapshot = structuredClone(fleet);
+  snapshot.readiness.hosts[1].observed_at = new Date(at + 30_000).toISOString();
+  const options = {snapshot, readable: true, now: at + 60_000};
+  assert.equal(fleetHealth(snapshot.readiness.hosts[0], options).state, 'stale');
+  assert.equal(fleetHealth(snapshot.readiness.hosts[1], options).state, 'ready');
+  assert.equal(healthDisplay({...input(), lastPoll: {at: at + 60_000, namespace: 'fixture'}}, at + 60_000).connection.freshness, 'current');
 });
