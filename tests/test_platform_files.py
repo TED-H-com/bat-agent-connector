@@ -1,16 +1,68 @@
-"""Real filesystem / kernel ownership tests; no simulated Windows flags."""
+"""Filesystem ownership tests and isolated native-reader retry policy."""
 
 from __future__ import annotations
 
+import ast
 import errno
 import multiprocessing
 import os
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from bat_agent_connector import platform_files as files
+
+
+@pytest.mark.parametrize("code,release,flags", [
+    (32, True, os.O_RDONLY), (32, False, os.O_RDONLY),
+    (5, False, os.O_RDONLY), (2, False, os.O_RDONLY),
+    (112, False, os.O_RDONLY), (None, False, os.O_RDONLY),
+    (32, False, os.O_RDWR), (32, False, os.O_CREAT),
+])
+def test_native_reader_retry_policy(code, release, flags):
+    # Execute the production function with only the syscall/clock/CRT boundary
+    # replaced. This proves policy on POSIX, not Windows sharing or ACL behavior.
+    source = Path(__file__).parents[1] / "src/bat_agent_connector/windows_files.py"
+    tree = ast.parse(source.read_text())
+    body = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "open_file"
+            or isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id.startswith("PRIVATE_READ_")
+                                                   for t in node.targets)]
+    clock, attempts, sleeps = [0.0], [], []
+    error = OSError(errno.EACCES, "native refusal")
+    error.winerror = code
+
+    def opening(*args, **kwargs):
+        attempts.append(clock[0])
+        assert len(attempts) < 100, "reader retry has no deadline"
+        if release and len(attempts) > 1:
+            return 123
+        raise error
+
+    def sleep(seconds):
+        assert seconds > 0, "reader retried after its deadline"
+        sleeps.append(seconds)
+        clock[0] += seconds
+
+    scope = {"os": SimpleNamespace(**{**vars(os), "O_BINARY": 0, "O_NOINHERIT": 0}),
+             "time": SimpleNamespace(monotonic=lambda: clock[0], sleep=sleep), "_open": opening,
+             "msvcrt": SimpleNamespace(open_osfhandle=lambda *_: 456), "_close": lambda _: None}
+    exec(compile(ast.Module(body=body, type_ignores=[]), str(source), "exec"), scope)
+    def call():
+        return scope["open_file"]("task-service.json", flags, parent=SimpleNamespace(handle=1))
+
+    if release:
+        assert call() == 456
+        assert len(attempts) == 2 and sleeps
+    else:
+        with pytest.raises(OSError) as caught:
+            call()
+        assert caught.value is error and caught.value.winerror == code
+        if code == 32 and flags == os.O_RDONLY:
+            assert len(attempts) > 1 and 0.5 <= clock[0] < 0.521
+        else:
+            assert len(attempts) == 1 and not sleeps
 
 
 def _replace_open(monkeypatch, opening):

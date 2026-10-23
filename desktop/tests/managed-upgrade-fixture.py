@@ -36,6 +36,8 @@ from managed_runtime_assertions import (
     stable_launch,
 )
 
+from bat_agent_connector import platform_files
+
 continuity = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'tests/upgrade_continuity_helpers.py'))
 snapshot_rows = continuity['snapshot_rows']
 assert_rows_preserved = continuity['assert_rows_preserved']
@@ -173,9 +175,11 @@ def owned_pid(child, pid):
 
 def owned_launch(data, child, original):
     try:
-        pointer = json.loads((data / 'state/task-service.json').read_text())
+        pointer = json.loads(platform_files.read_private(data / 'state/task-service.json'))
     except FileNotFoundError:
         raise OwnerNotReady('Owned fixture service is not listening yet') from None
+    except OSError as error:
+        raise OSError(f"Owned fixture pointer read failed (winerror={getattr(error, 'winerror', None)})") from error
     endpoint = pointer.get('endpoint')
     if not owned_pid(child, pointer.get('pid')) or not endpoint:
         raise OwnerNotReady('Owned fixture service is not listening yet')
