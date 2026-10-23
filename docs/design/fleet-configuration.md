@@ -502,7 +502,7 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 | 只查看與操作既有服務 | 新原生安裝先選「使用既有服務」，再進「加入既有的 Connector」的原生設定與憑證 enrollment；不解包 runtime、不 ensure、不建 Python journal／身分／專案 | 已實作；權限仍由所選 Connector 的 principal 決定，純 client 不額外要求 manage。瀏覽器入口不顯示原生用途選擇。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs)、[main.rs](../../desktop/src-tauri/src/main.rs) |
 | 本機提供 workspace 執行能力 | 新安裝明確選「提供本機工作區」後，先保存用途，再由原 managed ensure owner 準備一個服務；不因安裝取得 BAT 寫權限 | 已實作用途與啟動邊界；bootstrap 驗證後才將 launch 裝入同一 Bridge，沿用既有 workspace 設定。可開工仍須其完整能力檢查。[managed.rs](../../desktop/src-tauri/src/managed.rs)、[bridge.rs](../../desktop/src-tauri/src/bridge.rs) |
 | 兩者兼有 | 先保存「兩者兼有」並準備本機服務；就緒後沿用設定中的「加入既有的 Connector」，各服務保留自己的 principal、workspace、草稿與原 key | 已實作既有兩種模式的接線；沒有新增來源切換或工作搬移。外部中央選取仍優先，原本機服務只由已有用途／安裝證據恢復。[managed.rs](../../desktop/src-tauri/src/managed.rs)、[bridge.rs](../../desktop/src-tauri/src/bridge.rs) |
-| 已設定安裝 | 無用途紀錄時，只依既有檔案推定一次：managed manifest＝provider、只有 central.json＝client、兩者都有＝both；保留 ID、history、credential refs 及原 key | 已實作並保留空白安裝的原服務。重開不改用途；外部失敗不轉為 provisioning。紀錄不可讀／符號連結會拒絕，絕不 fallback 建服務。獨立停止已接入設定頁並保存停止意圖；中斷連線關聯仍缺本機參與者與 UI。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs)、[managed_runtime.py:296](../../src/bat_agent_connector/managed_runtime.py#L296) |
+| 已設定安裝 | 無用途紀錄時，只依既有檔案推定一次：managed manifest＝provider、只有 central.json＝client、兩者都有＝both；保留 ID、history、credential refs 及原 key | 已實作並保留空白安裝的原服務。重開不改用途；外部失敗不轉為 provisioning。紀錄不可讀／符號連結會拒絕，絕不 fallback 建服務。獨立停止已接入設定頁並保存停止意圖；中斷連線關聯仍缺本機執行接線與 UI。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs)、[managed_runtime.py:296](../../src/bat_agent_connector/managed_runtime.py#L296) |
 
 原生用途紀錄位於 `app_local_data_dir/startup-role/role.json`，格式為
 `{version: 1, installation_ref: <UUID>, generation: 1, role: client|provider|both}`。
@@ -639,8 +639,8 @@ client 與非正式環境 Linux BAT host 的指派由整合者私下保存，不
 
 | 決策／適用範圍 | 已採用選項與契約（2026-10-22） | 採用理由 | 實作／驗收前的限制 |
 | --- | --- | --- | --- |
-| D1 新安裝與既有本機安裝 | 已決定 A；已實作新桌面安裝先選「使用既有服務／提供本機工作區／兩者兼有」，再進各既有流程。用途先持久化，client 不準備本機 Connector；舊安裝依既有檔案推定一次，保留原角色及服務。 | 純 client 不建立第二份 Python journal／身分／專案；provider／both 在 Managed.serial 下 ensure，以 generation guard 安裝到既有 Bridge；中斷後重開沿原安裝恢復。 | 自有閒置服務的停止預覽、停止意圖與明確啟動已實作；設定產生器與逐檔發布核心也已實作，但 Fleet Apply 與中斷關聯仍缺本機參與者及 UI。Windows／macOS 原生行為只有 CI 證據，同候選實機驗收未完成。[managed-service.js:30](../../desktop/src/managed-service.js#L30)、[managed_runtime.py:296](../../src/bat_agent_connector/managed_runtime.py#L296)、[connection_publish.rs](../../desktop/fleet-core/src/connection_publish.rs) |
-| D6 移除機器連線的保留範圍 | 已決定 A：只解除本機連線引用；保留歷史、收據及憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態（已停止的仍停止）。後果：遠端與其他 client 不受影響，需另處管理憑證。 | 解除連線的效果最清楚，停止或撤銷留給各資源正式管理入口。 | 伺服器已註冊中斷關聯操作，確定本機回執才更新 detached 並保留其他欄位及收據；不刪來源、不撤銷憑證或停止服務。本機參與者與 UI 尚未實作，無 client 能完成中斷。[connection_detach.py:82](../../src/bat_agent_connector/connection_detach.py#L82)、[connection_detach.py:100](../../src/bat_agent_connector/connection_detach.py#L100) |
+| D1 新安裝與既有本機安裝 | 已決定 A；已實作新桌面安裝先選「使用既有服務／提供本機工作區／兩者兼有」，再進各既有流程。用途先持久化，client 不準備本機 Connector；舊安裝依既有檔案推定一次，保留原角色及服務。 | 純 client 不建立第二份 Python journal／身分／專案；provider／both 在 Managed.serial 下 ensure，以 generation guard 安裝到既有 Bridge；中斷後重開沿原安裝恢復。 | 自有閒置服務的停止預覽、停止意圖與明確啟動已實作；設定產生器與逐檔發布核心也已實作，但 Fleet Apply 與中斷關聯仍缺本機執行接線及 UI。Windows／macOS 原生行為只有 CI 證據，同候選實機驗收未完成。[managed-service.js:30](../../desktop/src/managed-service.js#L30)、[managed_runtime.py:296](../../src/bat_agent_connector/managed_runtime.py#L296)、[connection_publish.rs](../../desktop/fleet-core/src/connection_publish.rs) |
+| D6 移除機器連線的保留範圍 | 已決定 A：只解除本機連線引用；保留歷史、收據及憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態（已停止的仍停止）。後果：遠端與其他 client 不受影響，需另處管理憑證。 | 解除連線的效果最清楚，停止或撤銷留給各資源正式管理入口。 | 伺服器已註冊中斷關聯操作，確定本機回執才更新 detached 並保留其他欄位及收據；不刪來源、不撤銷憑證或停止服務。本機參與者的紀錄與探索核心已實作，關聯執行與 UI 尚未接入，無 client 能完成中斷。[connection_detach.py:82](../../src/bat_agent_connector/connection_detach.py#L82)、[connection_detach.py:100](../../src/bat_agent_connector/connection_detach.py#L100) |
 | D8 整合者、設備與五事件承諾 | 已決定 A：指定一位具名整合者與一組設備（公開示例 `integrator-a`／`client-a`／`host-a`），同候選完成五事件驗收後才承諾：關視窗／鎖屏繼續背景工作；登出／重開機中斷後於支援的正常登入方式恢復原 queue／Work，不重播已送效果；主動停止只停本安裝自有資源且確認退出。後果：完整背景承諾須等五格及平台政策都通過。 | 由同一人負責同一候選的完整證據，避免不同安裝或政策的結果拼成通過。真實指派由整合者私下保存；公開只用示例名稱。 | 五事件逐格記正式安裝／登入方式、OS 政策及原操作讀回；停機期間不承諾運算。未完成五事件實測前只交 fixture 證據、不作平台承諾。程式能證明 lease／owned 邊界，不能證明各 OS 生存性。[managed_runtime.py:257](../../src/bat_agent_connector/managed_runtime.py#L257)、[windows_tunnel.rs:113](../../desktop/fleet-core/src/windows_tunnel.rs#L113) |
 
 ### 整合者技術決定（預設建議）
@@ -719,7 +719,12 @@ setup revision 與 operation key：這些由 discovery 回應或既有 preview�
 `OperationService`, `operations` and `operation_steps` are the intent and history
 authority. `connection_bindings` is a projection. Native evidence describes only
 that participant's local effect; it does not prove server-observed reachability or
-remote ownership. Native participant wiring remains unavailable; generator and publisher cores do not imply readiness.
+remote ownership. The [participant record store](../../desktop/fleet-core/src/connection_participant/store.rs),
+[native discovery](../../desktop/src-tauri/src/connection_participant/discovery.rs) and
+[Bridge transport](../../desktop/src-tauri/src/connection_participant/transport.rs) exist,
+but production storage, execution, IPC and UI integration remain unavailable.
+本機參與者的紀錄儲存、探索及 Bridge 傳輸核心已實作；正式儲存、執行、IPC 與 UI
+仍未接通，不能由核心存在推定可供使用者套用。
 
 #### Native connection contract v1
 
@@ -730,10 +735,11 @@ file. The generator, publisher, [Windows ownership adapter](../../desktop/fleet-
 [creation writer](../../desktop/fleet-core/src/windows_creation/writer.rs#L293) and
 [reservation bootstrap](../../desktop/fleet-core/src/windows_creation/writer.rs#L139) cores exist,
 with no production caller, native route, IPC or public Apply entrypoint for these
-creation APIs; participant, Bridge allowlist/IPC and UI integration are **not available**.
+creation APIs; the participant cores above have no production activation, and the
+WebView allowlist, IPC and UI do not expose them.
 產生器、publisher、Windows ownership adapter、creation writer 與 reservation bootstrap
 核心已實作；creation API 尚無 production caller、native route、IPC 或公開 Apply 入口，
-participant、Bridge allowlist/IPC 與 UI 接線仍不可用。Capability
+上方 participant 核心仍未在正式流程啟用，WebView allowlist、IPC 與 UI 未開放這些能力。Capability
 `connection_contract_version` reports server protocol support, never native readiness.
 Native publication targets **Windows only**; macOS publication is unsupported.
 
@@ -765,7 +771,7 @@ The server cannot regenerate native files or attest a truthful participant.
 
 Version 2 is used by the server reference-detach action described below. No native reference
 participant exists yet, so no client can complete a detach. The UI offers no detach flow.
-版本二供下述伺服器中斷連線關聯 action 使用；本機參與者尚未實作，因此目前沒有 client 能完成
+版本二供下述伺服器中斷連線關聯 action 使用；本機關聯執行尚未實作，因此目前沒有 client 能完成
 中斷連線關聯，UI 也不提供此流程。
 Its plan is exactly `{contract_version,kind,generator_version,review_digest,artifacts}`;
 each artifact is `{role,before,after}`. A state is `{"state":"absent"}` or
@@ -945,7 +951,7 @@ history or reopening the operation. Receipt refs hash canonical challenge-free e
 過期或操作終結後仍可查回，但不續期、不更換 epoch、不派送。確定成功才儲存投影；
 拒絕以回執代碼失敗，未知保留不確定路徑，放棄剩餘本機發布則以固定代碼失敗並保留
 全部回執及決策事件，不能宣稱先前檔案已回復。伺服器 Cancel 只記錄未知結果，
-不會清理本機 publication journal。native participant 尚未提供；Windows 為發布目標，
+不會清理本機 publication journal。本機參與者仍無正式執行入口；Windows 為發布目標，
 macOS 不支援發布，版本 capability 不表示已可使用。
 
 #### Projection, admission and recovery
@@ -1109,9 +1115,12 @@ No native reference participant exists yet: this server contract alone cannot co
 detach from any current client, and the UI has no detach button or flow.
 
 The native [reference codec](../../desktop/fleet-core/src/connection_contract/reference.rs)
-now encodes and validates v2 plans and receipts using the shared vocabulary. There is no
-native review generator or reference executor yet. 本機 reference codec 已依共用詞彙提供
-v2 計畫與回執的編解碼及驗證；本機檢閱產生器與關聯執行器仍未實作。
+now encodes and validates v2 plans and receipts using the shared vocabulary. A
+[read-only diagnostic review](connection-reference-review.md) now produces catalog
+candidates and missing-evidence requirements; it cannot produce a submittable plan,
+and the reference executor is still absent. 本機 reference codec 已依共用詞彙提供
+v2 計畫與回執的編解碼及驗證；唯讀診斷檢閱已可產生目錄候選與缺證要求，
+但不能產生可提交計畫，關聯執行器仍未實作。
 
 The request has exactly these fields (normal operation idempotency keys remain in the header):
 
@@ -1172,8 +1181,9 @@ bootstrap 的新欄位僅宣告伺服器 codec 支援，舊版本欄位仍為 1�
 #### Native connection catalog format
 
 `fleet-core::connection_catalog` defines only a pure format and candidate transitions.
-Nothing reads, writes or advertises the catalog yet. The server detach action is
-defined above; its native participant is still not implemented.
+The read-only reference review consumes captured catalog bytes and these transitions;
+production catalog persistence and capability advertising remain absent. The server
+detach action is defined above; native reference execution is still not implemented.
 Central configuration remains under `bridge::Config::validate`; the catalog stores
 only a configuration ID and SHA-256, without duplicating that validator.
 
@@ -1199,16 +1209,17 @@ encoder emits compact UTF-8 JSON in declaration order without a newline, preserv
 entry order. A candidate's bytes depend only on the current document and `Change`.
 The catalog records no receipt or operation IDs, so a review can predict its bytes.
 Detach receipt references are appended only to the server's `connection_bindings` row.
-Participant evidence will stay in separate per-operation records, once implemented,
-bound to the catalog's before and after digests.
+The participant store already has separate per-operation records for v1 Fleet Apply;
+v2 reference records bound to the catalog's before and after digests remain unimplemented.
 Changes advance revision exactly once and return bytes/SHA-256;
 unchanged returns no bytes. Overflow or excess bounds refuse without pruning.
 Detach clears selection when needed and retains all entries and configuration,
 even for the last attachment. Add accepts only attached entries; explicit reattach
 retains the ID and is the only transition returning a detached entry to attached.
 
-繁體中文：此模組僅定義純格式與候選轉換，尚無程式讀取、寫入或宣告支援目錄。
-伺服器中斷連線關聯 action 如上所述，本機參與者仍未實作。中央設定沿用 `bridge::Config::validate`；目錄只引用設定 ID 與
+繁體中文：此模組僅定義純格式與候選轉換，唯讀關聯檢閱已使用擷取的目錄位元組與轉換，
+正式目錄儲存及 capability 宣告仍未接入。伺服器中斷連線關聯 action 如上所述，本機關聯執行仍未實作。
+中央設定沿用 `bridge::Config::validate`；目錄只引用設定 ID 與
 SHA-256，根層綁定啟動角色的固定 installation UUID，與 Fleet／managed runtime ID 分開。
 各項保留中央身分與 attached／detached 狀態；可選的 connection ID 沿用該中央身分及
 根層 installation，完整組合不可重複。僅有中央連線時使用 null，不虛構 BAT profile。
@@ -1222,5 +1233,5 @@ revision 恰增一，無變更不回新 bytes。超限或溢位拒絕，不裁�
 選取，最後一項仍保留全部項目與設定。新增只接受 attached 項目；只有明確重新附加
 可將 detached 項目恢復為 attached，並沿用原 ID。候選 bytes 僅取決於目前文件與
 `Change`；目錄不記錄收據或 operation ID，讓檢閱能預先算出 bytes。中斷關聯的 receipt refs
-只附加於伺服器 `connection_bindings` row；未來 participant 的證據另存逐操作紀錄，
-綁定目錄變更前後的 digest。
+只附加於伺服器 `connection_bindings` row；participant store 已提供 v1 Fleet Apply 的逐操作紀錄，
+綁定目錄變更前後 digest 的 v2 關聯紀錄仍未實作。
