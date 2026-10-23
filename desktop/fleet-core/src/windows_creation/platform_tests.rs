@@ -281,7 +281,7 @@ fn platform_refuses_history_signature_drift_between_reads() {
 }
 #[test]
 fn platform_private_state_checks_membership_scope_owner_and_directory_creation() {
-    for case in 0..6 {
+    for case in 0..7 {
         let f = Fixture::new();
         let p = f.platform();
         let root = p.reader.root();
@@ -290,6 +290,18 @@ fn platform_private_state_checks_membership_scope_owner_and_directory_creation()
         let path = match case {
             0 => root.join("unreserved/nested.json"),
             1 => p.reader.expected.scope.kit_root.clone(),
+            6 => {
+                let path = p
+                    .reader
+                    .expected
+                    .scope
+                    .state_root
+                    .join("fleet-publications")
+                    .join(format!("{}.json", "c".repeat(64)));
+                write_private(&path, b"private leaf");
+                *p.reader.security.denied.borrow_mut() = Some(path.clone());
+                path
+            }
             2 => {
                 owner.installation_id = "c".repeat(32);
                 root.clone()
@@ -361,6 +373,17 @@ fn platform_directory_hook_authorizes_once_and_never_creates() {
         );
         assert!(!path.parent().unwrap().exists());
     }
+    p.reader.security.login.borrow_mut().session_id += 1;
+    let mut calls = 0;
+    assert_eq!(
+        p.prepare_directory(&path, &f.owner, &mut || {
+            calls += 1;
+            Ok(())
+        }),
+        Err(publication::Error::Gate("OTHER_LOGIN_OWNER"))
+    );
+    assert_eq!(calls, 1);
+    assert!(!path.parent().unwrap().exists());
 }
 #[test]
 fn platform_observation_guards_and_unsupported_effects_use_only_their_seams() {
@@ -386,7 +409,9 @@ fn platform_observation_guards_and_unsupported_effects_use_only_their_seams() {
     assert_eq!(p.classify_shortcut(b""), Err(UNSUPPORTED));
     assert_eq!(p.shortcut(Backend::Rust), Err(UNSUPPORTED));
     assert!(p.reader.security.trace.borrow().is_empty());
+    p.reader.security.running.set(false);
     drop(launcher);
+    assert_eq!(migration::Platform::login(&p), Err("LAUNCHER_REQUIRED"));
     assert!(p.observation().is_err());
     std::fs::remove_file(&p.reader.expected.scope.pointer).unwrap();
     assert!(p.observation().is_err());
