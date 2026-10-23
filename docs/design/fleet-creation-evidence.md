@@ -145,7 +145,7 @@ There is no same-account hostile-tamper or backup anti-rollback guarantee.
 
 ## Record bounds and public data types
 
-All authority documents have exactly `version = 1`, `minimum_reader_version = 1`,
+Existing authority documents retain `version = 1`, `minimum_reader_version = 1`,
 and a tagged `record` with `kind` and `body`. Parsers reject unknown fields,
 duplicate decoded keys, missing fields (including explicit nullable fields), and
 nesting deeper than eight containers. The native `EvidenceKey` selects the
@@ -157,6 +157,32 @@ lowercase hex unless explicitly UUIDs. Paths are absolute UTF-8, at most 4096 by
 and 4096 UTF-16 units; lexical validation does not replace native canonicalization.
 Opaque acceptance/creation references are nonempty, at most 256 bytes, without
 control characters. SID validation reuses the existing 184-byte bound.
+
+### Original connection association
+
+`fleet-connection-association` is a pure codec for original Apply-time evidence
+needed by detach. Its producer combines a validated accepted server target with
+`FrozenHistory::association_projection()`: original selected profile IDs, proven
+SSH association, reviewed route and schema-validated inventory/index keys with
+their source digests. Display names and hostnames never establish an association.
+The server's existing connection ID is retained; creation derives it from the
+accepted operation ID using the server rule, without minting another identity.
+
+This family alone uses document/minimum-reader versions `(2,2)`. A `(1,1)` reader
+refuses it; the current reader preserves existing `(1,1)` bytes and rejects unknown
+families or mixed version pairs. Every field is required, including explicit null
+Connector/Dashboard route keys when no such mapping was reviewed. Records exclude
+credentials, challenges, endpoint text and diagnostics. The bounds are 32 KiB,
+eight containers deep, 256 UTF-8 bytes per native key and 64 lowercase hexadecimal
+characters per digest; unknown/duplicate keys and over-bound values refuse.
+The fixed `association-<sha256>.json` leaf hashes the canonical JSON tuple
+`(server, principal, startup UUID, server installation, connection, operation)`;
+tuple strings are never path segments.
+
+There is no persistence or directory resolver for this family yet. Later writing
+must use the existing creation guards and original authority checks, bound the
+family to 1024 records within the 4096-entry namespace, and refuse without GC.
+Decoding alone grants no ownership, publication or detach authority.
 
 | Public type | Fields and enforced bounds |
 | --- | --- |
