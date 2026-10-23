@@ -103,7 +103,7 @@ pub(crate) async fn reserve<R: tauri::Runtime>(
             #[cfg(windows)]
             {
                 use bat_fleet_core::{
-                    installation::canonical_local, windows_creation::WindowsCreationPlatform,
+                    installation::canonical_local, windows_creation::WindowsSecurity,
                 };
                 use tauri::Manager;
                 ticket.verify()?;
@@ -136,9 +136,13 @@ pub(crate) async fn reserve<R: tauri::Runtime>(
                     user,
                 };
                 let executable = std::env::current_exe().map_err(|_| "INSTALLATION_UNAVAILABLE")?;
-                let mut platform = WindowsCreationPlatform::from_native(
+                let security = crate::fleet_guarded::Guarded {
+                    inner: WindowsSecurity::for_context(&input, &executable)?,
+                    ticket: &ticket,
+                };
+                let mut platform = CreationPlatform::from_native_input(
                     input,
-                    &executable,
+                    security,
                     &|| ticket.verify(),
                     &mut || {
                         [

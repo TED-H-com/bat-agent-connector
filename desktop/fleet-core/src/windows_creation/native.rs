@@ -110,6 +110,17 @@ pub(super) use crate::publication_state::file_identity;
 pub type WindowsCreationPlatform = super::platform::CreationPlatform<WindowsSecurity>;
 pub type WindowsCreationWriter<'a> = super::writer::CreationWriter<'a, WindowsSecurity>;
 impl WindowsSecurity {
+    #[doc(hidden)]
+    pub fn for_context(input: &NativeInput, executable: &Path) -> Result<Self> {
+        Self::for_input(
+            &input.pointer,
+            &input.kit_root,
+            input.role_record.clone(),
+            &input.roaming,
+            executable,
+        )
+    }
+
     fn for_input(
         pointer: &Path,
         kit: &Path,

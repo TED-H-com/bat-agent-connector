@@ -461,7 +461,7 @@ pub use platform::CreationPlatform;
 pub use writer::CreationWriter;
 mod writer;
 #[cfg(windows)]
-pub use native::{WindowsCreationPlatform, WindowsCreationWriter};
+pub use native::{WindowsCreationPlatform, WindowsCreationWriter, WindowsSecurity};
 
 #[cfg(test)]
 mod tests;

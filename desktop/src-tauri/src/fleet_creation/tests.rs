@@ -15,12 +15,13 @@ use std::{
 mod generator {
     include!("../../../fleet-core/tests/support/connection_setup.rs");
 }
+type PathHook = Rc<RefCell<Option<Box<dyn FnMut(&Path)>>>>;
 #[derive(Clone)]
 struct SecurityFixture {
     login: Rc<RefCell<LoginIdentity>>,
     launcher: Rc<Cell<bool>>,
     monitor: Rc<Cell<bool>>,
-    on_path: Rc<RefCell<Option<Box<dyn FnMut(&Path)>>>>,
+    on_path: PathHook,
 }
 struct Guard(Rc<Cell<bool>>);
 impl Drop for Guard {
@@ -157,9 +158,21 @@ impl Fixture {
             user: self.data.join("user"),
         }
     }
-    fn platform(&self, mint: &mut dyn FnMut() -> [String; 2]) -> CreationPlatform<SecurityFixture> {
-        CreationPlatform::from_native_input(self.input(), self.security.clone(), &|| Ok(()), mint)
-            .unwrap()
+    fn platform<'a>(
+        &self,
+        ticket: &'a Ticket,
+        mint: &mut dyn FnMut() -> [String; 2],
+    ) -> CreationPlatform<crate::fleet_guarded::Guarded<'a, SecurityFixture>> {
+        CreationPlatform::from_native_input(
+            self.input(),
+            crate::fleet_guarded::Guarded {
+                inner: self.security.clone(),
+                ticket,
+            },
+            &|| ticket.verify(),
+            mint,
+        )
+        .unwrap()
     }
 }
 #[cfg(not(windows))]
@@ -189,7 +202,7 @@ fn real_selected_startup_context_reserves_reopens_and_proves_original_publicatio
     let role = startup_role::evidence(&f.data).unwrap();
     let original_role = std::fs::read(startup_role::record_path(&f.data)).unwrap();
     let minted = Cell::new(0);
-    let mut p = f.platform(&mut || {
+    let mut p = f.platform(&ticket, &mut || {
         minted.set(minted.get() + 1);
         ["a".repeat(32), "b".repeat(32)]
     });
@@ -211,7 +224,7 @@ fn real_selected_startup_context_reserves_reopens_and_proves_original_publicatio
     drop(p);
     // A new login session does not change the historical reservation's identity.
     f.security.login.borrow_mut().session_id += 1;
-    let mut p = f.platform(&mut || panic!("existing receipt must not mint"));
+    let mut p = f.platform(&ticket, &mut || panic!("existing receipt must not mint"));
     let reopened = prepare(&mut p, &ticket).unwrap();
     assert_eq!(reopened.owner, prepared.owner);
     assert_eq!(
@@ -284,7 +297,7 @@ fn changed_native_startup_uuid_generation_sid_and_stopped_ticket_refuse() {
     let f = Fixture::new();
     let tickets = Arc::new(crate::fleet_lifecycle::Tickets::default());
     let ticket = tickets.capture();
-    let mut p = f.platform(&mut || ["a".repeat(32), "b".repeat(32)]);
+    let mut p = f.platform(&ticket, &mut || ["a".repeat(32), "b".repeat(32)]);
     prepare(&mut p, &ticket).unwrap();
     drop(p);
     let path = startup_role::record_path(&f.data);
@@ -316,7 +329,7 @@ fn changed_native_startup_uuid_generation_sid_and_stopped_ticket_refuse() {
     )
     .is_err());
     f.security.login.borrow_mut().owner_sid = "S-1-5-21-123-456-789-1001".into();
-    let mut p = f.platform(&mut || panic!("existing receipt never mints"));
+    let mut p = f.platform(&ticket, &mut || panic!("existing receipt never mints"));
     tickets.set_stopping(true);
     assert!(matches!(
         prepare(&mut p, &ticket),
@@ -368,7 +381,7 @@ fn lifecycle_stop_after_staging_prevents_final_receipt_publication() {
     let f = Fixture::new();
     let tickets = Arc::new(crate::fleet_lifecycle::Tickets::default());
     let ticket = tickets.capture();
-    let mut p = f.platform(&mut || ["a".repeat(32), "b".repeat(32)]);
+    let mut p = f.platform(&ticket, &mut || ["a".repeat(32), "b".repeat(32)]);
     let root = p.receipt().scope.state_root.join("fleet-creation");
     let watch = root.clone();
     let gate = tickets.clone();
