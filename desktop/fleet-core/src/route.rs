@@ -68,13 +68,15 @@ struct Route {
     kind: RouteKind,
     alias: String,
     probe: Option<Endpoint>,
+    probe_budget: Duration,
+    allow_tailscale_relay: bool,
 }
 /// Native-only private endpoints/aliases; never Debug/Serialize this input.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Routes {
     name: String,
     routes: Vec<Route>,
-    probe_budget: Duration,
+    prefer_lan: bool,
 }
 impl Routes {
     pub fn from_inventory(inventory: &Inventory, name: &str) -> Result<Self> {
@@ -84,12 +86,15 @@ impl Routes {
             .filter(|v| (1..=5000).contains(v))
             .ok_or("INVENTORY_INVALID")?;
         let mut routes = Vec::new();
+        let mut prefer_lan = false;
         if doc["connector"]["name"].as_str() == Some(name) {
             if let Some(alias) = doc["connector"]["ssh_alias"].as_str() {
                 routes.push(Route {
                     kind: RouteKind::Configured,
                     alias: alias.into(),
                     probe: None,
+                    probe_budget: Duration::from_millis(budget),
+                    allow_tailscale_relay: false,
                 });
             }
         } else {
@@ -99,6 +104,7 @@ impl Routes {
                 .iter()
                 .find(|v| v["name"].as_str() == Some(name))
                 .ok_or("ROUTE_UNKNOWN_HOST")?;
+            prefer_lan = host["prefer_lan"].as_bool().unwrap_or(false);
             for route in host["routes"].as_array().ok_or("INVENTORY_INVALID")? {
                 let kind = match route["kind"].as_str() {
                     Some("direct") => RouteKind::Direct,
@@ -118,13 +124,31 @@ impl Routes {
                 } else {
                     None
                 };
-                routes.push(Route { kind, alias, probe });
+                let probe_budget = Duration::from_millis(
+                    route
+                        .get("direct_probe_ms")
+                        .or_else(|| host.get("direct_probe_ms"))
+                        .and_then(Value::as_u64)
+                        .unwrap_or(budget),
+                );
+                let allow_tailscale_relay = route
+                    .get("allow_tailscale_relay")
+                    .or_else(|| host.get("allow_tailscale_relay"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                routes.push(Route {
+                    kind,
+                    alias,
+                    probe,
+                    probe_budget,
+                    allow_tailscale_relay,
+                });
             }
         }
         Ok(Self {
             name: name.into(),
             routes,
-            probe_budget: Duration::from_millis(budget),
+            prefer_lan,
         })
     }
 }
@@ -152,6 +176,7 @@ pub trait RouteProbe: Sync {
 pub enum TailscalePeer {
     Unknown,
     Idle,
+    Relay,
     Direct,
 }
 pub type PeerFuture<'a> = Pin<Box<dyn Future<Output = TailscalePeer> + Send + 'a>>;
@@ -186,6 +211,15 @@ pub fn tailscale_peer(bytes: &[u8], ip: &str) -> TailscalePeer {
             .is_some_and(|v| !v.trim().is_empty())
     {
         TailscalePeer::Direct
+    } else if peer.get("Online") == Some(&Value::Bool(true))
+        && peer.get("Active") == Some(&Value::Bool(true))
+        && peer.get("CurAddr").is_none_or(|v| v.as_str() == Some(""))
+        && peer
+            .get("Relay")
+            .and_then(Value::as_str)
+            .is_some_and(|v| !v.trim().is_empty())
+    {
+        TailscalePeer::Relay
     } else {
         TailscalePeer::Idle
     }
@@ -601,7 +635,17 @@ impl SelectionRequest {
                 wake.failures = 0;
                 wake.next = None;
             }
-            TailscalePeer::Idle => {
+            TailscalePeer::Relay
+                if self
+                    .routes
+                    .routes
+                    .iter()
+                    .any(|r| r.kind == RouteKind::Direct && r.allow_tailscale_relay) =>
+            {
+                wake.failures = 0;
+                wake.next = None;
+            }
+            TailscalePeer::Idle | TailscalePeer::Relay => {
                 if !wake.active && !wake.next.is_some_and(|next| Instant::now() < next) {
                     wake.active = true;
                     wake.pending = Some(ip.into());
@@ -635,6 +679,7 @@ impl SelectionRequest {
             .find(|r| r.kind == RouteKind::Direct);
         let lan = self.routes.routes.iter().find(|r| r.kind == RouteKind::Lan);
         let mut direct_requirement = RouteRequirement::DirectPeerUnknown;
+        let mut relayed = false;
         let (direct_ok, lan_ok) = timeout_at(total, async {
             tokio::join!(
                 async {
@@ -644,20 +689,24 @@ impl SelectionRequest {
                         .direct(
                             probe,
                             &endpoint.address,
-                            deadline(total, self.routes.probe_budget),
+                            deadline(total, route.probe_budget),
                         )
                         .await;
-                    if peer != TailscalePeer::Direct {
-                        direct_requirement = if peer == TailscalePeer::Idle {
-                            RouteRequirement::DirectNotConfirmed
-                        } else {
-                            RouteRequirement::DirectPeerUnknown
-                        };
+                    if peer != TailscalePeer::Direct
+                        && !(peer == TailscalePeer::Relay && route.allow_tailscale_relay)
+                    {
+                        direct_requirement =
+                            if matches!(peer, TailscalePeer::Idle | TailscalePeer::Relay) {
+                                RouteRequirement::DirectNotConfirmed
+                            } else {
+                                RouteRequirement::DirectPeerUnknown
+                            };
                         return false;
                     }
+                    relayed = peer == TailscalePeer::Relay;
                     direct_requirement = RouteRequirement::DirectTcpUnreachable;
                     probe
-                        .tcp(endpoint, deadline(total, self.routes.probe_budget))
+                        .tcp(endpoint, deadline(total, route.probe_budget))
                         .await
                 },
                 async {
@@ -665,7 +714,7 @@ impl SelectionRequest {
                     probe
                         .tcp(
                             route.probe.as_ref().unwrap(),
-                            deadline(total, self.routes.probe_budget),
+                            deadline(total, route.probe_budget),
                         )
                         .await
                 }
@@ -676,16 +725,33 @@ impl SelectionRequest {
         if Instant::now() >= total {
             return Err("ROUTE_PROBE_TIMEOUT".into());
         }
-        let eligible: Vec<_> = self
+        let mut eligible: Vec<_> = self
             .routes
             .routes
             .iter()
             .filter(|r| match r.kind {
-                RouteKind::Direct => direct_ok,
+                RouteKind::Direct => direct_ok && !(self.routes.prefer_lan && relayed && lan_ok),
                 RouteKind::Lan => lan_ok,
                 RouteKind::Cf | RouteKind::Configured => true,
             })
             .collect();
+        eligible.sort_by_key(|r| match r.kind {
+            RouteKind::Lan => {
+                if self.routes.prefer_lan {
+                    0
+                } else {
+                    1
+                }
+            }
+            RouteKind::Direct => {
+                if self.routes.prefer_lan {
+                    1
+                } else {
+                    0
+                }
+            }
+            RouteKind::Cf | RouteKind::Configured => 2,
+        });
         let chosen = eligible
             .iter()
             .find(|r| !self.blocked.contains(&r.alias))

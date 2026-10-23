@@ -21,7 +21,7 @@ import random
 import ssl
 import time
 import zlib
-from collections import deque
+from collections import OrderedDict, deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -35,6 +35,7 @@ from .config import HostConfig
 from .errors import (
     AuthError,
     ChannelNotAllowed,
+    ConfigError,
     ConnectionLost,
     FingerprintMismatch,
     InvokeError,
@@ -83,6 +84,8 @@ class EventSubscription:
     dropped: int = 0
     _signal: asyncio.Event = field(default_factory=asyncio.Event)
 
+    recent_ids: OrderedDict = field(default_factory=OrderedDict)
+    dedupe_limit: int = 2048
     _closed: ConnectionLost | None = None
 
     def close(self, error: ConnectionLost) -> None:
@@ -96,6 +99,22 @@ class EventSubscription:
     def offer(self, ev: dict) -> None:
         if self.predicate and not self.predicate(ev):
             return
+        payloads = [ev]
+        if isinstance(ev.get("params"), dict):
+            payloads.append(ev["params"])
+        if isinstance(ev.get("args"), list):
+            payloads.extend(arg for arg in ev["args"] if isinstance(arg, dict))
+        identity = next(((key, payload[key]) for payload in payloads
+                         for key in ("eventId", "messageId", "id")
+                         if isinstance(payload.get(key), str) and payload[key]), None)
+        if identity is not None:
+            identity = (ev.get("channel"), event_session_id(ev), *identity)
+            if identity in self.recent_ids:
+                self.recent_ids.move_to_end(identity)
+                return
+            self.recent_ids[identity] = None
+            while len(self.recent_ids) > self.dedupe_limit:
+                self.recent_ids.popitem(last=False)
         if len(self.queue) >= self.maxsize:
             self.queue.popleft()
             self.dropped += 1
@@ -174,6 +193,29 @@ async def _retry_pause(delay_s: float) -> None:
     await asyncio.sleep(delay_s)
 
 
+class ReconnectBackoff:
+    """Full jitter; short successful connections do not erase failure history."""
+
+    def __init__(self, *, rng=random.uniform, clock=time.monotonic, stable_s=60.0):
+        self.rng, self.clock, self.stable_s = rng, clock, stable_s
+        self.failures = 0
+        self.connected_at = None
+
+    def connected(self):
+        self.connected_at = self.clock()
+
+    def disconnected(self):
+        if self.connected_at is not None and self.clock() - self.connected_at >= self.stable_s:
+            self.failures = 0
+        self.connected_at = None
+
+    def next_delay(self):
+        self.disconnected()
+        ceiling = min(60.0, 2.0 ** min(self.failures, 6))
+        self.failures += 1
+        return self.rng(0.0, ceiling)
+
+
 class BatClient:
     def __init__(
         self,
@@ -184,8 +226,9 @@ class BatClient:
         allow_writes: bool | None = None,
         allow_orchestrate: bool | None = None,
         max_frame: int = DEFAULT_MAX_FRAME,
-        connect_timeout: float = 10.0,
+        connect_timeout: float | None = None,
         max_concurrency: int = 16,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.host = host
         self.allow_writes = host.writes if allow_writes is None else (allow_writes and host.writes)
@@ -194,7 +237,12 @@ class BatClient:
         self._device_id = device_id
         self._label = client_label
         self._max_frame = max_frame
-        self._connect_timeout = connect_timeout
+        self._connect_timeout = getattr(host, "connect_timeout_s", 10.0) if connect_timeout is None else connect_timeout
+        self._clock = clock
+        self._backoff = ReconnectBackoff(clock=clock)
+        self._recovery: asyncio.Task | None = None
+        self._disconnected_at: float | None = None
+        self._closing = False
         self._ws: ClientConnection | None = None
         self._reader: asyncio.Task | None = None
         self._pending: dict[str, asyncio.Future] = {}
@@ -223,13 +271,55 @@ class BatClient:
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
 
-    async def connect(self) -> None:
+    async def connect(self, *, _recover: bool = False) -> None:
         async with self._conn_lock:
             if self.connected:
                 return
-            await self._connect_locked()
+            self._closing = False
+            if not _recover:
+                await self._connect_locked()
+                self._disconnected_at = None
+                self._backoff.connected()
+                for sub in self._subs:
+                    sub.reopen()
+                return
+            grace = getattr(self.host, "reconnect_grace_s", 120.0)
+            until = self._clock() + grace
+            if self._disconnected_at is not None:
+                until = min(until, self._disconnected_at + grace)
+                await _retry_pause(min(self._backoff.next_delay(), max(0.0, until - self._clock())))
+            while True:
+                remaining = until - self._clock()
+                if remaining <= 0:
+                    self._disconnected_at = None
+                    raise ConnectionLost(f"{self.host.name}: reconnect grace expired")
+                try:
+                    await _wait_with_timeout(self._connect_locked(), remaining)
+                    self._disconnected_at = None
+                    self._backoff.connected()
+                    for sub in self._subs:
+                        sub.reopen()
+                    return
+                except (ConnectionLost, asyncio.TimeoutError) as error:
+                    self._log_failure("reconnect", error)
+                    remaining = until - self._clock()
+                    if remaining <= 0:
+                        self._disconnected_at = None
+                        raise ConnectionLost(f"{self.host.name}: reconnect grace expired") from None
+                    await _retry_pause(min(self._backoff.next_delay(), remaining))
+
+    def _log_failure(self, action: str, error: Any) -> None:
+        details = {"type": error.get("type", "RemoteError"),
+                   "code": error.get("code"), "message": error.get("message"),
+                   "details": error} if isinstance(error, dict) else {
+            "type": type(error).__name__, "code": getattr(error, "code", getattr(error, "errno", None)),
+            "message": str(error),
+        }
+        log.warning("host=%s action=%s error=%s", self.host.name, action,
+                    redact(json.dumps(details, default=str, ensure_ascii=False)))
 
     async def _connect_locked(self) -> None:
+        await self._close_transport()
         token = self.host.resolve_token()
         t0 = time.monotonic()
         try:
@@ -247,6 +337,7 @@ class BatClient:
                 user_agent_header=f"bat-agent-connector/{__version__}",
             )
         except (OSError, InvalidHandshake, asyncio.TimeoutError) as e:
+            self._log_failure("connect", e)
             raise ConnectionLost(
                 f"{self.host.name}: connect failed: {redact(type(e).__name__)}: {redact(e)}"
             ) from None
@@ -275,7 +366,7 @@ class BatClient:
                 },
             }
             try:
-                await ws.send(json.dumps(auth))
+                await _wait_with_timeout(ws.send(json.dumps(auth)), self._connect_timeout)
                 deadline = time.monotonic() + self._connect_timeout
                 reply = None
                 while time.monotonic() < deadline:
@@ -285,9 +376,13 @@ class BatClient:
                         reply = obj
                         break
             except (ConnectionClosed, asyncio.TimeoutError) as e:
-                raise AuthError(f"{self.host.name}: no auth-result ({type(e).__name__})") from None
-            if not reply or reply.get("result") is not True:
+                self._log_failure("authenticate", e)
+                raise ConnectionLost(f"{self.host.name}: no auth-result ({type(e).__name__})") from None
+            if not reply:
+                raise ConnectionLost(f"{self.host.name}: no auth-result")
+            if reply.get("result") is not True:
                 err = (reply or {}).get("error") or "no auth-result"
+                self._log_failure("authenticate", err)
                 raise AuthError(f"{self.host.name}: auth failed: {redact(err)}")
             if reply.get("protocol") != PROTOCOL:
                 raise AuthError(f"{self.host.name}: server negotiated {reply.get('protocol')!r}, need {PROTOCOL}")
@@ -298,7 +393,7 @@ class BatClient:
             self.closed_reason = None
             self._reader = asyncio.create_task(self._read_loop(ws), name=f"bat-reader-{self.host.name}")
         except BaseException:
-            await self.close()
+            await self._close_transport()
             raise
 
     def _decode(self, raw: str | bytes) -> dict | None:
@@ -350,8 +445,10 @@ class BatClient:
                 if fut and not fut.done():
                     fut.set_result(obj)
         except ConnectionClosed as e:
+            self._log_failure("connection", e)
             reason = f"connection closed ({e.rcvd.code if e.rcvd else 'no close frame'})"
         except Exception as e:  # pragma: no cover - defensive
+            self._log_failure("connection", e)
             reason = f"reader error: {type(e).__name__}"
         finally:
             self.closed_reason = reason
@@ -360,10 +457,34 @@ class BatClient:
                 if not fut.done():
                     fut.set_exception(err)
             self._pending.clear()
+            self._backoff.disconnected()
+            # Notify waiters now; retain subscriptions for background recovery.
             for sub in list(self._subs):
                 sub.close(err)
+            if not self._closing:
+                self._disconnected_at = self._clock()
+                if self._subs and (self._recovery is None or self._recovery.done()):
+                    self._recovery = asyncio.create_task(self._recover_subscriptions(err))
+
+    async def _recover_subscriptions(self, error: ConnectionLost) -> None:
+        try:
+            await self.connect(_recover=True)
+        except (ConnectionLost, AuthError, FingerprintMismatch, ConfigError) as failure:
+            self._log_failure("reconnect", failure)
+            for sub in list(self._subs):
+                sub.close(error)
 
     async def close(self) -> None:
+        self._closing = True
+        if self._recovery is not None:
+            self._recovery.cancel()
+            await asyncio.gather(self._recovery, return_exceptions=True)
+            self._recovery = None
+        await self._close_transport()
+        for sub in list(self._subs):
+            sub.close(ConnectionLost(f"{self.host.name}: client closed"))
+
+    async def _close_transport(self) -> None:
         ws, self._ws = self._ws, None
         if ws is not None:
             try:
@@ -396,10 +517,13 @@ class BatClient:
         try:
             assert self._ws is not None
             encoded = json.dumps(frame)
-            if on_transport:
-                on_transport()  # No await between this durable fence and handing the frame to websocket send.
-            await self._ws.send(encoded)
-            return await _wait_with_timeout(fut, timeout)
+            async def exchange():
+                if on_transport:
+                    on_transport()  # No await between the durable fence and websocket send.
+                await self._ws.send(encoded)
+                return await fut
+
+            return await _wait_with_timeout(exchange(), timeout)
         except asyncio.TimeoutError:
             raise InvokeTimeout(
                 f"{self.host.name}: {frame.get('channel', frame['type'])} timed out after {timeout:.0f}s"
@@ -427,8 +551,9 @@ class BatClient:
         canonical = check_allowed(channel, allow_writes=False, allow_orchestrate=False)
         frame = {"type": "invoke", "id": f"batc-{next(self._ids)}",
                  "channel": canonical, "params": params}
-        reply = await self._roundtrip(frame, timeout_for(canonical))
+        reply = await self._roundtrip(frame, max(timeout_for(canonical), getattr(self.host, "invoke_timeout_s", None) or 0.0))
         if reply.get("type") == "invoke-error":
+            self._log_failure(canonical, reply.get("error"))
             raise InvokeError(f"{self.host.name}: {canonical}: {redact(reply.get('error'))}")
         if canonical == "claude:get-session-meta" and (reply.get("type") != "invoke-result" or "result" not in reply):
             raise InvokeError("session metadata reply does not prove presence or absence")
@@ -472,7 +597,7 @@ class BatClient:
                               frame_guard: Callable[[dict], None] | None = None,
                               on_transport: Callable[[], None] | None = None) -> Any:
         write = is_write(canonical)
-        timeout = timeout or timeout_for(canonical)
+        timeout = timeout if timeout is not None else max(timeout_for(canonical), getattr(self.host, "invoke_timeout_s", None) or 0.0)
         attempts = 1 if write and (canonical != "claude:send-message" or not retry_on_disconnect) else 3
         last_exc: Exception | None = None
         for attempt in range(attempts):
@@ -494,6 +619,7 @@ class BatClient:
                     reply = await self._roundtrip(frame, timeout, on_transport=on_transport)
                 self.last_used = time.monotonic()
                 if reply.get("type") == "invoke-error":
+                    self._log_failure(canonical, reply.get("error"))
                     err = redact(reply.get("error"))
                     if BUSY_TEXT in err and attempt + 1 < attempts:
                         await _retry_pause(0.5 * (attempt + 1))
@@ -502,11 +628,13 @@ class BatClient:
                 if canonical == "claude:get-session-meta" and (reply.get("type") != "invoke-result" or "result" not in reply):
                     raise InvokeError("session metadata reply does not prove presence or absence")
                 return reply.get("result")
-            except ConnectionLost as e:
+            except (ConnectionLost, InvokeTimeout, AuthError, FingerprintMismatch, ConfigError) as e:
+                self._log_failure(canonical, e)
+                if not isinstance(e, ConnectionLost):
+                    raise
                 # Only Claude's send-message is idempotent by clientMessageId;
                 # Codex ignores that field and callers disable this retry.
                 last_exc = e
-                await self.close()
                 if attempt + 1 < attempts:
                     await _retry_pause(random.uniform(0.0, min(4.0, 0.5 * 2**attempt)))
                     continue

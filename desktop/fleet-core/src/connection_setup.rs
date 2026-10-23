@@ -757,7 +757,14 @@ fn update_inventory(
             || host["local"] != forward.local.to_string()
             || host["target"] != forward.target
             || host["bat"]["remote_profile_id"] != p.profile.remote_profile_id
-            || !host["routes"].as_array().unwrap().contains(&route)
+            || !host["routes"].as_array().unwrap().iter().any(|existing| {
+                // Policy overrides are retained metadata, not endpoint identity.
+                let mut identity = existing.clone();
+                let fields = identity.as_object_mut().unwrap();
+                fields.remove("allow_tailscale_relay");
+                fields.remove("direct_probe_ms");
+                identity == route
+            })
         {
             return Err(Gap::IdentityChanged);
         }

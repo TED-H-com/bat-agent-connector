@@ -5,6 +5,11 @@
 # Tables merge; scalars/arrays replace. Each host must be defined in only one file.
 
 [client]
+# Finite seconds, 1–600; the same keys under [hosts.<name>] override these defaults.
+connect_timeout_s = 30                 # WebSocket connect and authentication
+invoke_timeout_s = 60                  # minimum default; longer channel deadlines still apply
+reconnect_grace_s = 120                # retain subscriptions while transport recovers
+# Recovery uses full jitter, 1s exponential base, 60s cap; resets after 60s connected.
 label = "BAT Agent Connector"          # how this client appears on the host
 human_name = "the user"                # name used in relayed messages and NEED-<NAME> status markers
 relay_name = "the assistant"           # who relays (labels the brief as its interpretation)
@@ -20,6 +25,7 @@ max_start_per_call = 4                 # fan-out: max sessions started by one `b
 profiles_dir = "~/.local/share/org.tonyq.better-agent-terminal/profiles"
 
 [hosts.workstation]
+# For a slower relayed host, for example: connect_timeout_s = 60, invoke_timeout_s = 120.
 url = "wss://127.0.0.1:9876/"          # e.g. an ssh -L tunnel to the host's bat-server
 fingerprint = "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
 token_ref = "env:BAT_TOKEN_WORKSTATION" # or "file:~/.config/bat-agent-connector/workstation.token"

@@ -264,8 +264,9 @@ impl Inventory {
                     "workspace_bindings",
                     "connector_endpoint",
                 ],
-                &[],
+                &["allow_tailscale_relay", "direct_probe_ms", "prefer_lan"],
             )?;
+            route_options(host)?;
             let name = identifier(&host["name"], 64, b"_.-")?;
             let profile = identifier(&host["profile"], 64, b"_.-")?;
             if name.eq_ignore_ascii_case("connector") || profile.eq_ignore_ascii_case("default") {
@@ -281,15 +282,31 @@ impl Inventory {
             if !host["probe"].is_null() {
                 endpoint(text(&host["probe"])?, false)?;
             }
+            let prefer_lan = match host.get("prefer_lan") {
+                None => false,
+                Some(value) => value.as_bool().ok_or(INVALID)?,
+            };
+            let order = if prefer_lan {
+                ["lan", "direct", "cf"]
+            } else {
+                ["direct", "lan", "cf"]
+            };
             let mut last = None;
             let mut kinds = HashSet::new();
             for route in array(&host["routes"], true)? {
-                fields(route, &["kind", "alias"], &["probe", "access_host"])?;
+                fields(
+                    route,
+                    &["kind", "alias"],
+                    &[
+                        "probe",
+                        "access_host",
+                        "allow_tailscale_relay",
+                        "direct_probe_ms",
+                    ],
+                )?;
+                route_options(route)?;
                 let kind = text(&route["kind"])?;
-                let tier = ["direct", "lan", "cf"]
-                    .iter()
-                    .position(|v| *v == kind)
-                    .ok_or(INVALID)?;
+                let tier = order.iter().position(|v| *v == kind).ok_or(INVALID)?;
                 if last.is_some_and(|v| v >= tier) {
                     return Err(INVALID);
                 }
@@ -588,4 +605,17 @@ pub fn configuration_issues(
         });
     }
     issues
+}
+
+fn route_options(value: &Value) -> Result<()> {
+    if value
+        .get("allow_tailscale_relay")
+        .is_some_and(|v| !v.is_boolean())
+        || value
+            .get("direct_probe_ms")
+            .is_some_and(|v| !v.as_u64().is_some_and(|n| (1..=5000).contains(&n)))
+    {
+        return Err(INVALID);
+    }
+    Ok(())
 }
