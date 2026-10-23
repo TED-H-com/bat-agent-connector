@@ -17,6 +17,9 @@ use windows_sys::Win32::{
         UNPROTECTED_DACL_SECURITY_INFORMATION,
     },
 };
+pub(super) fn dacl(path: &Path) -> Vec<u8> {
+    dacl_case(path, "shared ACL readback")
+}
 fn dacl_case(path: &Path, case: &str) -> Vec<u8> {
     let name: Vec<_> = path.as_os_str().encode_wide().chain(Some(0)).collect();
     let mut size = 0;
@@ -138,7 +141,7 @@ fn inspect_dacl(bytes: &[u8], case: &str) -> AclReadback {
         world,
     }
 }
-fn set_dacl(path: &Path, broad: bool) {
+pub(super) fn set_dacl(path: &Path, broad: bool) {
     let file = path.is_file();
     let sddl = if broad {
         "D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;OICI;FR;;;WD)"

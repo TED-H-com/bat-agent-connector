@@ -6,6 +6,7 @@ desktop/vendor/glib-0.18.5/LICENSE whitespace=-blank-at-eof
 src/bat_agent_connector/dashboard/** text eol=lf
 # The native plan golden pins the generator's canonical bytes.
 tests/fixtures/native-plan-manifest.json text eol=lf
+tests/fixtures/connection-association-targets.json text eol=lf
 # Canonical synthetic AHP shape bytes are checked on every platform.
 tests/fixtures/ahp-owned/protocol-shapes.jsonl text eol=lf
 tests/fixtures/ahp-work-start-bat.json text eol=lf
