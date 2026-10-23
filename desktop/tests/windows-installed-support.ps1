@@ -25,6 +25,7 @@ function New-FixtureViewAttempt([System.Collections.IDictionary]$Diagnostics) {
     $Diagnostics.attempt_count++
     $attempt = [ordered]@{
         attempt = $Diagnostics.attempt_count; exit_code = $null; error_type = $null; error_hresult = $null; unavailable_nodes = 0
+        phase_elapsed_ms = [ordered]@{}; diagnostics_truncated = $false; window_response = $null; process_elapsed_ms = $null
         phases = [ordered]@{spawned=$false; started=$false; owner_verified=$false; assemblies_loaded=$false;
             window_resolved=$false; query_started=$false; query_completed=$false; completed=$false; failed=$false; timed_out=$false}
     }
@@ -33,10 +34,22 @@ function New-FixtureViewAttempt([System.Collections.IDictionary]$Diagnostics) {
     return $attempt
 }
 function Set-FixtureViewDiagnostics([System.Collections.IDictionary]$Attempt, [string]$Stderr) {
-    foreach ($line in $Stderr.Split([char]10)) {
+    # Bound parsing and retained evidence independently of a provider's output.
+    if ($Stderr.Length -gt 16384) { $Attempt.diagnostics_truncated = $true; $Stderr = $Stderr.Substring(0, 16384) }
+    $lines = $Stderr.Split([char]10)
+    if ($lines.Length -gt 256) { $Attempt.diagnostics_truncated = $true }
+    foreach ($line in $lines | Select-Object -First 256) {
         $line = $line.Trim()
         if (@('started', 'owner_verified', 'assemblies_loaded', 'window_resolved',
             'query_started', 'query_completed', 'completed', 'failed') -ccontains $line) { $Attempt.phases[$line] = $true }
+        elseif ($line -cmatch '^phase_elapsed_ms:(started|owner_verified|assemblies_loaded|window_resolved|query_started|query_completed|completed|failed):([0-9]{1,5})$') {
+            $phase = $Matches[1]
+            $elapsed = [int]$Matches[2]
+            if ($elapsed -le 60000 -and -not $Attempt.phase_elapsed_ms.Contains($phase)) {
+                $Attempt.phase_elapsed_ms[$phase] = $elapsed
+                $Attempt.phases[$phase] = $true
+            }
+        }
         elseif ($line -ceq 'node_unavailable') { $Attempt.unavailable_nodes++ }
         elseif ($line -cmatch '^error_type:([A-Za-z_][A-Za-z0-9_.+]{0,199})$') {
             $Attempt.error_type = $Matches[1]
@@ -45,6 +58,19 @@ function Set-FixtureViewDiagnostics([System.Collections.IDictionary]$Attempt, [s
         elseif ($line -cmatch '^error_hresult:(0x[0-9A-F]{8})$') { $Attempt.error_hresult = $Matches[1] }
         # Never retain unrecognized stderr, provider messages, stacks or UI text.
     }
+}
+function Get-FixtureWindowResponse {
+    param([IntPtr]$Window, [uint32]$Owner, [DateTime]$Deadline,
+        [scriptblock]$Sample = { param($Handle, $ProcessId, $Timeout) [DashboardWindows]::SampleResponse($Handle, $ProcessId, $Timeout) },
+        [scriptblock]$Now = { [DateTime]::UtcNow })
+    $timeout = [int][Math]::Max(0, [Math]::Floor([Math]::Min(200, ($Deadline - (& $Now)).TotalMilliseconds)))
+    if ($timeout -eq 0) { return [ordered]@{state='not_sampled'; elapsed_ms=$null; timeout_ms=0; win32_error=$null} }
+    $sample = & $Sample $Window $Owner $timeout
+    if ($sample.State -cnotin @('responsive', 'hung', 'failed', 'owner_changed') -or
+        ($sample.ElapsedMilliseconds -isnot [long] -and $sample.ElapsedMilliseconds -isnot [int]) -or $sample.ElapsedMilliseconds -lt 0 -or
+        $sample.ErrorCode -isnot [int]) { throw 'Invalid native responsiveness diagnostic' }
+    return [ordered]@{state=$sample.State; elapsed_ms=[Math]::Min(60000, $sample.ElapsedMilliseconds);
+        timeout_ms=$timeout; win32_error=$sample.ErrorCode}
 }
 function Test-FixtureViewResult {
     param([System.Collections.IDictionary]$Attempt, [string]$Output, [System.Collections.IDictionary]$Observed)
