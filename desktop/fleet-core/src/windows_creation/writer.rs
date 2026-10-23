@@ -20,6 +20,112 @@ impl<S: Security> CreationPlatform<S> {
     }
 }
 impl<S: Security> CreationWriter<'_, S> {
+    /// Prepare only a fixed artifact parent, one recorded level at a time.
+    pub fn prepare_parents(
+        &mut self,
+        path: &Path,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<()> {
+        self.verify_effect_context()?;
+        if !self
+            .platform
+            .reader
+            .expected
+            .slots
+            .iter()
+            .any(|s| s.canonical_path.parent() == Some(path))
+        {
+            return Err(UNPROVEN);
+        }
+        let mut missing = Vec::new();
+        let mut parent = path;
+        while self.platform.reader.walk(parent)?.is_none() {
+            if !self.platform.reader.directory_reserved(parent)? {
+                return Err(UNPROVEN);
+            }
+            missing.push(parent.to_path_buf());
+            parent = parent.parent().ok_or(UNPROVEN)?;
+        }
+        self.parent_proof(parent)?;
+        for level in missing.into_iter().rev() {
+            self.directory_level(&level, authorize)?;
+        }
+        self.proven_directory(path)
+    }
+    fn proven_directory(&self, path: &Path) -> Result<()> {
+        if !self
+            .platform
+            .reader
+            .walk(path)?
+            .ok_or(UNPROVEN)?
+            .metadata()
+            .map_err(|_| UNPROVEN)?
+            .is_dir()
+        {
+            return Err(UNPROVEN);
+        }
+        self.parent_proof(path).map(|_| ())
+    }
+    fn ensure_directory(
+        &mut self,
+        path: &Path,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<()> {
+        self.verify_effect_context()?;
+        if present(path)? {
+            self.proven_directory(path)
+        } else {
+            self.directory_level(path, authorize)
+        }
+    }
+    /// Explicitly prepare evidence containers and the fixed publisher roots.
+    /// Call before export/admission; read-only publisher calls never do this.
+    pub fn prepare_publication_directories(
+        &mut self,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<()> {
+        let reader = &self.platform.reader;
+        let mut paths = reader.namespace_directories()?;
+        paths.extend(
+            reader
+                .expected
+                .directories
+                .iter()
+                .map(|d| d.path())
+                .filter(|p| {
+                    p.parent() == Some(reader.expected.scope.state_root.as_path())
+                        && **p != reader.root()
+                        && !p.starts_with(&reader.expected.scope.kit_root)
+                })
+                .map(Path::to_path_buf),
+        );
+        for path in paths {
+            self.ensure_directory(&path, authorize)?;
+        }
+        self.platform.directories_prepared = true;
+        Ok(())
+    }
+    /// Prepare the bounded child for an already admitted original frozen plan.
+    pub fn prepare_decision_directory(
+        &mut self,
+        reference: &crate::connection_publish::FrozenPlanRef,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<()> {
+        self.verify_effect_context()?;
+        if !self
+            .platform
+            .histories()?
+            .iter()
+            .any(|h| h.frozen().reference() == reference)
+        {
+            return Err(UNPROVEN);
+        }
+        let path = self
+            .platform
+            .publisher
+            .decision_directory(&reference.review_digest);
+        self.ensure_directory(&path, authorize)
+    }
     pub(super) fn held(platform: &mut CreationPlatform<S>) -> Result<CreationWriter<'_, S>> {
         platform.reader.security.effect_held()?;
         Ok(CreationWriter {
@@ -53,12 +159,24 @@ impl<S: Security> CreationWriter<'_, S> {
         record: &Record,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<String> {
+        record.encode()?;
         if !self.pending.borrow().is_empty()
             && !matches!(record, Record::Directory(d) if self.pending.borrow().get(&d.canonical_path) == Some(d))
         {
             return Err(UNPROVEN);
         }
-        let histories = self.platform.histories()?;
+        let mut histories = self.platform.histories()?;
+        if let Record::Publication(link) = record {
+            if !histories
+                .iter()
+                .any(|h| h.frozen().reference() == &link.frozen)
+            {
+                if histories.len() >= HISTORY_LIMIT {
+                    return Err(UNPROVEN);
+                }
+                histories.push(self.platform.history(&link.frozen)?);
+            }
+        }
         evidence::append(self, owner, record, &histories, &[], authorize)
     }
     fn receipt_hash(&self) -> Result<String> {
@@ -184,6 +302,12 @@ impl<S: Security> CreationWriter<'_, S> {
         self.platform.reader.root_bytes()?;
         // Read original histories before entering the unrecorded-directory interval.
         let histories = self.platform.histories()?;
+        let owner = self
+            .platform
+            .reader
+            .expected
+            .owner(&self.platform.reader.root_bytes()?)?;
+        evidence::capture(self, &owner)?.resolve(&histories, &[])?;
         let record = self.create_level(path, authorize)?;
         // The directory and its record are one level's authorized effect.
         self.record_level(record, &histories, &mut || Ok(()))

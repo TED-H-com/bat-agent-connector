@@ -238,8 +238,33 @@ impl<S: Security> Reader<S> {
             .collect()
     }
     fn directory_reserved(&self, path: &Path) -> Result<bool> {
-        Ok(self.expected.directories.iter().any(|d| d.path() == path)
-            || self.namespace_directories()?.iter().any(|p| p == path))
+        if self.expected.directories.iter().any(|d| d.path() == path)
+            || evidence::directory_reserved(&self.expected, path, &[])
+        {
+            return Ok(true);
+        }
+        // Probe only the shape here. Actual admissible reviews come from records;
+        // the resolver validates their full chain before any directory effect.
+        let name = path.file_name().and_then(|n| n.to_str()).ok_or(UNPROVEN)?;
+        if !evidence::directory_reserved(&self.expected, path, &[name]) {
+            return Ok(false);
+        }
+        let mut reviews = Vec::new();
+        for key in self.entries()? {
+            if matches!(key, EvidenceKey::Lineage(_)) {
+                if let Record::Publication(link) = Record::decode(
+                    &key,
+                    &self.read_private(&key, RECORD_LIMIT)?.ok_or(UNPROVEN)?,
+                )? {
+                    reviews.push(link.frozen.review_digest);
+                }
+            }
+        }
+        Ok(evidence::directory_reserved(
+            &self.expected,
+            path,
+            &reviews.iter().map(String::as_str).collect::<Vec<_>>(),
+        ))
     }
 }
 // The resolver needs EvidenceIo's read boundary. This private view never exposes

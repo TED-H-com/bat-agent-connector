@@ -69,6 +69,57 @@ fn windows_reservation_bootstrap_has_protected_private_dacl_and_recorded_identit
         assert!(!slot.canonical_path.exists());
     }
 }
+
+#[test]
+fn windows_preparation_parents_and_private_directories_are_protected_and_recorded() {
+    let f = fresh_from(native_input());
+    let mut p = native_platform(&f);
+    let mut w = CreationWriter::held(&mut p).unwrap();
+    let owner = w.reserve(&mut || Ok(())).unwrap();
+    let parent = w
+        .platform
+        .reader
+        .expected
+        .path(Artifact::ProfileIndex)
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    w.prepare_parents(&parent, &mut || Ok(())).unwrap();
+    w.prepare_publication_directories(&mut || Ok(())).unwrap();
+    let mut found = 0;
+    for key in w.entries().unwrap() {
+        if let Record::Directory(record) =
+            Record::decode(&key, &w.read_private(&key, RECORD_LIMIT).unwrap().unwrap()).unwrap()
+        {
+            assert!(windows_tests::protected(&record.canonical_path));
+            crate::publication_state::verify_protected(&record.canonical_path).unwrap();
+            assert_eq!(
+                record.identity,
+                w.platform.reader.identity(&record.canonical_path).unwrap()
+            );
+            assert_eq!(
+                record.parent_identity,
+                w.platform
+                    .reader
+                    .identity(record.canonical_path.parent().unwrap())
+                    .unwrap()
+            );
+            found += 1;
+        }
+    }
+    // Bootstrap pair, three artifact parents, three extra evidence containers,
+    // and the three fixed publisher roots; no artifact file is created.
+    assert_eq!(found, 11);
+    evidence::capture(&w, &owner)
+        .unwrap()
+        .resolve(&[], &[])
+        .unwrap()
+        .baseline()
+        .unwrap();
+    for slot in &w.platform.reader.expected.slots {
+        assert!(!slot.canonical_path.exists());
+    }
+}
 fn native_platform(f: &Fixture) -> WindowsCreationPlatform {
     let mut platform = windows_tests::platform(f);
     platform.reader.security.monitor_for_fixture = true;

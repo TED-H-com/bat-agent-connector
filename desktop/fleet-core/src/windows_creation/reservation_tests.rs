@@ -1,6 +1,6 @@
 use super::*;
 
-fn snapshot(path: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+pub(super) fn snapshot(path: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
     let mut result = BTreeMap::new();
     if path.exists() {
         result.insert(path.into(), None);

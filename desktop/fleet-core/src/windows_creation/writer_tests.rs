@@ -1,5 +1,7 @@
 use super::*;
 
+#[path = "preparation_tests.rs"]
+mod preparation;
 #[path = "reservation_tests.rs"]
 mod reservation;
 
