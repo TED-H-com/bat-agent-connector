@@ -1868,7 +1868,7 @@ fn requirement_fixture(
     } else {
         match peer {
             TailscalePeer::Unknown => RouteRequirement::DirectPeerUnknown,
-            TailscalePeer::Idle => RouteRequirement::DirectNotConfirmed,
+            TailscalePeer::Idle | TailscalePeer::Relay => RouteRequirement::DirectNotConfirmed,
             TailscalePeer::Direct => RouteRequirement::DirectTcpUnreachable,
         }
     };
@@ -1896,7 +1896,11 @@ impl RequirementFixture {
         self.runtime.tick(now).await.unwrap();
         let mut ready = HashSet::new();
         let mut saw_failure = false;
-        let waking = self.probe.peer == bat_fleet_core::route::TailscalePeer::Idle;
+        let waking = matches!(
+            self.probe.peer,
+            bat_fleet_core::route::TailscalePeer::Idle
+                | bat_fleet_core::route::TailscalePeer::Relay
+        );
         let mut wake_started = false;
         loop {
             // Drive one supervisor transition per actual fixture effect, never
@@ -2095,12 +2099,14 @@ async fn direct_requirement_survives_between_and_during_route_attempts() {
         (TailscalePeer::Direct, false),
         (TailscalePeer::Unknown, true),
         (TailscalePeer::Idle, false),
+        // This fixture does not opt into relay routes, so relay wakes like idle.
+        (TailscalePeer::Relay, false),
     ] {
         let mut f = requirement_fixture(peer, exhausted);
         f.settle(1000).await;
         let tcp = usize::from(peer == TailscalePeer::Direct);
         let lan = usize::from(exhausted);
-        let wakes = usize::from(peer == TailscalePeer::Idle);
+        let wakes = usize::from(matches!(peer, TailscalePeer::Idle | TailscalePeer::Relay));
         for now in [1001, 1200, 5000, 15999] {
             let status = f.runtime.tick(now).await.unwrap();
             assert_eq!(
