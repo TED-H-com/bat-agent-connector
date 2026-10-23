@@ -2,6 +2,9 @@ use super::*;
 use crate::windows_creation::{tests::windows_tests, writer::CreationWriter};
 
 fn native_fixture() -> Fixture {
+    seeded_from(native_input())
+}
+fn native_input() -> Fixture {
     let login = crate::windows::current_login().unwrap();
     let mut f = Fixture::with_sid(login.owner_sid);
     f.reader.expected.creator.session_id = login.session_id;
@@ -14,7 +17,57 @@ fn native_fixture() -> Fixture {
                 .unwrap(),
         )
         .unwrap();
-    seeded_from(f)
+    f
+}
+
+#[test]
+fn windows_reservation_bootstrap_has_protected_private_dacl_and_recorded_identity() {
+    let f = fresh_from(native_input());
+    let mut p = native_platform(&f);
+    let mut w = CreationWriter::held(&mut p).unwrap();
+    let owner = w.reserve(&mut || Ok(())).unwrap();
+    let paths = [
+        w.platform.reader.root(),
+        w.platform.reader.directory_container().unwrap(),
+    ];
+    let mut found = 0;
+    for path in &paths {
+        assert!(windows_tests::protected(path));
+        crate::publication_state::verify_protected(path).unwrap();
+        w.platform
+            .reader
+            .directory(path, parse_owner_reference(&owner).unwrap())
+            .unwrap();
+    }
+    for key in w.entries().unwrap() {
+        if let Record::Directory(record) =
+            Record::decode(&key, &w.read_private(&key, RECORD_LIMIT).unwrap().unwrap()).unwrap()
+        {
+            assert!(paths.contains(&record.canonical_path));
+            assert_eq!(
+                record.identity,
+                w.platform.reader.identity(&record.canonical_path).unwrap()
+            );
+            assert_eq!(
+                record.parent_identity,
+                w.platform
+                    .reader
+                    .identity(record.canonical_path.parent().unwrap())
+                    .unwrap()
+            );
+            found += 1;
+        }
+    }
+    assert_eq!(found, 2);
+    evidence::capture(&w, &owner)
+        .unwrap()
+        .resolve(&[], &[])
+        .unwrap()
+        .baseline()
+        .unwrap();
+    for slot in &w.platform.reader.expected.slots {
+        assert!(!slot.canonical_path.exists());
+    }
 }
 fn native_platform(f: &Fixture) -> WindowsCreationPlatform {
     let mut platform = windows_tests::platform(f);

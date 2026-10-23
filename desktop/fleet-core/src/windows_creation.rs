@@ -1,6 +1,6 @@
 //! Native creation observation and rooted ownership. No IPC or process effects.
 //! The default view is read-only. Explicit writer scopes retain effect guards;
-//! first-time namespace bootstrap and publisher directory preparation are unavailable.
+//! first reservation bootstraps only its root, record container and receipt.
 use crate::{
     connection_setup::{Artifact, FileOwnership, OwnerEvidence},
     creation_evidence::{self as evidence, *},
@@ -82,6 +82,13 @@ impl<S: Security> Reader<S> {
     }
     fn key_path(&self, key: &EvidenceKey) -> Result<PathBuf> {
         Ok(self.root().join(key.relative_path()?))
+    }
+    fn directory_container(&self) -> Result<PathBuf> {
+        Ok(self
+            .key_path(&EvidenceKey::Directory("0".repeat(64)))?
+            .parent()
+            .ok_or(UNPROVEN)?
+            .into())
     }
     fn private(&self, path: &Path) -> Result<bool> {
         let role_parent = self
@@ -258,6 +265,7 @@ impl<S: Security> EvidenceIo for Reader<S> {
                 self.directory(d.path(), &hash)?;
             }
         }
+        self.directory(&self.directory_container()?, &hash)?;
         self.verify_intermediates(receipt)
     }
     fn verify_effect_context(&self) -> Result<()> {

@@ -6,6 +6,8 @@ pub struct CreationWriter<'a, S> {
     pub(super) platform: &'a mut CreationPlatform<S>,
     pending: RefCell<BTreeMap<PathBuf, DirectoryCreated>>,
     staging: RefCell<Option<PathBuf>>,
+    // Granted only to the original reserve call, never reconstructed from disk.
+    bootstrap: bool,
 }
 impl<S: Security> CreationPlatform<S> {
     pub fn with_writer<T>(
@@ -24,12 +26,26 @@ impl<S: Security> CreationWriter<'_, S> {
             platform,
             pending: RefCell::default(),
             staging: RefCell::default(),
+            bootstrap: false,
         })
     }
-    /// Reopen recorded reservation evidence. New namespace bootstrap is unavailable.
+    /// Reserve absent slots, or reopen the complete original reservation.
     pub fn reserve(&mut self, authorize: &mut dyn FnMut() -> Result<()>) -> Result<OwnerEvidence> {
         let receipt = self.platform.reader.expected.clone();
-        evidence::reserve(self, &receipt, authorize)
+        self.verify_effect_context()?;
+        if !self.pending.borrow().is_empty() {
+            return Err(UNPROVEN);
+        }
+        self.bootstrap = !present(&self.platform.reader.root())?
+            && receipt.directories.iter().any(|d| {
+                matches!(d,
+                DirectoryReservation::ReservedAbsent { canonical_path }
+                if *canonical_path == self.platform.reader.root())
+            });
+        let result = evidence::reserve(self, &receipt, authorize);
+        self.bootstrap = false;
+        self.pending.borrow_mut().clear();
+        result
     }
     pub fn append(
         &mut self,
@@ -78,27 +94,35 @@ impl<S: Security> CreationWriter<'_, S> {
                 return Err(UNPROVEN);
             }
         } else {
+            if self.bootstrap
+                && self
+                    .pending
+                    .borrow()
+                    .get(parent)
+                    .is_some_and(|d| d.identity == identity)
+            {
+                return Ok(identity);
+            }
             reader.directory(parent, &self.receipt_hash()?)?;
         }
         Ok(identity)
     }
-    /// Create one receipt-reserved level under the current effect guards.
-    pub fn directory_level(
+    // The sole strict mkdir/readback step, shared by bootstrap and ordinary levels.
+    fn create_level(
         &mut self,
         path: &Path,
         authorize: &mut dyn FnMut() -> Result<()>,
-    ) -> Result<()> {
+    ) -> Result<DirectoryCreated> {
         self.verify_effect_context()?;
         let reader = &self.platform.reader;
-        reader.root_bytes()?;
-        if !reader.directory_reserved(path)? || reader.walk(path)?.is_some() {
+        if !reader.directory_reserved(path)?
+            || reader.walk(path)?.is_some()
+            || (self.bootstrap && path != reader.root() && path != reader.directory_container()?)
+        {
             return Err(UNPROVEN);
         }
         let parent = path.parent().ok_or(UNPROVEN)?;
         let parent_identity = self.parent_proof(parent)?;
-        // Read original histories while every existing directory is recorded.
-        // These immutable views remain inside the same held guard scope.
-        let histories = self.platform.histories()?;
         authorize()?;
         self.verify_effect_context()?;
         if self.parent_proof(parent)? != parent_identity {
@@ -118,6 +142,15 @@ impl<S: Security> CreationWriter<'_, S> {
         self.pending
             .borrow_mut()
             .insert(path.into(), record.clone());
+        Ok(record)
+    }
+    fn record_level(
+        &mut self,
+        record: DirectoryCreated,
+        histories: &[crate::connection_publish::PublicationHistory],
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<()> {
+        let path = record.canonical_path.clone();
         let owner = self
             .platform
             .reader
@@ -128,15 +161,32 @@ impl<S: Security> CreationWriter<'_, S> {
             self,
             &owner,
             &Record::Directory(record),
-            &histories,
+            histories,
             &[],
-            &mut || Ok(()),
+            authorize,
         )?;
         self.platform
             .reader
-            .directory(path, &self.receipt_hash()?)?;
-        self.pending.borrow_mut().remove(path);
+            .directory(&path, &self.receipt_hash()?)?;
+        self.pending.borrow_mut().remove(&path);
         Ok(())
+    }
+    /// Create and record one reserved level before permitting a descendant.
+    pub fn directory_level(
+        &mut self,
+        path: &Path,
+        authorize: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<()> {
+        if self.bootstrap || !self.pending.borrow().is_empty() {
+            return Err(UNPROVEN);
+        }
+        self.verify_effect_context()?;
+        self.platform.reader.root_bytes()?;
+        // Read original histories before entering the unrecorded-directory interval.
+        let histories = self.platform.histories()?;
+        let record = self.create_level(path, authorize)?;
+        // The directory and its record are one level's authorized effect.
+        self.record_level(record, &histories, &mut || Ok(()))
     }
 }
 impl<S: Security> EvidenceIo for CreationWriter<'_, S> {
@@ -238,9 +288,20 @@ impl<S: Security> EvidenceIo for CreationWriter<'_, S> {
         self.verify_context(receipt)?;
         let record = Record::decode(key, bytes)?;
         self.verify_record(&record)?;
-        if key == &EvidenceKey::Provisioning && !present(&self.platform.reader.root())? {
-            return Err(UNSUPPORTED);
-        }
+        let bootstrap =
+            if key == &EvidenceKey::Provisioning && !present(&self.platform.reader.root())? {
+                if !self.bootstrap {
+                    return Err(UNSUPPORTED);
+                }
+                let root = self.platform.reader.root();
+                let container = self.platform.reader.directory_container()?;
+                Some([
+                    self.create_level(&root, authorize)?,
+                    self.create_level(&container, authorize)?,
+                ])
+            } else {
+                None
+            };
         let path = self.platform.reader.key_path(key)?;
         let parent = path.parent().ok_or(UNPROVEN)?;
         if !present(parent)? {
@@ -301,6 +362,13 @@ impl<S: Security> EvidenceIo for CreationWriter<'_, S> {
             != Some(bytes)
         {
             return Err(UNPROVEN);
+        }
+        if let Some(records) = bootstrap {
+            // Only these two live, just-created objects may precede their records.
+            // No history can exist in the namespace whose absence reserve proved.
+            for record in records {
+                self.record_level(record, &[], authorize)?;
+            }
         }
         Ok(())
     }

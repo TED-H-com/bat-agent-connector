@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "reservation_tests.rs"]
+mod reservation;
+
 fn fresh() -> Fixture {
     fresh_from(Fixture::new())
 }
@@ -386,15 +389,21 @@ fn writer_refuses_linked_parent_without_following_target() {
 }
 
 #[test]
-fn writer_first_reservation_refuses_without_creating_unrecorded_namespace() {
+fn writer_reserves_real_evidence_without_creating_artifacts() {
     let f = fresh();
     let mut p = f.platform();
-    assert_eq!(
-        p.with_writer(|w| w.reserve(&mut || Ok(()))),
-        Err(UNSUPPORTED)
-    );
-    assert!(!p.reader.root().exists());
-    assert!(!p.reader.expected.scope.kit_root.exists());
+    let owner = p.with_writer(|w| w.reserve(&mut || Ok(()))).unwrap();
+    assert_eq!(owner, f.owner);
+    p.reader.security.held.set(true);
+    evidence::capture(&p.reader, &owner)
+        .unwrap()
+        .resolve(&[], &[])
+        .unwrap()
+        .baseline()
+        .unwrap();
+    for slot in &p.reader.expected.slots {
+        assert!(!slot.canonical_path.exists());
+    }
 }
 
 #[test]
