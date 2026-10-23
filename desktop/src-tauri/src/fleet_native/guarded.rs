@@ -117,6 +117,7 @@ impl<T: bat_fleet_core::windows_creation::Security> bat_fleet_core::windows_crea
     type LauncherGuard = T::LauncherGuard;
     type MonitorGuard = T::MonitorGuard;
     fn launcher_guard(&self, check: &dyn Fn() -> Result<()>) -> Result<Self::LauncherGuard> {
+        self.ticket.verify()?;
         self.ticket.acquire(|| {
             self.inner.launcher_guard(&|| {
                 self.ticket.verify()?;

@@ -37,7 +37,11 @@ impl<S: Security> Security for Attested<'_, S> {
         self.binding.observe(&self.inner)
     }
     fn launcher_guard(&self, check: &dyn Fn() -> Result<()>) -> Result<Self::LauncherGuard> {
-        self.inner.launcher_guard(check)
+        // Native preflight precedes acquisition; binding reads require exclusion.
+        // Keep native login/mutex checks, then run all caller policy while held.
+        let guard = self.inner.launcher_guard(&|| Ok(()))?;
+        check()?;
+        Ok(guard)
     }
     fn monitor_guard(&self, check: &dyn Fn() -> Result<()>) -> Result<Self::MonitorGuard> {
         self.inner.monitor_guard(check)

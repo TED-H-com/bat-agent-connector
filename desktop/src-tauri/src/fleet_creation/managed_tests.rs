@@ -53,10 +53,10 @@ impl ManagedFixture {
         }
     }
     fn observe(&self) -> Result<Option<ManagedIdentity>> {
+        let _guard = self.f.security.launcher_guard(&|| Ok(()))?;
         let scope = self.bridge.creation_scope()?;
         self.managed.creation_binding(&scope, |path, limit| {
-            publication_state::verify_ancestors(path, path.parent().unwrap())?;
-            publication_state::read_private(path, limit)?.ok_or("CREATION_EVIDENCE_UNPROVEN")
+            CreationPlatform::read_private_attestation(&self.f.security, path, limit)
         })
     }
 }
@@ -86,12 +86,13 @@ fn managed_binding_reads_the_manifest_id_and_rejects_actor_identity_substitution
         assert!(f.observe().is_err(), "must refuse changed {field}");
     }
     f.write(&f.document);
+    let _guard = f.f.security.launcher_guard(&|| Ok(())).unwrap();
     let scope = f.bridge.creation_scope().unwrap();
     let mut reads = 0;
     assert!(f
         .managed
         .creation_binding(&scope, |path, limit| {
-            let bytes = publication_state::read_private(path, limit)?.unwrap();
+            let bytes = CreationPlatform::read_private_attestation(&f.f.security, path, limit)?;
             reads += 1;
             if reads == 1 {
                 std::fs::write(path, b"changed").unwrap();
