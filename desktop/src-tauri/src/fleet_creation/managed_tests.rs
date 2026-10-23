@@ -196,3 +196,94 @@ fn provider_without_a_proven_manifest_is_never_downgraded_to_no_binding() {
     std::fs::remove_dir(f.path().parent().unwrap()).unwrap();
     assert!(f.observe().is_err());
 }
+
+#[test]
+fn external_client_absence_is_distinct_from_unverified_managed_state() {
+    let f = Fixture::new();
+    let (managed, _) = crate::managed::Managed::prepare(&f.data.join("missing"), &f.data, &f.state);
+    let bridge = crate::bridge::Bridge::file_fixture("http://127.0.0.1:41001/", "fixture-token");
+    let security = binding::Attested {
+        inner: f.security.clone(),
+        binding: binding::Binding {
+            managed: &managed,
+            bridge: &bridge,
+            original: RefCell::default(),
+        },
+    };
+    let _guard = security.launcher_guard(&|| Ok(())).unwrap();
+    assert_eq!(security.managed_identity(), Ok(None));
+    publication_state::create_new_directory(&f.data.join("managed-central")).unwrap();
+    assert!(security.managed_identity().is_err());
+}
+#[test]
+fn managed_reader_refuses_missing_or_mismatched_attestation_and_unverified_bridge() {
+    let f = ManagedFixture::new();
+    let tickets = Arc::new(crate::fleet_lifecycle::Tickets::default());
+    let ticket = tickets.capture();
+    let p = f.platform(&ticket, &mut || ["a".repeat(32), "b".repeat(32)]);
+    let mut receipt = p.receipt().clone();
+    drop(p);
+    let make = |receipt, security| {
+        CreationPlatform::with_security(
+            receipt,
+            f.f.data.clone(),
+            &f.f.data.join("Startup"),
+            &f.f.data.join("user"),
+            security,
+        )
+    };
+    assert!(make(receipt.clone(), f.f.security.clone()).is_err());
+    let security = f.security(&ticket);
+    let _guard = security.launcher_guard(&|| Ok(())).unwrap();
+    receipt.managed_connector.as_mut().unwrap().manifest_sha256 = "0".repeat(64);
+    assert!(CreationPlatform::with_security(
+        receipt,
+        f.f.data.clone(),
+        &f.f.data.join("Startup"),
+        &f.f.data.join("user"),
+        security
+    )
+    .is_err());
+    let scope = f.bridge.creation_scope().unwrap();
+    for field in 0..4 {
+        let mut changed = scope.clone();
+        match field {
+            0 => changed.managed = false,
+            1 => changed.actor = "changed-actor".into(),
+            2 => changed.identity.server_id = "changed-server".into(),
+            _ => changed.identity.principal_id = "changed-principal".into(),
+        }
+        assert!(f
+            .managed
+            .creation_binding(&changed, |_, _| panic!(
+                "identity mismatch precedes manifest reads"
+            ))
+            .is_err());
+    }
+    f.bridge.disconnect();
+    assert!(f.bridge.creation_scope().is_err());
+}
+#[cfg(windows)]
+#[test]
+fn windows_managed_binding_refuses_broad_manifest_or_root_without_repair() {
+    for leaf in [false, true] {
+        let f = ManagedFixture::new();
+        let target = if leaf {
+            f.path()
+        } else {
+            f.path().parent().unwrap().to_path_buf()
+        };
+        super::windows::set_dacl(&target, true);
+        let bytes = std::fs::read(f.path()).unwrap();
+        let acl = super::windows::dacl(&target);
+        assert!(f
+            .managed
+            .creation_binding(&f.bridge.creation_scope().unwrap(), |path, limit| {
+                publication_state::verify_ancestors(path, path.parent().unwrap())?;
+                publication_state::read_private(path, limit)?.ok_or("CREATION_EVIDENCE_UNPROVEN")
+            })
+            .is_err());
+        assert_eq!(std::fs::read(f.path()).unwrap(), bytes);
+        assert_eq!(super::windows::dacl(&target), acl);
+    }
+}
