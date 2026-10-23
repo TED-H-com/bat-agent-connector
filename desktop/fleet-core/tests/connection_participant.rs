@@ -274,11 +274,50 @@ fn production_without_a_backend_is_unavailable() {
 }
 
 #[test]
+fn restart_loads_the_original_intent_and_frozen_reference_without_a_new_plan() {
+    let f = Fixture::new();
+    f.claimed(&mut f.store());
+    let record = f
+        .store()
+        .open(
+            &f.intent.accepted().scope,
+            &f.intent.accepted().operation_id,
+            |reference| {
+                assert_eq!(reference, f.frozen.reference());
+                let bytes = fs::read(
+                    f.root
+                        .join("fleet-publication-plans")
+                        .join(format!("{}.json", reference.review_digest)),
+                )
+                .unwrap();
+                FrozenHistory::decode(reference, &bytes).map_err(|_| Error::Invalid)
+            },
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(record.intent().bytes().unwrap(), f.intent.bytes().unwrap());
+    assert_eq!(
+        record.recover(NOW).unwrap(),
+        Next::Executor { read_only: false }
+    );
+    let mut wrong = f.intent.accepted().scope.clone();
+    wrong.principal_id = "2".repeat(64);
+    assert!(f
+        .store()
+        .open(&wrong, &f.intent.accepted().operation_id, |_| panic!(
+            "foreign namespace"
+        ))
+        .unwrap()
+        .is_none());
+}
+
+#[test]
 fn installation_reference_uses_the_shared_character_bound() {
     let f = Fixture::new();
     let mut accepted = f.intent.accepted().clone();
     accepted.scope.installation_ref = "機".repeat(128);
     accepted.target.installation_ref = accepted.scope.installation_ref.clone();
+    accepted.operation_key = "原本的操作識別".into();
     assert!(Intent::fleet(accepted.clone(), &f.frozen).is_ok());
     accepted.scope.installation_ref.push('機');
     accepted.target.installation_ref = accepted.scope.installation_ref.clone();
@@ -460,6 +499,57 @@ fn readback_authority_never_creates_an_effect_fence() {
             br#"{"effect":{"artifact":"Inventory"}}"#
         )
         .is_err());
+}
+
+#[test]
+fn readback_receipt_history_allows_only_an_exact_replay_or_definitive_successor() {
+    for outcome in ["uncertain", "refused"] {
+        let f = Fixture::new();
+        let mut store = f.store();
+        store.begin(&f.intent).unwrap();
+        f.save(&mut store, Part::Claim, &json!({"requested_at_ms":NOW}));
+        f.save(
+            &mut store,
+            Part::Envelope,
+            &f.wire[outcome]["settled_readback"],
+        );
+        let mut changed = f.wire[outcome]["wire"].clone();
+        changed["code"] = json!("LOCAL_THIRD_BYTES");
+        assert!(store
+            .append(
+                &f.intent,
+                Part::Receipt(0),
+                &serde_json::to_vec(&changed).unwrap()
+            )
+            .is_err());
+        f.save(&mut store, Part::Receipt(0), &f.wire[outcome]["wire"]);
+        f.save(
+            &mut store,
+            Part::Acknowledgement(0),
+            &f.wire[outcome]["ack"],
+        );
+    }
+    let f = Fixture::new();
+    let mut store = f.store();
+    store.begin(&f.intent).unwrap();
+    f.save(&mut store, Part::Claim, &json!({"requested_at_ms":NOW}));
+    f.save(
+        &mut store,
+        Part::Envelope,
+        &f.wire["uncertain"]["settled_readback"],
+    );
+    f.save(&mut store, Part::Attempt(0), &json!({"abandonment":{"reference":"original-decision","recorded_at_unix_ms":NOW},"journal_digest":"d".repeat(64)}));
+    f.save(
+        &mut store,
+        Part::Receipt(0),
+        &f.wire["uncertain"]["definitive"],
+    );
+    let record = f.save(
+        &mut store,
+        Part::Acknowledgement(0),
+        &f.wire["uncertain"]["definitive_ack"],
+    );
+    assert_eq!(record.recover(NOW).unwrap(), Next::Done);
 }
 
 #[test]

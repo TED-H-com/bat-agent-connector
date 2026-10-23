@@ -134,6 +134,91 @@
       },
       "read_only": true
     },
+    "settled_readback": {
+      "native_handoff": {
+        "challenge": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "contract_version": 1,
+        "effect_id": "effect_15f38718f287a39b870bb6e90e15d02b8cacecc78d50b71d1932e82d6691b3ff",
+        "epoch": 1,
+        "expected_revision": 0,
+        "expires_at": 1800000300.0,
+        "installation_ref": "desktop-a",
+        "native_plan": {
+          "artifacts": [
+            {
+              "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+              "before_digest": null,
+              "role": "inventory"
+            },
+            {
+              "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+              "before_digest": null,
+              "role": "profile_index"
+            },
+            {
+              "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+              "before_digest": null,
+              "role": "ssh_reference"
+            },
+            {
+              "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+              "before_digest": null,
+              "role": "installation"
+            }
+          ],
+          "contract_version": 1,
+          "generator_version": 1,
+          "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+        },
+        "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt": {
+          "code": null,
+          "contract_version": 1,
+          "effect_id": "effect_15f38718f287a39b870bb6e90e15d02b8cacecc78d50b71d1932e82d6691b3ff",
+          "epoch": 1,
+          "expected_revision": 0,
+          "installation_ref": "desktop-a",
+          "native_review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0",
+          "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "outcome": "applied",
+          "phase": "readback",
+          "receipt_ref": "receipt_18d6ce58b549fb12c0cab0f4335b0ae4edf23827fcbb5610917e1694a70ece17",
+          "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "roles": [
+            {
+              "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+              "before_digest": null,
+              "observation": "present",
+              "role": "inventory"
+            },
+            {
+              "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+              "before_digest": null,
+              "observation": "present",
+              "role": "profile_index"
+            },
+            {
+              "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+              "before_digest": null,
+              "observation": "present",
+              "role": "ssh_reference"
+            },
+            {
+              "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+              "before_digest": null,
+              "observation": "present",
+              "role": "installation"
+            }
+          ],
+          "step": "native_effects"
+        },
+        "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "server_id": "11111111-1111-4111-8111-111111111111",
+        "step": "native_effects"
+      },
+      "read_only": true
+    },
     "wire": {
       "challenge": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "code": null,
@@ -305,6 +390,91 @@
         "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
         "receipt": null,
+        "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "server_id": "11111111-1111-4111-8111-111111111111",
+        "step": "native_effects"
+      },
+      "read_only": true
+    },
+    "settled_readback": {
+      "native_handoff": {
+        "challenge": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "contract_version": 1,
+        "effect_id": "effect_15f38718f287a39b870bb6e90e15d02b8cacecc78d50b71d1932e82d6691b3ff",
+        "epoch": 1,
+        "expected_revision": 0,
+        "expires_at": 1800000300.0,
+        "installation_ref": "desktop-a",
+        "native_plan": {
+          "artifacts": [
+            {
+              "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+              "before_digest": null,
+              "role": "inventory"
+            },
+            {
+              "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+              "before_digest": null,
+              "role": "profile_index"
+            },
+            {
+              "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+              "before_digest": null,
+              "role": "ssh_reference"
+            },
+            {
+              "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+              "before_digest": null,
+              "role": "installation"
+            }
+          ],
+          "contract_version": 1,
+          "generator_version": 1,
+          "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+        },
+        "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt": {
+          "code": "LOCAL_REVIEW_CHANGED",
+          "contract_version": 1,
+          "effect_id": "effect_15f38718f287a39b870bb6e90e15d02b8cacecc78d50b71d1932e82d6691b3ff",
+          "epoch": 1,
+          "expected_revision": 0,
+          "installation_ref": "desktop-a",
+          "native_review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0",
+          "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "outcome": "refused",
+          "phase": "preflight",
+          "receipt_ref": "receipt_90a910cce3f554600f2ace7936e17b11352f797e93db0cd7f855785b5a337e35",
+          "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "roles": [
+            {
+              "after_digest": null,
+              "before_digest": null,
+              "observation": "absent",
+              "role": "inventory"
+            },
+            {
+              "after_digest": null,
+              "before_digest": null,
+              "observation": "absent",
+              "role": "profile_index"
+            },
+            {
+              "after_digest": null,
+              "before_digest": null,
+              "observation": "absent",
+              "role": "ssh_reference"
+            },
+            {
+              "after_digest": null,
+              "before_digest": null,
+              "observation": "absent",
+              "role": "installation"
+            }
+          ],
+          "step": "native_effects"
+        },
         "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "server_id": "11111111-1111-4111-8111-111111111111",
         "step": "native_effects"
@@ -567,6 +737,91 @@
         "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
         "receipt": null,
+        "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "server_id": "11111111-1111-4111-8111-111111111111",
+        "step": "native_effects"
+      },
+      "read_only": true
+    },
+    "settled_readback": {
+      "native_handoff": {
+        "challenge": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "contract_version": 1,
+        "effect_id": "effect_15f38718f287a39b870bb6e90e15d02b8cacecc78d50b71d1932e82d6691b3ff",
+        "epoch": 1,
+        "expected_revision": 0,
+        "expires_at": 1800000300.0,
+        "installation_ref": "desktop-a",
+        "native_plan": {
+          "artifacts": [
+            {
+              "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+              "before_digest": null,
+              "role": "inventory"
+            },
+            {
+              "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+              "before_digest": null,
+              "role": "profile_index"
+            },
+            {
+              "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+              "before_digest": null,
+              "role": "ssh_reference"
+            },
+            {
+              "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+              "before_digest": null,
+              "role": "installation"
+            }
+          ],
+          "contract_version": 1,
+          "generator_version": 1,
+          "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+        },
+        "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
+        "receipt": {
+          "code": "LOCAL_REVIEW_CHANGED",
+          "contract_version": 1,
+          "effect_id": "effect_15f38718f287a39b870bb6e90e15d02b8cacecc78d50b71d1932e82d6691b3ff",
+          "epoch": 1,
+          "expected_revision": 0,
+          "installation_ref": "desktop-a",
+          "native_review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0",
+          "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "outcome": "uncertain",
+          "phase": "publishing",
+          "receipt_ref": "receipt_4dd595255467913ea8c4ea0dd5d95946d4c6c976b0cb3743474fd69bae180be3",
+          "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "roles": [
+            {
+              "after_digest": "a59d0255b152ba2251449a94368a7c8a03df7d44cdb4ff5d993fa1cd1fa6602c",
+              "before_digest": null,
+              "observation": "present",
+              "role": "inventory"
+            },
+            {
+              "after_digest": null,
+              "before_digest": null,
+              "observation": "absent",
+              "role": "profile_index"
+            },
+            {
+              "after_digest": null,
+              "before_digest": null,
+              "observation": "absent",
+              "role": "ssh_reference"
+            },
+            {
+              "after_digest": null,
+              "before_digest": null,
+              "observation": "absent",
+              "role": "installation"
+            }
+          ],
+          "step": "native_effects"
+        },
         "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "server_id": "11111111-1111-4111-8111-111111111111",
         "step": "native_effects"

@@ -28,6 +28,10 @@ async def test_participant_wire_matches_real_producers(installed, served_setup, 
         status, ack = await served_setup("POST", producer.RECEIPT, wire)
         assert status == 200
         case = {"claim": claimed, "readback": readback, "wire": wire, "ack": ack}
+        status, case["settled_readback"] = await served_setup(
+            "POST", producer.HANDOFF, producer.handoff_request(ident, mode="readback"))
+        assert status == 200
+        assert case["settled_readback"]["native_handoff"]["receipt"] == ack["receipt"]
         if outcome == "uncertain":
             wire = producer.participant_receipt(native, "abandoned")
             status, ack = await served_setup("POST", producer.RECEIPT, wire)
@@ -46,7 +50,7 @@ async def test_participant_wire_matches_real_producers(installed, served_setup, 
         for actual, example in replacements.items():
             encoded = encoded.replace(actual, example)
         case = json.loads(encoded)
-        for mode in ("claim", "readback"):
+        for mode in ("claim", "readback", "settled_readback"):
             case[mode]["native_handoff"]["expires_at"] = 1800000300.0
             case[mode]["native_handoff"]["epoch"] = 1
         for key in ("ack", "definitive_ack"):
@@ -55,6 +59,7 @@ async def test_participant_wire_matches_real_producers(installed, served_setup, 
                 evidence["epoch"] = 1
                 evidence["receipt_ref"] = "receipt_" + handoff.digest(
                     {k: v for k, v in evidence.items() if k != "receipt_ref"})
+        case["settled_readback"]["native_handoff"]["receipt"] = case["ack"]["receipt"]
         for key in ("wire", "definitive"):
             if key in case:
                 case[key]["epoch"] = 1

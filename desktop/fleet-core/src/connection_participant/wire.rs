@@ -141,16 +141,23 @@ pub(super) fn receipt(intent: &Intent, envelope: &Value, body: &Value) -> Result
                     .any(|a| a["before_digest"] != a["after_digest"]),
         )?;
     }
+    let previous = &envelope["receipt"];
+    ensure(
+        previous.is_null()
+            || evidence(body.clone())? == *previous
+            || (previous["outcome"] == "uncertain" && outcome != "uncertain"),
+    )?;
     Ok(())
+}
+fn evidence(mut body: Value) -> Result<Value> {
+    body.as_object_mut()
+        .ok_or(Error::Invalid)?
+        .remove("challenge");
+    body["receipt_ref"] = json!(format!("receipt_{}", digest(&encode(&body)?)));
+    Ok(body)
 }
 pub(super) fn acknowledgement(wire: &[u8], reply: &Value) -> Result<()> {
     exact(reply, &["receipt", "replayed"])?;
     ensure(reply["replayed"].is_boolean())?;
-    let mut evidence = parse(wire, bound("receipt_bytes"))?;
-    evidence
-        .as_object_mut()
-        .ok_or(Error::Invalid)?
-        .remove("challenge");
-    evidence["receipt_ref"] = json!(format!("receipt_{}", digest(&encode(&evidence)?)));
-    ensure(reply["receipt"] == evidence)
+    ensure(reply["receipt"] == evidence(parse(wire, bound("receipt_bytes"))?)?)
 }

@@ -73,6 +73,16 @@ pub struct Scope {
     pub native_installation: String,
     pub installation_ref: String,
 }
+impl Scope {
+    fn validate(&self) -> Result<()> {
+        ensure(
+            text(&self.server_id, 128)
+                && hash(&self.principal_id)
+                && uuid(&self.native_installation)
+                && text(&self.installation_ref, bound("installation_ref_chars")),
+        )
+    }
+}
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Target {
@@ -102,15 +112,9 @@ impl Accepted {
         {
             return Err(Error::Unsupported);
         }
+        self.scope.validate()?;
         ensure(
-            text(&self.scope.server_id, 128)
-                && hash(&self.scope.principal_id)
-                && uuid(&self.scope.native_installation)
-                && text(
-                    &self.scope.installation_ref,
-                    bound("installation_ref_chars"),
-                )
-                && self.target.installation_ref == self.scope.installation_ref
+            self.target.installation_ref == self.scope.installation_ref
                 && self
                     .target
                     .connection_id
@@ -118,7 +122,6 @@ impl Accepted {
                     .is_none_or(|s| hex(s, "conn_", 32))
                 && hex(&self.operation_id, "op_", 32)
                 && text(&self.operation_key, 256)
-                && self.operation_key.bytes().all(|b| b.is_ascii_graphic())
                 && self.expected_revision <= i64::MAX as u64
                 && hash(&self.review_digest)
                 && text(&self.credential_generation, 256),
@@ -161,14 +164,33 @@ impl Intent {
         }))
     }
     pub fn decode(bytes: &[u8], scope: &Scope, frozen: &FrozenHistory) -> Result<Self> {
+        let stored = Self::stored(bytes, scope)?;
+        let expected = Self::fleet(stored.accepted.clone(), frozen)?;
+        ensure(Self::Fleet(stored) == expected)?;
+        Ok(expected)
+    }
+    pub(super) fn reference(
+        bytes: &[u8],
+        scope: &Scope,
+        operation_id: &str,
+    ) -> Result<crate::connection_publish::FrozenPlanRef> {
+        let stored = Self::stored(bytes, scope)?;
+        ensure(stored.accepted.operation_id == operation_id)?;
+        Ok(stored.frozen)
+    }
+    fn stored(bytes: &[u8], scope: &Scope) -> Result<FleetIntent> {
         let value = parse(bytes, Self::limit())?;
         if value["format_version"].as_u64().is_some_and(|v| v != 1) {
             return Err(Error::Unsupported);
         }
         let stored: FleetIntent = typed(value)?;
-        let expected = Self::fleet(stored.accepted.clone(), frozen)?;
-        ensure(&stored.accepted.scope == scope && Self::Fleet(stored) == expected)?;
-        Ok(expected)
+        stored.accepted.validate()?;
+        ensure(
+            &stored.accepted.scope == scope
+                && hash(&stored.frozen.review_digest)
+                && hash(&stored.frozen.sha256),
+        )?;
+        Ok(stored)
     }
     pub fn bytes(&self) -> Result<Vec<u8>> {
         let bytes = encode(self.fleet_record())?;
@@ -179,10 +201,8 @@ impl Intent {
         &self.fleet_record().accepted
     }
     pub fn namespace(&self) -> Namespace {
-        Namespace {
-            scope: digest(&encode(&self.accepted().scope).expect("scope")),
-            operation: self.accepted().operation_id.clone(),
-        }
+        Namespace::for_operation(&self.accepted().scope, &self.accepted().operation_id)
+            .expect("validated intent")
     }
     pub(super) fn native_plan(&self) -> &Value {
         &self.fleet_record().native_plan
@@ -202,6 +222,14 @@ pub struct Namespace {
     operation: String,
 }
 impl Namespace {
+    pub fn for_operation(scope: &Scope, operation_id: &str) -> Result<Self> {
+        scope.validate()?;
+        ensure(hex(operation_id, "op_", 32))?;
+        Ok(Self {
+            scope: digest(&encode(scope)?),
+            operation: operation_id.into(),
+        })
+    }
     pub fn relative_path(&self) -> String {
         format!(
             "connections-v1/participant/{}/{}",

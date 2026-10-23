@@ -131,6 +131,9 @@ pub struct Record {
     abandonment: Option<AbandonDecision>,
 }
 impl Record {
+    pub fn intent(&self) -> &Intent {
+        &self.intent
+    }
     /// Private operation material for native recovery, never a frontend export.
     pub fn part(&self, part: Part) -> Option<&[u8]> {
         self.parts.get(&part).map(Vec::as_slice)
@@ -320,6 +323,33 @@ impl<B: Backend> Store<B> {
     }
     pub fn available(&mut self) -> Result<()> {
         self.backend.available()
+    }
+    /// Reopen only the original stored reference. The caller's loader must prove
+    /// protected frozen-history provenance; it must never generate a replacement plan.
+    pub fn open(
+        &mut self,
+        scope: &Scope,
+        operation_id: &str,
+        history: impl FnOnce(
+            &crate::connection_publish::FrozenPlanRef,
+        ) -> Result<crate::connection_publish::FrozenHistory>,
+    ) -> Result<Option<Record>> {
+        self.available()?;
+        let namespace = Namespace::for_operation(scope, operation_id)?;
+        let parts = self.backend.entries(&namespace)?;
+        if parts.is_empty() {
+            return Ok(None);
+        }
+        ensure(parts.len() <= 12 && parts.contains(&Part::Intent))?;
+        let bytes = self
+            .backend
+            .read(&namespace, Part::Intent, Intent::limit())?
+            .ok_or(Error::Invalid)?;
+        let reference = Intent::reference(&bytes, scope, operation_id)?;
+        let frozen = history(&reference)?;
+        let intent = Intent::decode(&bytes, scope, &frozen)?;
+        ensure(intent.accepted().operation_id == operation_id)?;
+        self.load(&intent).map(Some)
     }
     pub fn begin(&mut self, intent: &Intent) -> Result<Record> {
         self.available()?;
