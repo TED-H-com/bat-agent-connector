@@ -53,7 +53,9 @@ pub(crate) fn create_directory(path: &Path) -> Result<()> {
 
 #[cfg(windows)]
 mod windows {
+    mod protected;
     use super::*;
+    pub(super) use protected::{acl_file, new_directory, new_file, open_no_follow};
     use std::{os::windows::ffi::OsStrExt, ptr};
     use windows_sys::Win32::{
         Foundation::{GetLastError, LocalFree, ERROR_ALREADY_EXISTS},
@@ -282,4 +284,219 @@ mod tests {
         assert_eq!(create_directory(&root), Err(UNPROVEN));
         std::fs::remove_dir_all(root).unwrap();
     }
+}
+
+#[cfg(any(windows, test))]
+mod acl;
+
+/// Verify an existing private object, including SE_DACL_PROTECTED on Windows.
+/// This is an access-control property, never a creation/ownership decision.
+pub fn verify_protected(path: &Path) -> Result<()> {
+    no_links(path)?;
+    #[cfg(windows)]
+    let file = windows::open_no_follow(path, false).map_err(|_| UNPROVEN)?;
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(path)
+            .map_err(|_| UNPROVEN)?
+    };
+    private_handle(&file)
+}
+fn private_handle(file: &std::fs::File) -> Result<()> {
+    let metadata = file.metadata().map_err(|_| UNPROVEN)?;
+    if !(metadata.is_file() || metadata.is_dir()) {
+        return Err(UNPROVEN);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o077 != 0 {
+            return Err(UNPROVEN);
+        }
+    }
+    #[cfg(windows)]
+    windows::acl_file(file, true, false)?;
+    Ok(())
+}
+fn no_links(path: &Path) -> Result<()> {
+    use std::path::Component;
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+        || path
+            .to_str()
+            .is_none_or(|s| s.contains('\0') || s.split(['/', '\\']).any(|c| c == "." || c == ".."))
+    {
+        return Err(UNPROVEN);
+    }
+    for p in path.ancestors() {
+        match p.symlink_metadata() {
+            Ok(m) => {
+                if m.file_type().is_symlink() || (p != path && !m.is_dir()) {
+                    return Err(UNPROVEN);
+                }
+                #[cfg(windows)]
+                {
+                    use std::os::windows::fs::MetadataExt;
+                    if m.file_attributes() & 0x400 != 0 {
+                        return Err(UNPROVEN);
+                    }
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+            Err(_) => return Err(UNPROVEN),
+        }
+    }
+    Ok(())
+}
+/// Check one existing environmental directory's replacement/security rights.
+/// `child_absent` also forbids untrusted child-creation grants. Caller rechecks
+/// object identity while holding its native guards; readable is not owned.
+pub fn verify_ancestor(path: &Path, child_absent: bool) -> Result<()> {
+    no_links(path)?;
+    #[cfg(windows)]
+    {
+        let file = windows::open_no_follow(path, false).map_err(|_| UNPROVEN)?;
+        if !file.metadata().map_err(|_| UNPROVEN)?.is_dir() {
+            return Err(UNPROVEN);
+        }
+        windows::acl_file(&file, false, child_absent)
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let metadata = path.symlink_metadata().map_err(|_| UNPROVEN)?;
+        let _ = child_absent;
+        if !metadata.is_dir()
+            || (metadata.uid() != 0 && metadata.uid() != unsafe { libc::geteuid() })
+            || metadata.mode() & 0o022 != 0
+        {
+            return Err(UNPROVEN);
+        }
+        Ok(())
+    }
+}
+/// Walk every ancestor through the filesystem root. Existing directories within
+/// `protected_root` require private protection; outside it use environmental ACL
+/// policy. Missing components are permitted only below an existing protected
+/// root. This grants no right to create any of them.
+pub fn verify_ancestors(path: &Path, protected_root: &Path) -> Result<()> {
+    no_links(path)?;
+    no_links(protected_root)?;
+    if !path.starts_with(protected_root) || !protected_root.is_dir() {
+        return Err(UNPROVEN);
+    }
+    verify_protected(protected_root)?;
+    let mut child_absent = match path.symlink_metadata() {
+        Ok(_) => false,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+        Err(_) => return Err(UNPROVEN),
+    };
+    for parent in path.ancestors().skip(1) {
+        match parent.symlink_metadata() {
+            Ok(m) => {
+                if !m.is_dir() {
+                    return Err(UNPROVEN);
+                }
+                if parent.starts_with(protected_root) {
+                    verify_protected(parent)?;
+                } else {
+                    verify_ancestor(parent, child_absent)?;
+                }
+                child_absent = false;
+            }
+            Err(e)
+                if e.kind() == std::io::ErrorKind::NotFound
+                    && parent.starts_with(protected_root) =>
+            {
+                child_absent = true
+            }
+            Err(_) => return Err(UNPROVEN),
+        }
+    }
+    Ok(())
+}
+/// Strict create-new with explicit private permissions. An existing object is
+/// always a conflict; no adoption or ACL repair. Parent authorization is separate.
+pub fn create_new_directory(path: &Path) -> Result<()> {
+    no_links(path)?;
+    #[cfg(windows)]
+    windows::new_directory(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(path)
+            .map_err(|_| UNPROVEN)?;
+        std::fs::File::open(path.parent().ok_or(UNPROVEN)?)
+            .and_then(|f| f.sync_all())
+            .map_err(|_| UNPROVEN)?;
+    }
+    verify_protected(path)
+}
+/// Strict create-new private file, with handle security verified before return.
+/// Caller writes/syncs/readbacks and revalidates its native creation capability.
+pub fn create_new_file(path: &Path) -> Result<std::fs::File> {
+    no_links(path)?;
+    #[cfg(windows)]
+    let file = windows::new_file(path)?;
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(path)
+            .map_err(|_| UNPROVEN)?
+    };
+    private_handle(&file)?;
+    Ok(file)
+}
+/// Bounded no-follow private read (1..=32 MiB). Access denied, links, directories,
+/// weak ACLs and overlarge bytes are errors; only genuine NotFound is None.
+/// This does not substitute for verify_ancestors or native object-identity guards.
+pub fn read_private(path: &Path, limit: usize) -> Result<Option<Vec<u8>>> {
+    use std::io::Read;
+    if limit == 0 || limit > 32 * 1024 * 1024 {
+        return Err(UNPROVEN);
+    }
+    no_links(path)?;
+    #[cfg(windows)]
+    let opened = windows::open_no_follow(path, true);
+    #[cfg(unix)]
+    let opened = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(path)
+    };
+    let file = match opened {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(UNPROVEN),
+    };
+    if !file.metadata().map_err(|_| UNPROVEN)?.is_file() {
+        return Err(UNPROVEN);
+    }
+    private_handle(&file)?;
+    let mut bytes = Vec::new();
+    (&file)
+        .take(limit as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| UNPROVEN)?;
+    if bytes.len() > limit {
+        return Err(UNPROVEN);
+    }
+    private_handle(&file)?;
+    no_links(path)?;
+    Ok(Some(bytes))
 }

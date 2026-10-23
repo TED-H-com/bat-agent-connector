@@ -19,6 +19,18 @@ struct Document {
     backend: Backend,
 }
 
+/// Validate bounded pointer bytes against their declared root/backend, without
+/// reading the filesystem or establishing creation authority. Uses the same
+/// Document schema and legacy backend default as Snapshot.
+pub fn validate_pointer(bytes: &[u8], root: &Path, backend: Backend) -> Result<()> {
+    let document: Document = serde_json::from_value(strict_json::parse(bytes, 16_384)?)
+        .map_err(|_| "INSTALLATION_INVALID")?;
+    if document.kit_root != root || document.backend != backend {
+        return Err("INSTALLATION_CHANGED");
+    }
+    Ok(())
+}
+
 fn read(path: &Path) -> Result<Vec<u8>> {
     let metadata = std::fs::symlink_metadata(path).map_err(|_| "INSTALLATION_UNAVAILABLE")?;
     if !metadata.is_file() || metadata.file_type().is_symlink() {

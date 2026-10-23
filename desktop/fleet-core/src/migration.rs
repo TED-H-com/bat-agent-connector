@@ -198,7 +198,97 @@ pub struct Store {
     startup: PathBuf,
     directory: PathBuf,
 }
+/// Immutable history validated by Store's original bounded Saved reader. This
+/// record proves no creation authority; consumers must separately anchor it.
+pub struct SavedHistory {
+    saved: Saved,
+    sha256: String,
+}
+/// Guarded observation of one fixed migration id. None is a genuine missing
+/// Saved file, never a parse/permission error. Re-read across effects or guards.
+pub struct MigrationHistory {
+    id: String,
+    config_path: PathBuf,
+    startup_path: PathBuf,
+    saved: Option<SavedHistory>,
+}
+impl MigrationHistory {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    pub fn config_path(&self) -> &Path {
+        &self.config_path
+    }
+    pub fn startup_path(&self) -> &Path {
+        &self.startup_path
+    }
+    pub fn saved(&self) -> Option<&SavedHistory> {
+        self.saved.as_ref()
+    }
+}
+impl SavedHistory {
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+    pub fn id(&self) -> &str {
+        &self.saved.id
+    }
+    pub fn config_path(&self) -> &Path {
+        &self.saved.config_path
+    }
+    pub fn startup_path(&self) -> &Path {
+        &self.saved.startup_path
+    }
+    pub fn login(&self) -> LoginIdentity {
+        LoginIdentity {
+            owner_sid: self.saved.sid.clone(),
+            session_id: self.saved.session,
+        }
+    }
+    pub fn phase(&self) -> Phase {
+        self.saved.phase
+    }
+    pub fn review_fingerprint(&self) -> &str {
+        &self.saved.review_fingerprint
+    }
+    pub fn restores(&self) -> Option<&str> {
+        self.saved.restores.as_deref()
+    }
+    pub fn from(&self) -> Backend {
+        self.saved.from
+    }
+    pub fn to(&self) -> Backend {
+        self.saved.to
+    }
+    pub fn config(&self, next: bool) -> Result<Vec<u8>> {
+        self.saved.config(next)
+    }
+}
 impl Store {
+    /// Reads at most MAX_JOURNAL (6,000,000 bytes), with the original strict
+    /// validator and 1 MiB decoded-slot bounds. No begin, advance or writes.
+    pub fn read_history(&self, id: &str) -> Result<SavedHistory> {
+        let (saved, bytes) = self.read(id)?;
+        Ok(SavedHistory {
+            saved,
+            sha256: crate::digest(&bytes),
+        })
+    }
+    /// Read-only absence or the original bounded Saved validator. The caller
+    /// proves private storage provenance and holds its guards. No begin/advance.
+    pub fn observe_history(&self, id: &str) -> Result<MigrationHistory> {
+        let saved = match self.read_history(id) {
+            Ok(saved) => Some(saved),
+            Err("MIGRATION_NOT_FOUND") => None,
+            Err(error) => return Err(error),
+        };
+        Ok(MigrationHistory {
+            id: id.into(),
+            config_path: self.config.clone(),
+            startup_path: self.startup.clone(),
+            saved,
+        })
+    }
     pub fn new(config: &Path, startup_directory: &Path) -> Result<Self> {
         if !config.is_absolute()
             || config.file_name().is_none_or(|n| n != "fleet.json")
