@@ -158,6 +158,54 @@
           "current": null
         }
       },
+      "requirements": {
+        "relation": "explicit",
+        "package_ref": {
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "package_id": "pmwp_00000000000000000000000000000005",
+          "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "plan_ref": {
+          "adoption_operation_id": "op_00000000000000000000000000000008",
+          "decision_id": "pmdec_00000000000000000000000000000009",
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "plan_commit_sha": "1111111111111111111111111111111111111111",
+          "plan_tree_sha": "1111111111111111111111111111111111111111",
+          "revision_id": "pmrev_0000000000000000000000000000000a",
+          "scope_revision": "pmscope_00000000000000000000000000000006"
+        },
+        "dod_ref": null,
+        "candidate_commit": null,
+        "verification": "unverified",
+        "verification_evidence": [],
+        "items": [
+          {
+            "requirement_id": "member.login",
+            "text": "Members can log in",
+            "source_input_id": "pmi_0000000000000000000000000000000b",
+            "acceptance_input_ids": [
+              "pmi_0000000000000000000000000000000c"
+            ],
+            "state": "no_conclusion",
+            "selection": "undecided",
+            "assessments": [],
+            "link": {
+              "read": "pm_plan_get",
+              "params": {
+                "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "revision_id": "pmrev_0000000000000000000000000000000a"
+              }
+            }
+          }
+        ],
+        "dependent_work": [],
+        "related": [],
+        "coverage": {
+          "reviews_partial": false,
+          "packages_partial": false
+        },
+        "selection_rule": "explicit_original_review_selection_required"
+      },
       "delivery": {
         "delivery_goal": "pull_request",
         "pull_requests": [],
@@ -396,6 +444,54 @@
           "current": null
         }
       },
+      "requirements": {
+        "relation": "explicit",
+        "package_ref": {
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "package_id": "pmwp_00000000000000000000000000000005",
+          "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "plan_ref": {
+          "adoption_operation_id": "op_00000000000000000000000000000008",
+          "decision_id": "pmdec_00000000000000000000000000000009",
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "plan_commit_sha": "1111111111111111111111111111111111111111",
+          "plan_tree_sha": "1111111111111111111111111111111111111111",
+          "revision_id": "pmrev_0000000000000000000000000000000a",
+          "scope_revision": "pmscope_00000000000000000000000000000006"
+        },
+        "dod_ref": null,
+        "candidate_commit": null,
+        "verification": "unverified",
+        "verification_evidence": [],
+        "items": [
+          {
+            "requirement_id": "member.login",
+            "text": "Members can log in",
+            "source_input_id": "pmi_0000000000000000000000000000000b",
+            "acceptance_input_ids": [
+              "pmi_0000000000000000000000000000000c"
+            ],
+            "state": "no_conclusion",
+            "selection": "undecided",
+            "assessments": [],
+            "link": {
+              "read": "pm_plan_get",
+              "params": {
+                "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "revision_id": "pmrev_0000000000000000000000000000000a"
+              }
+            }
+          }
+        ],
+        "dependent_work": [],
+        "related": [],
+        "coverage": {
+          "reviews_partial": false,
+          "packages_partial": false
+        },
+        "selection_rule": "explicit_original_review_selection_required"
+      },
       "delivery": {
         "delivery_goal": "pull_request",
         "pull_requests": [],
@@ -611,6 +707,54 @@
           "reviews": [],
           "current": null
         }
+      },
+      "requirements": {
+        "relation": "explicit",
+        "package_ref": {
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "package_id": "pmwp_00000000000000000000000000000005",
+          "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "plan_ref": {
+          "adoption_operation_id": "op_00000000000000000000000000000008",
+          "decision_id": "pmdec_00000000000000000000000000000009",
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "plan_commit_sha": "1111111111111111111111111111111111111111",
+          "plan_tree_sha": "1111111111111111111111111111111111111111",
+          "revision_id": "pmrev_0000000000000000000000000000000a",
+          "scope_revision": "pmscope_00000000000000000000000000000006"
+        },
+        "dod_ref": null,
+        "candidate_commit": null,
+        "verification": "unverified",
+        "verification_evidence": [],
+        "items": [
+          {
+            "requirement_id": "member.login",
+            "text": "Members can log in",
+            "source_input_id": "pmi_0000000000000000000000000000000b",
+            "acceptance_input_ids": [
+              "pmi_0000000000000000000000000000000c"
+            ],
+            "state": "no_conclusion",
+            "selection": "undecided",
+            "assessments": [],
+            "link": {
+              "read": "pm_plan_get",
+              "params": {
+                "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "revision_id": "pmrev_0000000000000000000000000000000a"
+              }
+            }
+          }
+        ],
+        "dependent_work": [],
+        "related": [],
+        "coverage": {
+          "reviews_partial": false,
+          "packages_partial": false
+        },
+        "selection_rule": "explicit_original_review_selection_required"
       },
       "delivery": {
         "delivery_goal": "pull_request",
@@ -828,6 +972,54 @@
           "current": null
         }
       },
+      "requirements": {
+        "relation": "explicit",
+        "package_ref": {
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "package_id": "pmwp_00000000000000000000000000000005",
+          "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "plan_ref": {
+          "adoption_operation_id": "op_00000000000000000000000000000008",
+          "decision_id": "pmdec_00000000000000000000000000000009",
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "plan_commit_sha": "1111111111111111111111111111111111111111",
+          "plan_tree_sha": "1111111111111111111111111111111111111111",
+          "revision_id": "pmrev_0000000000000000000000000000000a",
+          "scope_revision": "pmscope_00000000000000000000000000000006"
+        },
+        "dod_ref": null,
+        "candidate_commit": null,
+        "verification": "unverified",
+        "verification_evidence": [],
+        "items": [
+          {
+            "requirement_id": "member.login",
+            "text": "Members can log in",
+            "source_input_id": "pmi_0000000000000000000000000000000b",
+            "acceptance_input_ids": [
+              "pmi_0000000000000000000000000000000c"
+            ],
+            "state": "no_conclusion",
+            "selection": "undecided",
+            "assessments": [],
+            "link": {
+              "read": "pm_plan_get",
+              "params": {
+                "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "revision_id": "pmrev_0000000000000000000000000000000a"
+              }
+            }
+          }
+        ],
+        "dependent_work": [],
+        "related": [],
+        "coverage": {
+          "reviews_partial": false,
+          "packages_partial": false
+        },
+        "selection_rule": "explicit_original_review_selection_required"
+      },
       "delivery": {
         "delivery_goal": "pull_request",
         "pull_requests": [],
@@ -941,7 +1133,7 @@
           "registry_origin": {
             "controller_incarnation": "22222222222222222222222222222222",
             "created_at": 1790001000,
-            "start_operation_id": "op_00000000000000000000000000000008"
+            "start_operation_id": "op_0000000000000000000000000000000d"
           }
         }
       },
@@ -1043,6 +1235,54 @@
           "reviews": [],
           "current": null
         }
+      },
+      "requirements": {
+        "relation": "explicit",
+        "package_ref": {
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "package_id": "pmwp_00000000000000000000000000000005",
+          "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "plan_ref": {
+          "adoption_operation_id": "op_00000000000000000000000000000008",
+          "decision_id": "pmdec_00000000000000000000000000000009",
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "plan_commit_sha": "1111111111111111111111111111111111111111",
+          "plan_tree_sha": "1111111111111111111111111111111111111111",
+          "revision_id": "pmrev_0000000000000000000000000000000a",
+          "scope_revision": "pmscope_00000000000000000000000000000006"
+        },
+        "dod_ref": null,
+        "candidate_commit": null,
+        "verification": "unverified",
+        "verification_evidence": [],
+        "items": [
+          {
+            "requirement_id": "member.login",
+            "text": "Members can log in",
+            "source_input_id": "pmi_0000000000000000000000000000000b",
+            "acceptance_input_ids": [
+              "pmi_0000000000000000000000000000000c"
+            ],
+            "state": "no_conclusion",
+            "selection": "undecided",
+            "assessments": [],
+            "link": {
+              "read": "pm_plan_get",
+              "params": {
+                "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "revision_id": "pmrev_0000000000000000000000000000000a"
+              }
+            }
+          }
+        ],
+        "dependent_work": [],
+        "related": [],
+        "coverage": {
+          "reviews_partial": false,
+          "packages_partial": false
+        },
+        "selection_rule": "explicit_original_review_selection_required"
       },
       "delivery": {
         "delivery_goal": "pull_request",
@@ -1251,6 +1491,54 @@
           "reviews": [],
           "current": null
         }
+      },
+      "requirements": {
+        "relation": "explicit",
+        "package_ref": {
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "package_id": "pmwp_00000000000000000000000000000005",
+          "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "plan_ref": {
+          "adoption_operation_id": "op_00000000000000000000000000000008",
+          "decision_id": "pmdec_00000000000000000000000000000009",
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "plan_commit_sha": "1111111111111111111111111111111111111111",
+          "plan_tree_sha": "1111111111111111111111111111111111111111",
+          "revision_id": "pmrev_0000000000000000000000000000000a",
+          "scope_revision": "pmscope_00000000000000000000000000000006"
+        },
+        "dod_ref": null,
+        "candidate_commit": null,
+        "verification": "unverified",
+        "verification_evidence": [],
+        "items": [
+          {
+            "requirement_id": "member.login",
+            "text": "Members can log in",
+            "source_input_id": "pmi_0000000000000000000000000000000b",
+            "acceptance_input_ids": [
+              "pmi_0000000000000000000000000000000c"
+            ],
+            "state": "no_conclusion",
+            "selection": "undecided",
+            "assessments": [],
+            "link": {
+              "read": "pm_plan_get",
+              "params": {
+                "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "revision_id": "pmrev_0000000000000000000000000000000a"
+              }
+            }
+          }
+        ],
+        "dependent_work": [],
+        "related": [],
+        "coverage": {
+          "reviews_partial": false,
+          "packages_partial": false
+        },
+        "selection_rule": "explicit_original_review_selection_required"
       },
       "delivery": {
         "delivery_goal": "pull_request",
@@ -1477,6 +1765,54 @@
           "current": null
         }
       },
+      "requirements": {
+        "relation": "explicit",
+        "package_ref": {
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "package_id": "pmwp_00000000000000000000000000000005",
+          "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "plan_ref": {
+          "adoption_operation_id": "op_00000000000000000000000000000008",
+          "decision_id": "pmdec_00000000000000000000000000000009",
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "plan_commit_sha": "1111111111111111111111111111111111111111",
+          "plan_tree_sha": "1111111111111111111111111111111111111111",
+          "revision_id": "pmrev_0000000000000000000000000000000a",
+          "scope_revision": "pmscope_00000000000000000000000000000006"
+        },
+        "dod_ref": null,
+        "candidate_commit": null,
+        "verification": "unverified",
+        "verification_evidence": [],
+        "items": [
+          {
+            "requirement_id": "member.login",
+            "text": "Members can log in",
+            "source_input_id": "pmi_0000000000000000000000000000000b",
+            "acceptance_input_ids": [
+              "pmi_0000000000000000000000000000000c"
+            ],
+            "state": "no_conclusion",
+            "selection": "undecided",
+            "assessments": [],
+            "link": {
+              "read": "pm_plan_get",
+              "params": {
+                "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "revision_id": "pmrev_0000000000000000000000000000000a"
+              }
+            }
+          }
+        ],
+        "dependent_work": [],
+        "related": [],
+        "coverage": {
+          "reviews_partial": false,
+          "packages_partial": false
+        },
+        "selection_rule": "explicit_original_review_selection_required"
+      },
       "delivery": {
         "delivery_goal": "pull_request",
         "pull_requests": [],
@@ -1701,6 +2037,54 @@
           "reviews": [],
           "current": null
         }
+      },
+      "requirements": {
+        "relation": "explicit",
+        "package_ref": {
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "package_id": "pmwp_00000000000000000000000000000005",
+          "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "plan_ref": {
+          "adoption_operation_id": "op_00000000000000000000000000000008",
+          "decision_id": "pmdec_00000000000000000000000000000009",
+          "document_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "plan_commit_sha": "1111111111111111111111111111111111111111",
+          "plan_tree_sha": "1111111111111111111111111111111111111111",
+          "revision_id": "pmrev_0000000000000000000000000000000a",
+          "scope_revision": "pmscope_00000000000000000000000000000006"
+        },
+        "dod_ref": null,
+        "candidate_commit": null,
+        "verification": "unverified",
+        "verification_evidence": [],
+        "items": [
+          {
+            "requirement_id": "member.login",
+            "text": "Members can log in",
+            "source_input_id": "pmi_0000000000000000000000000000000b",
+            "acceptance_input_ids": [
+              "pmi_0000000000000000000000000000000c"
+            ],
+            "state": "no_conclusion",
+            "selection": "undecided",
+            "assessments": [],
+            "link": {
+              "read": "pm_plan_get",
+              "params": {
+                "workspace_id": "ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "revision_id": "pmrev_0000000000000000000000000000000a"
+              }
+            }
+          }
+        ],
+        "dependent_work": [],
+        "related": [],
+        "coverage": {
+          "reviews_partial": false,
+          "packages_partial": false
+        },
+        "selection_rule": "explicit_original_review_selection_required"
       },
       "delivery": {
         "delivery_goal": "pull_request",
