@@ -187,6 +187,10 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync --locked --extra dev
+      - uses: ./.github/actions/bounded-apt
+        with:
+          package-set: native-isolation
+          package-set-hash: ${{ hashFiles('.github/workflows/ci.yml') }}
       - name: Install bubblewrap and enable user namespaces on this disposable runner only
         run: |
           sudo apt-get update

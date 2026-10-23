@@ -66,13 +66,13 @@ For passwordless test runs, an operator can provision a 64 MiB disk volume once:
 ```sh
 (
 set -e
-mkdir -p "$HOME/agent-work/tmp/isolation-volume"
-test ! -e "$HOME/agent-work/tmp/isolation-volume.img"
-truncate -s 64M "$HOME/agent-work/tmp/isolation-volume.img"
-mkfs.ext4 -q -F "$HOME/agent-work/tmp/isolation-volume.img"
-sudo mount -o loop,nodev,nosuid,noexec "$HOME/agent-work/tmp/isolation-volume.img" "$HOME/agent-work/tmp/isolation-volume"
-sudo chown "$(id -u):$(id -g)" "$HOME/agent-work/tmp/isolation-volume"
-BAC_ISOLATION_QUOTA_ROOT="$HOME/agent-work/tmp/isolation-volume" bash scripts/check_native_isolation.sh
+mkdir -p "/path/to/isolation-volume"
+test ! -e "/path/to/isolation-volume.img"
+truncate -s 64M "/path/to/isolation-volume.img"
+mkfs.ext4 -q -F "/path/to/isolation-volume.img"
+sudo mount -o loop,nodev,nosuid,noexec "/path/to/isolation-volume.img" "/path/to/isolation-volume"
+sudo chown "$(id -u):$(id -g)" "/path/to/isolation-volume"
+BAC_ISOLATION_QUOTA_ROOT="/path/to/isolation-volume" bash scripts/check_native_isolation.sh
 )
 ```
 With that variable set, the script neither creates nor mounts/unmounts a volume.

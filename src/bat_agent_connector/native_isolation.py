@@ -103,17 +103,14 @@ async def build_plan(ctx, receipt, *, readonly, areas, protected, command, check
     _require(sys.platform == 'linux' and os.uname().machine == 'x86_64', UNAVAILABLE)
     bwrap = shutil.which('bwrap')
     _require(bwrap is not None, UNAVAILABLE)
-    overlays = ()
-    if type(receipt) is native_carrier.CarrierReceipt:
-        saved = receipt.reference()
-        controls = [Path(saved['clone']['path'], '.git', p) for p in ('config', 'hooks', 'info', 'objects/info')]
-        controls += [Path(saved['cwd'], '.git'), *(Path(saved['git_dir']['path'], p) for p in ('gitdir', 'commondir'))]
-        optional = Path(saved['git_dir']['path'], 'config.worktree')
-        if optional.exists():
-            controls.append(optional)
-        overlays = tuple(Mount(str(_real(p)), str(p)) for p in controls)
     await native_carrier.readback(ctx, receipt, check=check)
     saved = receipt.reference()
+    controls = [Path(saved['clone']['path'], '.git', p) for p in ('config', 'hooks', 'info', 'objects/info')]
+    controls += [Path(saved['cwd'], '.git'), *(Path(saved['git_dir']['path'], p) for p in ('gitdir', 'commondir'))]
+    optional = Path(saved['git_dir']['path'], 'config.worktree')
+    if optional.exists():
+        controls.append(optional)
+    overlays = tuple(Mount(str(_real(p)), str(p)) for p in controls)
     for name in ('clone', 'worktree', 'git_dir'):
         physical = saved[name]
         local = _real(physical['path']).stat()

@@ -7,6 +7,7 @@ import shutil
 import socket
 import sys
 import zlib
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -61,17 +62,30 @@ async def case(world, tmp_path, monkeypatch):
 
 
 def canonical(plan, case):
-    value = json.dumps(plan.manifest(), sort_keys=True)
+    value = plan.manifest()
     replacements = [(str(case['areas'].scratch.parent), '<case>'),
-                    (str(Path(sys.base_prefix).resolve()), '<runtime>'),
                     (case['receipt'].reference()['clone']['path'], '<carrier>')]
-    for before, after in sorted(replacements, key=lambda p: -len(p[0])):
-        value = value.replace(before, after)
-    return json.loads(value)
+    def path(value):
+        for before, after in sorted(replacements, key=lambda p: -len(p[0])):
+            if value == before or value.startswith(before + '/'):
+                return after + value[len(before):]
+        return value
+    runtime = next(m.source for m in plan.mounts if m.target == '/runtime')
+    for i in range(len(value['argv']) - 2):
+        if value['argv'][i:i + 3] == ['--ro-bind', runtime, '/runtime']:
+            value['argv'][i + 1] = '<runtime>'
+    value['argv'] = [path(v) for v in value['argv']]
+    value['mounts'] = [{**m, 'source': '<runtime>' if m['target'] == '/runtime' else path(m['source']),
+                       'target': path(m['target'])} for m in value['mounts']]
+    return value
 
 
-async def test_plan_matches_reviewable_golden_and_fixed_rules(case):
+@pytest.mark.parametrize('runtime', ['/usr', '/opt/hostedtoolcache/Python/3.12/x64', '/home/runner/.local/share/uv/python'])
+async def test_plan_matches_reviewable_golden_and_fixed_rules(case, runtime):
     plan = await isolation.build_plan(**case)
+    original = next(m.source for m in plan.mounts if m.target == '/runtime')
+    plan = replace(plan, argv=tuple(runtime if v == original else v for v in plan.argv),
+                   mounts=tuple(replace(m, source=runtime) if m.target == '/runtime' else m for m in plan.mounts))
     expected = json.loads((FIXTURES / 'native-isolation-plan.json').read_text())
     assert canonical(plan, case) == expected
     assert plan.manifest()['spawn'] == {'close_fds': True, 'pass_fds': [], 'start_new_session': True, 'env': {}}
@@ -319,7 +333,7 @@ def control_paths(case):
         Path(saved['cwd'], '.git'), *(Path(saved['git_dir']['path'], p) for p in ('gitdir', 'commondir', 'config.worktree'))]
 
 
-async def test_control_overlays_follow_carrier_and_are_required(case):
+async def test_control_overlays_follow_carrier_and_are_required(case, monkeypatch):
     paths = control_paths(case)
     paths[-1].write_text('')
     plan = await isolation.build_plan(**case)
@@ -327,9 +341,13 @@ async def test_control_overlays_follow_carrier_and_are_required(case):
         assert path.exists()
         assert ('--ro-bind', str(path), str(path)) in tuple(zip(plan.argv, plan.argv[1:], plan.argv[2:]))
         assert plan.argv.index(str(path)) > plan.argv.index('--bind')
+    readback = isolation.native_carrier.readback
     for path in paths[:-1]:
         backup = path.with_name(path.name + '.saved')
-        path.rename(backup)
+        async def removed_after_readback(*args, **kwargs):
+            await readback(*args, **kwargs)
+            path.rename(backup)
+        monkeypatch.setattr(isolation.native_carrier, 'readback', removed_after_readback)
         try:
             with pytest.raises(native_process.NativeRuntimeError, match='NATIVE_ISOLATION_PATH_UNPROVEN'):
                 await isolation.build_plan(**case)
