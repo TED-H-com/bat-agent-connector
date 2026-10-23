@@ -103,6 +103,15 @@ async def build_plan(ctx, receipt, *, readonly, areas, protected, command, check
     _require(sys.platform == 'linux' and os.uname().machine == 'x86_64', UNAVAILABLE)
     bwrap = shutil.which('bwrap')
     _require(bwrap is not None, UNAVAILABLE)
+    overlays = ()
+    if type(receipt) is native_carrier.CarrierReceipt:
+        saved = receipt.reference()
+        controls = [Path(saved['clone']['path'], '.git', p) for p in ('config', 'hooks', 'info', 'objects/info')]
+        controls += [Path(saved['cwd'], '.git'), *(Path(saved['git_dir']['path'], p) for p in ('gitdir', 'commondir'))]
+        optional = Path(saved['git_dir']['path'], 'config.worktree')
+        if optional.exists():
+            controls.append(optional)
+        overlays = tuple(Mount(str(_real(p)), str(p)) for p in controls)
     await native_carrier.readback(ctx, receipt, check=check)
     saved = receipt.reference()
     for name in ('clone', 'worktree', 'git_dir'):
@@ -120,7 +129,7 @@ async def build_plan(ctx, receipt, *, readonly, areas, protected, command, check
     _require(readonly and all(type(m) is Mount and not m.writable and m.target in READONLY_TARGETS for m in readonly), MOUNT_UNPROVEN)
     _require(len({m.target for m in readonly}) == len(readonly), MOUNT_UNPROVEN)
     mounts = (*readonly, Mount(str(carrier), str(carrier), True),
-              Mount(str(areas.scratch), '/scratch', True), Mount(str(areas.state), '/state', True))
+              Mount(str(areas.scratch), '/scratch', True), Mount(str(areas.state), '/state', True), *overlays)
     _require(all(m in mounts for m in requested_mounts), MOUNT_UNPROVEN)
     for mount in mounts:
         source = _real(mount.source)

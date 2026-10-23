@@ -52,3 +52,31 @@ and [Ubuntu's release notes](https://documentation.ubuntu.com/release-notes/24.0
 這是獨立 coding policy；PM 合約不變。僅明列的唯讀工具鏈與本 Attempt 的磁碟區可見。
 人工工作區、憑證、資料庫、spool 與 host sockets 不掛入；無網路、無繼承 descriptor。
 實機 canary 是必要 CI gate；本機 skip 不代表隔離通過，模型／實機產品驗收仍未完成。
+
+Git control overlays follow the writable carrier bind: `.git/config`, `hooks/`,
+`info/`, `objects/info/`, the worktree's `.git` pointer, and its gitdir's `gitdir`,
+`commondir` and existing `config.worktree`. Missing mandatory paths refuse; only
+managed preparation creates the empty control directories, never the policy.
+Objects (except `info/`), refs, logs, packed-refs, HEAD and index remain writable.
+Host Git treats the carrier as untrusted and only uses the hardened runner;
+checkpoint sources and carrier readback share the hazard check. Delivery must
+never run porcelain in the carrier; delivery is not implemented here.
+
+For passwordless test runs, an operator can provision a 64 MiB disk volume once:
+```sh
+(
+set -e
+mkdir -p "$HOME/agent-work/tmp/isolation-volume"
+test ! -e "$HOME/agent-work/tmp/isolation-volume.img"
+truncate -s 64M "$HOME/agent-work/tmp/isolation-volume.img"
+mkfs.ext4 -q -F "$HOME/agent-work/tmp/isolation-volume.img"
+sudo mount -o loop,nodev,nosuid,noexec "$HOME/agent-work/tmp/isolation-volume.img" "$HOME/agent-work/tmp/isolation-volume"
+sudo chown "$(id -u):$(id -g)" "$HOME/agent-work/tmp/isolation-volume"
+BAC_ISOLATION_QUOTA_ROOT="$HOME/agent-work/tmp/isolation-volume" bash scripts/check_native_isolation.sh
+)
+```
+With that variable set, the script neither creates nor mounts/unmounts a volume.
+Policy checks still apply. The 1 GiB ceiling is provisional owner policy; carrier
+capacity remains unbounded pending a follow-up, so coding readiness remains off.
+控制檔以唯讀 overlays 保護；一般物件、refs 與 index 仍可寫。預先配置的磁碟區不需
+每次 sudo，但 carrier 容量缺口尚未修正，不能宣稱 coding 隔離已完成。

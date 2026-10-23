@@ -6,6 +6,7 @@ import os
 import shutil
 import socket
 import sys
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -215,6 +216,7 @@ async def test_real_bwrap_canary(world, tmp_path):
     import tempfile
     with tempfile.TemporaryDirectory(prefix='canary-', dir=quota) as owned:
         case = await inputs(world, tmp_path, Path(owned))
+        control_paths(case)[-1].write_text('')
         program = (FIXTURES / 'native-isolation-canary.py').read_text()
         forbidden = [str(p / 'secret') for p in (*case['protected'], case['areas'].spool)]
         before = {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in forbidden}
@@ -223,8 +225,16 @@ async def test_real_bwrap_canary(world, tmp_path):
         listener = socket.socket()
         listener.bind(('127.0.0.1', 0))
         listener.listen()
+        saved = case['receipt'].reference()
+        common, gitdir = Path(saved['clone']['path'], '.git'), Path(saved['git_dir']['path'])
+        blob = b'blob 6\0canary'
+        oid = hashlib.sha1(blob).hexdigest()
+        writable = {str(common / 'objects' / oid[:2] / oid[2:]): zlib.compress(blob).hex(),
+                    str(common / 'refs/heads/canary'): (saved['source_sha'] + '\n').encode().hex(),
+                    str(gitdir / 'index'): (gitdir / 'index').read_bytes().hex()}
         case['command'] = ('/runtime/bin/python3', '-I', '-c', program, json.dumps(forbidden),
-                           str(fd), str(os.getpid()), str(listener.getsockname()[1]))
+                           str(fd), str(os.getpid()), str(listener.getsockname()[1]),
+                           json.dumps([str(p) for p in control_paths(case)]), json.dumps(writable))
         try:
             try:
                 plan = await isolation.build_plan(**case)
@@ -248,6 +258,8 @@ async def test_real_bwrap_canary(world, tmp_path):
             assert result and all(value is False for value in result.values()), result
             assert Path(case['receipt'].reference()['cwd'], 'canary-edit').read_text() == 'owned'
             assert {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in forbidden} == before
+            Path(saved['cwd'], 'canary-edit').unlink()
+            await isolation.native_carrier.readback(world.ctx, case['receipt'], check=case['check'])
         finally:
             os.close(fd)
             listener.close()
@@ -299,3 +311,27 @@ async def test_consumer_deadline_still_closes_the_owned_process(case, monkeypatc
     with pytest.raises(asyncio.TimeoutError):
         await isolation.run(**case, consume=consume, timeout=0.01)
     assert process.closed == 1 and process.returncode == 0
+
+
+def control_paths(case):
+    saved = case['receipt'].reference()
+    return [Path(saved['clone']['path'], '.git', p) for p in ('config', 'hooks', 'info', 'objects/info')] + [
+        Path(saved['cwd'], '.git'), *(Path(saved['git_dir']['path'], p) for p in ('gitdir', 'commondir', 'config.worktree'))]
+
+
+async def test_control_overlays_follow_carrier_and_are_required(case):
+    paths = control_paths(case)
+    paths[-1].write_text('')
+    plan = await isolation.build_plan(**case)
+    for path in paths:
+        assert path.exists()
+        assert ('--ro-bind', str(path), str(path)) in tuple(zip(plan.argv, plan.argv[1:], plan.argv[2:]))
+        assert plan.argv.index(str(path)) > plan.argv.index('--bind')
+    for path in paths[:-1]:
+        backup = path.with_name(path.name + '.saved')
+        path.rename(backup)
+        try:
+            with pytest.raises(native_process.NativeRuntimeError, match='NATIVE_ISOLATION_PATH_UNPROVEN'):
+                await isolation.build_plan(**case)
+        finally:
+            backup.rename(path)

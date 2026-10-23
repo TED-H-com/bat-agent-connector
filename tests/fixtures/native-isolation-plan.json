@@ -36,6 +36,27 @@
     "--bind",
     "<case>/state",
     "/state",
+    "--ro-bind",
+    "<carrier>/.git/config",
+    "<carrier>/.git/config",
+    "--ro-bind",
+    "<carrier>/.git/hooks",
+    "<carrier>/.git/hooks",
+    "--ro-bind",
+    "<carrier>/.git/info",
+    "<carrier>/.git/info",
+    "--ro-bind",
+    "<carrier>/.git/objects/info",
+    "<carrier>/.git/objects/info",
+    "--ro-bind",
+    "<carrier>/.bat-worktrees/batc-published-06f19055b6fb/.git",
+    "<carrier>/.bat-worktrees/batc-published-06f19055b6fb/.git",
+    "--ro-bind",
+    "<carrier>/.git/worktrees/batc-published-06f19055b6fb/gitdir",
+    "<carrier>/.git/worktrees/batc-published-06f19055b6fb/gitdir",
+    "--ro-bind",
+    "<carrier>/.git/worktrees/batc-published-06f19055b6fb/commondir",
+    "<carrier>/.git/worktrees/batc-published-06f19055b6fb/commondir",
     "--setenv",
     "PATH",
     "/toolchain/bin:/runtime/bin",
@@ -99,6 +120,41 @@
       "source": "<case>/state",
       "target": "/state",
       "writable": true
+    },
+    {
+      "source": "<carrier>/.git/config",
+      "target": "<carrier>/.git/config",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/hooks",
+      "target": "<carrier>/.git/hooks",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/info",
+      "target": "<carrier>/.git/info",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/objects/info",
+      "target": "<carrier>/.git/objects/info",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.bat-worktrees/batc-published-06f19055b6fb/.git",
+      "target": "<carrier>/.bat-worktrees/batc-published-06f19055b6fb/.git",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/worktrees/batc-published-06f19055b6fb/gitdir",
+      "target": "<carrier>/.git/worktrees/batc-published-06f19055b6fb/gitdir",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/worktrees/batc-published-06f19055b6fb/commondir",
+      "target": "<carrier>/.git/worktrees/batc-published-06f19055b6fb/commondir",
+      "writable": false
     }
   ],
   "quota_bytes": 67108864,
