@@ -20,6 +20,7 @@ struct SecurityFixture {
     login: Rc<RefCell<LoginIdentity>>,
     launcher: Rc<Cell<bool>>,
     monitor: Rc<Cell<bool>>,
+    on_path: Rc<RefCell<Option<Box<dyn FnMut(&Path)>>>>,
 }
 struct Guard(Rc<Cell<bool>>);
 impl Drop for Guard {
@@ -56,7 +57,10 @@ impl Security for SecurityFixture {
     fn unpublished(&self, _: &Path) -> Result<()> {
         Ok(())
     }
-    fn validate_path(&self, _: &Path) -> Result<()> {
+    fn validate_path(&self, path: &Path) -> Result<()> {
+        if let Some(hook) = self.on_path.borrow_mut().as_mut() {
+            hook(path);
+        }
         Ok(())
     }
     fn login(&self) -> Result<LoginIdentity> {
@@ -138,6 +142,7 @@ impl Fixture {
                 })),
                 launcher: Default::default(),
                 monitor: Default::default(),
+                on_path: Default::default(),
             },
         }
     }
@@ -356,4 +361,39 @@ async fn unsupported_native_entry_refuses_before_native_discovery() {
     ));
     assert_eq!(std::fs::read(&sentinel).unwrap(), b"unchanged");
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn lifecycle_stop_after_staging_prevents_final_receipt_publication() {
+    let f = Fixture::new();
+    let tickets = Arc::new(crate::fleet_lifecycle::Tickets::default());
+    let ticket = tickets.capture();
+    let mut p = f.platform(&mut || ["a".repeat(32), "b".repeat(32)]);
+    let root = p.receipt().scope.state_root.join("fleet-creation");
+    let watch = root.clone();
+    let gate = tickets.clone();
+    let fired = Rc::new(Cell::new(false));
+    let marker = fired.clone();
+    *f.security.on_path.borrow_mut() = Some(Box::new(move |_| {
+        if !marker.get()
+            && std::fs::read_dir(&watch).is_ok_and(|entries| {
+                entries.filter_map(std::result::Result::ok).any(|e| {
+                    e.file_name()
+                        .to_string_lossy()
+                        .starts_with(".fleet-creation-")
+                })
+            })
+        {
+            marker.set(true);
+            gate.set_stopping(true);
+        }
+    }));
+    assert!(matches!(
+        prepare(&mut p, &ticket),
+        Err("FLEET_STOP_REQUESTED")
+    ));
+    assert!(fired.get(), "mandatory stop after a real staging write");
+    assert!(!root
+        .join(EvidenceKey::Provisioning.relative_path().unwrap())
+        .exists());
 }
