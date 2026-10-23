@@ -20,7 +20,7 @@ ACTION = "pm.work_profile.save"
 MAX_DOCUMENT_BYTES = 16384
 _PROFILE_ID = re.compile(r"wpf_[0-9a-f]{32}")
 _DOCUMENT_KEYS = frozenset({
-    "version", "binding", "agent", "model", "delivery_policy_ref", "budget_policy_ref",
+    "version", "binding", "agent", "model", "delivery_policy_ref", "budget_policy_ref", "adapter",
 })
 _PARAM_KEYS = frozenset({
     "profile_id", "expected_revision", "document", "withdrawn", "make_default",
@@ -188,6 +188,8 @@ def normalize_document(document) -> dict:
         raise _bad("INVALID_PARAMS", "Unexpected work profile document fields")
     if type(document.get("version")) is not int or document["version"] != 1:
         raise _bad("INVALID_PARAMS", "version must be 1")
+    if "adapter" in document and document["adapter"] not in ("bat", "ahp"):
+        raise _bad("INVALID_PARAMS", "adapter must be bat or ahp")
     binding = document.get("binding")
     if not isinstance(binding, dict) or set(binding) != {"repository", "host", "workspace_id"}:
         raise _bad("INVALID_PARAMS", "binding must be repository, host and workspace_id")
@@ -215,6 +217,7 @@ def normalize_document(document) -> dict:
         "model": model,
         "delivery_policy_ref": delivery,
         "budget_policy_ref": None,
+        **({"adapter": document["adapter"]} if document.get("adapter", "bat") != "bat" else {}),
     }
     if len(_json(normalized).encode("utf-8")) > MAX_DOCUMENT_BYTES:
         raise _bad("PM_WORK_PROFILE_TOO_LARGE", "Work profile document exceeds 16384 bytes", 413)
@@ -343,6 +346,8 @@ def _admit(ops, principal: Principal, target: dict, params: dict, pre: dict) -> 
     if not principal.allows("observe"):
         raise _bad("FORBIDDEN", "Saving a work profile requires the observe scope", 403)
     document = normalize_document(params["document"])
+    from .pm_work_start import profile_route
+    profile_route(ops, document)
     _require_binding(ops, document["binding"])
     profile_id, _revision = _check_update(ops.db, workspace["workspace_id"], params)
     kind, _withdrawn = _default_write(params, _current_default_id(ops.db, workspace["workspace_id"]), profile_id)
@@ -377,6 +382,8 @@ def _apply(ctx) -> dict:
     document = (ctx.admission_binding or {}).get("document")
     if not isinstance(document, dict):
         raise _bad("AUTHORITY_UNAVAILABLE", "The operation has no admitted work profile", 409)
+    from .pm_work_start import profile_route
+    profile_route(ctx.service, document)
     profile_id, revision = _check_update(db, workspace_id, params)
     current_id = _current_default_id(db, workspace_id)
     kind, withdrawn = _default_write(params, current_id, profile_id)
@@ -795,6 +802,8 @@ def _pm_analysis(ops, principal, workspace_id: str) -> dict:
 def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
     observed_at = time.time()
     document = _object(row["document"])
+    if document.get("adapter", "bat") != "bat":
+        return _adapter_readiness(ops, principal, workspace_id, row, document, observed_at)
     binding = document.get("binding") if isinstance(document.get("binding"), dict) else {}
     repository = binding.get("repository")
     host = binding.get("host")
@@ -974,3 +983,23 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
         "resume": {"kind": "client_draft", "stored_on_server": False},
         "pm_analysis": _pm_analysis(ops, principal, workspace_id),
     }
+
+
+def _adapter_readiness(ops, principal, workspace_id, row, document, observed_at):
+    from .pm_work_start import route_readiness
+    availability = route_readiness(ops, document)
+    reason = availability["reason"]
+    states = {name: _state("unknown", "not_verified") for name in _STATE_NAMES}
+    states["can_start_own"] = _state("ready" if availability["available"] else "unavailable", reason)
+    states["can_continue_own"] = _state("unavailable", "owned_turn_unavailable")
+    return {"contract": _CONTRACT, "workspace_id": workspace_id, "profile_id": row["profile_id"],
+        "revision": row["revision"], "digest": row["digest"], "observed_at": observed_at, "calls_bat": False,
+        "coding_route_ready": availability["available"], "states": states,
+        "configured": {**{key: document.get(key) for key in ("adapter", "agent", "model", "binding")},
+                       "delivery_goal": (document.get("delivery_policy_ref") or {}).get("goal")},
+        "work_follow_up": {"route": document["adapter"] + "_work_start", "agent": document["agent"],
+                          "state": "unavailable", "reason": "owned_turn_unavailable", "admission_checked": False},
+        "smallest_gap": _gap(reason) if reason else None,
+        "unverified": [name for name in _STATE_NAMES if states[name]["value"] == "unknown"],
+        "resume": {"kind": "client_draft", "stored_on_server": False},
+        "pm_analysis": _pm_analysis(ops, principal, workspace_id)}
