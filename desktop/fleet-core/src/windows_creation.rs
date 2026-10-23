@@ -1,6 +1,6 @@
 //! Native creation observation and rooted ownership. No IPC or process effects.
 //! The default view is read-only. Explicit writer scopes retain effect guards;
-//! first-time namespace bootstrap and publisher directory preparation are unavailable.
+//! first reservation bootstraps only its root, record container and receipt.
 use crate::{
     connection_setup::{Artifact, FileOwnership, OwnerEvidence},
     creation_evidence::{self as evidence, *},
@@ -82,6 +82,13 @@ impl<S: Security> Reader<S> {
     }
     fn key_path(&self, key: &EvidenceKey) -> Result<PathBuf> {
         Ok(self.root().join(key.relative_path()?))
+    }
+    fn directory_container(&self) -> Result<PathBuf> {
+        Ok(self
+            .key_path(&EvidenceKey::Directory("0".repeat(64)))?
+            .parent()
+            .ok_or(UNPROVEN)?
+            .into())
     }
     fn private(&self, path: &Path) -> Result<bool> {
         let role_parent = self
@@ -231,8 +238,33 @@ impl<S: Security> Reader<S> {
             .collect()
     }
     fn directory_reserved(&self, path: &Path) -> Result<bool> {
-        Ok(self.expected.directories.iter().any(|d| d.path() == path)
-            || self.namespace_directories()?.iter().any(|p| p == path))
+        if self.expected.directories.iter().any(|d| d.path() == path)
+            || evidence::directory_reserved(&self.expected, path, &[])
+        {
+            return Ok(true);
+        }
+        // Probe only the shape here. Actual admissible reviews come from records;
+        // the resolver validates their full chain before any directory effect.
+        let name = path.file_name().and_then(|n| n.to_str()).ok_or(UNPROVEN)?;
+        if !evidence::directory_reserved(&self.expected, path, &[name]) {
+            return Ok(false);
+        }
+        let mut reviews = Vec::new();
+        for key in self.entries()? {
+            if matches!(key, EvidenceKey::Lineage(_)) {
+                if let Record::Publication(link) = Record::decode(
+                    &key,
+                    &self.read_private(&key, RECORD_LIMIT)?.ok_or(UNPROVEN)?,
+                )? {
+                    reviews.push(link.frozen.review_digest);
+                }
+            }
+        }
+        Ok(evidence::directory_reserved(
+            &self.expected,
+            path,
+            &reviews.iter().map(String::as_str).collect::<Vec<_>>(),
+        ))
     }
 }
 // The resolver needs EvidenceIo's read boundary. This private view never exposes
@@ -258,6 +290,7 @@ impl<S: Security> EvidenceIo for Reader<S> {
                 self.directory(d.path(), &hash)?;
             }
         }
+        self.directory(&self.directory_container()?, &hash)?;
         self.verify_intermediates(receipt)
     }
     fn verify_effect_context(&self) -> Result<()> {

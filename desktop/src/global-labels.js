@@ -173,7 +173,7 @@ const WORK_STATUS = {
   github_closed: 'github_closed',
   github_completed: 'github_completed',
   github_done: 'github_done',
-  todo: 'not_started',
+  todo: 'todo',
   doing: 'in_progress',
   waiting: 'waiting',
   done: 'done',

@@ -326,12 +326,18 @@ impl Fixture {
             &reader.key_path(&EvidenceKey::Provisioning).unwrap(),
             &bytes,
         );
-        for d in &reader.expected.directories {
+        for path in reader
+            .expected
+            .directories
+            .iter()
+            .map(|d| d.path().to_path_buf())
+            .chain([reader.directory_container().unwrap()])
+        {
             let record = Record::Directory(DirectoryCreated {
                 binding: reader.expected.binding(&digest(&bytes), 7).unwrap(),
-                canonical_path: d.path().into(),
-                parent_identity: reader.identity(d.path().parent().unwrap()).unwrap(),
-                identity: reader.identity(d.path()).unwrap(),
+                parent_identity: reader.identity(path.parent().unwrap()).unwrap(),
+                identity: reader.identity(&path).unwrap(),
+                canonical_path: path,
             });
             write_private(
                 &reader.key_path(&record.key()).unwrap(),
