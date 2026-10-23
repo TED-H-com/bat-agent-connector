@@ -36,8 +36,11 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} existing connecti
     await page.locator('[data-setup-field=bat_secret]').fill('synthetic-bat-secret');
     await page.locator('[data-setup-discover]').click();
     await page.locator('[data-setup-discovered-profile]').selectOption('work');
+    // Discovery applies the profile and persists the draft in the same synchronous block.
+    await expect(page.locator('[data-setup-field=profile_id]')).toHaveValue('work');
     await page.reload(); await openSetupAdvanced(page);
     await page.locator('[data-setup-connect] > summary').click();
+    await expect(page.locator('[data-setup-review-reason]')).toBeVisible();
     await expect(page.locator('[data-setup-review-reason]')).toHaveText(credential);
     await expect(page.locator('[data-setup-host]').getByRole('button', {name: review, exact:true})).toBeDisabled();
     expect(state.previews).toEqual([]); expect(state.posts).toEqual([]);
