@@ -1,5 +1,7 @@
 import {openThreadTab} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
+import {setTimeout as delay} from 'node:timers/promises';
+import {STRINGS} from '../src/i18n.js';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture,pmRoute,workspaceId} from './pm-fixture.ts';
 
@@ -33,12 +35,12 @@ function fixture() {
   return {base,state,dispatch};
 }
 
-async function submit(page:any) {
+async function submit(page:any,copy=STRINGS.en) {
   await page.locator('[data-pm-add-input] > summary').click();
   const form=action(page);
-  await form.getByLabel('Topic',{exact:true}).selectOption('problem');
-  await form.getByLabel('Statement or question',{exact:true}).fill('A fixed original input');
-  await form.getByRole('button',{name:'Save input',exact:true}).click();
+  await form.getByLabel(copy.pm_input_slot,{exact:true}).selectOption('problem');
+  await form.getByLabel(copy.pm_input_value,{exact:true}).fill('A fixed original input');
+  await form.getByRole('button',{name:copy.pm_record_input,exact:true}).click();
   await expect.poll(async()=>(await draft(page))?.value.intent?.operation_id).toMatch(/^op_[0-9a-f]{32}$/);
   return form;
 }
@@ -103,27 +105,38 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
     expect((await draft(page)).value.intent).toBeUndefined();
   });
 
+  for(const locale of ['en-US','zh-TW'])test.describe(`bounded receipt ${locale}`,()=>{
+  test.use({locale});
   test('bounded polling stops with the original key intact and retains manual recovery',async({page})=>{
-    const f=fixture();await page.clock.install();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
+    const copy=STRINGS[locale==='en-US'?'en':'zh-TW'];
+    const f=fixture();await page.clock.install();await mountConversation(page,native,async input=>{
+      const firstReceipt=input.method==='GET'&&input.path.startsWith('/operations/')&&f.state.gets.length===0;
+      const result=await f.dispatch(input);
+      // Delay the first reply in real time, independently of the page's backoff clock.
+      if(firstReceipt)await delay(1_500);
+      return result;
+    });await page.goto(pmRoute);await openThreadTab(page,'inputs');
     await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
-    const form=await submit(page),saved=await draft(page);
-    await expect(form.getByRole('button',{name:'Save input',exact:true})).toBeDisabled();
+    const form=await submit(page,copy),saved=await draft(page);
+    await expect(form.getByRole('button',{name:copy.pm_record_input,exact:true})).toBeDisabled();
     // Allow each asynchronous GET to settle before advancing the next backoff.
     const delays=[250,500,1000,1500,2000,3000];
     for(let i=1;i<=6;i++){
       await page.clock.runFor(delays[i-1]);
-      await expect.poll(()=>f.state.gets.length).toBe(i);
-      if (i<6) await expect(form.getByRole('button',{name:'Save input',exact:true})).toBeDisabled();
-      else await expect(form.getByRole('button',{name:'Check original request',exact:true})).toBeEnabled();
+      await expect(form.locator(':scope > [role=status]')).not.toHaveAttribute('aria-busy','true');
+      expect(f.state.gets).toHaveLength(i);
+      if (i<6) await expect(form.getByRole('button',{name:copy.pm_record_input,exact:true})).toBeDisabled();
+      else await expect(form.getByRole('button',{name:copy.pm_check_original,exact:true})).toBeEnabled();
     }
     await page.clock.runFor(30000);
     expect(f.state.gets).toHaveLength(6);
     expect((await draft(page)).value.intent).toEqual(saved.value.intent);
-    await expect(form.getByLabel('Topic',{exact:true})).toBeDisabled();
-    await expect(form.getByRole('button',{name:'Check original request',exact:true})).toBeEnabled();
-    f.state.complete=true;await form.getByRole('button',{name:'Check original request',exact:true}).click();
-    await expect(form.getByLabel('Topic',{exact:true})).toBeEnabled();
+    await expect(form.getByLabel(copy.pm_input_slot,{exact:true})).toBeDisabled();
+    await expect(form.getByRole('button',{name:copy.pm_check_original,exact:true})).toBeEnabled();
+    f.state.complete=true;await form.getByRole('button',{name:copy.pm_check_original,exact:true}).click();
+    await expect(form.getByLabel(copy.pm_input_slot,{exact:true})).toBeEnabled();
     expect(f.state.gets).toHaveLength(7);expect(f.base.state.writes).toHaveLength(1);
+  });
   });
 
   test('an uncertain original receipt needs explicit recovery and is never automatically resubmitted',async({page})=>{
