@@ -144,7 +144,7 @@ Windows 的 directory sync 是 no-op，因此 Fleet publication 與 migration �
 This module has no Tauri/IPC, UI, Python, durable-operation participant, enrollment,
 startup, tunnel or monitor-launch wiring. The [Windows ownership adapter](../../desktop/fleet-core/src/windows_creation/platform.rs#L148),
 [guarded creation writer](../../desktop/fleet-core/src/windows_creation/writer.rs#L13)
-and [first-reservation bootstrap](../../desktop/fleet-core/src/windows_creation/writer.rs#L404)
+and [first-reservation bootstrap](../../desktop/fleet-core/src/windows_creation/writer.rs#L139)
 are implemented; they have no production caller, native route, IPC or public Apply
 entrypoint. Native Apply integration and live acceptance remain open.
 Windows ownership adapter、受 guard 保護的 creation writer 與首次 reservation bootstrap
