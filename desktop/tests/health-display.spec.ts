@@ -231,7 +231,8 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     try {
       await page.goto('/dashboard/#/session/fixture-host/fixture-session');
       await expect(page.locator('#installation-health [data-health-compact]')).toHaveAttribute('data-health-compact', 'attention');
-      await expect(page.locator('#installation-health .health-last-value')).toContainText(locale === 'zh-TW' ? '檢查中' : 'Checking');
+      await expect(page.locator('#installation-health .health-last-value')).not.toContainText(locale === 'zh-TW' ? '檢查中' : 'Checking');
+      await expect(page.locator('#installation-health [data-health-checking]')).toHaveText(locale === 'zh-TW' ? '檢查中' : 'Checking');
       await page.goto('/dashboard/#/settings');
       await expect(page.locator('[data-health-settings] [data-health-compact]')).toHaveAttribute('data-health-compact', 'attention');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -436,7 +437,10 @@ for (const locale of ['en-US', 'zh-TW']) {
         await expect.poll(async () => {
           await page.clock.runFor(1_000);
           return page.locator('#installation-health [data-health-key=capabilities]').allTextContents();
-        }).toEqual([copy.health_capabilities_checking]);
+        }).toEqual([copy.health_capabilities_changed]);
+        const checking = page.locator('#installation-health [data-health-checking]');
+        await expect(checking).toHaveCount(1);
+        await expect(checking).toHaveText(copy.health_checking);
         await page.clock.runFor(61_000);
       } else await (await verification!).finished();
       // Verification applies on receipt; the health strip paints on its 1 s tick.

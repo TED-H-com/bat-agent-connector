@@ -377,6 +377,7 @@ a { color: var(--accent); }
 .schedule-indent { width: 24px; flex: none; }
 .schedule-tree-copy { min-width: 0; flex: 1; }
 .schedule-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-label-tip { position: fixed; z-index: 100; max-width: min(36rem, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); font-size: var(--fs-small); }
 .schedule-tree-cell > .ui-pill { flex: none; margin-left: var(--space-1); }
 .schedule-date-range { display: none; }
 .schedule-row.selected .schedule-tree-cell { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
@@ -1531,6 +1532,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .dep-loaded { color: var(--text-3); font-size: var(--fs-caption); }
 .dep-graph-scroll { min-width: 0; width: 100%; max-height: min(70vh, 720px); display: flex; justify-content: safe center; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); touch-action: pan-x pan-y; cursor: grab; }
 .dep-graph { flex: none; }
+[data-dep-node-name] { overflow-wrap: anywhere; }
 .dep-graph text { fill: var(--text); font-size: 12px; font-family: var(--font-ui); }
 .dep-node-shape { fill: var(--surface); stroke: var(--line-strong); }
 .dep-node-repo { fill: var(--text-2); }

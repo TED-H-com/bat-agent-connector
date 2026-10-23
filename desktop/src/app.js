@@ -1,8 +1,9 @@
+import {healthSummaryContent} from './health-summary.js';
 import {managedServiceControls} from "./managed-service.js";
 import {startupRoleChoice} from "./startup-role.js";
 import {boardGitHubPanel} from './board-github.js';
 import {clientActionGate, pollFailure} from "./central-service-status.js";
-import {healthDisplay, healthLabel, healthAge, healthRevision, rememberHealthRead, withdrawHealthRead, selectHealthSession, resetHealthBootstrap, takeHealthRenewal} from './health-display.js';
+import {healthDisplay, healthLabel, healthRevision, rememberHealthRead, withdrawHealthRead, selectHealthSession, resetHealthBootstrap, takeHealthRenewal} from './health-display.js';
 import {browserCredentialRefusals, isCredentialRefusal, BROWSER_TOKEN_KEY as TOKEN_KEY} from './credential-refusals.js';
 import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
@@ -1086,37 +1087,8 @@ function paintConnection(waiting = false, paused = false) {
   for (const paint of [...connectionPainters]) paint();
   paintVersions();
 }
-function healthSummaryContent(projection) {
-  const summary = projection.summary;
-  const pair = (label, value) => t('health_pair', {label: t(label), value});
-  const join = values => values.reduce((left, right) => t('health_join', {left, right}));
-  const last = summary?.facts.filter(row => row.activity.freshness === 'stale')
-    .sort((a, b) => (b.activity.ageSeconds || 0) - (a.activity.ageSeconds || 0))[0];
-  const refresh = projection.capabilities.refresh;
-  return [summary ? h('span', {'data-health-key': 'selected', 'data-health-selected': '', class: 'health-selected'},
-    h('span', {}, pair(summary.selected.workspaceId ? 'health_selected_workspace' : 'health_selected_work', summary.selected.label || summary.selected.host)),
-    h('span', {class: 'ui-pill', 'data-health-compact': summary.compact}, t('health_' + summary.compact)),
-    summary.connection ? h('span', {class: 'health-installation-connection'}, healthLabel({...summary.connection,
-      key: summary.connection.value === 'connected' ? 'ui_connected' : summary.connection.value === 'not_connected' ? 'health_connection_problem' : 'health_unknown'}, t)) : null,
-    h('span', {class: 'health-facets'}, join([
-      pair('health_attention_label', t(summary.attention ? 'health_attention' : 'health_none')),
-      pair('health_activity', t('health_' + summary.activity)),
-      pair('health_freshness', t(summary.stale ? 'health_stale' : summary.unknown ? 'health_unknown' : 'health_current'))])),
-    last ? h('span', {class: 'health-last-value'}, healthLabel({...last.activity,
-      key: ['streaming', 'starting'].includes(last.activity.value) ? 'health_working'
-        : last.activity.value === 'not_streaming' ? 'health_idle' : 'health_unknown'}, t)) : null) : null,
-    projection.connection.freshness === 'stale' ? h('span', {'data-health-key': 'connection-age', 'data-health-age': '', 'aria-live': 'off'},
-      healthAge(projection.connection.ageSeconds, t)) : null,
-    projection.capabilities.freshness === 'invalidated' ? h('span', {'data-health-key': 'capabilities'},
-      t(refresh?.state === 'loading' ? 'health_capabilities_checking' : 'health_capabilities_reload', {reason: refresh?.reason || 'IDENTITY_UNVERIFIED'})) : null,
-    projection.capabilities.freshness === 'invalidated' && refresh?.state !== 'loading'
-      ? h('button', {'data-health-key': 'reload', onclick: () => location.reload()}, t('health_reload')) : null,
-    projection.otherAttention ? h(projection.other.href ? 'a' : 'span', {href: projection.other.href, 'data-health-key': 'other', 'data-health-other': ''},
-      healthLabel({...projection.other, key: projection.otherAttention === 1 ? 'health_other_machines_one' : 'health_other_machines_many'},
-        (key, vars) => t(key, {count: projection.otherAttention, ...vars}))) : null].filter(Boolean);
-}
 function renderHealthContent(container, projection) {
-  const content = healthSummaryContent(projection), signature = content.map(node => node.outerHTML).join('');
+  const content = healthSummaryContent(projection, {h, t}), signature = content.map(node => node.outerHTML).join('');
   if (container.dataset.signature === signature) return;
   const focused = container.contains(document.activeElement) ? document.activeElement.dataset.healthKey : null;
   const existing = new Map([...container.children].map(node => [node.dataset.healthKey, node]));

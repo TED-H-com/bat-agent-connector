@@ -125,7 +125,10 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.clock.fastForward(1_000);
       await page.evaluate(() => {location.hash = '#/session/fixture-host/fixture-session';});
       const activity = page.locator('#installation-health .health-last-value');
-      await expect(activity).toHaveText(locale === 'en-US' ? 'Idle · 10 min ago · Checking' : '閒置 · 10 分鐘前 · 檢查中');
+      const checking = page.locator('#installation-health [data-health-checking]');
+      await expect(activity).toHaveText(locale === 'en-US' ? 'Idle · 10 min ago' : '閒置 · 10 分鐘前');
+      await expect(checking).toHaveCount(1);
+      await expect(checking).toHaveText(locale === 'en-US' ? 'Checking' : '檢查中');
       release();
       await expect.poll(async () => {
         await page.clock.fastForward(1_000);
@@ -140,6 +143,10 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect(page.locator('#installation-health .health-installation-connection')).toHaveText(locale === 'en-US'
         ? 'Connected · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
         : '已連線 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+      // An applied unchanged observation is still stale, so the strip retains
+      // its single Checking statement even though the renewal has completed.
+      await expect(checking).toHaveCount(1);
+      await expect(checking).toHaveText(locale === 'en-US' ? 'Checking' : '檢查中');
       await page.clock.fastForward(1_000);
       expect(counts.get('/hosts')).toBe(2);
       await page.clock.fastForward(600_000);

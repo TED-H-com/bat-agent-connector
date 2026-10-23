@@ -32,6 +32,13 @@ a late read cannot repopulate a withdrawn view.
 
 ## Mount contract
 
+Current PM availability and the last run outcome are independent facts. Composer
+feedback labels a settled outcome as this discussion's last PM run. When the
+operation supplies `updated_at`, show its timestamp as "status updated", never
+as an inferred completion time. Missing timestamps stay absent. Active runs keep
+their existing running state and elapsed clock; neither outcome nor timestamp
+establishes current PM availability.
+
 ```js
 planProposals({h, t, api, alive, form, input, labelled, caps,
   workspaceId, threadId, thread, permitted, refresh, errorBox})

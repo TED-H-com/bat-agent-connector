@@ -44,6 +44,18 @@ their existing namespaces. No display state authorizes work or changes final gat
 
 ## Summary and compact presentation
 
+Relative ages share `desktop/src/relative-age.js`: English uses `min`, `hr`, `d`
+with spaces; zh-TW uses `分鐘`, `小時`, `天`. Units roll over at 60 minutes and
+24 hours. This formatter never chooses a clock or evaluates freshness. Health
+retains its observation/deadline clock, Overview its projection clock, and shared
+timestamps their display clock and existing switch to calendar dates after a day.
+
+The compact installation strip (including its Settings copy) retains each state and last-known age, then says
+Checking once after all facets, equally in visible and accessible text. Full
+health rows, Fleet rows and their per-fact descriptions retain Checking per fact;
+they do not repeat it inside a single fact. The priority and expiry rules below
+are unchanged.
+
 The header describes the selected workspace's installation only. Connector connection
 is explicitly labelled **Connector**; it does not mean BAT, authentication scopes,
 workspace access or all machines are ready. Where an explicit selected session supplies

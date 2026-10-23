@@ -1,3 +1,4 @@
+import {relativeAge, relativeAgeTranslator} from '../relative-age.js';
 // One formatter family. Date-only strings are calendar dates, never UTC instants.
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY = 86400000;
@@ -38,10 +39,7 @@ export function compactTime(value, {locale = 'en', now = Date.now()} = {}) {
   if (!date) return '';
   const chinese = zh(locale), delta = Number(now) - date.getTime(), distance = Math.abs(delta);
   if (distance < DAY) {
-    if (distance < 60000) return chinese ? '剛剛' : 'just now';
-    const minutes = Math.floor(distance / 60000), n = minutes < 60 ? minutes : Math.floor(minutes / 60);
-    const unit = minutes < 60 ? (chinese ? '分鐘' : 'm') : (chinese ? '小時' : 'h');
-    return chinese ? `${n} ${unit}${delta < 0 ? '後' : '前'}` : delta < 0 ? `in ${n}${unit}` : `${n}${unit} ago`;
+    return relativeAge(distance / 1000, relativeAgeTranslator(locale), {direction: delta < 0 ? 'future' : 'past'});
   }
   return `${compactDate(date, {locale, now})}${chinese ? ' ' : ', '}${clock(date, chinese)}`;
 }
