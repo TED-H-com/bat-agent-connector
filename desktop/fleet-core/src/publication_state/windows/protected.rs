@@ -21,19 +21,20 @@ use windows_sys::Win32::{
         CreateDirectoryW, CreateFileW, GetFileInformationByHandle, GetFileType,
         BY_HANDLE_FILE_INFORMATION, CREATE_NEW, FILE_ATTRIBUTE_NORMAL,
         FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
-        FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_TYPE_DISK, OPEN_EXISTING, READ_CONTROL,
+        FILE_READ_ATTRIBUTES, FILE_TYPE_DISK, OPEN_EXISTING, READ_CONTROL,
     },
 };
 pub(in crate::publication_state) fn open_no_follow(
     path: &Path,
     read: bool,
+    share_mode: u32,
 ) -> std::io::Result<File> {
     let name = wide(path).map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
     let handle = unsafe {
         CreateFileW(
             name.as_ptr(),
             READ_CONTROL | FILE_READ_ATTRIBUTES | if read { GENERIC_READ } else { 0 },
-            FILE_SHARE_READ,
+            share_mode,
             ptr::null(),
             OPEN_EXISTING,
             FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
@@ -118,6 +119,17 @@ pub(in crate::publication_state) fn acl_file(
     private: bool,
     child_absent: bool,
 ) -> Result<()> {
+    acl_file_policy(file, private, child_absent, false)
+}
+pub(in crate::publication_state) fn role_acl_file(file: &File) -> Result<()> {
+    acl_file_policy(file, true, false, true)
+}
+fn acl_file_policy(
+    file: &File,
+    private: bool,
+    child_absent: bool,
+    inherited_leaf: bool,
+) -> Result<()> {
     let handle = file.as_raw_handle();
     let mut info = BY_HANDLE_FILE_INFORMATION::default();
     if unsafe { GetFileType(handle) } != FILE_TYPE_DISK
@@ -200,7 +212,8 @@ pub(in crate::publication_state) fn acl_file(
     let installer = if private { None } else { trusted_installer() };
     acl::validate(
         &sid_text(owner)?,
-        control & SE_DACL_PROTECTED != 0,
+        control & SE_DACL_PROTECTED != 0
+            || (inherited_leaf && entries.iter().all(|e| e.flags & 0x10 != 0)),
         &entries,
         acl::Policy {
             current: &current,

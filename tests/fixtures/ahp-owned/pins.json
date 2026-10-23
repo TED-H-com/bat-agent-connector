@@ -1,0 +1,59 @@
+{
+  "contract": "ahp-owned-wire-shapes/v1",
+  "synthetic": true,
+  "notice": "Hand-written protocol-shape examples, not real traces or live-host acceptance. Tests are offline.",
+  "tested_host_versions": [],
+  "profiles": {
+    "1.0.0": {
+      "repository": "microsoft/agent-host-protocol",
+      "commit": "5f16d81bb7045b66d7bc768d244feab75002d943",
+      "tag": "spec/v1.0.0",
+      "paths": [
+        "types/common/messages.ts",
+        "types/common/commands.ts",
+        "types/common/actions.ts",
+        "types/common/errors.ts",
+        "types/channels-session/commands.ts",
+        "types/channels-session/state.ts",
+        "types/channels-chat/commands.ts",
+        "types/channels-chat/actions.ts",
+        "types/channels-chat/state.ts",
+        "types/common/state.ts"
+      ]
+    },
+    "0.10.0": {
+      "repository": "microsoft/vscode",
+      "commit": "2a59476c9bfcb90b3ddc372c36762471b7dfad1c",
+      "distribution_version": "1.141.0",
+      "paths": [
+        "src/vs/platform/agentHost/common/state/protocol/common/messages.ts",
+        "src/vs/platform/agentHost/common/state/protocol/common/commands.ts",
+        "src/vs/platform/agentHost/common/state/protocol/common/actions.ts",
+        "src/vs/platform/agentHost/common/state/protocol/common/errors.ts",
+        "src/vs/platform/agentHost/common/state/protocol/channels-session/commands.ts",
+        "src/vs/platform/agentHost/common/state/protocol/channels-session/state.ts",
+        "src/vs/platform/agentHost/common/state/protocol/channels-chat/commands.ts",
+        "src/vs/platform/agentHost/common/state/protocol/channels-chat/actions.ts",
+        "src/vs/platform/agentHost/common/state/protocol/channels-chat/state.ts",
+        "src/vs/platform/agentHost/common/state/protocol/common/state.ts"
+      ]
+    }
+  },
+  "error_codes": {
+    "ParseError": -32700,
+    "InvalidRequest": -32600,
+    "MethodNotFound": -32601,
+    "InvalidParams": -32602,
+    "InternalError": -32603,
+    "SessionNotFound": -32001,
+    "ProviderNotFound": -32002,
+    "SessionAlreadyExists": -32003,
+    "TurnInProgress": -32004,
+    "UnsupportedProtocolVersion": -32005,
+    "AuthRequired": -32007,
+    "NotFound": -32008,
+    "PermissionDenied": -32009,
+    "AlreadyExists": -32010,
+    "Conflict": -32011
+  }
+}

@@ -213,6 +213,7 @@ HOST_EFFECT_ACTIONS = frozenset({
 
 JOURNAL_ONLY_ACTIONS = frozenset({
     "connection.reference.apply",
+    "connection.reference.detach",
     "artifact.upload",
     "delivery.merge_and_deploy",
     "deployment.rollback",

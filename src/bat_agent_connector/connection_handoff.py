@@ -1,4 +1,4 @@
-"""Version-1 native participant wire contract; operations remain the authority.
+"""Native participant wire codecs dispatched by the persisted operation action.
 
 No native effect runs here. A dispatched challenge is a transport fence, never
 proof that a file was written or that BAT is reachable.
@@ -11,13 +11,26 @@ import json
 import re
 import time
 
-from .connection_contract import BOUNDS, CONTRACT, VERSION, canonical, require_version, valid_digest
+from .connection_contract import (
+    BOUNDS,
+    CONTRACT,
+    VERSION,
+    bounded_v2,
+    canonical,
+    effect_v2,
+    require_version,
+    valid_digest,
+    valid_state,
+    validate_native_plan_v2,
+)
 from .operations import OperationError
 
 STEP = "native_effects"
 TTL_S = BOUNDS["challenge_ttl_s"]
 ROLES = tuple(CONTRACT["roles"])
-ACTIONS = frozenset({"connection.reference.apply", "setup.connection.apply"})
+EFFECT_ACTIONS = {effect["action"]: kind for kind, effect in CONTRACT["v2"]["effect_kinds"].items()}
+NATIVE_ACTIONS = frozenset({"setup.connection.apply", *EFFECT_ACTIONS})
+ACTIONS = NATIVE_ACTIONS | {"connection.reference.apply"}
 CLAIMS = ("contract_version", "server_id", "principal_id", "installation_ref", "operation_id", "step",
           "review_digest", "expected_revision", "epoch", "effect_id", "expires_at", "native_plan")
 RECEIPT_FIELDS = frozenset({"contract_version", "installation_ref", "operation_id", "step", "review_digest",
@@ -52,6 +65,33 @@ def _challenge(ops, claims):
     return hmac.new(key, b"connection-native-handoff-v1\0" + canonical(claims), hashlib.sha256).hexdigest()
 
 
+def effect_kind(action):
+    return EFFECT_ACTIONS.get(action)
+
+
+def _codec(ops, operation_id):
+    kind = effect_kind(ops.get(operation_id, steps=False)["action"])
+    return (CLAIMS + ("action", "kind", "connection_id"), _challenge_v2) if kind else (CLAIMS, _challenge)
+
+
+def _authorize_native(ops, principal, operation):
+    if operation["action"] == "setup.connection.apply":
+        from .managed_setup import _installation
+        _installation(ops.context["daemon"], principal)
+    elif operation["action"] in EFFECT_ACTIONS:
+        from .connection_detach import owned
+        owned(ops, principal, operation["target"])
+    else:
+        _refuse()
+
+
+def _require_wire_version(body, action):
+    if not effect_kind(action):
+        require_version(body)
+    elif type(body.get("contract_version")) is not int or body["contract_version"] != CONTRACT["v2"]["contract_version"]:
+        raise OperationError("CONNECTION_CONTRACT_UNSUPPORTED", "Unsupported connection effect contract / 不支援此連線效果契約", 409)
+
+
 def prepare(ctx):
     """Persist only a challenge hash alongside its bounded, purpose-bound claims."""
     binding = ctx.admission_binding
@@ -61,19 +101,23 @@ def prepare(ctx):
         "expected_revision": ctx.preconditions["expected_revision"], "epoch": 1,
         "effect_id": "effect_" + digest([ctx.operation_id, STEP]), "expires_at": now() + TTL_S,
         "native_plan": binding["native_plan"]}
+    if kind := effect_kind(ctx.op["action"]):
+        claims = build_claims_v2(ctx.op, binding, kind=kind, issued_at=int(now()))
+    _, challenge = _codec(ctx.service, ctx.operation_id)
     with ctx.service.journal.tx():
         ctx.service._step_start(ctx.operation_id, STEP,
-            {**claims, "challenge_hash": digest(_challenge(ctx.service, claims))})
+            {**claims, "challenge_hash": digest(challenge(ctx.service, claims))})
         ctx.set_refs(native_effects_sent=False)
 
 
 def _renew(ops, operation_id, request, *, claiming=False):
     """Only an undispatched challenge may change; its effect identity never does."""
-    claims = {key: request[key] for key in CLAIMS}
+    keys, challenge = _codec(ops, operation_id)
+    claims = {key: request[key] for key in keys}
     expired = now() >= claims["expires_at"]
     if expired or claiming:
-        claims.update(epoch=claims["epoch"] + int(expired), expires_at=now() + TTL_S)
-        request = {**claims, "challenge_hash": digest(_challenge(ops, claims))}
+        claims.update(epoch=claims["epoch"] + int(expired), expires_at=(int(now()) if "kind" in claims else now()) + TTL_S)
+        request = {**claims, "challenge_hash": digest(challenge(ops, claims))}
         ops.db.execute("UPDATE operation_steps SET request=?,status='started',error=NULL WHERE operation_id=? AND name=?",
             (canonical(request).decode(), operation_id, STEP))
         ops.journal.api_event("operation", operation_id, "connection.handoff.issued",
@@ -97,8 +141,9 @@ def receipts(row):
 
 
 def _envelope(ops, request, history):
-    claims = {key: request[key] for key in CLAIMS}
-    challenge = _challenge(ops, claims)
+    keys, sign = _codec(ops, request["operation_id"])
+    claims = {key: request[key] for key in keys}
+    challenge = sign(ops, claims)
     if not hmac.compare_digest(digest(challenge), request["challenge_hash"]):
         raise OperationError("CONNECTION_HANDOFF_KEY_CHANGED", "Original challenge cannot be reconstructed; no write instruction is served / "
             "無法重建原 challenge；不提供寫入指示", 409)
@@ -106,9 +151,9 @@ def _envelope(ops, request, history):
 
 
 def claim(ops, principal, body):
-    from .managed_setup import _installation, _text
-    _installation(ops.context["daemon"], principal)
-    require_version(body)
+    from .managed_setup import _text
+    if type(body.get("contract_version")) is not int:
+        require_version(body)
     if (set(body) != {"contract_version", "installation_ref", "operation_id", "mode"}
             or len(canonical(body)) > BOUNDS["handoff_bytes"]
             or not isinstance(body["mode"], str) or body["mode"] not in CONTRACT["modes"]
@@ -117,7 +162,9 @@ def claim(ops, principal, body):
     _text(body["installation_ref"], "installation reference", BOUNDS["installation_ref_chars"])
     with ops.journal.tx():
         operation = ops.get(body["operation_id"], principal=principal)
-        if (operation["action"] != "setup.connection.apply"
+        _authorize_native(ops, principal, operation)
+        _require_wire_version(body, operation["action"])
+        if (operation["action"] not in NATIVE_ACTIONS
                 or body["installation_ref"] != operation["target"]["installation_ref"]):
             raise OperationError("FORBIDDEN", "Handoff belongs to the original principal and installation", 403)
         if body["mode"] == "claim" and (operation["status"] == "cancelled" or operation["cancel_requested"]):
@@ -210,21 +257,25 @@ def _validate_review(body, request):
 
 
 def receive(ops, principal, body):
-    value = validate_receipt(body)
+    if not isinstance(body.get("operation_id"), str) or not re.fullmatch(r"op_[0-9a-f]{32}", body["operation_id"]):
+        require_version(body)  # Preserve the legacy rejection when no operation can select a codec.
+        _invalid_receipt()
     operation = ops.get(body["operation_id"], principal=principal)
-    if operation["action"] != "setup.connection.apply" or not visible(ops.db, principal, operation):
+    _authorize_native(ops, principal, operation)
+    kind = effect_kind(operation["action"])
+    value = validate_receipt_v2(body, action=operation["action"], kind=kind,
+        plan=operation["external_refs"]["admission_binding"]["native_plan"]) if kind else validate_receipt(body)
+    if not visible(ops.db, principal, operation):
         _refuse()
-    # Keep the original personal setup boundary for every participant write.
-    from .managed_setup import _installation
-    _installation(ops.context["daemon"], principal)
     with ops.journal.tx():
         row = ops.db.execute("SELECT request,response FROM operation_steps WHERE operation_id=? AND name=?",
             (operation["operation_id"], STEP)).fetchone()
         receipt = {**value, "receipt_ref": "receipt_" + digest(value)}
         history = receipts(row) if row else []
         request = json.loads(row["request"]) if row else {}
+        fields = RECEIPT_FIELDS | ({"action", "kind", "connection_id"} if kind else set())
         matches = bool(row) and all(body[key] == request[key]
-            for key in RECEIPT_FIELDS - {"challenge", "outcome", "roles", "code", "native_review_digest", "phase"}) and hmac.compare_digest(
+            for key in fields - {"challenge", "outcome", "roles", "code", "native_review_digest", "phase"}) and hmac.compare_digest(
                 digest(body["challenge"]), request["challenge_hash"])
         sent = (operation.get("external_refs") or {}).get("native_effects_sent")
         if receipt in history and matches and sent:
@@ -235,7 +286,8 @@ def receive(ops, principal, body):
             _refuse()
         if not sent:
             _refuse("Handoff has not been dispatched")
-        _validate_review(body, request)
+        if not kind:
+            _validate_review(body, request)
         if history and (history[-1]["outcome"] != "uncertain" or receipt["outcome"] == "uncertain"):
             _refuse("Only one definitive readback may supersede uncertain evidence")
         # Expiry prohibits a new claim/write, not late evidence of the original claimed effect.
@@ -255,3 +307,70 @@ def receive(ops, principal, body):
             ops.resume(principal, operation["operation_id"])
     ops.kick()
     return {"receipt": receipt, "replayed": False}
+
+
+def _identity_v2(body):
+    installation = body.get("installation_ref")
+    patterns = {"operation_id": r"op_[0-9a-f]{32}", "connection_id": r"conn_[0-9a-f]{32}",
+                "effect_id": r"effect_[0-9a-f]{64}"}
+    return (all(isinstance(body.get(key), str) and re.fullmatch(pattern, body[key]) for key, pattern in patterns.items())
+        and isinstance(installation, str) and 1 <= len(installation) <= BOUNDS["installation_ref_chars"]
+        and installation == installation.strip() and all(ord(c) >= 32 for c in installation)
+        and body.get("step") == STEP and valid_digest(body.get("review_digest"))
+        and all(type(body.get(key)) is int and minimum <= body[key] <= CONTRACT["v2"]["integer_max"]
+                for key, minimum in (("expected_revision", 0), ("epoch", 1))))
+
+
+def build_claims_v2(operation, binding, *, kind, issued_at, epoch=1):
+    """Pure claims from persisted authority; issued_at is integer Unix seconds."""
+    if type(issued_at) is not int or not 0 <= issued_at <= CONTRACT["v2"]["integer_max"] - TTL_S:
+        raise OperationError("INVALID_CONNECTION_HANDOFF", "Invalid effect clock / 效果時鐘無效", 422)
+    action = operation["action"]
+    plan = validate_native_plan_v2(binding["native_plan"], action=action, kind=kind)
+    claims = {"contract_version": CONTRACT["v2"]["contract_version"], "action": action, "kind": kind,
+        "server_id": binding["server_id"], "principal_id": binding["principal_id"], **operation["target"],
+        "operation_id": operation["operation_id"], "step": STEP, "review_digest": binding["review_digest"],
+        "expected_revision": operation["preconditions"]["expected_revision"], "epoch": epoch,
+        "effect_id": "effect_" + digest([operation["operation_id"], STEP, action, kind]),
+        "expires_at": issued_at + TTL_S, "native_plan": plan}
+    if (set(operation["target"]) != {"installation_ref", "connection_id"} or not _identity_v2(claims)
+            or not valid_digest(claims["principal_id"]) or not isinstance(claims["server_id"], str)
+            or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", claims["server_id"])
+            or not bounded_v2({**claims, "challenge": "0" * 64, "receipt": None}, BOUNDS["handoff_bytes"])):
+        raise OperationError("INVALID_CONNECTION_HANDOFF", "Invalid bounded reference claims / 連線關聯聲明無效或超出限制", 422)
+    return claims
+
+
+def _challenge_v2(ops, claims):
+    purpose = CONTRACT["v2"]["hmac_purpose"].encode() + b"\0"
+    return hmac.new(ops.context["daemon"]._admin_token.encode(), purpose + canonical(claims), hashlib.sha256).hexdigest()
+
+
+def validate_receipt_v2(body, *, action, kind, plan):
+    effect = effect_v2(body, action=action, kind=kind)
+    validate_native_plan_v2(plan, action=action, kind=kind)
+    if (set(body) != RECEIPT_FIELDS | {"action", "kind", "connection_id"}
+            or not bounded_v2(body, BOUNDS["receipt_bytes"]) or body["action"] != action or not _identity_v2(body)
+            or not valid_digest(body["challenge"]) or not valid_digest(body["native_review_digest"])
+            or not isinstance(body["outcome"], str) or not isinstance(body["phase"], str)
+            or body["code"] is not None and not isinstance(body["code"], str)
+            or body["code"] not in effect["matrix"].get(body["outcome"], {}).get(body["phase"], [])
+            or not isinstance(body["roles"], list) or len(body["roles"]) != len(effect["roles"])):
+        _invalid_receipt()
+    success = body["outcome"] in {"applied", "unchanged"}
+    matches = body["native_review_digest"] == plan["review_digest"]
+    for name, role, artifact in zip(effect["roles"], body["roles"], plan["artifacts"], strict=True):
+        readable = isinstance(role, dict) and isinstance(role.get("observation"), str) and role["observation"] in {"present", "absent"}
+        if (not isinstance(role, dict) or set(role) != {"role", "before", "observation"} | ({"after"} if readable else set())
+                or role["role"] != name or not valid_state(role["before"])
+                or role["observation"] not in CONTRACT["observations"]
+                or readable and (not valid_state(role["after"]) or role["after"]["state"] != role["observation"])):
+            _invalid_receipt()
+        matches = matches and role["before"] == artifact["before"]
+        if success:
+            matches = matches and readable and role["after"] == artifact["after"]
+    if success:
+        matches = matches and any(a["before"] != a["after"] for a in plan["artifacts"]) == (body["outcome"] == "applied")
+    if not matches:
+        raise OperationError("SETUP_REVIEW_CHANGED", "Native evidence differs from the reviewed effect / 本機證據與已檢閱效果不同", 409)
+    return {key: value for key, value in body.items() if key != "challenge"}

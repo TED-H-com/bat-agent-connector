@@ -9,13 +9,21 @@ import uuid
 import pytest
 
 from bat_agent_connector import connection_dependencies as dependencies
-from bat_agent_connector import pm_work_profiles, repository_sync, setup_connections
+from bat_agent_connector import (
+    pm_source_lineage,
+    pm_work_profiles,
+    pm_workspace_adapter,
+    repository_sync,
+    setup_connections,
+)
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.config import parse_config
 from bat_agent_connector.connection_endpoints import setup_endpoint
 from bat_agent_connector.connection_source_descriptor import build_source_descriptor
 from bat_agent_connector.operations import OperationError
 from tests.operation_helpers import settle_operations
+from tests.test_api_v1 import http, token
+from tests.test_checkpoints import MANUAL
 from tests.test_pm_work_start import (  # noqa: F401 - producer fixtures
     STARTER_OWNER,
     _hold_before_handoff,
@@ -37,16 +45,20 @@ OWNER = Principal("dependency-owner", frozenset({"observe", "manage", "start", "
 OBSERVER = Principal("dependency-observer", frozenset({"observe"}))
 
 
-async def connect(w, who=OWNER, installation="desktop-a"):
+def connection_intent(w, installation="desktop-a"):
     d = w["d"]
     host = d.fleet.config.host("h1")
     descriptor = build_source_descriptor(kind="bat_profile", profile_reference="fixture-profile",
         association={"url": setup_endpoint(host.url), "fingerprint": host.fingerprint},
         availability_reason="SOURCE_AVAILABLE", source_state={"fixture": "a" * 64})
-    body = {"action": "connection.reference.apply", "target": {"installation_ref": installation},
+    return {"action": "connection.reference.apply", "target": {"installation_ref": installation},
         "params": {"source": descriptor, "source_reference": descriptor["reference"],
             "remote_profile_id": host.profile_id, "service_ref": "h1", "workspace_ref": "ws-1",
             "label": "Fixture", "preferences": {}}, "preconditions": {"expected_revision": 0}}
+
+
+async def connect(w, who=OWNER, installation="desktop-a"):
+    d, body = w["d"], connection_intent(w, installation)
     review = setup_connections.preview(d.ops, who, body)["preview"]
     body["preconditions"]["review_digest"] = review["review_digest"]
     op, _ = d.ops.create(who, **body, idempotency_key=uuid.uuid4().hex)
@@ -107,6 +119,73 @@ async def pending(w, count, *, status="accepted"):
 
 def refs(result, kind):
     return {r["ref"] for r in result["impacts"] if r["kind"] == kind}
+
+
+async def test_checkpoint_dependency_is_complete_after_real_pm_lineage(world, mock):
+    w, d = world, world["d"]
+    owner = Principal(OWNER.actor, OWNER.scopes | {"operate"})
+    auth = token(d, owner.actor, *owner.scopes)
+
+    async def action(body):
+        status, response = await http(w["port"], "POST", "/api/v1/operations", tok=auth,
+                                     body=body, headers={"Idempotency-Key": uuid.uuid4().hex})
+        assert status == 202, response
+        oid = response["operation"]["operation_id"]
+        await settle_operations(d.ops)
+        status, response = await http(w["port"], "GET", f"/api/v1/operations/{oid}", tok=auth)
+        assert status == 200, response
+        assert response["operation"]["status"] == "succeeded", response
+        return response["operation"]
+
+    # All journal records come from real actions over HTTP. The checkpoint is
+    # created before the PM root so reverting the column fails the dependency
+    # read's completeness assertion, not a producer's public response barrier.
+    mock.metas[MANUAL] = {"cwd": str(w["human"]), "isStreaming": False}
+    await d.inventory.refresh_host("h1")
+    checkpoint = await action({"action": "checkpoint.create", "target": {"host": "h1", "session_id": MANUAL},
+                               "params": {"last_n": 5}})
+    checkpoint_id = checkpoint["result"]["checkpoint_id"]
+    body = connection_intent(w)
+    status, review = await http(w["port"], "POST", "/api/v1/connections/preview", tok=auth, body=body)
+    assert status == 200, review
+    body["preconditions"]["review_digest"] = review["preview"]["review_digest"]
+    connection = await action(body)
+    connection_id = connection["result"]["connection_id"]
+    workspace = await action({"action": "pm.workspace.create", "params": {"name": "Lineage owner"}})
+    wid = workspace["result"]["workspace"]["workspace_id"]
+    status, capabilities = await http(w["port"], "GET", f"/api/v1/pm/workspaces/{wid}/capabilities", tok=auth)
+    assert status == 200, capabilities
+    original = await action({"action": pm_workspace_adapter.ACTION, "target": {"workspace_id": wid},
+        "params": {"adapter": pm_workspace_adapter.ADAPTERS[0], "rationale": "Record the selected PM source"},
+        "preconditions": capabilities["workspace_adapter"]["preconditions"]})
+    assert pm_source_lineage.roots(d.ops.db, "operation", original["operation_id"]) == {original["operation_id"]}
+    await d.inventory.refresh_host("h1")
+
+    before, channels = d.ops.db.total_changes, mock.channels()
+    result = dependencies.read(d.ops, owner, "desktop-a", connection_id)
+    assert d.ops.db.total_changes == before and mock.channels() == channels
+    assert result["domains"]["work_history"] == {"covered": True, "complete": True, "reason": None}
+    assert result["server_complete"], result["domains"]
+    assert checkpoint_id in refs(result, "checkpoint")
+    # Native review is a separate contract; it does not describe server SQL coverage.
+    assert not result["complete"]
+    for domain in ("native_selection", "native_resources"):
+        assert result["domains"][domain]["reason"] == "NATIVE_REVIEW_REQUIRED"
+
+    stranger = Principal("other-dependency-owner", owner.scopes)
+    other_auth = token(d, stranger.actor, *stranger.scopes)
+    status, listed = await http(w["port"], "GET", "/api/v1/connections?installation_ref=desktop-a", tok=other_auth)
+    assert status == 200 and listed["connections"] == [], listed
+    # The dependency reader has no HTTP route yet. Its existing principal-local
+    # refusal is identical for someone else's connection and an absent ID.
+    refusals = []
+    for identity in (connection_id, "absent"):
+        with pytest.raises(OperationError) as exc:
+            dependencies.read(d.ops, stranger, "desktop-a", identity)
+        refusals.append((exc.value.status, exc.value.code, str(exc.value)))
+    assert refusals[0] == refusals[1]
+    assert refusals[0][:2] == (404, "NOT_FOUND")
+    assert all(value not in json.dumps([listed, refusals]) for value in (connection_id, checkpoint_id, MANUAL, wid))
 
 
 async def test_visible_shared_and_completed_history_is_informative(connected):

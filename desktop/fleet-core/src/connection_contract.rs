@@ -4,6 +4,8 @@ use serde::Serialize;
 use serde_json::Value;
 use std::sync::OnceLock;
 
+pub mod reference;
+
 pub fn vocabulary() -> &'static Value {
     static CONTRACT: OnceLock<Value> = OnceLock::new();
     CONTRACT.get_or_init(|| {

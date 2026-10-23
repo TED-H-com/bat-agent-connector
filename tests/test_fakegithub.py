@@ -1,4 +1,4 @@
-"""The local GitHub fake must not depend on runner reverse DNS."""
+"""GitHub fake routing and runner-independent loopback binding."""
 from __future__ import annotations
 
 import json
@@ -6,6 +6,30 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
+
+
+@pytest.mark.parametrize(("path", "expected"), [
+    ("/repos/o/r/compare/main...feature", ("main", "feature")),
+    ("/repos/o/r/compare/release%2Fv1...feature%2Ffix", ("release%2Fv1", "feature%2Ffix")),
+    ("/repos/o/r/compare/v1.2...v1.3", ("v1.2", "v1.3")),
+    ("/repos/o/r/compare/one...two...three", ("one...two", "three")),
+    ("/repos/o/r/compare/base...head...", ("base", "head...")),
+    ("/repos/o/r/compare/...head", None),
+    ("/repos/o/r/compare/base...", None),
+    ("/repos/o/r/compare/...", None),
+    ("/repos/o/r/compare/base", None),
+    ("/other/compare/base...head", None),
+    ("/repos/o/r/compare/base...head\n", None),
+    ("/repos/o/r/compare/" + "." * 50_000, ("." * 49_996, ".")),
+    ("/repos/o/r/compare/" + "." * 50_000 + "\n", None),
+], ids=["normal", "quoted", "single-dots", "last-separator", "trailing-separators", "empty-base",
+        "empty-head", "empty-both", "no-separator", "wrong-prefix", "newline", "many-dots", "many-dots-newline"])
+def test_compare_route(path, expected):
+    from tests.fakegithub import parse_compare_route
+
+    assert parse_compare_route(path) == expected
 
 
 def test_bind_never_looks_up_the_loopback_hostname(tmp_path):
