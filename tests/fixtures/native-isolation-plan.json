@@ -1,0 +1,167 @@
+{
+  "argv": [
+    "/usr/bin/bwrap",
+    "--unshare-user",
+    "--unshare-pid",
+    "--unshare-net",
+    "--unshare-ipc",
+    "--unshare-uts",
+    "--disable-userns",
+    "--assert-userns-disabled",
+    "--die-with-parent",
+    "--new-session",
+    "--cap-drop",
+    "ALL",
+    "--clearenv",
+    "--proc",
+    "/proc",
+    "--ro-bind",
+    "<runtime>",
+    "/runtime",
+    "--ro-bind",
+    "/usr/lib/x86_64-linux-gnu",
+    "/lib/x86_64-linux-gnu",
+    "--ro-bind",
+    "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+    "/lib64/ld-linux-x86-64.so.2",
+    "--ro-bind",
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/ssl/certs/ca-certificates.crt",
+    "--bind",
+    "<carrier>",
+    "<carrier>",
+    "--bind",
+    "<case>/scratch",
+    "/scratch",
+    "--bind",
+    "<case>/state",
+    "/state",
+    "--ro-bind",
+    "<carrier>/.git/config",
+    "<carrier>/.git/config",
+    "--ro-bind",
+    "<carrier>/.git/hooks",
+    "<carrier>/.git/hooks",
+    "--ro-bind",
+    "<carrier>/.git/info",
+    "<carrier>/.git/info",
+    "--ro-bind",
+    "<carrier>/.git/objects/info",
+    "<carrier>/.git/objects/info",
+    "--ro-bind",
+    "<carrier>/.bat-worktrees/batc-published-06f19055b6fb/.git",
+    "<carrier>/.bat-worktrees/batc-published-06f19055b6fb/.git",
+    "--ro-bind",
+    "<carrier>/.git/worktrees/batc-published-06f19055b6fb/gitdir",
+    "<carrier>/.git/worktrees/batc-published-06f19055b6fb/gitdir",
+    "--ro-bind",
+    "<carrier>/.git/worktrees/batc-published-06f19055b6fb/commondir",
+    "<carrier>/.git/worktrees/batc-published-06f19055b6fb/commondir",
+    "--setenv",
+    "PATH",
+    "/toolchain/bin:/runtime/bin",
+    "--setenv",
+    "HOME",
+    "/scratch",
+    "--setenv",
+    "TMPDIR",
+    "/scratch",
+    "--setenv",
+    "XDG_CONFIG_HOME",
+    "/state",
+    "--setenv",
+    "LANG",
+    "C.UTF-8",
+    "--setenv",
+    "PYTHONDONTWRITEBYTECODE",
+    "1",
+    "--remount-ro",
+    "/",
+    "--chdir",
+    "<carrier>/.bat-worktrees/batc-published-06f19055b6fb",
+    "--",
+    "/runtime/bin/python3",
+    "-I",
+    "-c",
+    "pass"
+  ],
+  "mounts": [
+    {
+      "source": "<runtime>",
+      "target": "/runtime",
+      "writable": false
+    },
+    {
+      "source": "/usr/lib/x86_64-linux-gnu",
+      "target": "/lib/x86_64-linux-gnu",
+      "writable": false
+    },
+    {
+      "source": "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+      "target": "/lib64/ld-linux-x86-64.so.2",
+      "writable": false
+    },
+    {
+      "source": "/etc/ssl/certs/ca-certificates.crt",
+      "target": "/etc/ssl/certs/ca-certificates.crt",
+      "writable": false
+    },
+    {
+      "source": "<carrier>",
+      "target": "<carrier>",
+      "writable": true
+    },
+    {
+      "source": "<case>/scratch",
+      "target": "/scratch",
+      "writable": true
+    },
+    {
+      "source": "<case>/state",
+      "target": "/state",
+      "writable": true
+    },
+    {
+      "source": "<carrier>/.git/config",
+      "target": "<carrier>/.git/config",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/hooks",
+      "target": "<carrier>/.git/hooks",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/info",
+      "target": "<carrier>/.git/info",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/objects/info",
+      "target": "<carrier>/.git/objects/info",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.bat-worktrees/batc-published-06f19055b6fb/.git",
+      "target": "<carrier>/.bat-worktrees/batc-published-06f19055b6fb/.git",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/worktrees/batc-published-06f19055b6fb/gitdir",
+      "target": "<carrier>/.git/worktrees/batc-published-06f19055b6fb/gitdir",
+      "writable": false
+    },
+    {
+      "source": "<carrier>/.git/worktrees/batc-published-06f19055b6fb/commondir",
+      "target": "<carrier>/.git/worktrees/batc-published-06f19055b6fb/commondir",
+      "writable": false
+    }
+  ],
+  "quota_bytes": 67108864,
+  "spawn": {
+    "close_fds": true,
+    "env": {},
+    "pass_fds": [],
+    "start_new_session": true
+  }
+}
