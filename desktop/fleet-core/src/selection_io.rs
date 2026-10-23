@@ -67,6 +67,78 @@ fn read(path: &Path) -> Result<Option<Vec<u8>>> {
     Ok(Some(bytes))
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReadFailure {
+    Unreadable,
+    Invalid,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FileObservation {
+    Absent,
+    Present { bytes: Vec<u8>, digest: String },
+    Unreadable(ReadFailure),
+}
+impl FileObservation {
+    fn capture(path: &Path) -> Self {
+        match read(path) {
+            Ok(None) if matches!(path.symlink_metadata(), Err(e) if e.kind() == std::io::ErrorKind::NotFound) => {
+                Self::Absent
+            }
+            Ok(None) => Self::Unreadable(ReadFailure::Unreadable),
+            Ok(Some(bytes)) => Self::Present {
+                digest: digest(&bytes),
+                bytes,
+            },
+            Err("SELECTION_INVALID") => Self::Unreadable(ReadFailure::Invalid),
+            Err(_) => Self::Unreadable(ReadFailure::Unreadable),
+        }
+    }
+    fn bytes(&self) -> Result<Option<&[u8]>> {
+        match self {
+            Self::Absent => Ok(None),
+            Self::Present { bytes, .. } => Ok(Some(bytes)),
+            Self::Unreadable(ReadFailure::Invalid) => Err("SELECTION_INVALID"),
+            Self::Unreadable(ReadFailure::Unreadable) => Err("SELECTION_UNREADABLE"),
+        }
+    }
+}
+/// Native-only sampled evidence, not write authority or a locked transaction.
+/// Presence is independent of JSON validity and the compatibility Snapshot revision.
+pub struct Observation {
+    primary: FileObservation,
+    legacy: FileObservation,
+    configuration_binding: String,
+    directory: PathBuf,
+}
+impl Observation {
+    pub fn primary(&self) -> &FileObservation {
+        &self.primary
+    }
+    pub fn legacy(&self) -> &FileObservation {
+        &self.legacy
+    }
+    pub fn configuration_binding(&self) -> &str {
+        &self.configuration_binding
+    }
+    pub fn directory(&self) -> &Path {
+        &self.directory
+    }
+    /// Parse the captured bytes with the ordinary selection rules, without rereading slots.
+    pub fn snapshot(&self, configuration: &Configuration) -> Result<Snapshot> {
+        if self.configuration_binding != configuration.binding() {
+            return Err("CONFIGURATION_CHANGED");
+        }
+        configuration.verify_current()?;
+        let raw = self.primary.bytes()?.map(Vec::from);
+        let legacy = if raw.is_none() {
+            self.legacy.bytes()?.map(Vec::from)
+        } else {
+            None
+        };
+        Store::snapshot_from_bytes(configuration, &self.directory, raw, legacy)
+    }
+}
+
 #[derive(Clone)]
 pub struct Snapshot {
     preferences: Preferences,
@@ -162,6 +234,14 @@ impl Store {
         } else {
             None
         };
+        Self::snapshot_from_bytes(configuration, directory, raw, legacy)
+    }
+    fn snapshot_from_bytes(
+        configuration: &Configuration,
+        directory: &Path,
+        raw: Option<Vec<u8>>,
+        legacy: Option<Vec<u8>>,
+    ) -> Result<Snapshot> {
         let preferences =
             Preferences::load(&configuration.inventory, raw.as_deref(), legacy.as_deref())?;
         Ok(Snapshot {
@@ -172,6 +252,23 @@ impl Store {
             raw,
             legacy,
         })
+    }
+    /// Observe both fixed slots without creating a directory or acquiring a write lock.
+    /// A later writer must still recheck bytes, directory, configuration and owner.
+    pub fn observe(&self, configuration: &Configuration) -> Result<Observation> {
+        configuration.verify_current()?;
+        let (path, legacy, directory) = self.paths()?;
+        let observed = Observation {
+            primary: FileObservation::capture(&path),
+            legacy: FileObservation::capture(&legacy),
+            configuration_binding: configuration.binding().into(),
+            directory,
+        };
+        if data_directory(&self.roaming)? != observed.directory {
+            return Err("DATA_DIRECTORY_CHANGED");
+        }
+        configuration.verify_current()?;
+        Ok(observed)
     }
     pub fn read(&self, configuration: &Configuration) -> Result<Snapshot> {
         let (path, legacy, directory) = self.paths()?;
