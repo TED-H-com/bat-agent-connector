@@ -191,7 +191,7 @@ fn inaccessible_metadata_is_never_absence() {
     let directory = f.root.join("inaccessible");
     std::fs::create_dir(&directory).unwrap();
     let child = directory.join("child");
-    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0)).unwrap();
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o000)).unwrap();
     let native = child.symlink_metadata();
     let adapter = present(&child);
     let storage = crate::publication_state::metadata(&child);
