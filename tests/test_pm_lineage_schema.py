@@ -1,13 +1,13 @@
-"""Prepare lineage readers against the daemon's complete production schema."""
+"""Prepare every module's fixed SELECTs against the complete daemon schema."""
 from __future__ import annotations
 
 import ast
-import importlib
-import inspect
 import sqlite3
+from pathlib import Path
 
 import pytest
 
+import bat_agent_connector
 from bat_agent_connector import pm_access, pm_delivery_lineage, pm_source_lineage
 from tests.test_api_v1 import daemon  # noqa: F401
 from tests.test_work_items import VIEWER
@@ -36,28 +36,48 @@ def test_access_and_delivery_readers_on_absent_identities(daemon):  # noqa: F811
             "kind": "fixture.saved", "body": {"snapshot_id": "absent"}}) == (kind == "operation")
 
 
-# Include fixed SELECTs behind row-dependent branches as well as the direct
-# journal readers found by tracing source/lineage imports. EXPLAIN compiles the
-# real statement without executing it, needing neither fake rows nor providers.
-READERS = (
-    "pm_source_lineage", "pm_delivery_lineage", "pm_access", "pm_read_cache", "pm_source_reads",
-    "execution_sources", "pm_quality_sources", "pm_review_candidate_sources", "pm_operation_loop",
-    "pm_execution_runtime", "pm_maintenance_repair_runtime", "pm_register", "pm_schedule",
-    "artifact_managed", "work_item_results", "pm_thread_contexts", "cleanup",
-)
+def fixed_selects():
+    # Read source without importing every module: discovery must not launch a
+    # CLI or require an optional runtime. Include nested packages and __init__.
+    root = Path(bat_agent_connector.__file__).parent
+    result = {}
+    for path in sorted(root.rglob("*.py")):
+        statements = []
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "execute" and node.args and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str) and node.args[0].value.lstrip().upper().startswith("SELECT")):
+                statements.append((node.lineno, node.args[0].value))
+        if statements:
+            result[".".join(path.relative_to(root).with_suffix("").parts)] = statements
+    return result
 
 
-@pytest.mark.parametrize("module_name", READERS)
-def test_fixed_lineage_selects_prepare_on_installed_schema(daemon, module_name):  # noqa: F811
-    module = importlib.import_module("bat_agent_connector." + module_name)
-    statements = []
-    for node in ast.walk(ast.parse(inspect.getsource(module))):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "execute" and node.args and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str) and node.args[0].value.lstrip().upper().startswith("SELECT")):
-            statements.append((node.lineno, node.args[0].value))
-    assert statements, module_name
-    for line, statement in statements:
+FIXED_SELECTS = fixed_selects()
+# (module, unique SQL substring): (expected prepare error, reason).
+# Only legitimate non-daemon schemas belong here; stale matches must fail.
+EXCLUSIONS = {}
+
+
+def test_fixed_select_exclusions_match_real_statements():
+    assert FIXED_SELECTS
+    for (module_name, match), (_, reason) in EXCLUSIONS.items():
+        assert reason.strip()
+        assert sum(match in statement for _, statement in FIXED_SELECTS.get(module_name, ())) == 1, (module_name, match)
+
+
+@pytest.mark.parametrize("module_name", sorted(FIXED_SELECTS))
+def test_fixed_selects_prepare_on_installed_schema(daemon, module_name):  # noqa: F811
+    for line, statement in FIXED_SELECTS[module_name]:
+        exceptions = [value for (module, match), value in EXCLUSIONS.items()
+                      if module == module_name and match in statement]
+        assert len(exceptions) <= 1, (module_name, line)
+        if exceptions:
+            expected_error, _ = exceptions[0]
+            # If the schema becomes installed, this exclusion must be removed.
+            with pytest.raises(sqlite3.OperationalError, match=expected_error):
+                daemon.ops.db.execute("EXPLAIN " + statement, (None,) * statement.count("?")).fetchall()
+            continue
         try:
             daemon.ops.db.execute("EXPLAIN " + statement, (None,) * statement.count("?")).fetchall()
         except sqlite3.Error as error:
