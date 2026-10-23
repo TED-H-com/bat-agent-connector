@@ -93,7 +93,15 @@ impl OriginalReview {
         let a = self.intent.accepted();
         let admitted = &operation["external_refs"]["admission_binding"];
         let native = &admitted["native_plan"];
-        core::validate_variant(&json!({"format_version":2,"accepted":{"action":operation["action"],"contract_version":admitted.get("contract_version").unwrap_or(&native["contract_version"]),"kind":admitted.get("kind").or_else(||native.get("kind")).unwrap_or(&Value::Null)}})).map_err(|_|Error::Unsupported)?;
+        let variant = json!({
+            "format_version": 2,
+            "accepted": {
+                "action": operation["action"],
+                "contract_version": admitted.get("contract_version").unwrap_or(&native["contract_version"]),
+                "kind": admitted.get("kind").or_else(|| native.get("kind")).unwrap_or(&Value::Null)
+            }
+        });
+        core::validate_variant(&variant).map_err(|_| Error::Unsupported)?;
         let intent: Value =
             serde_json::from_slice(&self.intent.bytes().map_err(|_| Error::ReviewChanged)?)
                 .map_err(|_| Error::ReviewChanged)?;

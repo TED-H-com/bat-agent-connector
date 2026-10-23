@@ -169,7 +169,17 @@ impl<C: Fn() -> u64> Driver<C> {
             if record.part(Part::Claim).is_none() {
                 let body = core::request::handoff(intent, core::request::Mode::Claim)
                     .map_err(|_| Error::Invalid)?;
-                record=store.append(intent,Part::Claim,&serde_json::to_vec(&serde_json::json!({"requested_at_ms":(self.clock)(),"body":String::from_utf8(body).map_err(|_|Error::Invalid)?})).map_err(|_|Error::Invalid)?).map_err(|_|Error::Unavailable)?;
+                let claim = serde_json::json!({
+                    "requested_at_ms": (self.clock)(),
+                    "body": String::from_utf8(body).map_err(|_| Error::Invalid)?
+                });
+                record = store
+                    .append(
+                        intent,
+                        Part::Claim,
+                        &serde_json::to_vec(&claim).map_err(|_| Error::Invalid)?,
+                    )
+                    .map_err(|_| Error::Unavailable)?;
             }
             let body = record
                 .request(PostTarget::Claim)
@@ -179,7 +189,17 @@ impl<C: Fn() -> u64> Driver<C> {
                 .ok_or(Error::Changed)?;
             store.available().map_err(|_| Error::Unavailable)?;
             transport.check_original(intent.accepted())?;
-            store.append(intent,Part::Post(PostTarget::Claim,slot),&serde_json::to_vec(&serde_json::json!({"at_ms":(self.clock)(),"body":String::from_utf8(body.clone()).map_err(|_|Error::Invalid)?})).map_err(|_|Error::Invalid)?).map_err(|_|Error::Unavailable)?;
+            let attempt = serde_json::json!({
+                "at_ms": (self.clock)(),
+                "body": String::from_utf8(body.clone()).map_err(|_| Error::Invalid)?
+            });
+            store
+                .append(
+                    intent,
+                    Part::Post(PostTarget::Claim, slot),
+                    &serde_json::to_vec(&attempt).map_err(|_| Error::Invalid)?,
+                )
+                .map_err(|_| Error::Unavailable)?;
             match transport.handoff(intent, &body).await {
                 Err(PostFailure::BeforeSender(error)) => {
                     store
