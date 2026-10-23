@@ -89,6 +89,12 @@ pub trait EvidenceIo {
     /// New reservation/admission gate, repeated by the final write fence. Hold
     /// Launcher then Monitor and positively prove absence; never stop a Monitor.
     fn verify_effect_context(&self) -> Result<()>;
+    /// Migration-intent admission only: under Launcher then Monitor, re-read the
+    /// scoped Store and require pending() == None. Errors are not absence. The
+    /// default refuses, so read-only adapters cannot admit migration effects.
+    fn verify_no_pending_migration(&self) -> Result<()> {
+        Err("MIGRATION_PENDING")
+    }
     /// Native-only auxiliary attestations: directory creation handle/identity,
     /// managed manifest identity, or the original authorized migration intent.
     fn verify_record(&self, record: &Record) -> Result<()>;
@@ -115,11 +121,15 @@ pub struct WriteFence {
     record_hashes: BTreeMap<EvidenceKey, String>,
     observed: [ObservedSlot; 4],
     effect_context: bool,
+    migration_admission: bool,
 }
 impl WriteFence {
     pub fn verify(&self, io: &impl EvidenceIo, receipt: &ProvisioningReceipt) -> Result<()> {
         if self.effect_context {
             io.verify_effect_context()?;
+        }
+        if self.migration_admission {
+            io.verify_no_pending_migration()?;
         }
         io.verify_context(receipt)?;
         ensure(io.login()? == self.login)?;
@@ -134,6 +144,9 @@ impl WriteFence {
         io.verify_context(receipt)?;
         if self.effect_context {
             io.verify_effect_context()?;
+        }
+        if self.migration_admission {
+            io.verify_no_pending_migration()?;
         }
         ensure(io.login()? == self.login)
     }
@@ -278,6 +291,7 @@ pub fn reserve(
         record_hashes: BTreeMap::new(),
         observed: std::array::from_fn(|_| ObservedSlot::Absent),
         effect_context: true,
+        migration_admission: false,
     };
     fence.verify(io, receipt)?;
     io.create_only(
@@ -316,6 +330,10 @@ pub fn append(
     if !historical {
         io.verify_effect_context()?;
     }
+    let migration_admission = matches!(record, Record::MigrationIntent(_));
+    if migration_admission {
+        io.verify_no_pending_migration()?;
+    }
     let captured = capture(io, owner)?;
     let binding = record.binding().ok_or(INVALID)?;
     ensure(
@@ -339,6 +357,7 @@ pub fn append(
             .collect(),
         observed: captured.observed.clone(),
         effect_context: !historical,
+        migration_admission,
     };
     fence.verify(io, &captured.receipt)?;
     io.create_only(&captured.receipt, &key, &bytes, &fence, authorize)?;
