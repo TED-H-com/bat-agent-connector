@@ -150,6 +150,7 @@ const ACTIONS = {
   'task.request_ted': 'action_task_request_ted',
   'task.submit': 'action_task_submit',
   'work.start': 'action_work_start',
+  'ahp.work.create': 'action_ahp_work_create',
   'work.adopt_and_start': 'action_work_adopt_start',
   'work_item.approve': 'action_work_item_approve',
   'work_item.continue': 'action_work_item_continue',

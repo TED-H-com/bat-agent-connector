@@ -217,7 +217,7 @@ def normalize_document(document) -> dict:
         "model": model,
         "delivery_policy_ref": delivery,
         "budget_policy_ref": None,
-        **({"adapter": document["adapter"]} if "adapter" in document else {}),
+        **({"adapter": document["adapter"]} if document.get("adapter", "bat") != "bat" else {}),
     }
     if len(_json(normalized).encode("utf-8")) > MAX_DOCUMENT_BYTES:
         raise _bad("PM_WORK_PROFILE_TOO_LARGE", "Work profile document exceeds 16384 bytes", 413)
@@ -988,18 +988,18 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
 def _adapter_readiness(ops, principal, workspace_id, row, document, observed_at):
     from .pm_work_start import route_readiness
     availability = route_readiness(ops, document)
-    reason = availability['reason']
-    states = {name: _state('unknown', 'not_verified') for name in _STATE_NAMES}
-    states['can_start_own'] = _state('ready' if availability['available'] else 'unavailable', reason)
-    states['can_continue_own'] = _state('unavailable', 'owned_turn_unavailable')
-    return {'contract': _CONTRACT, 'workspace_id': workspace_id, 'profile_id': row['profile_id'],
-        'revision': row['revision'], 'digest': row['digest'], 'observed_at': observed_at, 'calls_bat': False,
-        'coding_route_ready': availability['available'], 'states': states,
-        'configured': {**{key: document.get(key) for key in ('adapter', 'agent', 'model', 'binding')},
-                       'delivery_goal': (document.get('delivery_policy_ref') or {}).get('goal')},
-        'work_follow_up': {'route': document['adapter'] + '_work_start', 'agent': document['agent'],
-                          'state': 'unavailable', 'reason': 'owned_turn_unavailable', 'admission_checked': False},
-        'smallest_gap': _gap(reason) if reason else None,
-        'unverified': [name for name in _STATE_NAMES if states[name]['value'] == 'unknown'],
-        'resume': {'kind': 'client_draft', 'stored_on_server': False},
-        'pm_analysis': _pm_analysis(ops, principal, workspace_id)}
+    reason = availability["reason"]
+    states = {name: _state("unknown", "not_verified") for name in _STATE_NAMES}
+    states["can_start_own"] = _state("ready" if availability["available"] else "unavailable", reason)
+    states["can_continue_own"] = _state("unavailable", "owned_turn_unavailable")
+    return {"contract": _CONTRACT, "workspace_id": workspace_id, "profile_id": row["profile_id"],
+        "revision": row["revision"], "digest": row["digest"], "observed_at": observed_at, "calls_bat": False,
+        "coding_route_ready": availability["available"], "states": states,
+        "configured": {**{key: document.get(key) for key in ("adapter", "agent", "model", "binding")},
+                       "delivery_goal": (document.get("delivery_policy_ref") or {}).get("goal")},
+        "work_follow_up": {"route": document["adapter"] + "_work_start", "agent": document["agent"],
+                          "state": "unavailable", "reason": "owned_turn_unavailable", "admission_checked": False},
+        "smallest_gap": _gap(reason) if reason else None,
+        "unverified": [name for name in _STATE_NAMES if states[name]["value"] == "unknown"],
+        "resume": {"kind": "client_draft", "stored_on_server": False},
+        "pm_analysis": _pm_analysis(ops, principal, workspace_id)}

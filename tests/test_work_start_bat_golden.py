@@ -32,7 +32,7 @@ def produce(tmp_path, monkeypatch):
             'project_id': 'proj_' + '4' * 16, 'work_item_id': 'wi_' + '3' * 20,
             'expected_project_version': 2, 'expected_work_item_fingerprint': 'c' * 64}
         package = {'workspace_id': 'ws_' + '1' * 32, 'package_id': 'pmwp_' + '5' * 32, 'document_digest': 'd' * 64}
-        request = pm_work_start._handoff_request(parent['operation_id'], intent, package)
+        request = pm_work_start._handoff_request(ops, parent['operation_id'], intent, package)
         bound = pm_work_start._intent(parent)['controller']
         with controller_authority.use(bound, ops.journal):
             pm_work_start._admit_child(OpContext(ops, parent), 'handoff', request)

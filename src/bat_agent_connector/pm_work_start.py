@@ -80,26 +80,35 @@ def _digest(value) -> str:
     return hashlib.sha256(_json(value).encode("utf-8")).hexdigest()
 
 
+def _route_registry(ops):
+    context = getattr(ops, "context", None)
+    if context is None:
+        return {"bat_work_start": (_bat_handoff_request, None)}
+    registry = context.setdefault("work_start_routes", {})
+    registry.setdefault("bat_work_start", (_bat_handoff_request, None))
+    return registry
+
+
 def register_handoff_route(ops, route, builder, readiness):
-    """Install a deterministic builder and a service-local availability check."""
-    if route in _HANDOFF_ROUTES and _HANDOFF_ROUTES[route] is not builder:
+    """Keep each builder and its readiness in the same service-local registry."""
+    registry = _route_registry(ops)
+    if route in registry and registry[route][0] is not builder:
         raise _bad("PM_WORK_ROUTE_CONFLICT", "Work route already has a different builder")
-    _HANDOFF_ROUTES[route] = builder
-    ops.context.setdefault("work_start_routes", {})[route] = readiness
+    registry[route] = (builder, readiness)
 
 
 def route_readiness(ops, document):
     route = document.get("adapter", "bat") + "_work_start"
-    check = ops.context.get("work_start_routes", {}).get(route)
-    if route not in _HANDOFF_ROUTES or check is None:
+    entry = _route_registry(ops).get(route)
+    if entry is None or entry[1] is None:
         return {"available": False, "reason": "PM_WORK_ROUTE_UNAVAILABLE"}
-    return check(ops, document)
+    return entry[1](ops, document)
 
 
 def profile_route(ops, document, *, require_ready=False):
     route = document.get("adapter", "bat") + "_work_start"
     if route != "bat_work_start":
-        if route not in ops.context.get("work_start_routes", {}) or route not in _HANDOFF_ROUTES:
+        if route not in _route_registry(ops):
             raise _bad("PM_WORK_ROUTE_UNAVAILABLE", "The selected Work adapter is not installed")
         if require_ready:
             state = route_readiness(ops, document)
@@ -871,7 +880,9 @@ def check_work_preconditions(ops, principal: Principal, wid: str, wi_id: str,
         _profile_admission_target(params, code_target, delivery_goal, pinned)
         route = profile_route(ops, pinned["document"], require_ready=True)
         if route != "bat_work_start":
-            route_pin = {"route": route, "profile": pinned}
+            route_pin = {"route": route, "profile": {
+                key: pinned[key] for key in ("profile_id", "revision", "digest")
+            }}
     if code_target["repository"].lower() not in {r.lower() for r in project["repositories"]}:
         raise _bad("PROJECT_REPOSITORY_CHANGED", "Selected repository does not belong to this work item's project", 409)
     target_3 = {k: code_target[k] for k in ("repository", "host", "workspace_id")}
@@ -1180,14 +1191,11 @@ def _bat_handoff_request(parent_id: str, intent: dict, package_ref: dict) -> dic
     }
 
 
-_HANDOFF_ROUTES = {"bat_work_start": _bat_handoff_request}
-
-
-def _handoff_request(parent_id: str, intent: dict, package_ref: dict) -> dict:
-    builder = _HANDOFF_ROUTES.get(intent.get("route", "bat_work_start"))
-    if builder is None:
+def _handoff_request(ops, parent_id: str, intent: dict, package_ref: dict) -> dict:
+    entry = _route_registry(ops).get(intent.get("route", "bat_work_start"))
+    if entry is None:
         raise _bad("PM_WORK_ROUTE_UNAVAILABLE", "The original handoff route is not installed")
-    return builder(parent_id, intent, package_ref)
+    return entry[0](parent_id, intent, package_ref)
 
 
 def _expected_child_request(ops, parent: dict, slot: str) -> dict:
@@ -1221,7 +1229,7 @@ def _expected_child_request(ops, parent: dict, slot: str) -> dict:
                 "package_id": pkg_res["package_id"],
                 "document_digest": pkg_res["document_digest"],
             }
-        return _handoff_request(parent_id, intent, pkg_ref)
+        return _handoff_request(ops, parent_id, intent, pkg_ref)
     raise _bad("PM_WORK_START_CHILD_CHANGED", "Unknown work.start child slot", 409)
 
 
@@ -1342,8 +1350,7 @@ def _guard(ops, parent: dict, *, allow_cancelled_parent: bool = False) -> Princi
                                   digest=pin["digest"], admission=True)
         if current["document"].get("adapter", "bat") + "_work_start" != intent["route"]:
             raise _bad("PM_WORK_ROUTE_CHANGED", "The admitted profile no longer names the original route")
-        if hasattr(ops, "context"):
-            profile_route(ops, current["document"], require_ready=True)
+        profile_route(ops, current["document"], require_ready=True)
 
     work = work_items._get_item(ops.db, wi_id, active=True)
     project = work_items._get_project(ops.db, intent["project_id"], active=True)
@@ -1821,7 +1828,7 @@ async def _run(ctx):
         ctx.check_cancel()
         try:
             _guard(ctx.service, _op(ctx.service.db, ctx.operation_id))
-            _admit_child(ctx, "handoff", _handoff_request(ctx.operation_id, intent, package_ref))
+            _admit_child(ctx, "handoff", _handoff_request(ctx.service, ctx.operation_id, intent, package_ref))
         except OperationError as exc:
             _stop_before_child(
                 ctx,

@@ -123,18 +123,21 @@ def test_route_builder_and_install_scope(ops):  # noqa: F811
     pin = {'profile_id': 'wpf_' + '1' * 32, 'revision': 1, 'digest': 'a' * 64}
     intent = {'route': module.ROUTE, 'profile': pin, 'workspace_id': WS, 'work_item_id': 'wi_' + '2' * 20}
     package = {'workspace_id': WS, 'package_id': 'pmwp_' + '3' * 32, 'document_digest': 'b' * 64}
-    request = work._handoff_request('op_' + '4' * 32, intent, package)
+    request = work._handoff_request(ops, 'op_' + '4' * 32, intent, package)
     assert request['action'] == module.ACTION
     assert request['idempotency_key'] == 'work-start:op_' + '4' * 32 + ':handoff'
     assert request['params'] == {'parent_id': 'op_' + '4' * 32, 'profile': pin, 'package_ref': package}
     assert 'instruction' not in request['params']
-    isolated = SimpleNamespace(context={}, actions={})
+    isolated = type(ops)(ops.journal)
     with pytest.raises(OperationError, match='PM_WORK_ROUTE_UNAVAILABLE'):
         work.profile_route(isolated, {'adapter': 'ahp'})
+    assert work.route_readiness(isolated, {'adapter': 'ahp'})['reason'] == 'PM_WORK_ROUTE_UNAVAILABLE'
+    with pytest.raises(OperationError, match='PM_WORK_ROUTE_UNAVAILABLE'):
+        work._handoff_request(isolated, 'op_' + '4' * 32, intent, package)
     unknown = copy.deepcopy(intent)
     unknown['route'] = 'unknown_work_start'
     with pytest.raises(OperationError, match='PM_WORK_ROUTE_UNAVAILABLE'):
-        work._handoff_request('op_' + '4' * 32, unknown, package)
+        work._handoff_request(ops, 'op_' + '4' * 32, unknown, package)
     source = Path(module.__file__).parent
     assert not any('pm_ahp_work_start.install(' in path.read_text() for path in source.glob('*.py'))
 
@@ -146,7 +149,7 @@ async def routed(start_ready):  # noqa: F811
     module = install(service)
     ssh(service)
     # Substitute only availability to exercise the real handoff before its creator exists.
-    service.context['work_start_routes'][module.ROUTE] = lambda *args: {'available': True, 'reason': None}
+    service.context['work_start_routes'][module.ROUTE] = (module.request, lambda *args: {'available': True, 'reason': None})
     saved = await _save_start(w, _start_doc(adapter='ahp'))
     parent, _ = _open_start(w, await _view(w, _body(saved)), saved)
     assert work._intent(parent)['route'] == module.ROUTE
@@ -215,3 +218,54 @@ def test_readiness_never_converts_a_git_binding(ops, transport, host, available)
     ops.context['git_runner'] = SimpleNamespace(execution_binding=lambda _: binding, available=lambda _: available)
     assert module.readiness(ops, _document(adapter='ahp')) == {'available': False, 'reason': 'GIT_RUNNER_UNAVAILABLE'}
     assert binding == {'transport': transport, 'host_identity': {'name': host}}
+
+
+def test_explicit_bat_has_one_canonical_document():
+    implicit = profiles.normalize_document(_document())
+    explicit = profiles.normalize_document(_document(adapter="bat"))
+    assert profiles._json(explicit) == profiles._json(implicit)
+    assert work._digest(explicit) == work._digest(implicit)
+
+
+async def test_admitted_profile_is_only_a_revision_reference(routed):
+    w, saved, parent_id, _module = routed
+    assert work._intent(w["d"].ops.get(parent_id))["profile"] == {
+        key: saved[key] for key in ("profile_id", "revision", "digest")
+    }
+
+
+async def test_database_only_child_guard_refuses_non_bat(routed, monkeypatch):
+    from bat_agent_connector import pm_source_lineage
+    w, _saved, parent_id, _module = routed
+    service = w["d"].ops
+    child_id = service.get(parent_id)["result"]["children"]["package"]
+    source = work._intent(service.get(parent_id))["code_source"]
+    config = work.repository_sync.config_snapshot(service, {
+        key: source[key] for key in ("repository", "host", "workspace_id")
+    })
+    monkeypatch.setattr(work.repository_sync, "config_snapshot", lambda *_args: config)
+    token = pm_source_lineage._EXECUTION.set(None)
+    try:
+        with pytest.raises(OperationError, match="PM_WORK_ROUTE_UNAVAILABLE"):
+            work.require_child(service.db, child_id)
+    finally:
+        pm_source_lineage._EXECUTION.reset(token)
+
+
+async def test_database_only_child_guard_preserves_bat(start_ready, monkeypatch):  # noqa: F811
+    from bat_agent_connector import pm_source_lineage
+    from tests.test_pm_work_start import _hold_before_handoff
+    service = start_ready['d'].ops
+    parent_id, child_id = await _hold_before_handoff(start_ready)
+    source = work._intent(service.get(parent_id))['code_source']
+    config = work.repository_sync.config_snapshot(service, {
+        key: source[key] for key in ('repository', 'host', 'workspace_id')
+    })
+    # The database-only path cannot perform the existing Fleet configuration read.
+    # Supply the real producer's snapshot; all child and route guards remain real.
+    monkeypatch.setattr(work.repository_sync, 'config_snapshot', lambda *_args: config)
+    token = pm_source_lineage._EXECUTION.set(None)
+    try:
+        assert work.require_child(service.db, child_id)['operation_id'] == parent_id
+    finally:
+        pm_source_lineage._EXECUTION.reset(token)
