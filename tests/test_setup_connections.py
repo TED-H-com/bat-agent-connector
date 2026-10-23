@@ -1219,6 +1219,21 @@ async def test_open_reference_update_blocks_personal_admission(installed, served
     assert (await served_setup("POST", PREVIEW, personal))[0] == 200
 
 
+async def test_dependency_read_retains_claimed_native_publication(installed, served_setup, source):
+    from bat_agent_connector.connection_dependencies import read
+    daemon, principal, root = installed
+    connection = await _created_connection(daemon, served_setup, source)
+    _, ident = await accept(served_setup, _update_intent(source, connection), key="native-update")
+    await settle_operations(daemon.ops)
+    await claim_handoff(served_setup, ident)
+    assert daemon.ops.get(ident)["status"] == "waiting_external"
+    before, config = daemon.ops.db.total_changes, (root / "config/hosts.toml").read_bytes()
+    result = read(daemon.ops, principal, "desktop-a", connection)
+    assert {row["ref"] for row in result["impacts"] if row["disposition"] == "blocking"} == {ident}
+    assert not result["domains"]["native_resources"]["complete"]
+    assert daemon.ops.db.total_changes == before and (root / "config/hosts.toml").read_bytes() == config
+
+
 def _committed_operation(daemon, ident):
     import sqlite3
     from pathlib import Path
