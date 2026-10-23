@@ -15,7 +15,7 @@ import uuid
 import zlib
 from importlib import resources
 
-from . import checkpoints, controller_authority, pm_workspace, repository_sync
+from . import checkpoints, controller_authority, native_carrier, pm_workspace, repository_sync
 from .operations import AmbiguousOutcome, NeedsAttention, OperationError, StepFailed
 
 _RUN = re.compile(r"pmr_[0-9a-f]{32}")
@@ -155,28 +155,7 @@ async def ensure(ctx, plan: dict, *, check) -> dict:
     ``check`` is an async final guard for the current writer generation and
     requesting member. A lost Git response is read back; never blindly repeated.
     """
-    async def read_pin(_=None):
-        observed = await _host_call(ctx, plan, "read.fetch", check=check)
-        return {"clone_path": plan["clone_path"], "source_sha": plan["source_sha"], "pinned": True} if observed.get("pinned") else None
-    async def fetch():
-        # A later run reuses the proven original commit even when its branch moved.
-        return await read_pin() or await _host_call(ctx, plan, "fetch", check=check)
-    await ctx.step("pm.repository.fetch", fetch, request={"binding": plan["binding_digest"], "source_sha": plan["source_sha"]},
-                   reconcile=read_pin)
-    async def read_carrier(_=None):
-        observed = await _host_call(ctx, plan, "read.pm-carrier", check=check)
-        return observed.get("carrier")
-    async def prepare():
-        return await read_carrier() or await _host_call(ctx, plan, "prepare", check=check)
-    result = await ctx.step("pm.worktree.prepare", prepare,
-                            request={"worktree_path": plan["worktree_path"], "creation_operation_id": plan["creation_operation_id"]},
-                            reconcile=read_carrier)
-    current = await read_carrier()
-    if not current or any(current[key] != result[key] for key in ("clone_path", "worktree_path", "branch")):
-        raise NeedsAttention("PM_WORKTREE_CHANGED", "The original PM carrier cannot be verified")
-    # A verified PM-only commit may advance the branch after this bootstrap
-    # receipt; the host validates the complete own-commit chain separately.
-    return current
+    return await native_carrier.prepare_pm(ctx, plan, lambda phase: _host_call(ctx, plan, phase, check=check))
 
 
 def snapshot_document(plan: dict, run_id: str, kind: str, payload: dict, *, operation_id: str) -> dict:
