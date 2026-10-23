@@ -39,7 +39,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   function treeDate(value) {
     const stamp = timeStamp(value, {dateOnly: true});
     if (stamp instanceof HTMLElement) {
-      stamp.setAttribute('aria-label', stamp.title);
+      stamp.setAttribute('aria-description', stamp.title);
       stamp.removeAttribute('title');
     }
     return stamp;

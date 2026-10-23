@@ -470,7 +470,10 @@ for (const locale of ['en', 'zh-TW']) test(`attempt action names and interval to
   const name = locale === 'en' ? 'Start session' : '開始工作階段';
   await expect(attempt).toHaveAccessibleName(name);
   await expect(attempt.locator('.schedule-title')).toHaveText(name);
-  await expect(attempt.locator('.schedule-title')).toHaveAttribute('title', name);
+  await expect(attempt.locator('[title]')).toHaveCount(0);
+  await attempt.focus();
+  await expect(page.getByRole('tooltip')).toHaveText(name);
+  await expect(page.getByRole('tooltip')).toBeVisible();
   const bar = page.locator('[data-schedule-track^="attempt:operation:"] .schedule-bar');
   const interval = locale === 'en' ? 'Actual · Oct 6' : '實際 · 10月6日';
   await expect(bar).toHaveAttribute('title', interval);

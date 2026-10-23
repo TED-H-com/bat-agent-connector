@@ -30237,7 +30237,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				class: "dep-note",
 				"data-dep-impact-reason": code
 			}, reasonText(t, code)));
-			for (const row of impact.components || []) affected.append(h("p", {}, joinLabel([componentName(row.component_id) || row.name, Number.isFinite(row.distance) ? t("dep_distance", { n: row.distance }) : ""])));
+			for (const row of impact.components || []) affected.append(h("p", {}, joinLabel([row.name, Number.isFinite(row.distance) ? t("dep_distance", { n: row.distance }) : ""])));
 			for (const row of impact.declared || []) affected.append(h("section", { "data-dep-impact-declaration": row.declaration_id }, h("p", {}, joinLabel([
 				componentName(row.component_id),
 				row.dependency?.name,
@@ -45882,7 +45882,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	function treeDate(value) {
 		const stamp = timeStamp(value, { dateOnly: true });
 		if (stamp instanceof HTMLElement) {
-			stamp.setAttribute("aria-label", stamp.title);
+			stamp.setAttribute("aria-description", stamp.title);
 			stamp.removeAttribute("title");
 		}
 		return stamp;

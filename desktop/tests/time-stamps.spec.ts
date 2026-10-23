@@ -1,7 +1,7 @@
 import {expect, test} from '@playwright/test';
 
-for (const locale of ['en', 'zh-TW']) test(`shared stamps tick without rebuilding the view ${locale}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, timezoneId:'UTC'}), page = await context.newPage();
+for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) test(`shared stamps tick without rebuilding the view ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: 960}, timezoneId:'UTC'}), page = await context.newPage();
   const now = Date.parse('2026-10-13T15:14:00Z');
   await page.clock.install({time:now});
   await page.goto('/ui-components.html');
@@ -35,8 +35,8 @@ for (const locale of ['en', 'zh-TW']) test(`shared stamps tick without rebuildin
   await context.close();
 });
 
-for (const locale of ['en', 'zh-TW']) test(`ticker retains a backward text selection inside a stamp ${locale}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, timezoneId:'UTC'}), page = await context.newPage();
+for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) test(`ticker retains a backward text selection inside a stamp ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: 960}, timezoneId:'UTC'}), page = await context.newPage();
   const now = Date.parse('2026-10-13T15:14:00Z');
   await page.clock.install({time:now});
   await page.goto('/ui-components.html');

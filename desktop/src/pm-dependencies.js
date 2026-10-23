@@ -548,7 +548,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
         affected.append(h('p', {class: 'dep-impact-summary', 'data-dep-impact-summary': ''}, t('dep_impact_partial', {detail})));
         if (reasons.length) affected.append(disclosure({label: t('dep_impact_reasons'), body: h('div', {'data-dep-impact-reasons': ''}, ...reasons.map(code => h('p', {'data-dep-impact-reason': code}, reasonText(t, code)))), key: JSON.stringify([namespace, workspaceId, 'dep-impact', selectedKey()])}));
       } else for (const code of reasons) affected.append(h('p', {class: 'dep-note', 'data-dep-impact-reason': code}, reasonText(t, code)));
-      for (const row of impact.components || []) affected.append(h('p', {}, joinLabel([componentName(row.component_id) || row.name, Number.isFinite(row.distance) ? t('dep_distance', {n: row.distance}) : ''])));
+      for (const row of impact.components || []) affected.append(h('p', {}, joinLabel([row.name, Number.isFinite(row.distance) ? t('dep_distance', {n: row.distance}) : ''])));
       for (const row of impact.declared || []) affected.append(h('section', {'data-dep-impact-declaration': row.declaration_id},
         h('p', {}, joinLabel([componentName(row.component_id), row.dependency?.name, t('dep_' + row.relation), versionLabel(row) || t('dep_dash'), levelText(row.evidence_level)])),
         h('p', {class: 'dep-note'}, (row.evidence_refs || (row.source_ref ? [row.source_ref] : [])).map(evidenceLine).filter(Boolean).join(' · '))));
