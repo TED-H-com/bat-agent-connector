@@ -341,3 +341,66 @@ fn lifecycle_observation_preserves_binary_output_exactly() {
     );
     temp.assert_reaped();
 }
+
+#[test]
+fn stderr_phases_arrive_without_changing_ready_or_stdout() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    let code = format!(
+        "{}sys.stderr.write('BATC_PHASE hash-before\\n');sys.stderr.flush()\ntime.sleep(0.05)\nsys.stderr.write('BATC_PHASE hash-after\\n');sys.stderr.flush()\nprint('unchanged')",
+        ready()
+    );
+    assert_eq!(
+        fixture.run(&mut temp.command(&code), Duration::from_secs(5)),
+        b"unchanged\n"
+    );
+    temp.assert_reaped();
+    let report = fixture.failure_message("successful fixture");
+    assert!(report.contains("hash-before@"), "{report}");
+    assert!(report.contains("hash-after@"), "{report}");
+    assert!(report.find("hash-before@").unwrap() < report.find("hash-after@").unwrap());
+}
+
+#[test]
+fn stderr_flood_is_drained_with_bounded_tail_and_retained_markers() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    let code = format!(
+        "{}sys.stderr.write('BATC_PHASE before-flood\\n');sys.stderr.flush()\nsys.stderr.write('x'*1048576+'\\nerror-tail\\nBATC_PHASE script-end\\n');sys.stderr.flush()\nprint('finished')",
+        ready()
+    );
+    assert_eq!(
+        fixture.run(&mut temp.command(&code), Duration::from_secs(5)),
+        b"finished\n"
+    );
+    temp.assert_reaped();
+    let report = fixture.failure_message("successful fixture");
+    assert!(report.contains("before-flood@"), "{report}");
+    assert!(report.contains("script-end@"), "{report}");
+    assert!(report.contains("error-tail"), "{report}");
+    assert!(report.contains("stderr_dropped="), "{report}");
+    assert!(
+        report.len() < 4096,
+        "stderr retention must be bounded: {}",
+        report.len()
+    );
+}
+
+#[test]
+fn stderr_last_phase_identifies_shutdown_stall_before_cleanup() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    let code = format!(
+        "{}sys.stderr.write('BATC_PHASE output-after\\nBATC_PHASE script-end\\n');sys.stderr.flush()\ntime.sleep(30)", ready()
+    );
+    let report = panic_message(|| {
+        fixture.run(&mut temp.command(&code), Duration::from_millis(300));
+    });
+    temp.assert_reaped();
+    assert!(report.contains("script-end@"), "{report}");
+    assert!(
+        report.contains("stall=shutdown (script-end reached, process exit not observed)"),
+        "{report}"
+    );
+    assert!(report.contains("process_exit=None"), "{report}");
+}

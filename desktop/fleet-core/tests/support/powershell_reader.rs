@@ -1,24 +1,23 @@
-//! A cancellable, single reader for the test-owned stdout pipe.
+//! A cancellable, single reader for the test-owned stdout/stderr pipes.
 use super::Lifecycle;
 use std::{
     io::{self, Read},
-    process::ChildStdout,
     sync::{atomic::AtomicBool, atomic::Ordering, Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
 
-pub(super) struct Stdout {
-    pipe: ChildStdout,
+pub(super) struct Pipe<P> {
+    pipe: P,
     stop: Arc<AtomicBool>,
-    lifecycle: Arc<Mutex<Lifecycle>>,
+    lifecycle: Option<Arc<Mutex<Lifecycle>>>,
     began: Instant,
 }
-impl Stdout {
+impl<P> Pipe<P> {
     pub(super) fn new(
-        pipe: ChildStdout,
+        pipe: P,
         stop: Arc<AtomicBool>,
-        lifecycle: Arc<Mutex<Lifecycle>>,
+        lifecycle: Option<Arc<Mutex<Lifecycle>>>,
         began: Instant,
     ) -> Self {
         Self {
@@ -29,7 +28,7 @@ impl Stdout {
         }
     }
 }
-impl Read for Stdout {
+impl<P: PipeHandle> Read for Pipe<P> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         if buffer.is_empty() {
             return Ok(0); // An empty buffer is not evidence of EOF.
@@ -40,11 +39,13 @@ impl Read for Stdout {
             }
             match read_available(&mut self.pipe, buffer) {
                 Ok(0) => {
-                    self.lifecycle
-                        .lock()
-                        .unwrap()
-                        .stdout_eof
-                        .get_or_insert_with(|| self.began.elapsed());
+                    if let Some(lifecycle) = &self.lifecycle {
+                        lifecycle
+                            .lock()
+                            .unwrap()
+                            .stdout_eof
+                            .get_or_insert_with(|| self.began.elapsed());
+                    }
                     return Ok(0);
                 }
                 Err(error)
@@ -62,8 +63,7 @@ impl Read for Stdout {
 }
 
 #[cfg(unix)]
-fn read_available(pipe: &mut ChildStdout, buffer: &mut [u8]) -> io::Result<usize> {
-    use std::os::fd::AsRawFd;
+fn read_available(pipe: &mut impl PipeHandle, buffer: &mut [u8]) -> io::Result<usize> {
     let mut fd = libc::pollfd {
         fd: pipe.as_raw_fd(),
         events: libc::POLLIN,
@@ -79,8 +79,8 @@ fn read_available(pipe: &mut ChildStdout, buffer: &mut [u8]) -> io::Result<usize
 }
 
 #[cfg(windows)]
-fn read_available(pipe: &mut ChildStdout, buffer: &mut [u8]) -> io::Result<usize> {
-    use std::{os::windows::io::AsRawHandle, ptr::null_mut};
+fn read_available(pipe: &mut impl PipeHandle, buffer: &mut [u8]) -> io::Result<usize> {
+    use std::ptr::null_mut;
     use windows_sys::Win32::{Foundation::ERROR_BROKEN_PIPE, System::Pipes::PeekNamedPipe};
     let mut available = 0;
     if unsafe {
@@ -109,3 +109,12 @@ fn read_available(pipe: &mut ChildStdout, buffer: &mut [u8]) -> io::Result<usize
     let count = buffer.len().min(available as usize);
     pipe.read(&mut buffer[..count])
 }
+
+#[cfg(unix)]
+pub(super) trait PipeHandle: Read + std::os::fd::AsRawFd {}
+#[cfg(unix)]
+impl<T: Read + std::os::fd::AsRawFd> PipeHandle for T {}
+#[cfg(windows)]
+pub(super) trait PipeHandle: Read + std::os::windows::io::AsRawHandle {}
+#[cfg(windows)]
+impl<T: Read + std::os::windows::io::AsRawHandle> PipeHandle for T {}
