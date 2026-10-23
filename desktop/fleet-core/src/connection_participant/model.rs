@@ -66,7 +66,7 @@ pub const FLEET_ACTION: &str = "setup.connection.apply";
 
 /// Classify dispatch before decoding today's fields: future variants are not corruption.
 pub fn validate_variant(value: &Value) -> Result<()> {
-    if value["format_version"] != 1
+    if ![serde_json::json!(1), serde_json::json!(2)].contains(&value["format_version"])
         || value["accepted"]["action"] != FLEET_ACTION
         || value["accepted"]["contract_version"] != contract::vocabulary()["contract_version"]
         || !value["accepted"]["kind"].is_null()
@@ -178,9 +178,23 @@ impl Intent {
                 .collect(),
         })))
     }
+    /// New records retain the v1 wire contract but require durable POST history.
+    pub fn fleet_post(accepted: Accepted, frozen: &FrozenHistory) -> Result<Self> {
+        let mut intent = Self::fleet(accepted, frozen)?;
+        let Dispatch::Fleet(record) = &mut intent.0;
+        record.format_version = 2;
+        Ok(intent)
+    }
+    pub fn format_version(&self) -> u32 {
+        self.fleet_record().format_version
+    }
     pub fn decode(bytes: &[u8], scope: &Scope, frozen: &FrozenHistory) -> Result<Self> {
         let stored = Self::stored(bytes, scope)?;
-        let expected = Self::fleet(stored.accepted.clone(), frozen)?;
+        let expected = if stored.format_version == 2 {
+            Self::fleet_post(stored.accepted.clone(), frozen)?
+        } else {
+            Self::fleet(stored.accepted.clone(), frozen)?
+        };
         ensure(Self(Dispatch::Fleet(stored)) == expected)?;
         Ok(expected)
     }

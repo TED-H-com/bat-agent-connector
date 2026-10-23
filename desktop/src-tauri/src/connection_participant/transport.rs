@@ -169,7 +169,15 @@ impl Bridge {
         {
             return Err(Error::Changed);
         }
-        let body = serde_json::to_vec(&serde_json::json!({"contract_version":a.contract_version,"installation_ref":a.target.installation_ref,"operation_id":a.operation_id,"mode":if readback {"readback"} else {"claim"}})).map_err(|_| Error::Invalid)?;
+        let body = bat_fleet_core::connection_participant::request::handoff(
+            intent,
+            if readback {
+                bat_fleet_core::connection_participant::request::Mode::Readback
+            } else {
+                bat_fleet_core::connection_participant::request::Mode::Claim
+            },
+        )
+        .map_err(|_| Error::Invalid)?;
         self.participant_exchange(scope, "/connections/handoff".into(), Some(&body))
             .await
     }
@@ -178,16 +186,12 @@ impl Bridge {
         scope: &NativeScope,
         body: &[u8],
     ) -> Result<Reply> {
-        let max = bat_fleet_core::connection_contract::vocabulary()["bounds"]["receipt_bytes"]
-            .as_u64()
-            .ok_or(Error::Invalid)? as usize;
-        let value = bat_fleet_core::strict_json::parse(body, max).map_err(|_| Error::Invalid)?;
-        if !value["operation_id"].as_str().is_some_and(operation_id) {
-            return Err(Error::Invalid);
-        }
-        self.participant_exchange(scope, "/connections/receipt".into(), Some(body))
+        let body = bat_fleet_core::connection_participant::request::stored_receipt(body)
+            .map_err(|_| Error::Invalid)?;
+        self.participant_exchange(scope, "/connections/receipt".into(), Some(&body))
             .await
     }
+
     async fn participant_exchange(
         &self,
         scope: &NativeScope,
