@@ -189,3 +189,43 @@ New refusal codes include `CONTROLLER_AUTHORITY_REQUIRED`,
 `CONTROLLER_INCARNATION_CHANGED`, `CONTROLLER_WORKSPACE_CHANGED`,
 `CONTROLLER_MEMBERSHIP_CHANGED`, `CONTROLLER_IMMUTABLE` and `SESSION_SOURCE_CHANGED`. These restrictions are
 shown per action without rewriting provenance or granting takeover through `force`.
+
+## AHP owned-resource frame seam
+
+`ahp_owned_resources.schema(journal)` explicitly installs an append-only private
+ledger; daemon startup does not install it or allocate a data step. Reservations
+are intents and cannot satisfy `controller_authority.require_entry`. A typed
+creation receipt requires the original create ACK and exact session/chat snapshots
+from that connection, including provider, directory and config values. Optional
+native `createdAt` comes from that connection's exact catalog summary. A catalog
+URI, managed-root path, token, manage scope or administrator is not ownership.
+Changed evidence conflicts without rewriting history. Endpoint changes refuse;
+a matching URI or timestamp after restart cannot adopt another resource.
+
+Only `resource_policy.mint_ahp_grant` issues the process-local typed capability.
+Its identity and immutable signature bind operation, controller incarnation,
+adapter/host/endpoint, Work/Attempt, session/chat/turn, method/action, managed
+creation receipt and config/profile/source digests. Copies and outside constructors
+are refused. The future central worker must provide synchronous current binding
+and permission/busy readback; this seam does not invent an adapter runtime.
+
+`ahp_owned_transport` checks after connect, semaphore and fresh-read awaits:
+current credential scopes, membership and controller; shared task/coordinator and
+lifecycle gates; fixed Work/Attempt/profile/source; managed-directory receipt,
+ownership, editor permission, busy and cancellation. The final synchronous check
+and `pm_source_lineage.require_frame()` precede the durable sent-fence commit and
+synchronous socket enqueue, with no intervening await. Outer transactions refuse.
+After the fence the effect remains unknown, including transport failure; no retry,
+new operation/turn substitution or lock clearing can resend it. Only future
+readback reconciliation may resolve it. Work budget remains thirty minutes and
+permission answers remain in the editor.
+
+No production action, route or API mints this grant. Create, turn, result, API and
+UI implementations are deliberately absent; `require_owned_write()` still refuses.
+Tests use a test-only receipt producer and synthetic frames over a disk Unix socket.
+
+繁體中文：AHP 帳本明確安裝、只追加，不進 BAT registry。預留不是所有權；須有同連線
+ACK 與精確 snapshot，重啟不認領同 URI。只有中央資源政策鑄造 grant；每個 await 後
+重驗現行權限、controller、coordinator、來源與生命週期、Work／Attempt／profile、
+所有權、permission、busy 與取消，再經 lineage guard、提交 sent fence，才同步送出。
+跨 fence 的未知結果只能查回，不重送；本輪沒有 create、turn、result、API 或 UI。

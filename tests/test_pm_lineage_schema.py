@@ -174,6 +174,16 @@ EXCLUSIONS.update({
         ("native_identity", "native_session_creations", "SELECT 1 FROM native_session_creations WHERE"),
     )
 })
+EXCLUSIONS.update({
+    ('ahp_owned_resources', statement): (
+        'no such table: ahp_owned_sessions',
+        'ahp_owned_resources.schema explicitly installs this unregistered adapter ledger; never daemon startup.',
+    ) for statement in (
+        'SELECT digest,body FROM ahp_owned_sessions WHERE resource_id=? AND record_id=?',
+        'INSERT INTO ahp_owned_sessions VALUES(?,?,?,?)',
+        "SELECT 1 FROM ahp_owned_sessions WHERE resource_id=? AND record_id LIKE 'sent:%' LIMIT 1",
+    )
+})
 
 
 def test_fixed_sql_exclusions_match_real_statements():
@@ -222,3 +232,15 @@ def test_lazy_native_sql_prepares_only_after_real_schema_and_exclusions_become_s
             daemon.ops.db.execute("EXPLAIN " + row.sql, (None,) * row.sql.count("?")).fetchall()
         with pytest.raises(AssertionError, match="stale exclusion"):
             test_fixed_sql_prepares_on_installed_schema(daemon, module)
+
+
+def test_lazy_ahp_sql_prepares_after_explicit_schema(daemon):  # noqa: F811
+    from bat_agent_connector.ahp_owned_resources import schema
+
+    assert not daemon.ops.db.execute("SELECT 1 FROM sqlite_master WHERE name='ahp_owned_sessions'").fetchone()
+    version = daemon.ops.db.execute('PRAGMA user_version').fetchone()[0]
+    schema(daemon.journal)
+    schema(daemon.journal)
+    assert daemon.ops.db.execute('PRAGMA user_version').fetchone()[0] == version
+    for row in FIXED_SQL['ahp_owned_resources']:
+        daemon.ops.db.execute('EXPLAIN ' + row.sql, (None,) * row.sql.count('?')).fetchall()
