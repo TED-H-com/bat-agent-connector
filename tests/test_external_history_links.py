@@ -255,3 +255,19 @@ async def test_ungranted_relations_do_not_create_pagination_hints(linked_work, r
     d.history_collector.config = HistoryConfig(10, ())
     result = pm_reads.read(d.ops, OWNER, 'pm_history_links_list', req['target'] | {'limit': 1})
     assert result == {'links': [], 'next_after': None}
+
+
+async def test_unavailable_work_lineage_and_missing_work_share_refusal(linked_work):
+    d, req, _ = linked_work
+    errors = []
+    for missing in (True, False):
+        target = req['target'] | {'work_item_id': 'wi_' + 'f' * 20} if missing else req['target']
+        if not missing:
+            d.ops.db.execute('INSERT INTO pm_source_lineage VALUES(?,?,?,?)', ('work_item', target['work_item_id'], 'op_' + 'f' * 32, 'fixture'))
+        for invoke in (lambda: d.ops.create(OWNER, **(req | {'target': target})),
+                       lambda: pm_reads.read(d.ops, OWNER, 'pm_history_links_list', target)):
+            with pytest.raises(OperationError) as exc:
+                invoke()
+            errors.append((exc.value.status, exc.value.code, exc.value.message))
+    assert len(set(errors)) == 1 and errors[0][0] == 404
+    assert counts(d) == (0, 0, 0)

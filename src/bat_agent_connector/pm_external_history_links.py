@@ -70,9 +70,8 @@ def _member(db, principal, wid, *, write=False):
 
 def _work(db, principal, wid, wi):
     _member(db, principal, wid)
-    if not isinstance(wi, str):
+    if not isinstance(wi, str) or not pm_source_lineage.visible(db, principal, 'work_item', wi):
         raise refs.unavailable()
-    pm_source_lineage.require(db, principal, 'work_item', wi)
     binding = pm_evidence._binding(db, wid, wi)
     if binding is None:
         raise refs.unavailable()
