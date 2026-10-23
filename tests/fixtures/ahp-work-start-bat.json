@@ -1,0 +1,53 @@
+{
+  "children": [
+    {
+      "created_at": 1800000000.0,
+      "operation_id": "op_22222222222222222222222222222222",
+      "ordinal": 2,
+      "parent_id": "op_11111111111111111111111111111111",
+      "request": "{\"action\":\"repository.continue\",\"idempotency_key\":\"work-start:op_11111111111111111111111111111111:handoff\",\"params\":{\"agent\":\"claude\",\"model\":\"synthetic-model\",\"pm_code_basis\":{\"mode\":\"implement_fixed_spec_from_selected_base\",\"rationale\":\"Start from reviewed published head refs/heads/main at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa for work.start (work_start_thin_v1).\"},\"pm_package_ref\":{\"document_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"package_id\":\"pmwp_55555555555555555555555555555555\",\"workspace_id\":\"ws_11111111111111111111111111111111\"},\"project_id\":\"proj_4444444444444444\",\"prompt\":\"Synthetic 工作\",\"source_ref\":\"refs/heads/main\",\"source_sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"title\":\"Synthetic title\",\"work_item_id\":\"wi_33333333333333333333\"},\"preconditions\":{\"binding_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"expected_project_version\":2,\"expected_work_item_fingerprint\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"repository_id\":42},\"target\":{\"host\":\"synthetic-host\",\"repository\":\"o/r\",\"workspace_id\":\"synthetic-workspace\"}}",
+      "request_digest": "b4dbca90595b0398ef511ab29ab5ceeddb65444871b465b9428b180c6c7dd2ab",
+      "slot": "handoff"
+    }
+  ],
+  "producer": "pm_work_start._handoff_request/_admit_child; pm_work_profiles.normalize_document",
+  "producer_commit": "9e888a05a96b56483ae68ed712e46db3bdcc5a7b",
+  "profile_digest": "5d13ecb170f2fe6f3f486ca549845d255b402b73f0abfe6538a193acfe84ece9",
+  "profile_document": "{\"agent\":\"claude\",\"binding\":{\"host\":\"synthetic-host\",\"repository\":\"o/r\",\"workspace_id\":\"synthetic-workspace\"},\"budget_policy_ref\":null,\"delivery_policy_ref\":null,\"model\":null,\"version\":1}",
+  "request": {
+    "action": "repository.continue",
+    "idempotency_key": "work-start:op_11111111111111111111111111111111:handoff",
+    "params": {
+      "agent": "claude",
+      "model": "synthetic-model",
+      "pm_code_basis": {
+        "mode": "implement_fixed_spec_from_selected_base",
+        "rationale": "Start from reviewed published head refs/heads/main at aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa for work.start (work_start_thin_v1)."
+      },
+      "pm_package_ref": {
+        "document_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "package_id": "pmwp_55555555555555555555555555555555",
+        "workspace_id": "ws_11111111111111111111111111111111"
+      },
+      "project_id": "proj_4444444444444444",
+      "prompt": "Synthetic 工作",
+      "source_ref": "refs/heads/main",
+      "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "title": "Synthetic title",
+      "work_item_id": "wi_33333333333333333333"
+    },
+    "preconditions": {
+      "binding_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected_project_version": 2,
+      "expected_work_item_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "repository_id": 42
+    },
+    "target": {
+      "host": "synthetic-host",
+      "repository": "o/r",
+      "workspace_id": "synthetic-workspace"
+    }
+  },
+  "request_digest": "b4dbca90595b0398ef511ab29ab5ceeddb65444871b465b9428b180c6c7dd2ab",
+  "synthetic": true
+}
