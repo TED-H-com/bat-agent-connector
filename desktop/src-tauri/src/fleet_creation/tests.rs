@@ -439,3 +439,6 @@ fn unfinished_old_session_refuses_before_creating_artifact_parents() {
         "an unfinished old-session review cannot create artifact parents"
     );
 }
+
+#[path = "managed_tests.rs"]
+mod managed_tests;

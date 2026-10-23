@@ -36,6 +36,10 @@ pub trait Security {
     fn unpublished(&self, journal: &Path) -> Result<()>;
     fn validate_path(&self, path: &Path) -> Result<()>;
     fn login(&self) -> Result<LoginIdentity>;
+    /// Fresh native manifest/service/Bridge observation, under the caller's guards.
+    fn managed_identity(&self) -> Result<Option<ManagedIdentity>> {
+        Ok(None)
+    }
     fn held(&self) -> Result<()>;
     fn effect_held(&self) -> Result<()> {
         Err(UNSUPPORTED)

@@ -525,6 +525,15 @@ pub(crate) struct FileScope {
     pub actor: String,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct CreationScope {
+    pub generation: u64,
+    pub managed: bool,
+    pub actor: String,
+    pub identity: Identity,
+}
+
 #[derive(Clone)]
 struct Active {
     config: Config,
@@ -587,6 +596,29 @@ fn get(path: &str) -> ConnectorRequest {
 }
 
 impl Bridge {
+    #[allow(dead_code)]
+    pub(crate) fn creation_scope(&self) -> bat_fleet_core::Result<CreationScope> {
+        Err("CREATION_OPERATION_UNSUPPORTED")
+    }
+    #[cfg(test)]
+    pub(crate) fn creation_fixture(launch: &crate::managed::Launch) -> Self {
+        let bridge = Self::managed(
+            Path::new("fixture"),
+            launch.config(),
+            launch.token.clone(),
+            launch.identity(),
+        );
+        bridge.state.lock().unwrap().active = Some(Active {
+            config: launch.config(),
+            record: Record {
+                version: 1,
+                binding: binding(&launch.config()),
+                token: launch.token.clone(),
+                identity: launch.identity(),
+            },
+        });
+        bridge
+    }
     #[cfg(test)]
     pub(crate) fn file_fixture(endpoint: &str, token: &str) -> Self {
         let config = Config {
