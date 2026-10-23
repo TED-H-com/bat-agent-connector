@@ -1,13 +1,57 @@
+use super::platform::CreationPlatform;
 use super::*;
-use std::cell::Cell;
+use crate::{
+    connection_publish::{self as publication, Platform as _},
+    discovery::{Backend, MonitorIdentity},
+    migration::{self, Platform as _},
+};
+use std::{cell::Cell, io::Write, rc::Rc};
+type OpenHook = Rc<RefCell<Option<Box<dyn FnMut(&Path)>>>>;
 mod generator {
     use crate as bat_fleet_core;
     include!("../../tests/support/connection_setup.rs");
 }
+#[derive(Clone)]
 struct SecurityFixture {
-    login: RefCell<LoginIdentity>,
-    held: Cell<bool>,
-    denied: RefCell<Option<PathBuf>>,
+    login: Rc<RefCell<LoginIdentity>>,
+    held: Rc<Cell<bool>>,
+    denied: Rc<RefCell<Option<PathBuf>>>,
+    monitor: Rc<Cell<bool>>,
+    running: Rc<Cell<bool>>,
+    trace: Rc<RefCell<Vec<&'static str>>>,
+    on_open: OpenHook,
+    on_validate: OpenHook,
+    invalid_path: Rc<Cell<bool>>,
+    login_after_discover: Rc<Cell<bool>>,
+    changed_identity: Rc<RefCell<Option<(ObjectIdentity, usize)>>>,
+    policies: Rc<RefCell<Vec<(PathBuf, bool, bool)>>>,
+}
+impl SecurityFixture {
+    fn new(login: LoginIdentity) -> Self {
+        Self {
+            login: Rc::new(RefCell::new(login)),
+            held: Rc::new(Cell::new(true)),
+            denied: Default::default(),
+            monitor: Default::default(),
+            running: Default::default(),
+            trace: Default::default(),
+            on_open: Default::default(),
+            on_validate: Default::default(),
+            invalid_path: Default::default(),
+            login_after_discover: Default::default(),
+            changed_identity: Default::default(),
+            policies: Default::default(),
+        }
+    }
+    fn touch(&self, call: &'static str) {
+        self.trace.borrow_mut().push(call);
+    }
+}
+struct Guard(Rc<Cell<bool>>);
+impl Drop for Guard {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
 }
 fn identity(file: &File) -> Result<ObjectIdentity> {
     #[cfg(unix)]
@@ -25,13 +69,80 @@ fn identity(file: &File) -> Result<ObjectIdentity> {
     }
 }
 impl Security for SecurityFixture {
-    fn validate_path(&self, _: &Path) -> Result<()> {
+    type LauncherGuard = Guard;
+    type MonitorGuard = Guard;
+    fn launcher_guard(&self, verify: &dyn Fn() -> Result<()>) -> Result<Guard> {
+        self.touch("launcher");
+        if self.held.get() {
+            return Err("LAUNCHER_BUSY");
+        }
+        verify()?;
+        self.held.set(true);
+        let guard = Guard(self.held.clone());
+        verify()?;
+        Ok(guard)
+    }
+    fn monitor_guard(&self, verify: &dyn Fn() -> Result<()>) -> Result<Guard> {
+        self.held()?;
+        self.touch("monitor");
+        if self.monitor.get() {
+            return Err("MONITOR_ALREADY_RUNNING");
+        }
+        self.monitor.set(true);
+        let guard = Guard(self.monitor.clone());
+        verify()?;
+        Ok(guard)
+    }
+    fn unconfigured(&self, _: &Path, _: &Path) -> Result<()> {
+        self.touch("unconfigured");
+        if self.running.get() {
+            Err("MONITOR_ALREADY_RUNNING")
+        } else {
+            Ok(())
+        }
+    }
+    fn discover(&self) -> Result<Option<MonitorIdentity>> {
+        self.touch("discover");
+        if self.login_after_discover.get() {
+            self.login.borrow_mut().session_id += 1;
+        }
+        Ok(self.running.get().then(|| MonitorIdentity {
+            process: crate::process_adapter::ProcessSnapshot {
+                pid: 42,
+                created_filetime: 123,
+                executable: "C:\\fixture.exe".into(),
+                arguments: vec![],
+                login: self.login.borrow().clone(),
+            },
+            backend: Backend::Rust,
+            instance: Some("a".repeat(32)),
+            ownership: crate::discovery::Ownership::CurrentLogin,
+            legacy: false,
+            directories: vec![],
+            record: None,
+        }))
+    }
+    fn unpublished(&self, _: &Path) -> Result<()> {
+        self.touch("unpublished");
+        Ok(())
+    }
+
+    fn validate_path(&self, path: &Path) -> Result<()> {
+        self.touch("path");
+        if self.invalid_path.get() {
+            return Err("PATH_UNPROVEN");
+        }
+        if let Some(hook) = self.on_validate.borrow_mut().as_mut() {
+            hook(path);
+        }
         Ok(())
     }
     fn login(&self) -> Result<LoginIdentity> {
+        self.touch("login");
         Ok(self.login.borrow().clone())
     }
     fn held(&self) -> Result<()> {
+        self.touch("held");
         if self.held.get() {
             Ok(())
         } else {
@@ -39,9 +150,26 @@ impl Security for SecurityFixture {
         }
     }
     fn identity(&self, file: &File) -> Result<ObjectIdentity> {
-        identity(file)
+        self.touch("identity");
+        let mut id = identity(file)?;
+        if let Some((target, count)) = self.changed_identity.borrow_mut().as_mut() {
+            if *target == id {
+                *count += 1;
+                if *count >= 3 {
+                    id.file_id = "0".repeat(32);
+                }
+            }
+        }
+        Ok(id)
     }
-    fn open(&self, path: &Path, _: bool, _: bool) -> Result<File> {
+    fn open(&self, path: &Path, private: bool, child_absent: bool) -> Result<File> {
+        self.touch("open");
+        self.policies
+            .borrow_mut()
+            .push((path.into(), private, child_absent));
+        if let Some(hook) = self.on_open.borrow_mut().as_mut() {
+            hook(path);
+        }
         if self.denied.borrow().as_deref() == Some(path) {
             return Err("SECURITY_DENIED");
         }
@@ -84,26 +212,32 @@ impl Drop for Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let root = std::env::temp_dir()
-            .canonicalize()
+        Self::with_sid("S-1-5-21-123-456-789-1001".into())
+    }
+    fn with_sid(sid: String) -> Self {
+        let root = crate::installation::canonical_local(&std::env::temp_dir())
             .unwrap()
-            .join(format!("wca-{:032x}", rand::random::<u128>()));
+            .join(format!("fleet-creation-{:032x}", rand::random::<u128>()));
+        crate::publication_state::create_new_directory(&root).unwrap();
         for p in [
+            "kit",
+            "kit/client",
             "kit/client/bat-profiles",
+            "state",
+            "state/fleet-creation",
             "state/fleet-creation/directories",
+            "state/fleet-publications",
+            "state/fleet-publication-plans",
+            "state/fleet-publication-decisions",
             "roles",
         ] {
-            std::fs::create_dir_all(root.join(p)).unwrap();
+            crate::publication_state::create_new_directory(&root.join(p)).unwrap();
         }
-        std::fs::write(root.join("roles/role.json"), b"synthetic startup role").unwrap();
-        let security = SecurityFixture {
-            login: RefCell::new(LoginIdentity {
-                owner_sid: "S-1-5-21-123-456-789-1001".into(),
-                session_id: 7,
-            }),
-            held: Cell::new(true),
-            denied: RefCell::default(),
-        };
+        write_private(&root.join("roles/role.json"), b"synthetic startup role");
+        let security = SecurityFixture::new(LoginIdentity {
+            owner_sid: sid,
+            session_id: 7,
+        });
         let object = |p: &Path| {
             security
                 .identity(&security.open(p, false, false).unwrap())
@@ -142,6 +276,9 @@ impl Fixture {
                 scope.kit_root.join("client"),
                 scope.kit_root.join("client/bat-profiles"),
                 scope.state_root.join("fleet-creation"),
+                scope.state_root.join("fleet-publications"),
+                scope.state_root.join("fleet-publication-plans"),
+                scope.state_root.join("fleet-publication-decisions"),
             ]
             .into_iter()
             .map(|canonical_path| DirectoryReservation::ReservedAbsent { canonical_path })
@@ -176,7 +313,10 @@ impl Fixture {
             .unwrap();
         let owner = receipt.owner(&bytes).unwrap();
         let reader = Reader::new(receipt, security).unwrap();
-        std::fs::write(reader.key_path(&EvidenceKey::Provisioning).unwrap(), &bytes).unwrap();
+        write_private(
+            &reader.key_path(&EvidenceKey::Provisioning).unwrap(),
+            &bytes,
+        );
         for d in &reader.expected.directories {
             let record = Record::Directory(DirectoryCreated {
                 binding: reader.expected.binding(&digest(&bytes), 7).unwrap(),
@@ -184,17 +324,26 @@ impl Fixture {
                 parent_identity: reader.identity(d.path().parent().unwrap()).unwrap(),
                 identity: reader.identity(d.path()).unwrap(),
             });
-            std::fs::write(
-                reader.key_path(&record.key()).unwrap(),
-                record.encode().unwrap(),
-            )
-            .unwrap();
+            write_private(
+                &reader.key_path(&record.key()).unwrap(),
+                &record.encode().unwrap(),
+            );
         }
         Self {
             root,
             reader,
             owner,
         }
+    }
+    fn platform(&self) -> CreationPlatform<SecurityFixture> {
+        CreationPlatform::with_security(
+            self.reader.expected.clone(),
+            self.root.clone(),
+            &self.root.join("Startup"),
+            &self.root.join("user"),
+            self.reader.security.clone(),
+        )
+        .unwrap()
     }
     fn resolve(&self) -> Result<Resolution> {
         evidence::capture(&self.reader, &self.owner)?.resolve(&[], &[])
@@ -282,10 +431,48 @@ fn reader_refuses_managed_receipts_without_native_manifest_attestation() {
         server_id: "server-a".into(),
         principal_id: "principal-a".into(),
     });
-    let security = SecurityFixture {
-        login: RefCell::new(f.reader.login.clone()),
-        held: Cell::new(true),
-        denied: RefCell::default(),
-    };
+    let security = SecurityFixture::new(f.reader.login.clone());
     assert!(Reader::new(receipt, security).is_err());
 }
+
+#[test]
+fn walk_refuses_present_component_below_missing_ancestor() {
+    use crate::publication_state::{walk_checked, WalkObject};
+    let f = Fixture::new();
+    let leaf = f
+        .reader
+        .expected
+        .path(Artifact::Inventory)
+        .parent()
+        .unwrap();
+    let missing = f.reader.expected.scope.kit_root.clone();
+    assert!(
+        walk_checked(leaf, &mut Default::default(), UNPROVEN, |p, _| {
+            if p == missing {
+                return Ok(None);
+            }
+            Ok(Some(WalkObject::new(p.symlink_metadata().unwrap(), (), ())))
+        })
+        .is_err()
+    );
+}
+
+fn write_private(path: &Path, bytes: &[u8]) {
+    if present(path).unwrap() {
+        std::fs::write(path, bytes).unwrap();
+    } else {
+        let mut file = crate::publication_state::create_new_file(path).unwrap();
+        file.write_all(bytes).unwrap();
+        file.sync_all().unwrap();
+    }
+}
+
+#[path = "platform_tests.rs"]
+mod platform_tests;
+
+#[path = "reader_tests.rs"]
+mod reader_tests;
+
+#[cfg(windows)]
+#[path = "windows_tests.rs"]
+mod windows_tests;

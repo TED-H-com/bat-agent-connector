@@ -12,15 +12,22 @@ use std::{
     cell::RefCell,
     collections::BTreeMap,
     fs::File,
-    io::Read,
     path::{Path, PathBuf},
 };
 const UNPROVEN: &str = "CREATION_EVIDENCE_UNPROVEN";
 const UNSUPPORTED: &str = "CREATION_OPERATION_UNSUPPORTED";
 
-// Tests replace only token identity, ACL and object-identity observations.
+// Tests substitute OS identity, ACL, path, process and guard observations.
 // All namespace enumeration, bounded reads, parsing and replay remain real.
-trait Security {
+#[doc(hidden)]
+pub trait Security {
+    type LauncherGuard;
+    type MonitorGuard;
+    fn launcher_guard(&self, verify: &dyn Fn() -> Result<()>) -> Result<Self::LauncherGuard>;
+    fn monitor_guard(&self, verify: &dyn Fn() -> Result<()>) -> Result<Self::MonitorGuard>;
+    fn unconfigured(&self, pointer: &Path, roaming: &Path) -> Result<()>;
+    fn discover(&self) -> Result<Option<crate::discovery::MonitorIdentity>>;
+    fn unpublished(&self, journal: &Path) -> Result<()>;
     fn validate_path(&self, path: &Path) -> Result<()>;
     fn login(&self) -> Result<LoginIdentity>;
     fn held(&self) -> Result<()>;
@@ -33,7 +40,7 @@ struct Reader<S> {
     login: LoginIdentity,
     // Directory handles deny delete sharing on Windows. Retain them throughout
     // this synchronous operation, including evidence/history readbacks.
-    directories: RefCell<BTreeMap<PathBuf, File>>,
+    directories: RefCell<BTreeMap<PathBuf, (std::rc::Rc<File>, ObjectIdentity)>>,
 }
 fn present(path: &Path) -> Result<bool> {
     match path.symlink_metadata() {
@@ -67,8 +74,14 @@ impl<S: Security> Reader<S> {
     fn key_path(&self, key: &EvidenceKey) -> Result<PathBuf> {
         Ok(self.root().join(key.relative_path()?))
     }
-    fn private(&self, path: &Path) -> bool {
-        path.starts_with(&self.expected.scope.kit_root)
+    fn private(&self, path: &Path) -> Result<bool> {
+        let role_parent = self
+            .expected
+            .scope
+            .startup_role_record
+            .parent()
+            .ok_or(UNPROVEN)?;
+        Ok(path.starts_with(&self.expected.scope.kit_root)
             || path.starts_with(self.root())
             || self
                 .expected
@@ -76,61 +89,50 @@ impl<S: Security> Reader<S> {
                 .iter()
                 .any(|d| path.starts_with(d.path()))
             || path == self.expected.scope.pointer
-            || path.starts_with(self.expected.scope.startup_role_record.parent().unwrap())
+            || path.starts_with(role_parent))
     }
-    fn walk(&self, path: &Path) -> Result<Option<File>> {
+    fn walk(&self, path: &Path) -> Result<Option<std::rc::Rc<File>>> {
+        use crate::publication_state::{metadata, walk_checked, WalkObject};
         self.security.validate_path(path)?;
-        let mut leaf = None;
-        let chain: Vec<_> = path.ancestors().collect();
-        for (index, &ancestor) in chain.iter().enumerate().rev() {
-            if !present(ancestor)? {
-                continue;
-            }
-            let child_absent = index > 0 && !present(chain[index - 1])?;
-            let file = self
-                .security
-                .open(ancestor, self.private(ancestor), child_absent)?;
-            let metadata = file.metadata().map_err(|_| UNPROVEN)?;
-            if metadata.file_type().is_symlink() || (ancestor != path && !metadata.is_dir()) {
-                return Err(UNPROVEN);
-            }
-            if metadata.is_dir() {
-                let mut held = self.directories.borrow_mut();
-                if let Some(old) = held.get(ancestor) {
-                    if self.security.identity(old)? != self.security.identity(&file)? {
-                        return Err(UNPROVEN);
-                    }
-                } else {
-                    held.insert(ancestor.into(), file.try_clone().map_err(|_| UNPROVEN)?);
+        let object = walk_checked(
+            path,
+            &mut self.directories.borrow_mut(),
+            UNPROVEN,
+            |p, child| {
+                let Some(m) = metadata(p)? else {
+                    return Ok(None);
+                };
+                let file = self.security.open(
+                    p,
+                    self.private(p)?,
+                    child.is_some_and(|c| matches!(metadata(c), Ok(None))),
+                )?;
+                let metadata = file.metadata().map_err(|_| UNPROVEN)?;
+                if metadata.is_dir() != m.is_dir() {
+                    return Err(UNPROVEN);
                 }
-            }
-            if ancestor == path {
-                leaf = Some(file);
-            }
-        }
-        if present(path)? != leaf.is_some() {
-            return Err(UNPROVEN);
-        }
-        Ok(leaf)
+                let identity = self.security.identity(&file)?;
+                Ok(Some(WalkObject::new(
+                    metadata,
+                    std::rc::Rc::new(file),
+                    identity,
+                )))
+            },
+        )?;
+        Ok(object.map(|o| o.handle))
     }
     fn identity(&self, path: &Path) -> Result<ObjectIdentity> {
-        self.security.identity(&self.walk(path)?.ok_or(UNPROVEN)?)
+        self.security
+            .identity(self.walk(path)?.ok_or(UNPROVEN)?.as_ref())
     }
     fn read(&self, path: &Path, limit: usize) -> Result<Option<Vec<u8>>> {
+        crate::publication_state::read_limit(limit).map_err(|_| UNPROVEN)?;
         let Some(file) = self.walk(path)? else {
             return Ok(None);
         };
-        let metadata = file.metadata().map_err(|_| UNPROVEN)?;
-        if !metadata.is_file() || metadata.len() > limit as u64 {
-            return Err(UNPROVEN);
-        }
         let identity = self.security.identity(&file)?;
-        let mut bytes = Vec::new();
-        (&file)
-            .take(limit as u64 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| UNPROVEN)?;
-        if bytes.len() > limit || self.identity(path)? != identity {
+        let bytes = crate::publication_state::read_bounded(&file, limit).map_err(|_| UNPROVEN)?;
+        if self.identity(path)? != identity {
             return Err(UNPROVEN);
         }
         Ok(Some(bytes))
@@ -366,6 +368,7 @@ impl<S: Security> EvidenceIo for Reader<S> {
 
 #[cfg(windows)]
 mod native;
+mod platform;
 #[cfg(windows)]
 pub use native::WindowsCreationPlatform;
 
