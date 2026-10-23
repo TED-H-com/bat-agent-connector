@@ -1022,6 +1022,9 @@ impl MigrationCase {
         let plan = fixture.plan();
         fixture.admit(&plan);
         fixture.publish(&plan);
+        Self::from_published_fixture(fixture)
+    }
+    pub fn from_published_fixture(mut fixture: Fixture) -> Self {
         let resolution = fixture.native.resolution().unwrap();
         let store = migration::Store::new(
             &fixture.path(Artifact::Installation),

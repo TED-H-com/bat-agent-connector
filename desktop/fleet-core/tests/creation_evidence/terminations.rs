@@ -548,3 +548,86 @@ fn read_only_evidence_adapter_defaults_to_refusing_migration_admission() {
         Err("MIGRATION_PENDING")
     );
 }
+
+#[test]
+fn termination_selects_its_own_intent_after_an_earlier_completed_migration() {
+    let mut f = Fixture::new();
+    let plan = f.plan();
+    let mut link = f.prepare(&plan);
+    // Choose a bounded synthetic acceptance reference that orders this key
+    // before the subsequent intent. Every candidate is a valid native shape.
+    let key_ordered = (0..1024).any(|n| {
+        link.acceptance_reference = format!("native-review-{n}");
+        digest(&Record::Publication(link.clone()).encode().unwrap()).starts_with('0')
+    });
+    assert!(key_ordered);
+    f.native.append(&Record::Publication(link)).unwrap();
+    f.publish(&plan);
+    let mut c = MigrationCase::from_published_fixture(f);
+    let key_ordered = (0..1024).any(|n| {
+        c.intent.acceptance_reference = format!("native-migration-{n}");
+        c.intent_hash = digest(&Record::MigrationIntent(c.intent.clone()).encode().unwrap());
+        c.intent_hash > c.intent.predecessor_sha256
+    });
+    assert!(key_ordered);
+    c.fixture
+        .native
+        .append(&Record::MigrationIntent(c.intent.clone()))
+        .unwrap();
+    let completion = c.complete();
+    c.fixture
+        .native
+        .append(&Record::MigrationCompletion(completion))
+        .unwrap();
+    *c.fixture.native.running.borrow_mut() = None;
+    let r = c.fixture.native.resolution().unwrap();
+    let preview = c
+        .store
+        .preview(&mut c.producer, Backend::Powershell)
+        .unwrap();
+    let mut intent = c.intent.clone();
+    intent.predecessor_sha256 = r.head().into();
+    intent.predecessor_terminal = r.terminal().unwrap().clone();
+    intent.migration_id = "6".repeat(32);
+    intent.review_fingerprint = preview.fingerprint().into();
+    intent.before_sha256 = digest(&c.after);
+    // Put the new lineage key after the earlier one in iteration order. This
+    // ensures a lookup of any intent cannot accidentally select the right one.
+    assert!(intent.predecessor_sha256 > c.intent.predecessor_sha256);
+    let intent_hash = c
+        .fixture
+        .native
+        .append(&Record::MigrationIntent(intent.clone()))
+        .unwrap();
+    let original = c
+        .store
+        .read_history(&c.intent.migration_id)
+        .unwrap()
+        .config(false)
+        .unwrap();
+    c.store
+        .begin(
+            &mut c.producer,
+            &intent.migration_id,
+            &preview,
+            Backend::Rust,
+            &original,
+            false,
+        )
+        .unwrap();
+    let record = Record::MigrationTermination(MigrationTermination {
+        binding: intent.binding,
+        intent_sha256: intent_hash,
+        saved_sha256: Some(
+            c.store
+                .read_history(&intent.migration_id)
+                .unwrap()
+                .sha256()
+                .into(),
+        ),
+        outcome: MigrationOutcome::Abandoned,
+        decision_reference: "native-second-migration-end".into(),
+    });
+    c.fixture.native.append(&record).unwrap();
+    c.assert_only_installation_unknown();
+}
