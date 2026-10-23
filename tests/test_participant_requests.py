@@ -14,7 +14,7 @@ source = producer.source
 
 
 async def test_rust_request_bytes_are_accepted_unchanged(installed, served_setup, source, monkeypatch):
-    requests = json.loads(Path("desktop/fleet-core/tests/fixtures/participant-requests.json").read_bytes())
+    requests = json.loads((Path(__file__).resolve().parents[1] / "desktop/fleet-core/tests/fixtures/participant-requests.json").read_bytes())
     digest = handoff.digest
     # Stable synthetic review and signer outputs match the de-identified Rust inputs.
     # Admission, source/revision checks, sent fence and receipt validation stay real.
