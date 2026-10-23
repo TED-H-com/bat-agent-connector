@@ -599,3 +599,196 @@ fn a_crash_after_the_real_publisher_decision_keeps_the_original_decision() {
     assert_eq!(fs::read(sidecar).unwrap(), before);
     assert_eq!(fs::read(journal).unwrap(), original);
 }
+
+#[test]
+fn every_create_boundary_recovers_only_durable_parts_and_leaves_business_files_alone() {
+    for scenario in 0..21 {
+        let uncertain = scenario >= 9;
+        let target = if uncertain { scenario - 9 } else { scenario };
+        for after in [false, true] {
+            let f = Fixture::new();
+            let mut steps = vec![
+                (Part::Intent, f.intent.bytes().unwrap()),
+                (
+                    Part::Claim,
+                    serde_json::to_vec(&json!({"requested_at_ms":NOW})).unwrap(),
+                ),
+                (
+                    Part::Envelope,
+                    serde_json::to_vec(&f.wire["applied"]["claim"]).unwrap(),
+                ),
+            ];
+            for (i, a) in ["Inventory", "ProfileIndex", "SshReference", "Installation"]
+                .iter()
+                .enumerate()
+            {
+                steps.push((
+                    Part::Attempt(i as u8),
+                    serde_json::to_vec(&json!({"effect":{"artifact":a}})).unwrap(),
+                ));
+            }
+            let outcome = if uncertain { "uncertain" } else { "applied" };
+            steps.push((
+                Part::Receipt(0),
+                serde_json::to_vec(&f.wire[outcome]["wire"]).unwrap(),
+            ));
+            steps.push((
+                Part::Acknowledgement(0),
+                serde_json::to_vec(&f.wire[outcome]["ack"]).unwrap(),
+            ));
+            if uncertain {
+                steps.extend([
+                    (Part::Attempt(4), serde_json::to_vec(&json!({"abandonment":{"reference":"original-decision","recorded_at_unix_ms":NOW},"journal_digest":"d".repeat(64)})).unwrap()),
+                    (Part::Receipt(1), serde_json::to_vec(&f.wire["uncertain"]["definitive"]).unwrap()),
+                    (Part::Acknowledgement(1), serde_json::to_vec(&f.wire["uncertain"]["definitive_ack"]).unwrap()),
+                ]);
+            }
+            // Include the intent fence itself as well as every later part.
+            let sentinels = [
+                "fleet.json",
+                "fleet-inventory.json",
+                "index.json",
+                "ssh-config",
+                "catalog.json",
+                "selection.json",
+            ];
+            for name in sentinels {
+                fs::write(f.root.join(name), b"independent business bytes").unwrap();
+            }
+            let frozen_path = f
+                .root
+                .join("fleet-publication-plans")
+                .join(format!("{}.json", f.frozen.reference().review_digest));
+            let original_frozen = fs::read(&frozen_path).unwrap();
+            let mut store = f.store();
+            for (part, bytes) in &steps[..target] {
+                if *part == Part::Intent {
+                    store.begin(&f.intent).unwrap();
+                } else {
+                    store.append(&f.intent, *part, bytes).unwrap();
+                }
+            }
+            let (part, bytes) = &steps[target];
+            let mut faulted = Store::new(Disk {
+                root: f.root.clone(),
+                fail: Some((*part, after)),
+            });
+            let failed = if *part == Part::Intent {
+                faulted.begin(&f.intent)
+            } else {
+                faulted.append(&f.intent, *part, bytes)
+            };
+            assert_eq!(failed.err(), Some(Error::Unavailable), "{part:?} {after}");
+            let record = f.store().begin(&f.intent).unwrap();
+            let durable = target + usize::from(after);
+            let next = record.recover(NOW).unwrap();
+            match durable {
+                0 | 1 => assert_eq!(next, Next::Claim),
+                2 => assert_eq!(next, Next::ReplayClaim),
+                3 => assert_eq!(next, Next::Executor { read_only: false }),
+                4..=7 => assert_eq!(next, Next::Executor { read_only: true }),
+                8 => assert_eq!(
+                    next,
+                    Next::Redeliver {
+                        index: 0,
+                        body: steps[7].1.clone()
+                    }
+                ),
+                9 | 10 if uncertain => assert_eq!(next, Next::Executor { read_only: true }),
+                11 if uncertain => assert_eq!(
+                    next,
+                    Next::Redeliver {
+                        index: 1,
+                        body: steps[10].1.clone()
+                    }
+                ),
+                _ => assert_eq!(next, Next::Done),
+            }
+            for name in sentinels {
+                assert_eq!(
+                    fs::read(f.root.join(name)).unwrap(),
+                    b"independent business bytes"
+                );
+            }
+            assert_eq!(fs::read(frozen_path).unwrap(), original_frozen);
+        }
+    }
+}
+
+#[test]
+fn request_text_cannot_choose_a_namespace_and_existing_parts_cannot_be_replaced() {
+    let f = Fixture::new();
+    let mut accepted = f.intent.accepted().clone();
+    accepted.scope.installation_ref = "../../request-path".into();
+    accepted.target.installation_ref = accepted.scope.installation_ref.clone();
+    let intent = Intent::fleet(accepted, &f.frozen).unwrap();
+    let expected = format!(
+        "connections-v1/participant/{}/{}",
+        digest(&serde_json::to_vec(&intent.accepted().scope).unwrap()),
+        intent.accepted().operation_id
+    );
+    assert_eq!(intent.namespace().relative_path(), expected);
+    assert!(!expected.contains("request-path"));
+    let mut disk = Disk {
+        root: f.root.clone(),
+        fail: None,
+    };
+    disk.create_only(&intent.namespace(), Part::Intent, &intent.bytes().unwrap())
+        .unwrap();
+    let original = fs::read(disk.path(&intent.namespace(), Part::Intent)).unwrap();
+    assert!(disk
+        .create_only(&intent.namespace(), Part::Intent, b"replacement")
+        .is_err());
+    assert_eq!(
+        fs::read(disk.path(&intent.namespace(), Part::Intent)).unwrap(),
+        original
+    );
+}
+
+#[test]
+fn corrupt_foreign_oversized_or_linked_parts_fail_closed() {
+    for fault in 0..5 {
+        let f = Fixture::new();
+        let mut store = f.store();
+        f.claimed(&mut store);
+        let disk = Disk {
+            root: f.root.clone(),
+            fail: None,
+        };
+        let path = disk.path(&f.intent.namespace(), Part::Envelope);
+        match fault {
+            0 => fs::write(&path, b"not json").unwrap(),
+            1 => {
+                let mut v: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+                v["intent_digest"] = json!("0".repeat(64));
+                fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
+            }
+            2 => fs::write(&path, vec![b' '; 50000]).unwrap(),
+            3 => {
+                let path = disk.path(&f.intent.namespace(), Part::Intent);
+                let mut v: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+                v["accepted"]["kind"] = json!("reference_detach");
+                fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
+            }
+            _ => {
+                fs::write(path.parent().unwrap().join("unexpected.json"), b"{}").unwrap();
+            }
+        }
+        assert!(f.store().load(&f.intent).is_err());
+    }
+    #[cfg(unix)]
+    {
+        let f = Fixture::new();
+        let mut store = f.store();
+        f.claimed(&mut store);
+        let disk = Disk {
+            root: f.root.clone(),
+            fail: None,
+        };
+        let path = disk.path(&f.intent.namespace(), Part::Envelope);
+        let target = f.root.join("foreign");
+        fs::rename(&path, &target).unwrap();
+        std::os::unix::fs::symlink(target, &path).unwrap();
+        assert!(store.load(&f.intent).is_err());
+    }
+}
