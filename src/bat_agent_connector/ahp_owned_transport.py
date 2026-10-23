@@ -26,11 +26,18 @@ async def guarded_frame(ctx, grant, frame, *, current, connect, semaphore, fresh
     async with semaphore:
         check()
         await fresh_read()
+        check()
+        creating = type(grant) is resource_policy.AhpCreateGrant
+        if creating:
+            await resource_policy.refresh_ahp_carrier(grant, ctx, frame, current=current)
         with journal.tx():
             check()
             with pm_source_lineage.execution(ctx.service, ctx.operation_id):
                 pm_source_lineage.require_frame()
-            ledger.sent_fence(journal, grant.resource_id, grant.operation_id, grant.turn_id, ledger.digest(frame))
+            if creating:
+                ledger.create_sent(journal, grant.resource_id, frame, grant.connection)
+            else:
+                ledger.sent_fence(journal, grant.resource_id, grant.operation_id, grant.turn_id, ledger.digest(frame))
         # No await between the final check, durable commit and socket enqueue.
         # A crash, exception or cancellation from here cannot prove non-delivery.
         try:

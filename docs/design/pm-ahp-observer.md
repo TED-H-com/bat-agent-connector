@@ -411,3 +411,17 @@ budget. Synthetic Unix-peer tests are not R3/E11 editor acceptance.
 繁體中文：中央政策新增 AHP 所有權與 final-frame 接縫；預留及唯讀驗證回執均不是
 建立證據。送出前重驗權限與身分、通過 lineage、提交 fence；未知效果只查回、不重送。
 既有 observer 不變，寫入仍停用，沒有 create、turn、result、API 或 UI。
+
+The policy now distinguishes creation authority from owned-turn authority.
+A create capability requires the original Work handoff child, an unsent intent,
+fresh bounded absence and readback of the same Attempt's managed carrier.
+The shared frame guard commits the existing create fence before enqueue;
+neither a lost reply nor `SessionAlreadyExists` permits another create.
+After exact creation evidence, a separate immutable record binds the advertised
+chat. Missing chat evidence still prevents turns. These are internal seams:
+no production route installs them, and `require_owned_write()` still refuses.
+
+繁體中文：新增獨立 create grant；它只授權原 handoff child 的未送出 intent，
+須具備同 Attempt 的 carrier 查回與即時完整 absence，並不授予 turn 所有權。
+共用 guard 先提交 create fence 再送出；失去回覆或 SessionAlreadyExists 都不重送。
+建立後另記 session 宣告的 chat 與其不可變綁定。正式路由尚未安裝，observer 與寫入拒絕不變。
