@@ -9,7 +9,7 @@ import {sessionHref} from './session-navigation.js';
 import {qualityFact} from './pm-quality-projections.js';
 import {runtimeCompletion, runtimeReceipt} from './pm-runtime-completion.js';
 
-export const workStatus = card => ({backlog: 'not_started', in_progress: 'in_progress', waiting: 'waiting', review: 'in_review', accepted: 'done', github_done: 'done', github_closed: 'historical', github_completed: 'historical', archived: 'historical'})[typeof card?.column === 'string' ? card.column : ''] || 'unknown';
+export const workStatus = card => ({backlog: 'todo', in_progress: 'in_progress', waiting: 'waiting', review: 'in_review', accepted: 'done', github_done: 'done', github_closed: 'historical', github_completed: 'historical', archived: 'historical'})[typeof card?.column === 'string' ? card.column : ''] || 'unknown';
 // Content approval is a management fact, not proof of delivery or passing DoD.
 export const workStatusLabel = (t, card) => ['github_done', 'github_closed', 'github_completed'].includes(card?.column) ? boardGitHubText({github_done: 'bgh_done', github_closed: 'bgh_closed', github_completed: 'bgh_completed'}[card.column]) : card?.column === 'accepted' ? t('wv_content_approved') : t('ui_status_' + workStatus(card));
 export function workStatusPill(t, card) {

@@ -2334,6 +2334,11 @@ function reasonLabel(t, reason) {
 var statusVocabulary, phaseVocabulary, phaseStrings, uiStrings, reasonLabels;
 var init_ui_strings = __esmMin((() => {
 	statusVocabulary = Object.freeze({
+		todo: {
+			en: "To do",
+			"zh-TW": "待辦",
+			tone: "neutral"
+		},
 		not_started: {
 			en: "Not started",
 			"zh-TW": "未開始",
@@ -3025,6 +3030,7 @@ var init_global_strings = __esmMin((() => {
 			action_setup_host: "Set up host",
 			action_setup_connection: "Set up connection",
 			action_connection_reference: "Save connection",
+			action_connection_detach: "Detach connection reference",
 			action_setup_repository: "Set up repository",
 			action_setup_verification: "Set up verification",
 			action_models_update: "Update model preferences",
@@ -3234,6 +3240,7 @@ var init_global_strings = __esmMin((() => {
 			action_setup_host: "設定主機",
 			action_setup_connection: "設定連線",
 			action_connection_reference: "儲存連線",
+			action_connection_detach: "中斷連線關聯",
 			action_setup_repository: "設定儲存庫",
 			action_setup_verification: "設定驗證",
 			action_models_update: "更新模型偏好",
@@ -12013,7 +12020,7 @@ var init_i18n = __esmMin((() => {
 			pin: "固定在上方",
 			unpin: "取消固定",
 			wi_done_of: "完成 {done}/{total}",
-			wi_state_todo: "未開始",
+			wi_state_todo: uiStrings["zh-TW"].ui_status_todo,
 			wi_state_doing: "進行中",
 			wi_state_waiting: "等待中",
 			wi_state_done: "已完成",
@@ -19300,6 +19307,7 @@ var ACTIONS = {
 	"setup.host": "action_setup_host",
 	"setup.connection.apply": "action_setup_connection",
 	"connection.reference.apply": "action_connection_reference",
+	"connection.reference.detach": "action_connection_detach",
 	"setup.repository": "action_setup_repository",
 	"setup.verification": "action_setup_verification",
 	"preferences.models.update": "action_models_update",
@@ -19429,7 +19437,7 @@ var WORK_STATUS = {
 	github_closed: "github_closed",
 	github_completed: "github_completed",
 	github_done: "github_done",
-	todo: "not_started",
+	todo: "todo",
 	doing: "in_progress",
 	waiting: "waiting",
 	done: "done",
@@ -22705,7 +22713,7 @@ function runtimeReceipt(t, attempt) {
 //#region src/pm-work-inspector.js
 init_ui_strings();
 var workStatus = (card) => ({
-	backlog: "not_started",
+	backlog: "todo",
 	in_progress: "in_progress",
 	waiting: "waiting",
 	review: "in_review",
@@ -43728,6 +43736,9 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 		busy = true;
 		try {
 			alive();
+			if (verb === "resume" && selectedWork() === current.work_item_ids[0]) try {
+				sessionStorage.setItem(navigationKey(operation.operation_id), current.work_item_ids[0]);
+			} catch {}
 			for (const button of body.querySelectorAll("button")) button.disabled = true;
 			const value = await api("POST", `/operations/${operation.operation_id}/${verb}`, {});
 			if (!valid(own)) return;

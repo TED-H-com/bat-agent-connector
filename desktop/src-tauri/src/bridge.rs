@@ -12,6 +12,9 @@ use std::{
 use url::Url;
 use zeroize::Zeroizing;
 
+#[path = "connection_participant/mod.rs"]
+mod connection_participant;
+
 pub const MAX_ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
 
 const MAX_REQUEST: usize = 1024 * 1024;
@@ -1559,13 +1562,26 @@ impl Bridge {
         token: &str,
         input: &ConnectorRequest,
     ) -> Result<ConnectorResponse, String> {
+        self.send_encoded(config, token, input, None).await
+    }
+    async fn send_encoded(
+        &self,
+        config: &Config,
+        token: &str,
+        input: &ConnectorRequest,
+        encoded: Option<&[u8]>,
+    ) -> Result<ConnectorResponse, String> {
         let url = config
             .validate()?
             .join(&format!("api/v1{}", input.path))
             .map_err(|_| "Invalid central route")?;
         let method = Method::from_bytes(input.method.as_bytes()).map_err(|_| "Invalid method")?;
         let mut request = self.client.request(method, url).bearer_auth(token);
-        if let Some(body) = &input.body {
+        if let Some(encoded) = encoded {
+            request = request
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(encoded.to_vec());
+        } else if let Some(body) = &input.body {
             request = request.json(body);
         }
         if let Some(key) = &input.idempotency_key {

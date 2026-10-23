@@ -29,6 +29,29 @@ internal static class ManagedViewProbeTests
 
     private static int Main()
     {
+        foreach (string phase in new string[] {
+            "started", "owner_verified", "assemblies_loaded", "window_resolved",
+            "query_started", "query_completed", "completed", "failed" })
+        {
+            Check(ManagedViewProbe.FormatPhase(phase, 7234) == "phase_elapsed_ms:" + phase + ":7234",
+                "Phase elapsed format drifted");
+        }
+        Check(ManagedViewProbe.FormatPhase("started", -1) == "phase_elapsed_ms:started:0", "Negative phase time escaped");
+        Check(ManagedViewProbe.FormatPhase("failed", long.MaxValue) == "phase_elapsed_ms:failed:60000", "Phase time was not bounded");
+        bool invalidPhase = false;
+        try { ManagedViewProbe.FormatPhase("private UI text", 1); } catch (ArgumentException) { invalidPhase = true; }
+        Check(invalidPhase, "Unknown phase text escaped");
+        Check(ManagedViewProbe.ElapsedMilliseconds(1000, 8500, 1000) == 7500, "Parent process-start origin was lost");
+        Check(ManagedViewProbe.ElapsedMilliseconds(8500, 8500, 1000) == 0, "Zero elapsed time drifted");
+        Check(ManagedViewProbe.ElapsedMilliseconds(1000, 90000, 1000) == 60000, "Elapsed time was not bounded");
+        Check(ManagedViewProbe.ParseElapsedOrigin("1000", 8500) == 1000, "Parent timestamp was not parsed invariantly");
+        foreach (string value in new string[] { "0", "-1", "8501", " 1000", "1000 secret", "99999999999999999999" })
+        {
+            bool refused = false;
+            try { ManagedViewProbe.ParseElapsedOrigin(value, 8500); } catch (ArgumentException) { refused = true; }
+            Check(refused, "Malformed or future parent timestamp was accepted");
+        }
+
         foreach (uint code in new uint[] { 0x80040201, 0x80010108, 0x80010001, 0x8001010A })
         {
             Check(ManagedViewProbe.IsTransient(new COMException("private value", unchecked((int)code))), "Transient COM read became fatal");
