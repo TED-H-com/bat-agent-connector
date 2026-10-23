@@ -1,0 +1,586 @@
+{
+  "operations": {
+    "operations": [
+      {
+        "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "actor": "fixture-operator",
+        "entry": "http",
+        "idem_key": "original-key",
+        "action": "setup.connection.apply",
+        "target": {
+          "installation_ref": "desktop-a"
+        },
+        "params": {
+          "label": "Fixture connection",
+          "native_plan": {
+            "artifacts": [
+              {
+                "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+                "before_digest": null,
+                "role": "inventory"
+              },
+              {
+                "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+                "before_digest": null,
+                "role": "profile_index"
+              },
+              {
+                "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+                "before_digest": null,
+                "role": "ssh_reference"
+              },
+              {
+                "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+                "before_digest": null,
+                "role": "installation"
+              }
+            ],
+            "contract_version": 1,
+            "generator_version": 1,
+            "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+          },
+          "preferences": {
+            "favorite": true
+          },
+          "remote_profile_id": "default",
+          "service_ref": null,
+          "source": {
+            "association": {
+              "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "url": "wss://bat.example:9876/"
+            },
+            "availability_reason": "SOURCE_AVAILABLE",
+            "kind": "bat_profile",
+            "policy_version": 1,
+            "profile_reference": "profile-a",
+            "reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "source_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "source_reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "workspace_ref": null
+        },
+        "preconditions": {
+          "expected_revision": 0,
+          "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "status": "waiting_external",
+        "status_reason": "Connection intent accepted; waiting for native receipt before saving the association / 連線意圖已接受；等待本機回執後儲存關聯",
+        "error_code": null,
+        "result": null,
+        "external_refs": {
+          "admission_binding": {
+            "connection_id": null,
+            "controller_authority": {
+              "actor": "fixture-operator",
+              "admin": false,
+              "controller_id": "ctr_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "scopes": [
+                "approve",
+                "cleanup",
+                "cleanup_discard",
+                "deploy",
+                "integrate",
+                "manage",
+                "merge",
+                "observe",
+                "operate",
+                "start"
+              ],
+              "server_id": "11111111-1111-4111-8111-111111111111"
+            },
+            "create_intent": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "installation_ref": "desktop-a",
+            "native_plan": {
+              "artifacts": [
+                {
+                  "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+                  "before_digest": null,
+                  "role": "inventory"
+                },
+                {
+                  "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+                  "before_digest": null,
+                  "role": "profile_index"
+                },
+                {
+                  "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+                  "before_digest": null,
+                  "role": "ssh_reference"
+                },
+                {
+                  "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+                  "before_digest": null,
+                  "role": "installation"
+                }
+              ],
+              "contract_version": 1,
+              "generator_version": 1,
+              "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+            },
+            "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
+            "projection": {
+              "label": "Fixture connection",
+              "preferences": {
+                "favorite": true
+              },
+              "remote_profile_id": "default",
+              "service_ref": null,
+              "workspace_ref": null
+            },
+            "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "server_id": "11111111-1111-4111-8111-111111111111",
+            "source_descriptor": {
+              "association": {
+                "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "url": "wss://bat.example:9876/"
+              },
+              "availability_reason": "SOURCE_AVAILABLE",
+              "kind": "bat_profile",
+              "policy_version": 1,
+              "profile_reference": "profile-a",
+              "reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "source_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            }
+          },
+          "native_effects_sent": false
+        },
+        "cancel_requested": false,
+        "version": 2,
+        "attempts": 1,
+        "uncertain_tries": 0,
+        "next_run_at": 1800000000.0,
+        "created_at": 1800000000.0,
+        "updated_at": 1800000000.0,
+        "idempotency_key": "original-key",
+        "idempotency_enabled": true
+      }
+    ],
+    "next_before": null,
+    "next_before_id": null
+  },
+  "operation": {
+    "operation": {
+      "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "actor": "fixture-operator",
+      "entry": "http",
+      "idem_key": "original-key",
+      "action": "setup.connection.apply",
+      "target": {
+        "installation_ref": "desktop-a"
+      },
+      "params": {
+        "label": "Fixture connection",
+        "native_plan": {
+          "artifacts": [
+            {
+              "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+              "before_digest": null,
+              "role": "inventory"
+            },
+            {
+              "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+              "before_digest": null,
+              "role": "profile_index"
+            },
+            {
+              "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+              "before_digest": null,
+              "role": "ssh_reference"
+            },
+            {
+              "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+              "before_digest": null,
+              "role": "installation"
+            }
+          ],
+          "contract_version": 1,
+          "generator_version": 1,
+          "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+        },
+        "preferences": {
+          "favorite": true
+        },
+        "remote_profile_id": "default",
+        "service_ref": null,
+        "source": {
+          "association": {
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "url": "wss://bat.example:9876/"
+          },
+          "availability_reason": "SOURCE_AVAILABLE",
+          "kind": "bat_profile",
+          "policy_version": 1,
+          "profile_reference": "profile-a",
+          "reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "source_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        "source_reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "workspace_ref": null
+      },
+      "preconditions": {
+        "expected_revision": 0,
+        "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "status": "waiting_external",
+      "status_reason": "Connection intent accepted; waiting for native receipt before saving the association / 連線意圖已接受；等待本機回執後儲存關聯",
+      "error_code": null,
+      "result": null,
+      "external_refs": {
+        "admission_binding": {
+          "connection_id": null,
+          "controller_authority": {
+            "actor": "fixture-operator",
+            "admin": false,
+            "controller_id": "ctr_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "scopes": [
+              "approve",
+              "cleanup",
+              "cleanup_discard",
+              "deploy",
+              "integrate",
+              "manage",
+              "merge",
+              "observe",
+              "operate",
+              "start"
+            ],
+            "server_id": "11111111-1111-4111-8111-111111111111"
+          },
+          "create_intent": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "installation_ref": "desktop-a",
+          "native_plan": {
+            "artifacts": [
+              {
+                "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+                "before_digest": null,
+                "role": "inventory"
+              },
+              {
+                "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+                "before_digest": null,
+                "role": "profile_index"
+              },
+              {
+                "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+                "before_digest": null,
+                "role": "ssh_reference"
+              },
+              {
+                "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+                "before_digest": null,
+                "role": "installation"
+              }
+            ],
+            "contract_version": 1,
+            "generator_version": 1,
+            "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+          },
+          "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
+          "projection": {
+            "label": "Fixture connection",
+            "preferences": {
+              "favorite": true
+            },
+            "remote_profile_id": "default",
+            "service_ref": null,
+            "workspace_ref": null
+          },
+          "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "server_id": "11111111-1111-4111-8111-111111111111",
+          "source_descriptor": {
+            "association": {
+              "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "url": "wss://bat.example:9876/"
+            },
+            "availability_reason": "SOURCE_AVAILABLE",
+            "kind": "bat_profile",
+            "policy_version": 1,
+            "profile_reference": "profile-a",
+            "reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "source_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          }
+        },
+        "native_effects_sent": false
+      },
+      "cancel_requested": false,
+      "version": 2,
+      "attempts": 1,
+      "uncertain_tries": 0,
+      "next_run_at": 1800000000.0,
+      "created_at": 1800000000.0,
+      "updated_at": 1800000000.0,
+      "idempotency_key": "original-key",
+      "idempotency_enabled": true,
+      "steps": [
+        {
+          "seq": 1,
+          "name": "native_effects",
+          "status": "started",
+          "external_ref": null,
+          "error": null,
+          "started_at": 1800000000.0,
+          "finished_at": null
+        }
+      ]
+    },
+    "work_items": [],
+    "cleanup_receipts": []
+  },
+  "operations_route": "/api/v1/operations?action=setup.connection.apply&limit=200",
+  "bootstrap_operations": {
+    "operations": [
+      {
+        "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "actor": "fixture-operator",
+        "entry": "http",
+        "idem_key": "original-key",
+        "action": "setup.connection.apply",
+        "target": {
+          "installation_ref": "desktop-a"
+        },
+        "params": {
+          "label": "Fixture connection",
+          "native_plan": {
+            "artifacts": [
+              {
+                "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+                "before_digest": null,
+                "role": "inventory"
+              },
+              {
+                "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+                "before_digest": null,
+                "role": "profile_index"
+              },
+              {
+                "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+                "before_digest": null,
+                "role": "ssh_reference"
+              },
+              {
+                "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+                "before_digest": null,
+                "role": "installation"
+              }
+            ],
+            "contract_version": 1,
+            "generator_version": 1,
+            "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+          },
+          "preferences": {
+            "favorite": true
+          },
+          "remote_profile_id": "default",
+          "service_ref": null,
+          "source": {
+            "association": {
+              "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "url": "wss://bat.example:9876/"
+            },
+            "availability_reason": "SOURCE_AVAILABLE",
+            "kind": "bat_profile",
+            "policy_version": 1,
+            "profile_reference": "profile-a",
+            "reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "source_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "source_reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "workspace_ref": null
+        },
+        "preconditions": {
+          "expected_revision": 0,
+          "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "status": "waiting_external",
+        "status_reason": "Connection intent accepted; waiting for native receipt before saving the association / 連線意圖已接受；等待本機回執後儲存關聯",
+        "error_code": null,
+        "result": null,
+        "external_refs": {
+          "admission_binding": {
+            "connection_id": null,
+            "controller_authority": {
+              "actor": "fixture-operator",
+              "admin": false,
+              "controller_id": "ctr_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "scopes": [
+                "approve",
+                "cleanup",
+                "cleanup_discard",
+                "deploy",
+                "integrate",
+                "manage",
+                "merge",
+                "observe",
+                "operate",
+                "start"
+              ],
+              "server_id": "11111111-1111-4111-8111-111111111111"
+            },
+            "create_intent": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "installation_ref": "desktop-a",
+            "native_plan": {
+              "artifacts": [
+                {
+                  "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+                  "before_digest": null,
+                  "role": "inventory"
+                },
+                {
+                  "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+                  "before_digest": null,
+                  "role": "profile_index"
+                },
+                {
+                  "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+                  "before_digest": null,
+                  "role": "ssh_reference"
+                },
+                {
+                  "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+                  "before_digest": null,
+                  "role": "installation"
+                }
+              ],
+              "contract_version": 1,
+              "generator_version": 1,
+              "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+            },
+            "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
+            "projection": {
+              "label": "Fixture connection",
+              "preferences": {
+                "favorite": true
+              },
+              "remote_profile_id": "default",
+              "service_ref": null,
+              "workspace_ref": null
+            },
+            "review_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "server_id": "11111111-1111-4111-8111-111111111111",
+            "source_descriptor": {
+              "association": {
+                "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "url": "wss://bat.example:9876/"
+              },
+              "availability_reason": "SOURCE_AVAILABLE",
+              "kind": "bat_profile",
+              "policy_version": 1,
+              "profile_reference": "profile-a",
+              "reference": "source_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "source_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            }
+          },
+          "native_effects_sent": false
+        },
+        "cancel_requested": false,
+        "version": 2,
+        "attempts": 1,
+        "uncertain_tries": 0,
+        "next_run_at": 1800000000.0,
+        "created_at": 1800000000.0,
+        "updated_at": 1800000000.0,
+        "idempotency_key": "original-key",
+        "idempotency_enabled": true
+      }
+    ],
+    "next_before": null,
+    "next_before_id": null
+  },
+  "replay_sync": {
+    "version": 1,
+    "server_id": "11111111-1111-4111-8111-111111111111",
+    "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
+    "head_cursor": 5,
+    "retained_after": 0,
+    "checkpoint": {
+      "cursor": 4,
+      "token": "fixture-checkpoint-proof"
+    }
+  },
+  "events": {
+    "events": [
+      {
+        "seq": 5,
+        "event_id": 5,
+        "resource_type": "operation",
+        "resource_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "kind": "operation.waiting_external",
+        "body": {
+          "action": "setup.connection.apply",
+          "from": "running",
+          "to": "waiting_external",
+          "error_code": null,
+          "reason": "Connection intent accepted; waiting for native receipt before saving the association / 連線意圖已接受；等待本機回執後儲存關聯"
+        },
+        "actor": "fixture-operator",
+        "created_at": 1800000000.0,
+        "context": {
+          "action": "setup.connection.apply",
+          "actor": "fixture-operator",
+          "actor_basis": "authenticated_principal",
+          "actor_evidence": {
+            "principal_ref": "fixture-operator",
+            "source": "api_events.actor"
+          },
+          "backfilled": false,
+          "claimed_actor": null,
+          "client": null,
+          "command_id": null,
+          "entry_point": "daemon",
+          "evidence": [],
+          "execution_id": null,
+          "host": null,
+          "observer": "operation-service",
+          "occurred_at": "2027-01-15T08:00:00Z",
+          "occurred_at_epoch": 1800000000.0,
+          "operation_entry_point": "http",
+          "operation_id": "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "profile_id": null,
+          "project_ids": [],
+          "recorded_at": "2027-01-15T08:00:00Z",
+          "relation_ids": [],
+          "result_versions": [],
+          "session_resource_ids": [],
+          "source_versions": [],
+          "step": null,
+          "unknown_fields": {
+            "claimed_actor": "not_recorded",
+            "client": "not_recorded",
+            "command_id": "not_recorded",
+            "execution_id": "not_recorded",
+            "host": "not_recorded",
+            "profile_id": "not_recorded",
+            "step": "not_recorded",
+            "workspace_id": "not_recorded"
+          },
+          "work_item_ids": [],
+          "workspace_id": null,
+          "worktree_ids": []
+        }
+      }
+    ],
+    "next_cursor": 5,
+    "head_cursor": 5,
+    "has_more": false,
+    "sync": {
+      "version": 1,
+      "server_id": "11111111-1111-4111-8111-111111111111",
+      "principal_id": "1111111111111111111111111111111111111111111111111111111111111111",
+      "head_cursor": 5,
+      "retained_after": 0,
+      "checkpoint": {
+        "cursor": 5,
+        "token": "fixture-checkpoint-proof"
+      }
+    }
+  },
+  "gap": {
+    "error": {
+      "code": "EVENT_CURSOR_RESET",
+      "reason": "checkpoint_invalid",
+      "message": "Reload the bootstrap snapshot before replaying events; preserve local drafts.",
+      "resnapshot": true,
+      "preserve_drafts": true
+    }
+  }
+}
