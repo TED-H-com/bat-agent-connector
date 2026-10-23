@@ -17,6 +17,8 @@ import pytest
 
 from scripts.ci_sharding import assign_files, collection_digest, load_weights
 
+_crash_state = pytest.StashKey[tuple[int, int | None]]()
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("ci-sharding")
@@ -48,10 +50,66 @@ def pytest_configure(config):
     config.add_cleanup(progress.close)
     # Duplicate stderr before per-test capture starts, so a blocked test cannot
     # trap the dump in pytest's capture file. The workflow tees it to an artifact.
-    stderr_fd = os.dup(sys.stderr.fileno()) if timeout is not None else None
-    if stderr_fd is not None:
-        config.add_cleanup(lambda: os.close(stderr_fd))
+    stderr_fd = None
+    if timeout is not None:
+        original_stderr = sys.stderr.fileno()
+        stderr_fd = os.dup(original_stderr)
+        # Like pytest's built-in plugin, retain the original stderr target:
+        # faulthandler has no API to retrieve an already-enabled handler's fd.
+        restore_fd = original_stderr if faulthandler.is_enabled() else None
+        config.stash[_crash_state] = (stderr_fd, restore_fd)
+        config.add_cleanup(lambda: _restore_crash_handler(config))  # Also covers configure failures.
+        faulthandler.enable(file=stderr_fd, all_threads=True)
     config.pluginmanager.register(_ShardEvidence(progress, timeout, stderr_fd), "ci-shard-evidence")
+
+
+def _restore_crash_handler(config):
+    state = config.stash.get(_crash_state, None)
+    if state is None:
+        return
+    stderr_fd, restore_fd = state
+    faulthandler.cancel_dump_traceback_later()
+    faulthandler.disable()
+    os.close(stderr_fd)
+    if restore_fd is not None:
+        faulthandler.enable(file=restore_fd, all_threads=True)
+    del config.stash[_crash_state]
+
+
+def pytest_unconfigure(config):
+    _restore_crash_handler(config)
+
+
+def _read_proc(path):
+    """Small injection seam for unavailable procfs; never patch global open."""
+    return Path(path).read_text(encoding="ascii")
+
+
+def _resource_snapshot():
+    snapshot = {"mem_available_kib": None, "rss_kib": None, "threads": None}
+    if sys.platform != "linux":
+        return snapshot
+    for path, fields in (
+        ("/proc/meminfo", {"MemAvailable": "mem_available_kib"}),
+        ("/proc/self/status", {"VmRSS": "rss_kib", "Threads": "threads"}),
+    ):
+        try:
+            text = _read_proc(path)
+        except (OSError, UnicodeError):
+            continue  # Missing diagnostics must not change a test's outcome.
+        for line in text.splitlines():
+            key, _, raw = line.partition(":")
+            if key not in fields:
+                continue
+            parts = raw.split()
+            try:
+                value = int(parts[0])
+                units = [] if key == "Threads" else ["kB"]
+                if 0 <= value < 2**63 and parts[1:] == units:
+                    snapshot[fields[key]] = value
+            except (ValueError, IndexError):
+                pass
+    return snapshot
 
 
 class _ShardEvidence:
@@ -82,6 +140,7 @@ class _ShardEvidence:
             "time": time.time(), "nodeid": item.nodeid[:512],
             "nodeid_sha256": hashlib.sha256(item.nodeid.encode()).hexdigest(),
             "nodeid_truncated": len(item.nodeid) > 512, "phase": phase, "event": event,
+            **_resource_snapshot(),
         }, ensure_ascii=True) + "\n")
         self.stream.flush()
 

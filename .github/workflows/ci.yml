@@ -108,6 +108,7 @@ jobs:
       - name: Tests (mock server only; existing live-test policy unchanged)
         # Run 39922072602: max completed Tests 1705s * 1.5 = 42m37.5s < 43m.
         # Max setup 11s + Tests 43m + upload/cleanup reserve 1m < job 45m (post-test max 6s).
+        # A step deadline can preserve uploads only while the runner remains healthy.
         timeout-minutes: 43
         shell: bash
         run: |

@@ -205,3 +205,137 @@ def test_watchdog_rejects_competing_timer_and_invalid_threshold(pytester, monkey
     assert result.ret == pytest.ExitCode.USAGE_ERROR
     assert message in result.stderr.str()
     assert not (pytester.path / "ci-results").exists()
+
+
+def test_fatal_signal_keeps_all_thread_stacks_and_current_phase(pytester, monkeypatch):
+    prepare(pytester, monkeypatch)
+    pytester.makepyfile(test_crash='''
+        import faulthandler
+        import threading
+
+        def crash_background_wait(ready, done):
+            ready.set()
+            done.wait()
+
+        def test_crashing_extension():
+            ready, done = threading.Event(), threading.Event()
+            thread = threading.Thread(target=crash_background_wait, args=(ready, done), daemon=True)
+            thread.start()
+            ready.wait()
+            faulthandler._sigsegv()
+    ''')
+    result = run_step(pytester)
+    assert result.ret != 0  # The real shell pipeline must retain the crash exit.
+    for output in (result.stderr.str(), (pytester.path / "ci-results/tracebacks.log").read_text()):
+        assert "Fatal Python error" in output
+        fatal_dump = output[output.index("Fatal Python error"):]
+        assert "test_crashing_extension" in fatal_dump
+        assert "crash_background_wait" in fatal_dump
+    progress = [json.loads(line) for line in (pytester.path / "ci-results/progress.jsonl").read_text().splitlines()]
+    assert progress[-1]["nodeid"] == "test_crash.py::test_crashing_extension"
+    assert (progress[-1]["phase"], progress[-1]["event"]) == ("call", "start")
+
+
+@pytest.mark.parametrize("previously_enabled", [False, True])
+def test_crash_handler_restores_state_before_closing_fd(pytester, monkeypatch, previously_enabled):
+    prepare(pytester, monkeypatch)
+    # All instrumentation stays in this child process. Like pytest's built-in
+    # handler, the pre-existing handler here targets the original stderr.
+    pytester.makeconftest('''
+        import faulthandler
+        import json
+        import os
+        import sys
+        from pathlib import Path
+        import pytest
+
+        state = {"owned_fd": None, "disable_saw_open_fd": False, "restored_target": None}
+        previously_enabled = PREVIOUSLY_ENABLED
+
+        @pytest.hookimpl(tryfirst=True)
+        def pytest_configure(config):
+            original_fd = sys.stderr.fileno()
+            state["original_fd"] = original_fd
+            faulthandler.disable()
+            if previously_enabled:
+                faulthandler.enable(file=original_fd, all_threads=True)
+            enable, disable = faulthandler.enable, faulthandler.disable
+            def checked_enable(file=sys.stderr, all_threads=True, **kwargs):
+                fd = file if isinstance(file, int) else file.fileno()
+                if state["owned_fd"] is None and fd != original_fd:
+                    state["owned_fd"] = fd
+                elif fd == original_fd:
+                    state["restored_target"] = fd
+                return enable(file=file, all_threads=all_threads, **kwargs)
+            def checked_disable():
+                if state["owned_fd"] is not None:
+                    # Detect premature close at the moment the handler is stopped.
+                    os.fstat(state["owned_fd"])
+                    state["disable_saw_open_fd"] = True
+                return disable()
+            faulthandler.enable, faulthandler.disable = checked_enable, checked_disable
+
+        @pytest.hookimpl(wrapper=True, tryfirst=True)
+        def pytest_unconfigure(config):
+            yield
+            assert state["owned_fd"] is not None
+            assert state["disable_saw_open_fd"]
+            assert faulthandler.is_enabled() is previously_enabled
+            assert state["restored_target"] == (state["original_fd"] if previously_enabled else None)
+            with pytest.raises(OSError):
+                os.fstat(state["owned_fd"])
+            Path("restored.json").write_text(json.dumps(state))
+    '''.replace("PREVIOUSLY_ENABLED", repr(previously_enabled)))
+    pytester.makepyfile('''
+        import faulthandler
+        def test_handler_is_active():
+            assert faulthandler.is_enabled()
+    ''')
+    result = pytester.runpytest_subprocess(
+        "-q", "-p", "tests.ci_shard_plugin", "-p", "no:faulthandler",
+        "--ci-shard-index=1", "--ci-shard-count=1", "--ci-shard-manifest=ci-results/manifest.json",
+        "--ci-durations=weights.json", "--ci-watchdog-seconds=1",
+    )
+    result.assert_outcomes(passed=1)
+    assert result.ret == 0
+    assert json.loads((pytester.path / "restored.json").read_text())["disable_saw_open_fd"]
+
+
+@pytest.mark.parametrize("source", ["procfs", "read-failure", "non-linux"])
+def test_progress_records_resources_without_affecting_tests(pytester, monkeypatch, source):
+    prepare(pytester, monkeypatch)
+    if source == "read-failure":
+        pytester.makeconftest('''
+            import pytest
+            from tests import ci_shard_plugin
+            @pytest.hookimpl(trylast=True)
+            def pytest_configure(config):
+                def unavailable(path):
+                    raise OSError("synthetic procfs read failure")
+                ci_shard_plugin._read_proc = unavailable
+        ''')
+    elif source == "non-linux":
+        pytester.makeconftest('''
+            from types import SimpleNamespace
+            import pytest
+            from tests import ci_shard_plugin
+            @pytest.hookimpl(trylast=True)
+            def pytest_configure(config):
+                # Replace only this plugin's platform view, never the stdlib module.
+                ci_shard_plugin.sys = SimpleNamespace(platform="other")
+        ''')
+    pytester.makepyfile("def test_resource_probe_is_diagnostic(): pass")
+    result = run_step(pytester)
+    result.assert_outcomes(passed=1)
+    assert result.ret == 0
+    lines = (pytester.path / "ci-results/progress.jsonl").read_text().splitlines()
+    assert len(lines) == 6
+    for line in lines:
+        assert len(line.encode()) <= 8192
+        row = json.loads(line)
+        for field in ("mem_available_kib", "rss_kib", "threads"):
+            if source != "procfs" or sys.platform != "linux":
+                assert row[field] is None
+            else:
+                assert type(row[field]) is int
+                assert row[field] >= 0
