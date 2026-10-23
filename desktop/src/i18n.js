@@ -2051,7 +2051,7 @@ export const STRINGS = {
     project_repository_optional: "Repository for dispatch (optional)", project_repository_later: "Choose later",
     no_projects: "No projects yet.", new_sub_project: "Sub-project name", rename: "Rename", archive: "Archive",
     restore: "Restore", more: "More", move_up: "Move up", move_down: "Move down", pin: "Pin to top", unpin: "Unpin",
-    wi_done_of: "{done}/{total} done", wi_state_todo: uiStrings.en.ui_status_todo, wi_state_doing: "in progress",
+    wi_done_of: "{done}/{total} done", wi_state_todo: "to do", wi_state_doing: "in progress",
     wi_state_waiting: "waiting", wi_state_done: "done", wi_state_awaiting_approval: "done? (to confirm)",
     wi_err_VERSION_CONFLICT: "Someone changed this meanwhile; the latest version was loaded (your edits in the form are kept). Check it and save again.", linked_back: "linked to this work item",
     wi_err_ORDER_CHANGED: "The order changed meanwhile; it was reloaded. Reorder again.",

@@ -53,5 +53,5 @@ for (const locale of ['en', 'zh-TW']) test(`to-do lane stays distinct from a sta
     const {t} = await import('/src/i18n.js');
     return {key: workStatusKey('todo'), label: t('ui_status_' + workStatusKey('todo')), legacy: t('wi_state_todo')};
   });
-  expect(labels).toEqual({key: 'todo', label: lane, legacy: lane});
+  expect(labels).toEqual({key: 'todo', label: lane, legacy: locale === 'en' ? 'to do' : lane});
 });

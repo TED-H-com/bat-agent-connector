@@ -13784,7 +13784,7 @@ var init_i18n = __esmMin((() => {
 			pin: "Pin to top",
 			unpin: "Unpin",
 			wi_done_of: "{done}/{total} done",
-			wi_state_todo: uiStrings.en.ui_status_todo,
+			wi_state_todo: "to do",
 			wi_state_doing: "in progress",
 			wi_state_waiting: "waiting",
 			wi_state_done: "done",
