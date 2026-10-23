@@ -14,6 +14,10 @@ fallback; selection does not prove that its future tunnel or BAT protocol is rea
 The Connector's single configured SSH alias is an explicitly `configured` route;
 no alias means no tunnel route, rather than inventing one.
 
+Hosts accept `prefer_lan`: a strictly boolean, host-only option, default `false`.
+Default route order and preference remain direct → LAN → cf. With `prefer_lan: true`,
+route order and preference are LAN → direct → cf. Reordered routes are rejected.
+
 Inventory hosts and individual `routes` entries accept optional policy fields:
 
 - `allow_tailscale_relay`: boolean, default `false`. A route override takes precedence
@@ -33,7 +37,7 @@ or `central.json` API identity configuration.
 
 Home hosts can intentionally use a dual-WAN load-balancing router. Public addresses
 and ports changing between connections are an expected home condition.
-Selection prefers LAN, then Tailscale direct, then an opted-in Tailscale relay,
+With the host opt-in `prefer_lan: true`, selection prefers LAN, then Tailscale direct, then an opted-in Tailscale relay,
 then configured Cloudflare. LAN has its own looser budget so a loaded host can
 finish its probe before a relay is selected. Route budgets override host budgets,
 which override the global budget.
@@ -42,6 +46,7 @@ For example, retain the other required host fields and configure:
 
 ```json
 {
+  "prefer_lan": true,
   "direct_probe_ms": 600,
   "routes": [
     {"kind": "lan", "alias": "bat-home-lan", "probe": "192.0.2.10:22",
@@ -55,7 +60,7 @@ For example, retain the other required host fields and configure:
 
 Also include `home.example.invalid` in `cloudflare_access_hosts`.
 繁體中文：家中刻意使用雙 WAN 負載平衡時，每次連線的公開位址及連接埠改變是正常情況。
-優先使用 LAN（例如 1500 毫秒），其次為 Tailscale 直連、明確允許的中繼，最後為已設定的
+主機明確設定 `prefer_lan: true` 才優先使用 LAN（例如 1500 毫秒），其次為 Tailscale 直連、明確允許的中繼，最後為已設定的
 Cloudflare。路線預算優先於主機及全域預算；LAN 探測完成前不會選用中繼。
 
 If status identifies exactly one peer at the configured tailnet IP but direct proof
@@ -87,7 +92,8 @@ Two intentional corrections to historical Kit behavior are part of this port:
 - Fast-failure demotion only ranks routes whose eligibility was checked. A demoted
   preferred route cannot cause an unproven direct/LAN tier to be selected.
 
-Within eligible routes, preference is LAN, direct (including opted-in relay), then Cloudflare. Skip aliases
+Within eligible routes, default preference remains direct, LAN, then Cloudflare.
+Only hosts with `prefer_lan: true` prefer LAN before direct (including opted-in relay). Skip aliases
 blocked by fast failures when another eligible route is available. If every eligible
 route is blocked, retain the best eligible route, as in the Kit's last-resort policy.
 Three observed failures lasting less than 15 seconds demote that alias for ten minutes

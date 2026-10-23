@@ -76,6 +76,7 @@ struct Route {
 pub struct Routes {
     name: String,
     routes: Vec<Route>,
+    prefer_lan: bool,
 }
 impl Routes {
     pub fn from_inventory(inventory: &Inventory, name: &str) -> Result<Self> {
@@ -85,6 +86,7 @@ impl Routes {
             .filter(|v| (1..=5000).contains(v))
             .ok_or("INVENTORY_INVALID")?;
         let mut routes = Vec::new();
+        let mut prefer_lan = false;
         if doc["connector"]["name"].as_str() == Some(name) {
             if let Some(alias) = doc["connector"]["ssh_alias"].as_str() {
                 routes.push(Route {
@@ -102,6 +104,7 @@ impl Routes {
                 .iter()
                 .find(|v| v["name"].as_str() == Some(name))
                 .ok_or("ROUTE_UNKNOWN_HOST")?;
+            prefer_lan = host["prefer_lan"].as_bool().unwrap_or(false);
             for route in host["routes"].as_array().ok_or("INVENTORY_INVALID")? {
                 let kind = match route["kind"].as_str() {
                     Some("direct") => RouteKind::Direct,
@@ -145,6 +148,7 @@ impl Routes {
         Ok(Self {
             name: name.into(),
             routes,
+            prefer_lan,
         })
     }
 }
@@ -726,14 +730,26 @@ impl SelectionRequest {
             .routes
             .iter()
             .filter(|r| match r.kind {
-                RouteKind::Direct => direct_ok && !(relayed && lan_ok),
+                RouteKind::Direct => direct_ok && !(self.routes.prefer_lan && relayed && lan_ok),
                 RouteKind::Lan => lan_ok,
                 RouteKind::Cf | RouteKind::Configured => true,
             })
             .collect();
         eligible.sort_by_key(|r| match r.kind {
-            RouteKind::Lan => 0,
-            RouteKind::Direct => 1,
+            RouteKind::Lan => {
+                if self.routes.prefer_lan {
+                    0
+                } else {
+                    1
+                }
+            }
+            RouteKind::Direct => {
+                if self.routes.prefer_lan {
+                    1
+                } else {
+                    0
+                }
+            }
             RouteKind::Cf | RouteKind::Configured => 2,
         });
         let chosen = eligible

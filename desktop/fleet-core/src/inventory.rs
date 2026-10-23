@@ -264,7 +264,7 @@ impl Inventory {
                     "workspace_bindings",
                     "connector_endpoint",
                 ],
-                &["allow_tailscale_relay", "direct_probe_ms"],
+                &["allow_tailscale_relay", "direct_probe_ms", "prefer_lan"],
             )?;
             route_options(host)?;
             let name = identifier(&host["name"], 64, b"_.-")?;
@@ -282,6 +282,16 @@ impl Inventory {
             if !host["probe"].is_null() {
                 endpoint(text(&host["probe"])?, false)?;
             }
+            let prefer_lan = match host.get("prefer_lan") {
+                None => false,
+                Some(value) => value.as_bool().ok_or(INVALID)?,
+            };
+            let order = if prefer_lan {
+                ["lan", "direct", "cf"]
+            } else {
+                ["direct", "lan", "cf"]
+            };
+            let mut last = None;
             let mut kinds = HashSet::new();
             for route in array(&host["routes"], true)? {
                 fields(
@@ -296,10 +306,12 @@ impl Inventory {
                 )?;
                 route_options(route)?;
                 let kind = text(&route["kind"])?;
-                // Selection ranks eligible routes independently of inventory order.
-                if !["direct", "lan", "cf"].contains(&kind) || !kinds.insert(kind) {
+                let tier = order.iter().position(|v| *v == kind).ok_or(INVALID)?;
+                if last.is_some_and(|v| v >= tier) {
                     return Err(INVALID);
                 }
+                last = Some(tier);
+                kinds.insert(kind);
                 identifier(&route["alias"], 128, b"_.-")?;
                 if !route["probe"].is_null() {
                     endpoint(text(&route["probe"])?, false)?;

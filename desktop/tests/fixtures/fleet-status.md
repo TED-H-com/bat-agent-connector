@@ -22,9 +22,8 @@ Unknown codes and missing layer fields in unit tests exercise defensive reader
 behavior and sparse legacy status; they are not native readiness evidence.
 
 Route observations are generated from real `SelectionRequest` choices using a
-synthetic inventory and injected existing probes, then `Entry::observed`. Three hosts
-choose direct, node-4 chooses Cloudflare, node-5 prefers LAN over its eligible direct
-route, and Connector chooses configured SSH.
+synthetic inventory and injected existing probes, then `Entry::observed`. Four hosts
+choose direct, node-4 chooses Cloudflare, and Connector chooses configured SSH.
 Each choice is five minutes older than the snapshot. The same confirmation helper
 used by supervisor ownership reconciliation dates its last verified use at the
 snapshot time; this keeps the long-running route current. No latency is measured.
