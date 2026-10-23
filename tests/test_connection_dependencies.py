@@ -11,6 +11,7 @@ import pytest
 from bat_agent_connector import connection_dependencies as dependencies
 from bat_agent_connector import pm_work_profiles, repository_sync, setup_connections
 from bat_agent_connector.api_auth import Principal
+from bat_agent_connector.config import parse_config
 from bat_agent_connector.connection_endpoints import setup_endpoint
 from bat_agent_connector.connection_source_descriptor import build_source_descriptor
 from bat_agent_connector.operations import OperationError
@@ -131,15 +132,79 @@ async def test_visible_shared_and_completed_history_is_informative(connected):
 
 async def test_hidden_references_have_no_ids_names_or_counts(connected):
     w, stranger = connected, Principal("private-owner", OWNER.scopes)
+    before = w["read"]()
     wid = await workspace(w, stranger)
     saved = await profile(w, wid, stranger)
     first = w["read"]()
-    assert first["domains"]["work_history"]["reason"] == "REFERENCES_UNAVAILABLE"
+    assert first["server_complete"] and first == before
     encoded = json.dumps(first)
     assert wid not in encoded and saved["profile_id"] not in encoded and "Private workspace" not in encoded
     await profile(w, wid, stranger)
     assert w["read"]() == first
-    assert not first["server_complete"]
+
+
+@pytest.mark.parametrize("step_status", [None, "started", "sent", "uncertain"])
+async def test_hidden_unsettled_operation_is_a_generic_blocker(connected, step_status):
+    w, ops = connected, connected["d"].ops
+    op, _ = ops.create(Principal("private-owner", OWNER.scopes), action="pm.workspace.create",
+        params={"name": "Hidden pending workspace", "repositories": ["o/r"]}, idempotency_key="hidden")
+    if step_status:
+        ops._transition(op["operation_id"], "running")
+        ops._step_start(op["operation_id"], "local.effect", {}, bookkeeping=True)
+        ops._step_status(op["operation_id"], "local.effect", step_status)
+        ops._transition(op["operation_id"], "failed")
+    result = w["read"]()
+    assert result["domains"]["unsettled_operations"] == {
+        "covered": True, "complete": False, "reason": "REFERENCES_UNAVAILABLE"}
+    assert not result["server_complete"]
+    assert op["operation_id"] not in json.dumps(result) and "Hidden pending workspace" not in json.dumps(result)
+
+
+async def test_visible_pending_effect_is_reached_through_hidden_binding(connected):
+    w, stranger = connected, Principal("private-owner", OWNER.scopes)
+    wid = await workspace(w, stranger)
+    pid = (await act(w["d"], OWNER, "project.create", params={"name": "Unbound"}))["result"]["project_id"]
+    work = (await act(w["d"], OWNER, "work_item.create", {"project_id": pid}, {"title": "Unbound work"}))["result"]["work_item_id"]
+    assert work not in refs(w["read"](), "work_item")
+    await act(w["d"], stranger, "pm.project.bind", {"workspace_id": wid, "project_id": pid},
+        {"rationale": "Track this project"}, {"expected_workspace_version": 1, "expected_project_version": 1})
+    op, _ = w["d"].ops.create(OWNER, action="work_item.update", target={"work_item_id": work},
+        params={"title": "Pending edit"}, preconditions={"expected_version": 1}, idempotency_key="edit")
+    result = w["read"]()
+    assert any(row["ref"] == op["operation_id"] and row["disposition"] == "blocking" for row in result["impacts"])
+    assert wid not in json.dumps(result) and not refs(result, "project_binding")
+    assert result["server_complete"]
+
+
+@pytest.mark.parametrize("host,workspace_id", [("h2", "ws-1"), ("h1", "ws-2")])
+async def test_repository_matches_respect_record_host_and_workspace(connected, mock, host, workspace_id):
+    w, d = connected, connected["d"]
+    raw = copy.deepcopy(w["raw"])
+    raw["hosts"]["h2"] = copy.deepcopy(raw["hosts"]["h1"])
+    raw["github"]["repos"][0]["sync"]["bindings"] += [
+        {"host": "h2", "workspace_id": "ws-1"}, {"host": "h1", "workspace_id": "ws-2"}]
+    mock.ws_doc["workspaces"][1]["folderPath"] = str(w["human"])
+    config = parse_config(raw)
+    d.fleet.config = d.inventory.config = d.inventory.fleet.config = config
+    d.ops.context["github_config"] = config.github
+    pid = (await act(d, OWNER, "project.create", params={"name": "Shared", "repositories": ["o/r"]}))["result"]["project_id"]
+    work = (await act(d, OWNER, "work_item.create", {"project_id": pid}, {"title": "No host"}))["result"]["work_item_id"]
+    target = {**TARGET, "host": host, "workspace_id": workspace_id}
+    pv = await repository_sync.source_preview(d.ops, {**REQUEST, **target})
+    bad, _ = d.ops.create(OWNER, **{**envelope(pv, "other-binding"), "target": target})
+    # Journal producers put location and repository evidence in sibling objects.
+    local, _ = d.ops.create(OWNER, action="session.start", target={"host": host, "workspace": workspace_id},
+        idempotency_key="other-local-start")
+    d.ops._merge_refs(local["operation_id"], {"repository": "o/r", "workspace_id": workspace_id})
+    good = (await pending(w, 1))[0]
+    result = w["read"]()
+    assert bad["operation_id"] not in json.dumps(result) and local["operation_id"] not in json.dumps(result)
+    assert good in refs(result, "operation")
+    assert any(row["ref"] == work and row["disposition"] == "informative" for row in result["impacts"])
+    # Explicit identity links still connect effects across locations.
+    d.ops.create(OWNER, action="work_item.link", target={"work_item_id": work},
+        params={"kind": "operation", "ref": bad["operation_id"]}, idempotency_key="explicit-link")
+    assert bad["operation_id"] in refs(w["read"](), "operation")
 
 
 async def test_principal_installation_and_scope_are_non_disclosing(connected):
@@ -294,7 +359,8 @@ async def test_checkpoint_continuation_follows_recorded_source(connected, mock):
     assert op["operation_id"] in refs(w["read"](), "operation")
 
 
-async def test_unavailable_work_link_source_cannot_claim_complete_history(connected, mock, monkeypatch):
+@pytest.mark.parametrize("error", ["sqlite", "operation"])
+async def test_unavailable_work_link_source_cannot_claim_complete_history(connected, mock, monkeypatch, error):
     from bat_agent_connector import pm_source_lineage
     from tests.test_checkpoints import MANUAL, bat_git_status, make_checkpoint
     w = connected
@@ -308,6 +374,8 @@ async def test_unavailable_work_link_source_cannot_claim_complete_history(connec
     original = pm_source_lineage.visible
     def unavailable(db, principal, kind, identity):
         if kind == "checkpoint":
+            if error == "operation":
+                raise OperationError("PM_SOURCE_LINEAGE_LIMIT", "Source reader unavailable", 409)
             raise sqlite3.OperationalError("Source reader unavailable")
         return original(db, principal, kind, identity)
     monkeypatch.setattr(pm_source_lineage, "visible", unavailable)

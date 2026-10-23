@@ -66,29 +66,50 @@ def _pages(ops, unavailable):
         before, before_id = following
 
 
-def _related(value, connection, repositories, identities):
+def _documents(value):
     if isinstance(value, list):
-        return any(_related(v, connection, repositories, identities) for v in value)
-    if not isinstance(value, dict):
-        return False
-    if value.get("host") == connection["service_ref"] and connection["service_ref"] is not None:
-        if connection["workspace_ref"] is None or value.get("workspace_id", connection["workspace_ref"]) == connection["workspace_ref"]:
+        for child in value:
+            yield from _documents(child)
+    elif isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _documents(child)
+
+
+def _related(value, connection, repositories, identities):
+    documents = tuple(_documents(value))
+    hosts = {doc["host"] for doc in documents if isinstance(doc.get("host"), str)}
+    # PM membership IDs are not BAT workspace locations.
+    workspaces = {doc["workspace_id"] for doc in documents if isinstance(doc.get("workspace_id"), str)
+                  and not doc["workspace_id"].startswith("ws_")}
+    location_matches = (not hosts or connection["service_ref"] in hosts) and (
+        connection["workspace_ref"] is None or not workspaces or connection["workspace_ref"] in workspaces)
+    for doc in documents:
+        if location_matches:
+            if doc.get("host") == connection["service_ref"] and connection["service_ref"] is not None:
+                if connection["workspace_ref"] is None or doc.get("workspace_id", connection["workspace_ref"]) == connection["workspace_ref"]:
+                    return True
+            repository, names = doc.get("repository"), doc.get("repositories")
+            if isinstance(repository, str) and repository in repositories or isinstance(names, list) and any(
+                    isinstance(name, str) and name in repositories for name in names):
+                return True
+        if any(isinstance(doc.get(key), str) and doc[key] in identities for key in REF_FIELDS):
             return True
-    repository, names = value.get("repository"), value.get("repositories")
-    if isinstance(repository, str) and repository in repositories or isinstance(names, list) and any(
-            isinstance(name, str) and name in repositories for name in names):
-        return True
-    if any(isinstance(value.get(key), str) and value[key] in identities for key in REF_FIELDS):
-        return True
-    if any(identity in identities for _, identity in pm_source_lineage.references(value)):
-        return True
-    return any(_related(v, connection, repositories, identities) for v in value.values() if isinstance(v, (dict, list)))
+        if any(identity in identities for _, identity in pm_source_lineage.references(doc)):
+            return True
+    return False
 
 
-def _visible(ops, principal, kind, row):
+def _visible(ops, principal, kind, row) -> bool | None:
+    """True: visible; False: access refused; None: visibility could not be read."""
     try:
         if (row.get("workspace_id") or "").startswith("ws_"):
-            pm_workspace.require_member(ops.db, principal, row["workspace_id"])
+            try:
+                pm_workspace.require_member(ops.db, principal, row["workspace_id"])
+            except OperationError as exc:
+                if (exc.code, exc.status) in {("NOT_FOUND", 404), ("FORBIDDEN", 403)}:
+                    return False
+                raise
         if kind in {"work_item", "checkpoint"} and not pm_source_lineage.visible(ops.db, principal, kind, row[kind + "_id"]):
             return False
         if kind == "work_link" and not pm_source_lineage.visible(ops.db, principal, row["kind"], row["ref"]):
@@ -98,7 +119,7 @@ def _visible(ops, principal, kind, row):
             return pm_access.visible(ops.db, principal, ops.get(oid, steps=False))
         return True
     except (OperationError, sqlite3.Error):
-        return False
+        return None
 
 
 def read(ops, principal, installation_ref, connection_id, *, offset=0, limit=PAGE_SIZE):
@@ -119,7 +140,7 @@ def _read(ops, principal, installation_ref, connection_id, offset, limit):
     identity = dashboard_sync.identity(ops.journal, principal)
     target = {"installation_ref": installation_ref, "connection_id": connection_id}
     connection = setup_connections._row(ops, identity["principal_id"], target)
-    if not connection or not _visible(ops, principal, "connection", connection):
+    if not connection or _visible(ops, principal, "connection", connection) is not True:
         raise OperationError("NOT_FOUND", "Connection not found in this principal and installation", 404)
     domains = {key: {"covered": True, "complete": True, "reason": None} for key in SERVER_DOMAINS}
     for key in ("native_selection", "native_resources"):
@@ -211,8 +232,10 @@ def _read(ops, principal, installation_ref, connection_id, offset, limit):
             domain = "unsettled_operations" if unsettled else "work_history"
             disposition = "blocking" if unsettled else "informative"
             kind = "operation" if unsettled else "operation_history"
-        if not _visible(ops, principal, kind, row):
-            unavailable(domain)
+        visibility = _visible(ops, principal, kind, row)
+        if visibility is not True:
+            if visibility is None or disposition == "blocking":
+                unavailable(domain)
             continue
         if kind in {"operation", "operation_history"}:
             # Requests/responses bind original publication and launch receipts,
