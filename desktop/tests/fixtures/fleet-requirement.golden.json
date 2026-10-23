@@ -169,7 +169,7 @@
           "observed_at": "2026-10-08T12:00:00Z",
           "route": {
             "generation": 1,
-            "kind": "direct",
+            "kind": "lan",
             "observed_at": "2026-10-08T12:00:00Z"
           },
           "selected": true,
@@ -362,7 +362,7 @@
           "observed_at": "2026-10-08T12:00:00Z",
           "route": {
             "generation": 1,
-            "kind": "direct",
+            "kind": "lan",
             "observed_at": "2026-10-08T12:00:00Z"
           },
           "selected": true,
@@ -555,7 +555,7 @@
           "observed_at": "2026-10-08T12:00:00Z",
           "route": {
             "generation": 1,
-            "kind": "direct",
+            "kind": "lan",
             "observed_at": "2026-10-08T12:00:00Z"
           },
           "selected": true,
@@ -748,7 +748,7 @@
           "observed_at": "2026-10-08T12:00:00Z",
           "route": {
             "generation": 1,
-            "kind": "direct",
+            "kind": "lan",
             "observed_at": "2026-10-08T12:00:00Z"
           },
           "selected": true,
@@ -941,7 +941,7 @@
           "observed_at": "2026-10-08T12:00:00Z",
           "route": {
             "generation": 1,
-            "kind": "direct",
+            "kind": "lan",
             "observed_at": "2026-10-08T12:00:00Z"
           },
           "selected": true,
@@ -1124,7 +1124,7 @@
           "observed_at": "2026-10-08T12:00:00Z",
           "route": {
             "generation": 1,
-            "kind": "direct",
+            "kind": "lan",
             "observed_at": "2026-10-08T12:00:00Z"
           },
           "selected": true,

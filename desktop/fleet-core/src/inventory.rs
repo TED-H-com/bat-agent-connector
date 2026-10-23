@@ -282,7 +282,6 @@ impl Inventory {
             if !host["probe"].is_null() {
                 endpoint(text(&host["probe"])?, false)?;
             }
-            let mut last = None;
             let mut kinds = HashSet::new();
             for route in array(&host["routes"], true)? {
                 fields(
@@ -297,15 +296,10 @@ impl Inventory {
                 )?;
                 route_options(route)?;
                 let kind = text(&route["kind"])?;
-                let tier = ["direct", "lan", "cf"]
-                    .iter()
-                    .position(|v| *v == kind)
-                    .ok_or(INVALID)?;
-                if last.is_some_and(|v| v >= tier) {
+                // Selection ranks eligible routes independently of inventory order.
+                if !["direct", "lan", "cf"].contains(&kind) || !kinds.insert(kind) {
                     return Err(INVALID);
                 }
-                last = Some(tier);
-                kinds.insert(kind);
                 identifier(&route["alias"], 128, b"_.-")?;
                 if !route["probe"].is_null() {
                     endpoint(text(&route["probe"])?, false)?;

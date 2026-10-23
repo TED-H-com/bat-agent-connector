@@ -1214,3 +1214,30 @@ fn home_example_inventory_is_valid() {
     ))
     .unwrap();
 }
+
+#[test]
+fn home_inventory_still_rejects_duplicate_and_unknown_route_kinds() {
+    let doc: Value = serde_json::from_slice(include_bytes!(
+        "../../fleet.example/client/fleet-inventory.json"
+    ))
+    .unwrap();
+    for kind in ["lan", "direct", "cf", "unknown"] {
+        let mut invalid = doc.clone();
+        let mut route = invalid["hosts"][0]["routes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|route| route["kind"] == kind)
+            .unwrap_or(&invalid["hosts"][0]["routes"][0])
+            .clone();
+        route["kind"] = kind.into();
+        invalid["hosts"][0]["routes"]
+            .as_array_mut()
+            .unwrap()
+            .push(route);
+        assert!(matches!(
+            Inventory::parse(&serde_json::to_vec(&invalid).unwrap()),
+            Err("INVENTORY_INVALID")
+        ));
+    }
+}

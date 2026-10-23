@@ -87,7 +87,7 @@ Two intentional corrections to historical Kit behavior are part of this port:
 - Fast-failure demotion only ranks routes whose eligibility was checked. A demoted
   preferred route cannot cause an unproven direct/LAN tier to be selected.
 
-Within eligible routes, preference remains direct, LAN, then Cloudflare. Skip aliases
+Within eligible routes, preference is LAN, direct (including opted-in relay), then Cloudflare. Skip aliases
 blocked by fast failures when another eligible route is available. If every eligible
 route is blocked, retain the best eligible route, as in the Kit's last-resort policy.
 Three observed failures lasting less than 15 seconds demote that alias for ten minutes
