@@ -134,12 +134,29 @@ serves profile, migration and supervisor writes, preserving their error codes,
 read policies and creation/deletion behavior. Each replacement is independent;
 neither a cross-file transaction nor a filesystem compare-and-swap against a
 non-cooperating editor is claimed.
-On Windows, [compare_replace.rs:115](../../desktop/fleet-core/src/compare_replace.rs#L115)
+On Windows, [compare_replace.rs:242](../../desktop/fleet-core/src/compare_replace.rs#L242)
 makes directory sync a no-op, so [Fleet publication](../../desktop/fleet-core/src/connection_publish.rs#L209)
 and [migration](../../desktop/fleet-core/src/migration_io.rs#L86) are tested for recovery
 after a process kill, but the published name is not flushed against power loss.
 Windows 的 directory sync 是 no-op，因此 Fleet publication 與 migration 已測試程序
 被終止後的 recovery，但發布名稱未針對斷電執行 flush。
+
+#### Participant stage publication
+
+The shared stage engine also supports fixed stage names and captured file identities.
+The [Windows no-replace mode](../../desktop/fleet-core/src/connection_participant/protected/native.rs#L140)
+flushes the stage handle, then uses same-directory
+[MoveFileExW with MOVEFILE_WRITE_THROUGH](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)
+and checks exact bytes and identity on readback. Process-kill recovery is tested;
+power-loss persistence rests on that documented API behavior and is not proven by CI.
+The participant Backend is not available yet. Fleet publication and migration keep
+using their existing publication mode and its limit above.
+
+共享 stage 引擎另支援固定暫存名稱與檔案 identity。Windows no-replace 模式先 flush
+stage handle，再於同一目錄使用 MOVEFILE_WRITE_THROUGH 移動，並比對讀回位元組與
+identity。程序被終止後的 recovery 已測試；斷電持久性依據該 API 的文件行為，
+未由 CI 證明。participant Backend 尚不可用；Fleet publication 與 migration
+仍使用既有發布模式，並保留上述限制。
 
 This module has no Tauri/IPC, UI, Python, durable-operation participant, enrollment,
 startup, tunnel or monitor-launch wiring. The [Windows ownership adapter](../../desktop/fleet-core/src/windows_creation/platform.rs#L148),
