@@ -326,10 +326,7 @@
     "work_items": [],
     "cleanup_receipts": []
   },
-  "connections": {
-    "connections": [],
-    "next_after": null
-  },
+  "operations_route": "/api/v1/operations?action=setup.connection.apply&limit=200",
   "bootstrap_operations": {
     "operations": [
       {

@@ -23,11 +23,10 @@ pub(crate) struct Checkpoint {
 }
 pub(crate) enum Query {
     Bootstrap,
-    Connections {
-        installation: String,
-        after: Option<String>,
+    Operations {
+        action: String,
+        cursor: Option<Cursor>,
     },
-    Operations(Option<Cursor>),
     Operation(String),
     Events(Checkpoint),
 }
@@ -70,17 +69,9 @@ impl Transport for NativeTransport<'_> {
     async fn read(&self, query: Query) -> Result<Reply> {
         match query {
             Query::Bootstrap => self.bridge.participant_bootstrap(&self.scope).await,
-            Query::Connections {
-                installation,
-                after,
-            } => {
+            Query::Operations { action, cursor } => {
                 self.bridge
-                    .participant_connections(&self.scope, &installation, after.as_deref())
-                    .await
-            }
-            Query::Operations(cursor) => {
-                self.bridge
-                    .participant_operations(&self.scope, cursor.as_ref())
+                    .participant_operations(&self.scope, &action, cursor.as_ref())
                     .await
             }
             Query::Operation(id) => self.bridge.participant_operation(&self.scope, &id).await,
@@ -106,39 +97,6 @@ impl Bridge {
         self.participant_exchange(scope, "/bootstrap".into(), None)
             .await
     }
-    pub(crate) async fn participant_connections(
-        &self,
-        scope: &NativeScope,
-        installation: &str,
-        after: Option<&str>,
-    ) -> Result<Reply> {
-        let max = bat_fleet_core::connection_contract::vocabulary()["bounds"]
-            ["installation_ref_chars"]
-            .as_u64()
-            .ok_or(Error::Invalid)? as usize;
-        if installation.is_empty()
-            || installation.chars().count() > max
-            || installation.chars().any(char::is_control)
-        {
-            return Err(Error::Invalid);
-        }
-        let mut pairs = vec![
-            ("installation_ref", installation.into()),
-            ("limit", "200".into()),
-        ];
-        if let Some(after) = after {
-            if !after.strip_prefix("conn_").is_some_and(|s| {
-                s.len() == 32
-                    && s.bytes()
-                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            }) {
-                return Err(Error::Invalid);
-            }
-            pairs.push(("after", after.into()));
-        }
-        self.participant_exchange(scope, route("/connections", &pairs), None)
-            .await
-    }
     pub(crate) async fn participant_operation(
         &self,
         scope: &NativeScope,
@@ -153,9 +111,13 @@ impl Bridge {
     pub(crate) async fn participant_operations(
         &self,
         scope: &NativeScope,
+        action: &str,
         cursor: Option<&Cursor>,
     ) -> Result<Reply> {
-        let mut pairs = vec![("limit", "200".into())];
+        if action.is_empty() || action.len() > 128 || action.chars().any(char::is_control) {
+            return Err(Error::Invalid);
+        }
+        let mut pairs = vec![("action", action.into()), ("limit", "200".into())];
         if let Some(cursor) = cursor {
             if !operation_id(&cursor.before_id)
                 || !cursor

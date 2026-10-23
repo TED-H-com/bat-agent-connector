@@ -5,6 +5,7 @@ use super::{
     Error,
 };
 use crate::{bridge::Bridge, credentials::Identity};
+use bat_fleet_core::connection_participant::FLEET_ACTION;
 use serde_json::{json, Value};
 use std::{
     io::{Read, Write},
@@ -89,7 +90,18 @@ impl HttpPeer {
                 if wrong_identity.load(Ordering::SeqCst) {
                     boot["sync"]["principal_id"] = json!("2".repeat(64));
                 }
-                let (status, document) = if refuse.load(Ordering::SeqCst) {
+                let query: std::collections::BTreeMap<_, _> =
+                    url::Url::parse(&format!("http://fixture.invalid{path}"))
+                        .unwrap()
+                        .query_pairs()
+                        .into_owned()
+                        .collect();
+                let unfiltered = path.split('?').next() == Some("/api/v1/operations")
+                    && query.get("action").is_none_or(String::is_empty);
+                let connections = path.split('?').next() == Some("/api/v1/connections");
+                let (status, document) = if unfiltered || connections {
+                    (422, json!({"error":{"code":"UNFILTERED_OPERATIONS"}}))
+                } else if refuse.load(Ordering::SeqCst) {
                     (401, json!({"error":{"code":"UNAUTHORIZED"}}))
                 } else {
                     (
@@ -97,8 +109,21 @@ impl HttpPeer {
                         match path.split('?').next().unwrap() {
                             "/api/v1/capabilities" => boot["capabilities"].clone(),
                             "/api/v1/bootstrap" => boot,
-                            "/api/v1/connections" => golden()["connections"].clone(),
-                            "/api/v1/operations" => golden()["operations"].clone(),
+                            "/api/v1/operations" => {
+                                if query.get("action").map(String::as_str) == Some(FLEET_ACTION)
+                                    && !query.contains_key("before")
+                                {
+                                    assert_eq!(
+                                        path,
+                                        golden()["operations_route"].as_str().unwrap()
+                                    );
+                                    golden()["operations"].clone()
+                                } else {
+                                    let mut page = golden()["operations"].clone();
+                                    page["operations"] = json!([]);
+                                    page
+                                }
+                            }
                             "/api/v1/events" => golden()["events"].clone(),
                             "/api/v1/connections/handoff" => wire()["refused"]["claim"].clone(),
                             "/api/v1/connections/receipt" => wire()["refused"]["ack"].clone(),
@@ -173,14 +198,26 @@ async fn native_discovery_queries_never_post_or_start_a_service() {
             .all(|r| r.starts_with("GET ")),
         "a discovery read must never issue a claim or business mutation"
     );
+    assert!(
+        result.is_ok(),
+        "native discovery must use action-filtered operation pages"
+    );
     assert_eq!(result.unwrap().operations.len(), 1);
-    assert_eq!(peer.requests.lock().unwrap().len(), 5);
+    assert!(peer
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|r| r.starts_with(&format!(
+            "GET {} ",
+            golden()["operations_route"].as_str().unwrap()
+        ))));
     let cursor = Cursor {
         before: json!(1.0).as_number().unwrap().clone(),
         before_id: format!("op_{:032x}", 1),
     };
     bridge
-        .participant_operations(&transport.scope, Some(&cursor))
+        .participant_operations(&transport.scope, FLEET_ACTION, Some(&cursor))
         .await
         .unwrap();
     assert!(peer
@@ -190,6 +227,27 @@ async fn native_discovery_queries_never_post_or_start_a_service() {
         .last()
         .unwrap()
         .contains("before=1.0&before_id=op_"));
+}
+
+#[tokio::test]
+async fn discovery_does_not_read_connections() {
+    let peer = HttpPeer::new();
+    let bridge = peer.bridge();
+    let transport = NativeTransport {
+        bridge: &bridge,
+        scope: bridge.participant_scope().unwrap(),
+    };
+    let _ = Discovery::default()
+        .refresh(&transport, &binding(), None)
+        .await;
+    assert!(
+        peer.requests
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|r| !r.starts_with("GET /api/v1/connections")),
+        "discovery must not traverse unused connections"
+    );
 }
 
 #[tokio::test]

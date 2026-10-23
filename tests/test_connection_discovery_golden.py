@@ -21,13 +21,14 @@ async def test_connection_discovery_matches_real_producers(installed, served_set
     _, ident = await producer.accept(served_setup, producer.intent(source, action="setup.connection.apply"))
     await settle_operations(daemon.ops)
     result = {}
+    operations_route = "/api/v1/operations?action=setup.connection.apply&limit=200"
     for name, route in {
-        "operations": "/api/v1/operations?limit=200",
+        "operations": operations_route,
         "operation": "/api/v1/operations/" + ident,
-        "connections": "/api/v1/connections?installation_ref=desktop-a",
     }.items():
         status, result[name] = await served_setup("GET", route)
         assert status == 200
+    result["operations_route"] = operations_route
     status, bootstrap = await served_setup("GET", "/api/v1/bootstrap")
     assert status == 200
     result["bootstrap_operations"] = bootstrap["snapshot"]["operations"]

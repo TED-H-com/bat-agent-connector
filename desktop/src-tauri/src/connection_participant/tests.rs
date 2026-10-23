@@ -1,5 +1,5 @@
 use super::{discovery::*, transport::*, *};
-use bat_fleet_core::connection_participant::Scope;
+use bat_fleet_core::connection_participant::{Scope, FLEET_ACTION};
 use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
@@ -52,6 +52,8 @@ struct Peer {
     cursors: Mutex<Vec<(String, String)>>,
     gap: AtomicBool,
     changed: AtomicBool,
+    event_id: Option<String>,
+    actions: Mutex<Vec<String>>,
 }
 impl Peer {
     fn new() -> Self {
@@ -66,6 +68,8 @@ impl Peer {
             cursors: Mutex::new(vec![]),
             gap: AtomicBool::new(false),
             changed: AtomicBool::new(false),
+            event_id: None,
+            actions: Mutex::new(vec![]),
         }
     }
 }
@@ -83,14 +87,17 @@ impl Transport for Peer {
                 self.boots.fetch_add(1, Ordering::SeqCst);
                 bootstrap()
             }
-            Query::Connections {
-                installation,
-                after,
-            } => {
-                assert!(installation == binding().installation_ref && after.is_none());
-                golden()["connections"].clone()
-            }
-            Query::Operations(cursor) => {
+            Query::Operations { action, cursor } => {
+                assert!(!action.is_empty(), "unfiltered operations are refused");
+                self.actions.lock().unwrap().push(action.clone());
+                if action != FLEET_ACTION {
+                    let mut page = golden()["operations"].clone();
+                    page["operations"] = json!([]);
+                    return Ok(Reply {
+                        status: 200,
+                        document: page,
+                    });
+                }
                 let mut cursors = self.cursors.lock().unwrap();
                 let index = cursor.as_ref().map_or(0, |c| {
                     cursors.push((c.before.to_string(), c.before_id.clone()));
@@ -127,6 +134,9 @@ impl Transport for Peer {
                 } else {
                     self.originals.keys().next().unwrap()
                 });
+                if let Some(id) = &self.event_id {
+                    page["events"][0]["resource_id"] = json!(id);
+                }
                 page
             }
         };
@@ -272,6 +282,80 @@ async fn discovery_uses_the_persisted_action_and_explicit_variant_not_artifact_s
             .unwrap();
         assert_eq!(snapshot.operations[0].state, State::Unsupported);
     }
+}
+
+#[tokio::test]
+async fn discovery_reads_every_action_in_the_vocabulary() {
+    let peer = Peer::new();
+    let mut vocabulary = bat_fleet_core::connection_contract::vocabulary().clone();
+    if vocabulary["v2"].is_null() {
+        // Action-only projection of connection_contract.json's real v2 reference kind.
+        // Exercise forward integration while the stacked source tree still has v1 only.
+        vocabulary["v2"] =
+            json!({"effect_kinds":{"reference_detach":{"action":"connection.reference.detach"}}});
+    }
+    assert!(Discovery::snapshot(&peer, &binding(), None, &vocabulary)
+        .await
+        .is_ok());
+    let actions = peer.actions.lock().unwrap();
+    assert!(actions.iter().any(|a| a == FLEET_ACTION));
+    for kind in vocabulary["v2"]["effect_kinds"]
+        .as_object()
+        .unwrap()
+        .values()
+    {
+        assert!(
+            actions
+                .iter()
+                .any(|a| a == kind["action"].as_str().unwrap()),
+            "every vocabulary action must be paged"
+        );
+    }
+}
+
+#[tokio::test]
+async fn action_pages_refuse_cycles_and_more_than_200_rows() {
+    for over_bound in [false, true] {
+        let mut peer = Peer::new();
+        if over_bound {
+            peer.pages[0]["operations"] = json!(vec![peer.pages[0]["operations"][0].clone(); 201]);
+        } else {
+            peer.pages[0]["next_before"] = json!(1.0);
+            peer.pages[0]["next_before_id"] = json!(id(1));
+            peer.pages.push(peer.pages[0].clone());
+        }
+        assert_eq!(
+            Discovery::default()
+                .refresh(&peer, &binding(), None)
+                .await
+                .err(),
+            Some(Error::Invalid)
+        );
+    }
+}
+
+#[tokio::test]
+async fn discovery_reports_a_nonparticipant_action_seen_only_in_events_as_unsupported() {
+    let mut peer = Peer::new();
+    let mut op = peer.originals.values().next().unwrap().clone();
+    op["operation_id"] = json!(id(77));
+    op["action"] = json!("connection.reference.apply");
+    peer.originals.insert(id(77), op);
+    peer.event_id = Some(id(77));
+    let snapshot = Discovery::default()
+        .refresh(&peer, &binding(), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        snapshot
+            .operations
+            .iter()
+            .find(|op| op.operation_id == id(77))
+            .unwrap()
+            .state,
+        State::Unsupported
+    );
+    assert_eq!(peer.gets.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]

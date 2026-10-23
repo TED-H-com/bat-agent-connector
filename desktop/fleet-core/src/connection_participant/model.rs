@@ -62,10 +62,12 @@ pub(super) fn typed<T: for<'a> Deserialize<'a> + Serialize>(value: Value) -> Res
     ensure(serde_json::to_value(&result).map_err(|_| Error::Invalid)? == value)?;
     Ok(result)
 }
+pub const FLEET_ACTION: &str = "setup.connection.apply";
+
 /// Classify dispatch before decoding today's fields: future variants are not corruption.
 pub fn validate_variant(value: &Value) -> Result<()> {
     if value["format_version"] != 1
-        || value["accepted"]["action"] != "setup.connection.apply"
+        || value["accepted"]["action"] != FLEET_ACTION
         || value["accepted"]["contract_version"] != contract::vocabulary()["contract_version"]
         || !value["accepted"]["kind"].is_null()
     {

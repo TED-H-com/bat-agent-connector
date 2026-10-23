@@ -1,5 +1,5 @@
 use super::{transport::*, Error, Result};
-use bat_fleet_core::connection_participant::{validate_variant, Namespace, Scope};
+use bat_fleet_core::connection_participant::{validate_variant, Namespace, Scope, FLEET_ACTION};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -28,7 +28,7 @@ pub(crate) struct StatusSnapshot {
     pub operations: Vec<OperationStatus>,
 }
 #[derive(Default)]
-struct Observed {
+pub(super) struct Observed {
     operations: BTreeMap<String, Value>,
     statuses: Vec<OperationStatus>,
 }
@@ -83,6 +83,18 @@ fn checkpoint(sync: &Value, scope: &Scope) -> Result<Checkpoint> {
         token: token.into(),
     })
 }
+fn participant_actions(vocabulary: &Value) -> BTreeSet<&str> {
+    // Same union as connection_handoff.py::NATIVE_ACTIONS; the vocabulary owns v2 mappings.
+    std::iter::once(FLEET_ACTION)
+        .chain(
+            vocabulary["v2"]["effect_kinds"]
+                .as_object()
+                .into_iter()
+                .flat_map(|kinds| kinds.values())
+                .filter_map(|kind| kind["action"].as_str()),
+        )
+        .collect()
+}
 impl Discovery {
     pub(crate) async fn refresh(
         &self,
@@ -99,7 +111,14 @@ impl Discovery {
         // A continuity failure retries the same bootstrap/read sequence once. A
         // changed access/identity boundary cannot retain any previous observation.
         for _ in 0..2 {
-            match Self::snapshot(transport, scope, wake).await {
+            match Self::snapshot(
+                transport,
+                scope,
+                wake,
+                bat_fleet_core::connection_contract::vocabulary(),
+            )
+            .await
+            {
                 Err(Error::Resnapshot) => continue,
                 Err(error) => return Err(error),
                 Ok(next) => {
@@ -114,10 +133,11 @@ impl Discovery {
         }
         Err(Error::Resnapshot)
     }
-    async fn snapshot(
+    pub(super) async fn snapshot(
         transport: &impl Transport,
         scope: &Scope,
         wake: Option<&str>,
+        vocabulary: &Value,
     ) -> Result<Observed> {
         let bootstrap = document(transport.read(Query::Bootstrap).await?)?;
         transport.check(scope)?;
@@ -130,54 +150,37 @@ impl Discovery {
             .collect();
         let mut ids = BTreeSet::new();
         candidates(&bootstrap["snapshot"]["operations"], scope, &mut ids)?;
-        let mut after = None;
-        let mut connections_seen = BTreeSet::new();
-        loop {
-            let page = document(
-                transport
-                    .read(Query::Connections {
-                        installation: scope.installation_ref.clone(),
-                        after,
-                    })
-                    .await?,
-            )?;
-            require(
-                page["connections"]
-                    .as_array()
-                    .is_some_and(|rows| rows.len() <= 200),
-            )?;
-            if page["next_after"].is_null() {
-                break;
+        for action in participant_actions(vocabulary) {
+            let mut cursor = None;
+            let mut cursors_seen = BTreeSet::new();
+            loop {
+                let page = document(
+                    transport
+                        .read(Query::Operations {
+                            action: action.into(),
+                            cursor,
+                        })
+                        .await?,
+                )?;
+                candidates(&page, scope, &mut ids)?;
+                if page["next_before"].is_null() && page["next_before_id"].is_null() {
+                    break;
+                }
+                let before = page["next_before"]
+                    .as_number()
+                    .ok_or(Error::Invalid)?
+                    .clone();
+                let before_id = page["next_before_id"]
+                    .as_str()
+                    .ok_or(Error::Invalid)?
+                    .to_string();
+                require(
+                    operation_id(&before_id)
+                        && before.as_f64().is_some_and(|n| n.is_finite() && n >= 0.0)
+                        && cursors_seen.insert((before.to_string(), before_id.clone())),
+                )?;
+                cursor = Some(Cursor { before, before_id });
             }
-            let next = page["next_after"]
-                .as_str()
-                .ok_or(Error::Invalid)?
-                .to_string();
-            require(connections_seen.insert(next.clone()))?;
-            after = Some(next);
-        }
-        let mut cursor = None;
-        let mut cursors_seen = BTreeSet::new();
-        loop {
-            let page = document(transport.read(Query::Operations(cursor)).await?)?;
-            candidates(&page, scope, &mut ids)?;
-            if page["next_before"].is_null() && page["next_before_id"].is_null() {
-                break;
-            }
-            let before = page["next_before"]
-                .as_number()
-                .ok_or(Error::Invalid)?
-                .clone();
-            let before_id = page["next_before_id"]
-                .as_str()
-                .ok_or(Error::Invalid)?
-                .to_string();
-            require(
-                operation_id(&before_id)
-                    && before.as_f64().is_some_and(|n| n.is_finite() && n >= 0.0)
-                    && cursors_seen.insert((before.to_string(), before_id.clone())),
-            )?;
-            cursor = Some(Cursor { before, before_id });
         }
         loop {
             let reply = transport.read(Query::Events(checkpoint.clone())).await?;
