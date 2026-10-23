@@ -395,3 +395,19 @@ context discussion turn is not that adapter. W24 still needs a persisted workspa
 working-adapter transition with PM document continuity and the original writer queue;
 the native/BAT discussion selector does not establish that contract. These execution,
 create-own and adapter-switch capabilities remain explicitly unsupported here.
+
+## Owned-resource authority seam
+
+The [central resource policy](resource-policy.md#ahp-owned-resource-frame-seam)
+now defines a private append-only AHP ledger, typed policy-issued grant and final
+frame boundary. Reservations confer no ownership; typed same-connection creation
+receipts are distinct from observation receipts. Current authority and identity
+checks precede lineage validation and a committed sent fence; uncertain effects
+remain unknown and cannot be resent. This does not change observer permissions,
+budgets or `require_owned_write()`. Production create, turn, result, API and UI
+remain absent. Permission answers stay in the editor; each Work has a thirty-minute
+budget. Synthetic Unix-peer tests are not R3/E11 editor acceptance.
+
+繁體中文：中央政策新增 AHP 所有權與 final-frame 接縫；預留及唯讀驗證回執均不是
+建立證據。送出前重驗權限與身分、通過 lineage、提交 fence；未知效果只查回、不重送。
+既有 observer 不變，寫入仍停用，沒有 create、turn、result、API 或 UI。

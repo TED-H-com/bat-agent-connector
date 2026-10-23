@@ -159,6 +159,16 @@ EXCLUSIONS = {
         "DELETE FROM browser_handoffs WHERE digest=?",
     )
 }
+EXCLUSIONS.update({
+    ('ahp_owned_resources', statement): (
+        'no such table: ahp_owned_sessions',
+        'ahp_owned_resources.schema explicitly installs this unregistered adapter ledger; never daemon startup.',
+    ) for statement in (
+        'SELECT digest,body FROM ahp_owned_sessions WHERE resource_id=? AND record_id=?',
+        'INSERT INTO ahp_owned_sessions VALUES(?,?,?,?)',
+        "SELECT 1 FROM ahp_owned_sessions WHERE resource_id=? AND record_id LIKE 'sent:%' LIMIT 1",
+    )
+})
 
 
 def test_fixed_sql_exclusions_match_real_statements():
@@ -194,5 +204,17 @@ def test_lazy_browser_sql_prepares_after_the_real_constructor(daemon, tmp_path):
 
     BrowserSessions(daemon, tmp_path, "fixture-installation")
     for module_name, statement in EXCLUSIONS:
-        assert module_name == "browser_sessions"
-        daemon.ops.db.execute("EXPLAIN " + statement, (None,) * statement.count("?")).fetchall()
+        if module_name == "browser_sessions":
+            daemon.ops.db.execute("EXPLAIN " + statement, (None,) * statement.count("?")).fetchall()
+
+
+def test_lazy_ahp_sql_prepares_after_explicit_schema(daemon):  # noqa: F811
+    from bat_agent_connector.ahp_owned_resources import schema
+
+    assert not daemon.ops.db.execute("SELECT 1 FROM sqlite_master WHERE name='ahp_owned_sessions'").fetchone()
+    version = daemon.ops.db.execute('PRAGMA user_version').fetchone()[0]
+    schema(daemon.journal)
+    schema(daemon.journal)
+    assert daemon.ops.db.execute('PRAGMA user_version').fetchone()[0] == version
+    for row in FIXED_SQL['ahp_owned_resources']:
+        daemon.ops.db.execute('EXPLAIN ' + row.sql, (None,) * row.sql.count('?')).fetchall()
