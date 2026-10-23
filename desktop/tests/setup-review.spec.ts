@@ -143,7 +143,10 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
     await expect(page.getByRole('button', {name: locale === 'en' ? 'Check request' : '查回請求', exact: true})).toBeHidden();
     state.refused = false; await field(page, 'host').fill('local-new');
     await reviewSetupConnection(page,locale); await applySetupReview(page);
-    await expect(page.locator('[data-managed-setup]')).toContainText(locale === 'en' ? 'local-new · Connected' : 'local-new · 已連線');
+    // The saved operation does not supply a matching current observation.
+    await expect(page.locator('[data-setup-host-state][data-host="local-new"] h3')).toHaveText('local-new');
+    await expect(page.locator('[data-setup-facet="connection"] [data-setup-fact-value]')).toHaveText(locale === 'en'
+      ? 'Not verified yet · Checking' : '尚未驗證 · 檢查中');
     expect(state.posts).toHaveLength(2); expect(state.staged).toHaveLength(1);
     expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
   });

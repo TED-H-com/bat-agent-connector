@@ -1,13 +1,13 @@
 {
   "schema": "public_ui_screenshots_v1",
-  "frontend_source_commit": "14c62830240148b14a4d28a9c428f7f8b5ba8bf3",
+  "frontend_source_commit": "437ee6a7143a82e32eae1d6a008203b2df072aaf",
   "source_pin_kind": "merged",
-  "frontend_source_tree": "0ddca2d4ffe0819436190181b23a3473062fa0c2",
-  "captured_at": "2026-10-19T08:11:47.832Z",
+  "frontend_source_tree": "14bd3cd86480fcae49bc9d7f66e9807e05fdd6b8",
+  "captured_at": "2026-10-22T19:26:37.481Z",
   "fixture_clock": "2026-10-13T09:00:00.000Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
-  "node": "v24.21.0",
+  "node": "v24.22.1",
   "synthetic_data": true,
   "native_or_live_acceptance": false,
   "dom_content_modified": false,
@@ -107,15 +107,15 @@
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "d3a09dcf59bb584afa76409377cd05d7ee12bf9c0112544841d99724db807582"
+      "sha256": "0084571d3ec83cfdba529d5f8c5f3f6a48d21f26f4db4bb9ee623ab7e32ac5ac"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",
-      "sha256": "10d2cbade579ad6c521a55139a89ed60d4b5dc134b3b36c59430ebf384ea69e3"
+      "sha256": "813035182901742d8074054030d4b282688feb482fec151251d7c6b3d6866be1"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.js",
-      "sha256": "f4d96e881c64c1c55a6354df3ba247a37197305e7e949ecd010f03776c7e9c51"
+      "sha256": "43c88c4e7f14d2d10ad7b160eae705098bd382719d3098bb8be1a0b0ac8f57d6"
     },
     {
       "file": "src/bat_agent_connector/dashboard/i18n.js",
@@ -123,13 +123,13 @@
     },
     {
       "file": "src/bat_agent_connector/dashboard/index.html",
-      "sha256": "c95fdc193177a7dfcc768f121bdb8b012312defdb3846f3b0ce168a493fc56ca"
+      "sha256": "c863b655b8f3fefe7dd3530f6af40914b89d7d13d04df081c45fa23dd5bb6c83"
     }
   ],
   "images": [
     {
       "file": "overview-en.png",
-      "sha256": "b225bb18617787ec1919206a636a168dcd285e70da27a475ceb485a53a459d22",
+      "sha256": "480cb59e6000033e9f9c68bc682bcb01b9a2ffe5faaf347376581d20502f9163",
       "scenario": "overview",
       "locale": "en-US",
       "viewport": {
@@ -168,7 +168,7 @@
     },
     {
       "file": "discussions-en.png",
-      "sha256": "39274aa57e0b804e8aaeced31e22aea8d507f0f7dbb120861b15d64a36d237fe",
+      "sha256": "1270fc38b9320b7c2e3f5399f80167f530b5c2214362422886dfbfc08f72c393",
       "scenario": "discussions",
       "locale": "en-US",
       "viewport": {
@@ -207,7 +207,7 @@
     },
     {
       "file": "requirements-en.png",
-      "sha256": "630bb3efad9e10ee082057d3a00a014fbf020f3035712014719acc1f9fd438e7",
+      "sha256": "735b1fb0d4aa0658e98677cb904bcb2ef89855813e99e97afa976de01c309c4f",
       "scenario": "requirements",
       "locale": "en-US",
       "viewport": {
@@ -246,7 +246,7 @@
     },
     {
       "file": "issues-en.png",
-      "sha256": "411f342440c43c48cb6d7884c7a3bdb8b414b77e493e69bb642ff2a2bad443cf",
+      "sha256": "de819ff8945e762811094c7626dfacfae89e4dadc69d6c4123cd26f68a4b2da9",
       "scenario": "issues",
       "locale": "en-US",
       "viewport": {
@@ -285,7 +285,7 @@
     },
     {
       "file": "schedule-en.png",
-      "sha256": "a7444a9a899ab8dc010bd01c003cf118f9ce4f638ff3c04ce81d58de43716d87",
+      "sha256": "e3fb39b2c3e6aabfb1dc3ade4c685bdeb0838db0630f6ebf67ba14a2fcdfed9c",
       "scenario": "schedule",
       "locale": "en-US",
       "viewport": {
@@ -324,7 +324,7 @@
     },
     {
       "file": "dependencies-en.png",
-      "sha256": "f34f9c604d73d09c9a3085df2872304fa5647b630f3620545463d9907c129c76",
+      "sha256": "209e8def147bdbd300082b59a0cfcace2ff0772c016b686961c7ef9bb37b47d1",
       "scenario": "dependencies",
       "locale": "en-US",
       "viewport": {
@@ -363,7 +363,7 @@
     },
     {
       "file": "board-en.png",
-      "sha256": "74a60374e5ece281d51629cd6b8a1bdaad193b83e68ac0cc3113133868056361",
+      "sha256": "8ef121e0715829520156453754acc82df6663c36578b6f66190f8912350748d2",
       "scenario": "board",
       "locale": "en-US",
       "viewport": {
@@ -402,7 +402,7 @@
     },
     {
       "file": "session-en.png",
-      "sha256": "5c2082ad309454f1e493bc94b31fb9a9139ab6f730b5a47335c5642ada6a1b7f",
+      "sha256": "905389d70081dd7bfdadd27a6797261e8ed4a5338709a939fcd6adb528180cf4",
       "scenario": "session",
       "locale": "en-US",
       "viewport": {
@@ -441,7 +441,7 @@
     },
     {
       "file": "overview-zh.png",
-      "sha256": "f43d83f87d3727681af3c072ad4898ba010e4b6a21b873df12a7fb0a393352d5",
+      "sha256": "5922ef6995cad148f1a4f7df931858f033b414f160ad1dc99bf826c107c6cc02",
       "scenario": "overview",
       "locale": "zh-TW",
       "viewport": {
@@ -480,7 +480,7 @@
     },
     {
       "file": "discussions-zh.png",
-      "sha256": "7139dfc7285c001437f41c10f633f9619d359c158ed99dc2438bfdc7f322b3f4",
+      "sha256": "a636ebfb286edf8cde9336763c00718e137a7a54f53bb5cad1647250c3c75ad1",
       "scenario": "discussions",
       "locale": "zh-TW",
       "viewport": {
@@ -519,7 +519,7 @@
     },
     {
       "file": "requirements-zh.png",
-      "sha256": "e79aae7f7e0a34a130fc4f0769506a141957c533a565a1bda4d7ee3837d71824",
+      "sha256": "e85b6df7947e20cab4862f9aa891850453224dca49f1c75de5bcb4e154a1d76c",
       "scenario": "requirements",
       "locale": "zh-TW",
       "viewport": {
@@ -558,7 +558,7 @@
     },
     {
       "file": "issues-zh.png",
-      "sha256": "274fc90f8afa5ea8f2f7821a2ead2c3a282150c78cb332c9ae6bdce6ee87cfb4",
+      "sha256": "78a3284c15bc9d63f3380ff2f7203882ed3a67499e9038b7d53c1c6318f14b21",
       "scenario": "issues",
       "locale": "zh-TW",
       "viewport": {
@@ -597,7 +597,7 @@
     },
     {
       "file": "schedule-zh.png",
-      "sha256": "d64467321a99be195a4a5507fa9fa5a12d46edda2db55dec0b6a6b88135b7aa0",
+      "sha256": "f324d156ac0118edf8c46333148b5cc8648c15793ce3c5400154c0fb84c25c84",
       "scenario": "schedule",
       "locale": "zh-TW",
       "viewport": {
@@ -636,7 +636,7 @@
     },
     {
       "file": "dependencies-zh.png",
-      "sha256": "68686fe544e2fd4719b22eacfa395e749178d2ffe12296375bb783c5087ca4dd",
+      "sha256": "3dd4ba2c040032a59255f073dd64aa68d0530d64e83fb7a467a1ea545c51ab0b",
       "scenario": "dependencies",
       "locale": "zh-TW",
       "viewport": {
@@ -675,7 +675,7 @@
     },
     {
       "file": "board-zh.png",
-      "sha256": "32d389ce76eaa6b0cb032bab445d71446504ee07a4f67e105f754a5a6c449c0b",
+      "sha256": "f363ad1061fa71e2a3b38ad64c2fcb7a7af212334bb844d77711365e9aff6183",
       "scenario": "board",
       "locale": "zh-TW",
       "viewport": {
@@ -714,7 +714,7 @@
     },
     {
       "file": "session-zh.png",
-      "sha256": "454acccaf4036e40323c1c42df1a89975f6bf28988214ed611512ee65552e95c",
+      "sha256": "93f8a189eb548d20fdb25b8d07d9d2d46e1b6a49b0abb318b8ad25f1acc19d1a",
       "scenario": "session",
       "locale": "zh-TW",
       "viewport": {

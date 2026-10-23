@@ -173,7 +173,7 @@ def validate(parent):
         feed = [candidate]
         def install(path, release, *, home):
             return stage(path, release, home=home, command=command)
-        updater = Updater(home, find_release=lambda channel: feed[0], install=install)
+        updater = Updater(home, find_release=lambda channel, observation=None: feed[0], install=install)
         updater.enroll(receipt, "preview")
         sentinel = home / "existing-journal"
         sentinel.write_bytes(b"fixed operation key and unknown sent effect")

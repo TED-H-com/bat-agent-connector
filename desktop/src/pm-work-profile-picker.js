@@ -5,6 +5,8 @@ import {internalFrom} from './work-paths.js';
 import {healthLabel} from './health-fact.js';
 import {profileStateFacts,profileTimestamp} from './pm-work-profile-state.js';
 import {hasEffectivePmRoute,renderEffectivePmRoute} from './pm-effective-route.js';
+import {claimObservationRenewal} from './observation-renewal.js';
+import {patch} from './ui/patch.js';
 
 const identity = value => typeof value === 'string' && /^wpf_[0-9a-f]{32}$/.test(value);
 const states = ['discovered','signed_in_or_available','can_observe','can_start_own','can_continue_own','last_verified_execution'];
@@ -55,8 +57,8 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
   async function renew(current,at){
     // Retire the deadline before awaiting. A later selection/read of this same
     // deadline must not inherit a Checking label from a discarded ticket.
-    const attempt={error:{code:'OBSERVATION_NOT_RENEWED',unchangedDeadline:true}};
-    renewed.set(renewalKey(current.row,at),attempt);
+    const attempt=claimObservationRenewal(renewed,renewalKey(current.row,at),at);
+    if(!attempt)return;
     try{await read(current.row,current.ticket,true);}
     catch(error){
       if(!valid(current.ticket)||observation!==current)return;
@@ -84,19 +86,6 @@ export function workProfilePicker({t,api,alive,namespace,workspaceId,workId,caps
     clearObservation();const current=selected();if(current)rows.delete(current.profile_id);verified=null;facts.replaceChildren();announcement.textContent='';
     if(!request()?.locked()){request()?.set('profile','');onChange(null,false);}
     status.replaceChildren(h('p',{class:'muted'},t(message)));options();
-  }
-  // Keep mounted controls/links, focus and enclosing disclosures while their
-  // read-only content changes. Unchanged subtrees retain their exact DOM nodes.
-  function patch(current,next){
-    if(current.isEqualNode(next))return;
-    if(current.nodeType!==next.nodeType||current.nodeName!==next.nodeName){current.replaceWith(next);return;}
-    if(current.nodeType===Node.TEXT_NODE){current.data=next.data;return;}
-    for(const attr of [...current.attributes])if(!next.hasAttribute(attr.name)&&attr.name!=='open')current.removeAttribute(attr.name);
-    for(const attr of next.attributes)if(attr.name!=='open')current.setAttribute(attr.name,attr.value);
-    const old=[...current.childNodes],fresh=[...next.childNodes];
-    for(let i=0;i<Math.max(old.length,fresh.length);i++){
-      if(!old[i])current.append(fresh[i]);else if(!fresh[i])old[i].remove();else patch(old[i],fresh[i]);
-    }
   }
   function display(data,row,renewal=false){
     const scroll=[];

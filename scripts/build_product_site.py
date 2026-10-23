@@ -76,8 +76,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "Screenshots pin merged main at 14c62830240148b14a4d28a9c428f7f8b5ba8bf3, through #314 on October 19, 2026. They show the synthetic Dashboard in Development: Needs attention, a four-section live charter, an unadopted discussion proposal, twelve register records, and a manual session whose host is not set up for managed work. The gallery does not open Start work or the Result section. Gallery images do not establish installation or live acceptance. Match the package to its source before installing.",
-        "截圖固定於已合併主線的 14c62830240148b14a4d28a9c428f7f8b5ba8bf3，包含 2026 年 10 月 19 日的 #314。畫面是開發階段的合成 Dashboard：需要關注、四段即時專案章程、一份尚未採用的討論提案、十二筆登記，以及人工工作階段寫明此主機尚未設定受管工作。圖庫沒有打開「開始工作」或成果區。圖庫不代表安裝或實機驗收；安裝前請核對套件來源。",
+        "Screenshots pin merged main at 437ee6a7143a82e32eae1d6a008203b2df072aaf, the published 0.2.13 / 0.1.9 prerelease through #395 on October 22, 2026. They show the synthetic Dashboard in Development: Needs attention, a four-section live charter, an unadopted discussion proposal, twelve register records, and a manual session whose host is not set up for managed work. The gallery does not open Start work or the Result section. Gallery images do not establish installation or live acceptance. Match the package to its source before installing.",
+        "截圖固定於已合併主線的 437ee6a7143a82e32eae1d6a008203b2df072aaf，即 2026 年 10 月 22 日已發布的 0.2.13／0.1.9 預覽版（截至 #395）。畫面是開發階段的合成 Dashboard：需要關注、四段即時專案章程、一份尚未採用的討論提案、十二筆登記，以及人工工作階段寫明此主機尚未設定受管工作。圖庫沒有打開「開始工作」或成果區。圖庫不代表安裝或實機驗收；安裝前請核對套件來源。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -89,8 +89,8 @@ shots = [
      "Live Overview in Development: Needs attention, honest progress and a four-section charter. Saved reports stay separate.",
      "開發階段的即時總覽：需要關注、誠實進度與四段專案章程。已存報告另外保留。"),
     ("discussions", "Discussions", "討論",
-     "The proposal stays in the conversation, Proposed and Unresolved. Discussion info is not open over it. Save note only and Make a plan are shown. This synthetic session says ordinary PM replies are unavailable.",
-     "提案留在對話中，狀態是建議、未決。討論資料沒有蓋在上面。畫面提供只存筆記與整理計畫。這個合成工作階段顯示一般 PM 對話目前無法使用。"),
+     "The proposal stays in the conversation, Proposed and Unresolved. Discussion info is not open over it. Save note only and Make a plan are shown. This synthetic session says PM availability is unknown.",
+     "提案留在對話中，狀態是建議、未決。討論資料沒有蓋在上面。畫面提供只存筆記與整理計畫。這個合成工作階段顯示 PM 可用性未知。"),
     ("requirements", "Requirements", "需求",
      "Expand the email sign-in row and read its work inspector. Acceptance, merged PRs and partial delivery each retain their evidence.",
      "展開電子郵件登入需求與工作詳情，分開查看驗收、已合併 PR 及部分交付證據。"),
@@ -305,7 +305,7 @@ parts.append(
     )
     + "</div>"
     + bi("↓ Governed BAT operations ↓", "↓ 受控 BAT 操作 ↓", "p", "flow-label")
-    + bi("Selected BAT host and workspace", "選定的 BAT 主機與 workspace", "h3", "bat-node")
+    + bi("Selected BAT host and workspace", "選定的 BAT 主機與工作區", "h3", "bat-node")
     + '<div class="resource-row">'
 )
 for en, zh, d, dz in [
@@ -389,9 +389,9 @@ for en, zh, d, dz, path in [
     ),
     (
         "One connection owner",
-        "明確的連線 owner",
+        "明確的連線擁有者",
         "Use public Rust configuration or explicitly migrate an existing PowerShell setup after proving the old owner stopped.",
-        "使用公開 Rust 設定，或證明舊 owner 已停止後明確遷移既有 PowerShell 配置。",
+        "使用公開 Rust 設定，或證明原連線擁有者已停止執行後明確遷移既有 PowerShell 配置。",
         "fleet-migration.md",
     ),
     (
@@ -438,8 +438,8 @@ for en, zh, d, dz in [
     (
         "Match the package",
         "核對套件",
-        "Download Connector 0.2.12 / desktop 0.1.8 from the published release. Check its source manifest and SHA-256 checksums.",
-        "下載已發布的 Connector 0.2.12／desktop 0.1.8，核對來源清單與 SHA-256 校驗碼。",
+        "Stable: Connector 0.2.12 / desktop 0.1.8, source 14c62830. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
+        "穩定版：Connector 0.2.12／desktop 0.1.8，來源 14c62830。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
     ),
     (
         "Connect your environment",
@@ -459,8 +459,22 @@ parts.append(
     '</ol><div class="install-current">'
     + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
-        "Advanced users can explicitly join an existing central. The published release includes fixed source and checksum records. These are development validation builds, not a stable signed update channel. Closing the UI leaves central work running.",
-        "進階使用者可明確加入既有中央。已發布版本附有固定來源與校驗紀錄。這些是開發驗證包，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
+        "Advanced users can explicitly join an existing central. The published release includes fixed source and checksum records. These are unsigned or ad-hoc-signed development builds, not a stable signed update channel. Closing the UI leaves central work running.",
+        "進階使用者可明確加入既有中央。已發布版本附有固定來源與校驗紀錄。這些是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
+        "p",
+    )
+    + bi(
+        "For Connector, use the verified installer from the same tag with these arguments. Scroll the command blocks to read or copy the full arguments on a narrow screen.",
+        "Connector 使用同一 tag 的驗證安裝器，參數如下。窄螢幕可橫向捲動命令區塊，閱讀或複製完整參數。",
+        "p",
+    )
+    + bi("Stable", "穩定版", "p")
+    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.12 --channel-check stable</code></pre>'
+    + bi("Prerelease", "預覽版", "p")
+    + '<pre class="install-command" tabindex="0" aria-label="Preview installer arguments / 預覽版安裝器參數"><code>--tag v0.2.13-preview.20261022 --channel-check preview</code></pre>'
+    + bi(
+        "A tag is required; the default preview check accepts stable releases and prereleases, while stable refuses previews. On Linux, <code>--enable-updates</code> enrolls and schedules that channel. The updater offers eligible newer stable releases on stable, and eligible newer stable releases or prereleases on preview. Updates affect future launches; existing processes keep running.",
+        "必須指定 tag；預設 preview 可接受穩定版與預覽版，stable 拒絕預覽版。Linux 加上 <code>--enable-updates</code> 才會登記該通道並啟用排程。更新器在 stable 提供符合條件的較新穩定版，在 preview 提供符合條件的較新穩定版或預覽版。更新供下次啟動使用，既有程序繼續執行。",
         "p",
     )
     + '<div class="actions">'
@@ -473,10 +487,17 @@ parts.append(
     )
     + link(
         repo + "/releases/tag/v0.2.12",
-        "Download published release →",
-        "下載已發布版本 →",
+        "Download stable 0.2.12 →",
+        "下載穩定版 0.2.12 →",
         "text-link",
     )
+    + link(
+        repo + "/releases/tag/v0.2.13-preview.20261022",
+        "Download prerelease 0.2.13 →",
+        "下載預覽版 0.2.13 →",
+        "text-link",
+    )
+    + doc("scripts/install_connector.py", "Installer source", "安裝器原始碼", "text-link")
     + doc("docs/connector-updates.md", "Connector automatic updates", "Connector 自動更新", "text-link")
     + "</div></div></div></section>"
 )
@@ -485,11 +506,11 @@ parts.append(
     + heading(
         "Entry points", "使用入口", "One Dashboard across your screens.", "不同螢幕，同一份 Dashboard。"
     )
-    + '<div class="table-wrap" role="region" aria-label="Platform support / 平台支援" tabindex="0"><table><thead><tr>'
+    + '<div class="table-wrap" role="region" aria-label="Platform support / 平台支援"><table role="table"><thead role="rowgroup"><tr role="row">'
     + bi("Entry", "入口", "th")
     + bi("Local facilities", "本機能力", "th")
     + bi("Current boundary", "目前界線", "th")
-    + "</tr></thead><tbody>"
+    + '</tr></thead><tbody role="rowgroup">'
 )
 for en, zh, d, dz, bound, bz in [
     (
@@ -525,15 +546,22 @@ for en, zh, d, dz, bound, bz in [
         "外部中央的原生憑證只留記憶體。",
     ),
 ]:
-    parts.append("<tr>" + bi(en, zh, "th") + bi(d, dz, "td") + bi(bound, bz, "td") + "</tr>")
+    parts.append(
+        '<tr role="row"><th scope="row" role="rowheader">' + bi(en, zh) + '</th><td role="cell">'
+        + '<span class="table-label" aria-hidden="true">' + bi("Local facilities", "本機能力") + "</span>"
+        + bi(d, dz) + '</td><td role="cell">'
+        + '<span class="table-label" aria-hidden="true">' + bi("Current boundary", "目前界線") + "</span>"
+        + bi(bound, bz) + "</td></tr>"
+    )
 parts.append(
     "</tbody></table></div>"
     + bi(
-        "Formal signing, Mac notarization, production updates and Linux persistent native credential storage are outside the agreed delivery.",
-        "正式簽章、Mac 公證、正式更新通道與 Linux 原生憑證持久儲存，已排除於本次交付。",
+        "Connector automatic updates are in scope for explicitly enrolled per-user Linux installations; eligible published releases apply to future launches. Formal signing, Mac notarization, signed desktop updates and Linux persistent native credential storage remain outside the agreed delivery.",
+        "Connector 自動更新已納入範圍，適用於明確登記的 Linux 使用者安裝；符合條件的已發布版本供下次啟動使用。正式簽章、Mac 公證、桌面版簽章更新與 Linux 原生憑證持久儲存仍排除於交付範圍。",
         "p",
         "section-note",
     )
+    + doc("docs/design/connector-updates.md", "Connector update contract →", "Connector 更新契約 →")
     + "</section>"
 )
 
@@ -597,8 +625,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "Merged main at 14c62830 (through #314, October 19, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.",
-        "已合併主線 14c62830（截至 #314，2026 年 10 月 19 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。",
+        "Published preview source 437ee6a7 (through #395, October 22, 2026) connects reviewed plans to Work, queued follow-ups, fixed Results, verification and PR delivery. Workbench provides mobile navigation and foreground recovery; profiles show route limits before start. PM can discuss two fixed assessments, save continuation briefs and explicitly assess the Overview. Resources reads separately authorized local Codex/Claude histories. Lists load summaries first; unsent instructions can return to Idea. Core UI actions share HTTP/MCP contracts. Classic remains the default. Integration fixtures use real Connector and disk Git with mock BAT/providers; live BAT/model and physical-device acceptance remain separate.",
+        "已發布預覽版來源 437ee6a7（截至 #395，2026 年 10 月 22 日）接通計畫採用、建立工作、排隊中的追加指令、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。",
     ),
     (
         "Still ahead",
@@ -729,7 +757,7 @@ for q, qz, a, az in [
         "Is this an official BAT product?",
         "這是 BAT 官方產品嗎？",
         "It is an unofficial MIT-licensed companion. BAT is by TonyQ and contributors. Project Hub informs selected interaction patterns without a runtime or importer dependency.",
-        "這是 MIT 授權的非官方 companion。BAT 由 TonyQ 與貢獻者開發；部分互動參考 Project Hub，沒有 runtime 或 importer 依賴。",
+        "這是 MIT 授權的非官方輔助工具。BAT 由 TonyQ 與貢獻者開發；部分互動參考 Project Hub，沒有 runtime 或 importer 依賴。",
     ),
 ]:
     parts.append("<details><summary>" + bi(q, qz) + "</summary>" + bi(a, az, "p") + "</details>")
@@ -737,7 +765,7 @@ parts.append(
     '</section></main><footer class="site-footer"><div class="section footer-inner"><div><a class="brand" href="#top"><img src="logo.svg" width="32" height="32" alt=""><span>Better Agent Dashboard</span></a>'
     + bi(
         "Project management on bat-agent-connector. An unofficial BAT companion.",
-        "以 bat-agent-connector 為中央的專案管理工具，BAT 的非官方 companion。",
+        "以 bat-agent-connector 為中央的專案管理工具，BAT 的非官方輔助工具。",
         "p",
     )
     + '</div><div class="footer-links">'

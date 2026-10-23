@@ -23,6 +23,27 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   const chart = h('div', {class: 'schedule-chart'}), meta = h('div', {class: 'schedule-meta', 'aria-live': 'polite'});
   const caption = h('p', {class: 'schedule-axis-caption', 'data-schedule-axis-caption': ''});
   const unscheduled = h('div', {class: 'schedule-unscheduled'}), error = h('div');
+  const labelTip = h('div', {class: 'schedule-label-tip', role: 'tooltip', id: `${workspaceId}-schedule-label`, hidden: true});
+  let tipCell = null;
+  function hideLabel() {labelTip.hidden = true; tipCell = null;}
+  function showLabel(cell, text) {
+    if (tipCell === cell) return;
+    tipCell = cell; labelTip.textContent = text; labelTip.hidden = false;
+    positionLabel(cell);
+  }
+  function positionLabel(cell) {
+    const box = cell.getBoundingClientRect();
+    labelTip.style.left = `${Math.max(8, Math.min(box.left, innerWidth - labelTip.offsetWidth - 8))}px`;
+    labelTip.style.top = `${Math.max(8, Math.min(box.bottom, innerHeight - labelTip.offsetHeight - 8))}px`;
+  }
+  function treeDate(value) {
+    const stamp = timeStamp(value, {dateOnly: true});
+    if (stamp instanceof HTMLElement) {
+      stamp.setAttribute('aria-description', stamp.title);
+      stamp.removeAttribute('title');
+    }
+    return stamp;
+  }
   const main = h('div', {class: 'schedule-main'}, error, viewport, unscheduled);
   viewport.append(caption, chart);
   const legend = h('div', {class: 'schedule-legend', 'aria-label': t('sched_legend')},
@@ -41,7 +62,11 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   }
   mountZoom();
   const layout = h('div', {class: 'schedule-layout'}, main);
-  const element = h('section', {'data-pm-schedule': '', class: 'pm-schedule'}, toolbar, layout);
+  const element = h('section', {'data-pm-schedule': '', class: 'pm-schedule'}, toolbar, layout, labelTip);
+  viewport.addEventListener('scroll', () => {
+    if (tipCell?.contains(document.activeElement)) positionLabel(tipCell);
+    else hideLabel();
+  }, {passive: true});
   viewport.addEventListener('scroll', saveScroll, {passive: true});
   function fitViewport() {
     if (!data || fitting) return;
@@ -290,8 +315,8 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const dates = spans(row).map(span => {
         const s = row[span.kind].start?.slice(0, 10) || '—';
         const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
-        const suffix = span.open ? [' → ', t('sched_open')] : span.unknownEnd ? [' → ', reasonLabel(t, 'terminal_time_unrecorded')] : e && e !== s ? [' → ', timeStamp(e, {dateOnly:true})] : [];
-        return h('span', {}, t('sched_' + span.kind), ' ', timeStamp(s, {dateOnly:true}), ...suffix);
+        const suffix = span.open ? [' → ', t('sched_open')] : span.unknownEnd ? [' → ', reasonLabel(t, 'terminal_time_unrecorded')] : e && e !== s ? [' → ', treeDate(e)] : [];
+        return h('span', {}, t('sched_' + span.kind), ' ', treeDate(s), ...suffix);
       });
       const deltaValue = row.kind === 'milestone' ? milestoneDelta(row) : null;
       const dateChildren = dates.length ? dates.flatMap((date, index) => index ? [' · ', date] : [date]) : [t('sched_no_dates')];
@@ -299,11 +324,22 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const pill = row.kind === 'work' || row.kind === 'attempt' ? rowStatus(row, data) : null;
       const descId = `sched-desc-${index}`, statusId = pill ? `sched-status-${index}` : null;
       if (pill) pill.id = statusId;
+      const fullTitle = scheduleTitle(row) || label(row);
       const cell = h('div', {class: 'schedule-tree-cell', role: 'treeitem', 'aria-level': depth, 'aria-expanded': expandable ? String(!collapsed.has(row.id)) : null,
-        'aria-label': label(row), 'aria-describedby': [statusId, descId].filter(Boolean).join(' '), tabindex: tabId === row.id ? 0 : -1,
+        'aria-label': fullTitle, 'aria-describedby': [statusId, descId].filter(Boolean).join(' '), tabindex: tabId === row.id ? 0 : -1,
         'data-schedule-select': row.id, onclick: event => row.kind === 'group' ? toggle(row.id) : select(row.id, event.currentTarget), onkeydown: event => keydown(event, item, index)},
-        expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: scheduleTitle(row)}, label(row)), h('span', {id: descId, class: 'schedule-date-range'}, ...dateChildren)),
+        expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title'}, label(row)), h('span', {id: descId, class: 'schedule-date-range'}, ...dateChildren)),
         pill);
+      const hoverLabel = () => {
+        const focused = document.activeElement?.closest('.schedule-tree-cell');
+        if (!focused || focused === cell) showLabel(cell, fullTitle);
+      };
+      cell.addEventListener('mouseenter', hoverLabel);
+      cell.addEventListener('mousemove', hoverLabel);
+      cell.addEventListener('mouseleave', () => {if (tipCell === cell && !cell.contains(document.activeElement)) hideLabel();});
+      cell.addEventListener('focusin', () => showLabel(cell, fullTitle));
+      cell.addEventListener('focusout', event => {if (tipCell === cell && !cell.contains(event.relatedTarget)) hideLabel();});
+      cell.addEventListener('keydown', event => {if (event.key === 'Escape') hideLabel();});
       cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
       const lane = h('div', {class: 'schedule-lane'}, track(row));
       lane.addEventListener('scroll', () => {
@@ -316,6 +352,16 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const line = h('div', {class: 'schedule-row', 'data-schedule-row': row.id, 'data-has-dates': String(spans(row).length > 0)}, cell, lane); tree.append(line);
     });
     chart.replaceChildren(axis, tree);
+    // Measure label, indentation and state pill together. Reserve a readable
+    // timeline and share one column width across the header and every row.
+    if (!phone()) {
+      const needed = Math.max(328, ...[...tree.querySelectorAll('.schedule-tree-cell')].map(cell => {
+        const title = cell.querySelector('.schedule-title');
+        return title.scrollWidth + cell.clientWidth - title.clientWidth + 2;
+      }));
+      chart.style.setProperty('--schedule-tree', `${Math.min(needed, Math.max(328, viewport.clientWidth - 480))}px`);
+    }
+    if (tipCell && !tipCell.isConnected) hideLabel();
     if (!visible.length) chart.replaceChildren(emptyState({title: t('sched_empty')}));
     else if (phone()) for (const trackNode of chart.querySelectorAll('.schedule-track')) containPhone(trackNode);
     else trimAxis(axis);
@@ -353,6 +399,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     showPanel();
   }
   function withdraw() {
+    hideLabel();
     serial++; stale = false; pendingRefresh = null; closePanel(); selected = null; remember(); data = null; signature = ''; domain = null;
     chart.replaceChildren(); caption.textContent = ''; meta.replaceChildren(); unscheduled.replaceChildren(); error.replaceChildren();
     delete element.dataset.scheduleLayout;
@@ -399,7 +446,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   }
   return {element, meta, refresh, withdraw, openRef, setActive(value) {
     active = value;
-    if (!value) {saveScroll(); closePanel(false);}
+    if (!value) {hideLabel(); saveScroll(); closePanel(false);}
     else {
       if (data) {restoreScroll(); showPanel();}
       if (stale && !element.closest('[hidden]')) void refresh();

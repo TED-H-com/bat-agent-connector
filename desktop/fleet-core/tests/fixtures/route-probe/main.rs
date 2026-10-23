@@ -32,6 +32,8 @@ fn main() {
         fs::write(directory.join("awakened"), "yes").unwrap();
         return;
     }
+    fs::OpenOptions::new().create(true).append(true).open(directory.join("status-count"))
+        .unwrap().write_all(b"status\n").unwrap();
     fs::write(
         directory.join("argv-ok"),
         if args == ["status", "--json"] && allowed {
@@ -59,6 +61,10 @@ fn main() {
         }
         "invalid_utf8" => {
             let _ = io::stdout().write_all(&[255]);
+            return;
+        }
+        "missing" => {
+            println!("{{\"Peer\":{{}}}}");
             return;
         }
         "invalid_json" => {

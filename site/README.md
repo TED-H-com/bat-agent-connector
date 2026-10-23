@@ -17,10 +17,12 @@ problem, discuss it with the PM and review a decision in the same context.
 It retains Windows Fleet, central authority, platform differences and installation guidance.
 
 The redesigned views and sixteen screenshots are a **development preview from merged main**
-pinned to `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`.
-This is the published Connector 0.2.12 / desktop 0.1.8 source through #314 (2026-10-19). It includes the merged Work loop: start, adopt-and-start, a second instruction to the same Work, fixed Results and requested diffs, profiles/readiness, verification, PR delivery and API/MCP parity. This compact gallery shows existing PM views and a read-only manual session; it does not open Start work or the Work Result inspector. Those features require the configured capabilities, BAT host and bound repository. Native coding/AHP routes, full PM lifecycle work and real BAT/model/device acceptance remain separate open work.
-It includes the first-run connection URL flow; repository binding and verification
-are optional collapsed steps. This refresh provides no installation or live evidence.
+pinned to `437ee6a7143a82e32eae1d6a008203b2df072aaf`.
+This is the published Connector 0.2.13 / desktop 0.1.9 prerelease source through #395 (2026-10-22). The compact gallery shows existing PM views and a read-only manual session with synthetic data. It does not open Start work or the Work Result inspector. It does not show later changes #399–#403. Native coding/AHP routes, full PM lifecycle work and real BAT/model/device acceptance remain separate open work.
+
+這十六張圖固定於已發布的 Connector 0.2.13／desktop 0.1.9 預覽版來源 `437ee6a7`（2026-10-22，#395），使用合成資料展示既有 PM 檢視與唯讀人工工作階段。圖庫沒有開啟「開始工作」或 Work 成果檢視器，也不含後續 #399–#403。原生 coding／AHP 路線、完整 PM 生命週期及真 BAT／模型／裝置驗收仍分別待完成。
+This refresh provides no installation or live evidence.
+本次圖庫更新不提供安裝或實機驗收證據。
 CI and browser screenshots do not establish native or live acceptance.
 Keep validation outcomes in the [implementation status](../docs/product/implementation-status.md);
 link it from the site. The [October 12 report](../docs/product/progress-2026-10-12.md) retains historical evidence.

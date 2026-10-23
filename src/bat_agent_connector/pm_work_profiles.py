@@ -662,26 +662,6 @@ def _stale_after_s(ops) -> float:
     return 180.0
 
 
-def _host_observation(db, host):
-    if not _table(db, "hosts_observed"):
-        return None
-    row = db.execute(
-        "SELECT reachable, last_attempt_at, last_success_at FROM hosts_observed WHERE host=?", (host,),
-    ).fetchone()
-    return dict(row) if row is not None else None
-
-
-def _discovery_bodies(db, host) -> list:
-    if not _table(db, "discovery_latest"):
-        return []
-    bodies = []
-    for row in db.execute("SELECT body FROM discovery_latest WHERE host=?", (host,)).fetchall():
-        body = _object(row["body"])
-        if body:
-            bodies.append(body)
-    return bodies
-
-
 def _covers(body, bat_workspace: str) -> bool:
     coverage = body.get("coverage")
     ids = coverage.get("workspace_ids") if isinstance(coverage, dict) else None
@@ -831,12 +811,15 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
     continue_registered = "repository.continue" in ops.actions
     send_registered = "session.send" in ops.actions
     bound = _binding_known(ops, repository, host, bat_workspace)
-    host_row = _host_observation(ops.db, host)
+    inventory = ops.context.get("inventory")
+    source = inventory.current_source_evidence(host) if inventory is not None else None
+    host_row = source.observation if source is not None else None
+    source_reason = source.reason if source is not None else None
     stale_after = _stale_after_s(ops)
     observed_reason = _observation_reason(host_row, observed_at, stale_after)
     last_success = host_row["last_success_at"] if host_row is not None else None
     last_attempt = host_row["last_attempt_at"] if host_row is not None else None
-    bodies = _discovery_bodies(ops.db, host)
+    bodies = source.discovery_bodies if source is not None else []
     covering = [body for body in bodies if _covers(body, bat_workspace)]
     provider = _usage_provider(ops.db, host, agent)
     receipt = _matching_continue(ops.db, principal, host, bat_workspace, repository, agent)
@@ -853,7 +836,7 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
         })
     else:
         coded = next((body.get("error_code") for body in bodies if body.get("error_code") in _DISCOVERY_REASONS), None)
-        discovered = _state("unknown", coded or "configured_unverified")
+        discovered = _state("unknown", source_reason or coded or "configured_unverified")
     if covering:
         past = covering[0]
         discovered["verified"] = _verified("ready", None, {
@@ -876,6 +859,8 @@ def _readiness_body(ops, principal: Principal, workspace_id: str, row) -> dict:
         can_observe = _state("missing", "ssh_alias_missing")
     elif not orchestrate or not roots:
         can_observe = _state("unavailable", "REPOSITORY_HOST_UNAVAILABLE")
+    elif source_reason:
+        can_observe = _state("unknown", source_reason)
     elif observed_reason == "never_observed":
         can_observe = _state("unknown", "never_observed")
     elif observed_reason == "host_unreachable":

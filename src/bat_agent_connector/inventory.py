@@ -21,6 +21,14 @@ from datetime import datetime
 
 from . import confinement, registry, service
 from .config import Config
+from .errors import (
+    AuthError,
+    ConnectionLost,
+    FingerprintMismatch,
+    InvokeError,
+    InvokeTimeout,
+    TokenUnavailable,
+)
 from .fleet import Fleet
 from .observation import Observation, _refs, body, dump, registry_bindings
 from .redact import redact
@@ -72,6 +80,28 @@ class InventorySettings:
     max_backoff_s: float = 600.0
 
 
+@dataclass(frozen=True)
+class CurrentSourceEvidence:
+    observation: dict | None
+    discovery_bodies: list[dict]
+    reason: str | None = None
+    source: dict | None = None
+
+
+def _failure_reason(exc: BaseException) -> str:
+    """Only client exception types establish a category; messages are diagnostics.
+
+    AuthError also covers protocol negotiation: the client does not distinguish
+    those failures by type. Never infer a finer distinction from its text.
+    """
+    for kind, code in ((TokenUnavailable, "credential_missing"), (FingerprintMismatch, "tls_trust"),
+                       (AuthError, "auth_or_protocol"), (ConnectionLost, "transport"),
+                       (InvokeError, "service_refused"), (InvokeTimeout, "service_timeout")):
+        if isinstance(exc, kind):
+            return code
+    return "unknown"
+
+
 def _material(row: dict) -> dict:
     return {k: row.get(k) for k in MATERIAL}
 
@@ -109,6 +139,10 @@ class Inventory:
                  fleet: Fleet | None = None) -> None:
         self.journal = journal
         self.db = journal.db
+        # Additive metadata only: no data migration or user_version allocation.
+        with journal.tx():
+            if "failure_reason" not in {r[1] for r in self.db.execute("PRAGMA table_info(hosts_observed)")}:
+                self.db.execute("ALTER TABLE hosts_observed ADD COLUMN failure_reason TEXT")
         self.config = config
         self.observation = Observation(journal, config)
         self.settings = settings or InventorySettings()
@@ -172,13 +206,14 @@ class Inventory:
 
     def _record_failure(self, host: str, at: float, exc: BaseException) -> dict:
         error = redact(f"{type(exc).__name__}: {exc}")[:300]
+        failure_reason = _failure_reason(exc)
         with self.journal.tx():
             old = self.db.execute("SELECT * FROM hosts_observed WHERE host=?", (host,)).fetchone()
             failures = (old["consecutive_failures"] if old else 0) + 1
-            self.db.execute("""INSERT INTO hosts_observed(host,reachable,error,last_attempt_at,consecutive_failures)
-                VALUES(?,0,?,?,?) ON CONFLICT(host) DO UPDATE SET reachable=0,error=excluded.error,
+            self.db.execute("""INSERT INTO hosts_observed(host,reachable,error,last_attempt_at,consecutive_failures,failure_reason)
+                VALUES(?,0,?,?,?,?) ON CONFLICT(host) DO UPDATE SET reachable=0,error=excluded.error,failure_reason=excluded.failure_reason,
                 last_attempt_at=excluded.last_attempt_at,consecutive_failures=excluded.consecutive_failures""",
-                            (host, error, at, failures))
+                            (host, error, at, failures, failure_reason))
             if old is None or old["reachable"]:
                 self.journal.api_event("host", host, "host.unreachable", {"error": error}, actor="inventory", context=self._context(host))
             self._discovery(host, at, failed=error)
@@ -256,7 +291,7 @@ class Inventory:
                     self._specific_stale(host, missing["session_id"], "not_enumerated", at)
             self.db.execute("""INSERT INTO hosts_observed(host,reachable,error,server_version,last_attempt_at,
                 last_success_at,consecutive_failures,session_count) VALUES(?,1,NULL,?,?,?,0,?)
-                ON CONFLICT(host) DO UPDATE SET reachable=1,error=NULL,server_version=excluded.server_version,
+                ON CONFLICT(host) DO UPDATE SET reachable=1,error=NULL,failure_reason=NULL,server_version=excluded.server_version,
                 last_attempt_at=excluded.last_attempt_at,last_success_at=excluded.last_success_at,
                 consecutive_failures=0,session_count=excluded.session_count""",
                             (host, version, at, at, len(seen)))
@@ -269,6 +304,28 @@ class Inventory:
     def _binding(self, host):
         hc = self.config.host(host)
         return hashlib.sha256(dump([hc.url, hc.fingerprint, hc.profile_id]).encode()).hexdigest()
+
+    def current_source_evidence(self, host: str) -> CurrentSourceEvidence:
+        """Read only evidence bound to this host's configured profile and source.
+
+        hosts_observed has no source column; its discovery row supplies the binding.
+        A scope refusal retains the old binding, so it cannot verify the new source.
+        No refresh, probe, timestamp renewal or journal write happens here.
+        """
+        configured = self.config.hosts.get(host)
+        if configured is None:
+            return CurrentSourceEvidence(None, [])
+        source = {"host": host, "profile_id": configured.profile_id, "binding_version": self._binding(host)}
+        row = self.db.execute("""SELECT h.*, d.body AS discovery_body
+            FROM discovery_latest d LEFT JOIN hosts_observed h ON h.host=d.host
+            WHERE d.host=? AND d.profile_id=? AND d.binding=?""",
+            (host, configured.profile_id, self._binding(host))).fetchone()
+        if row is None:
+            previous = self.db.execute("SELECT 1 FROM discovery_latest WHERE host=? LIMIT 1", (host,)).fetchone()
+            return CurrentSourceEvidence(None, [], "DISCOVERY_SCOPE_CHANGED" if previous else None, source)
+        observation = {key: row[key] for key in row.keys() if key != "discovery_body"} if row["host"] else None
+        discovery = body(row["discovery_body"])
+        return CurrentSourceEvidence(observation, [discovery] if discovery else [], source=source)
 
     def _context(self, host):
         scan = self._scans.get(host, {})
@@ -398,6 +455,7 @@ class Inventory:
             r = observed.get(name) or {}
             stale, reason = self._host_stale(r, now)
             out.append({"host": name, "reachable": bool(r["reachable"]) if r else None, "error": r.get("error"),
+                        "failure_reason": r.get("failure_reason") or "unknown" if r and not r.get("reachable") else None,
                         "server_version": r.get("server_version"), "sessions": r.get("session_count"),
                         "last_attempt_at": _iso(r.get("last_attempt_at")),
                         "last_success_at": _iso(r.get("last_success_at")),

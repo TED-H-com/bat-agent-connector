@@ -129,7 +129,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     const send = await page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true}).boundingBox();
     const ask = await page.locator('[data-discussion-ask]').boundingBox();
     expect(send!.y).toBe(ask!.y); expect(send!.x).toBeLessThan(ask!.x);
-    await expect(page.locator('[data-discussion-working]')).toHaveText(zh ? 'PM 已完成' : 'PM finished');
+    await expect(page.locator('[data-discussion-working]')).toHaveText(zh ? '此討論上次的 PM 執行：PM 已完成' : 'This discussion’s last PM run: PM finished');
     await page.screenshot({path: testInfo.outputPath(`discussions-proposed-${locale}-${width}.png`)});
     await page.locator('[data-proposal-review]').press('Enter');
     const adopt = page.locator('[data-pm-action="pm.conversation.adopt"]');
@@ -448,12 +448,12 @@ test('a second analysis with a lost reply shows Retry and never reuses a complet
     return result;
   });
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
-  await page.locator('[data-discussion-ask]').click(); await expect(page.locator('[data-discussion-working]')).toHaveText('PM finished');
+  await page.locator('[data-discussion-ask]').click(); await expect(page.locator('[data-discussion-working]')).toHaveText('This discussion’s last PM run: PM finished');
   await page.locator('[data-discussion-ask]').click();
   const status = page.locator('[data-discussion-working]'); await expect(status).toContainText('This request could not be completed. Check Details.');
   await expect(page.locator('[data-pm-action="pm.conversation.propose"] [data-error-details]')).toContainText('Original reply unavailable');
   await expect(status).not.toContainText('PM finished');
-  await status.getByRole('button', {name: 'Retry', exact: true}).click(); await expect(status).toHaveText('PM finished');
+  await status.getByRole('button', {name: 'Retry', exact: true}).click(); await expect(status).toHaveText('This discussion’s last PM run: PM finished');
   expect(f.discussion.writes).toHaveLength(3); expect(f.discussion.writes[2]).toEqual(f.discussion.writes[1]); expect(f.discussion.operations.size).toBe(2);
 });
 
@@ -620,7 +620,7 @@ for (const trigger of ['refresh', 'pm_run', 'pm_conversation_proposal']) test(`w
   const op: any = [...f.discussion.operations.values()][0]; op.status = 'succeeded';
   if (trigger === 'refresh') await page.getByRole('button', {name: 'Refresh', exact: true}).click();
   else events.push({seq: 1, resource_type: trigger, resource_id: 'analysis', kind: trigger + '.updated'});
-  await expect(working).toHaveText('PM finished', {timeout: 10000}); await expect(page.locator('[data-discussion-ask]')).toHaveText('Make a plan');
+  await expect(working).toHaveText('This discussion’s last PM run: PM finished', {timeout: 10000}); await expect(page.locator('[data-discussion-ask]')).toHaveText('Make a plan');
   expect(reads).toHaveLength(7); expect(new Set(reads)).toEqual(new Set(['/operations/' + op.operation_id]));
   expect(f.discussion.writes).toHaveLength(1);
 });
@@ -721,6 +721,9 @@ test('reload during the first thread mount preserves the staged intent without a
 test('adoption recovery opens Details and tolerates a completed receipt', async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale: 'zh-TW', viewport: {width: 390, height: 844}});
   const page = await context.newPage(), f = demoFixture({locale: 'zh-TW', discussions: true}), checks: string[] = [];
+  // Count explicit recovery reads here. A restored form also schedules its own
+  // acknowledged-receipt read after 250 ms; wall time must not race these steps.
+  const at = Date.now(); await page.clock.pauseAt(at);
   let op: any;
   await mountConversation(page, false, async input => {
     if (input.method === 'GET' && input.path.startsWith('/operations/')) checks.push(input.path);

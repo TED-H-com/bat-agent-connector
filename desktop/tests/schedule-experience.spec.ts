@@ -166,7 +166,7 @@ test('unobserved sessions and inconsistent dates stay honest; full multiline tex
   const region = page.locator('[data-pm-schedule]'); await region.locator('.schedule-unscheduled summary').click();
   const unobserved = region.locator('.schedule-unscheduled li').filter({hasText: f.ids.sessions.manual});
   await expect(unobserved).toContainText('Not observed yet');
-  await region.getByRole('treeitem', {name: 'First requirement line', exact: true}).click();
+  await region.getByRole('treeitem', {name: 'First requirement line Full second line <script>safe text</script>', exact: true}).click();
   await expect(page.locator('[data-schedule-inspector]')).toContainText('Full second line <script>safe text</script>');
   await page.locator('[data-schedule-inspector] > .ui-inspector-body > div > details > summary').click();
   await expect(page.locator('[data-schedule-inspector]')).toContainText('End precedes start; end omitted');
@@ -470,7 +470,10 @@ for (const locale of ['en', 'zh-TW']) test(`attempt action names and interval to
   const name = locale === 'en' ? 'Start session' : '開始工作階段';
   await expect(attempt).toHaveAccessibleName(name);
   await expect(attempt.locator('.schedule-title')).toHaveText(name);
-  await expect(attempt.locator('.schedule-title')).toHaveAttribute('title', name);
+  await expect(attempt.locator('[title]')).toHaveCount(0);
+  await attempt.focus();
+  await expect(page.getByRole('tooltip')).toHaveText(name);
+  await expect(page.getByRole('tooltip')).toBeVisible();
   const bar = page.locator('[data-schedule-track^="attempt:operation:"] .schedule-bar');
   const interval = locale === 'en' ? 'Actual · Oct 6' : '實際 · 10月6日';
   await expect(bar).toHaveAttribute('title', interval);

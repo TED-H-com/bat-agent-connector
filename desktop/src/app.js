@@ -1,7 +1,9 @@
+import {healthSummaryContent} from './health-summary.js';
+import {managedServiceControls} from "./managed-service.js";
 import {startupRoleChoice} from "./startup-role.js";
 import {boardGitHubPanel} from './board-github.js';
 import {clientActionGate, pollFailure} from "./central-service-status.js";
-import {healthDisplay, healthLabel, healthAge, healthRevision, rememberHealthRead, withdrawHealthRead, selectHealthSession, resetHealthBootstrap, takeHealthRenewal} from './health-display.js';
+import {healthDisplay, healthLabel, healthRevision, rememberHealthRead, withdrawHealthRead, selectHealthSession, resetHealthBootstrap, takeHealthRenewal} from './health-display.js';
 import {browserCredentialRefusals, isCredentialRefusal, BROWSER_TOKEN_KEY as TOKEN_KEY} from './credential-refusals.js';
 import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
@@ -1085,37 +1087,8 @@ function paintConnection(waiting = false, paused = false) {
   for (const paint of [...connectionPainters]) paint();
   paintVersions();
 }
-function healthSummaryContent(projection) {
-  const summary = projection.summary;
-  const pair = (label, value) => t('health_pair', {label: t(label), value});
-  const join = values => values.reduce((left, right) => t('health_join', {left, right}));
-  const last = summary?.facts.filter(row => row.activity.freshness === 'stale')
-    .sort((a, b) => (b.activity.ageSeconds || 0) - (a.activity.ageSeconds || 0))[0];
-  const refresh = projection.capabilities.refresh;
-  return [summary ? h('span', {'data-health-key': 'selected', 'data-health-selected': '', class: 'health-selected'},
-    h('span', {}, pair(summary.selected.workspaceId ? 'health_selected_workspace' : 'health_selected_work', summary.selected.label || summary.selected.host)),
-    h('span', {class: 'ui-pill', 'data-health-compact': summary.compact}, t('health_' + summary.compact)),
-    summary.connection ? h('span', {class: 'health-installation-connection'}, healthLabel({...summary.connection,
-      key: summary.connection.value === 'connected' ? 'ui_connected' : summary.connection.value === 'not_connected' ? 'health_connection_problem' : 'health_unknown'}, t)) : null,
-    h('span', {class: 'health-facets'}, join([
-      pair('health_attention_label', t(summary.attention ? 'health_attention' : 'health_none')),
-      pair('health_activity', t('health_' + summary.activity)),
-      pair('health_freshness', t(summary.stale ? 'health_stale' : summary.unknown ? 'health_unknown' : 'health_current'))])),
-    last ? h('span', {class: 'health-last-value'}, healthLabel({...last.activity,
-      key: ['streaming', 'starting'].includes(last.activity.value) ? 'health_working'
-        : last.activity.value === 'not_streaming' ? 'health_idle' : 'health_unknown'}, t)) : null) : null,
-    projection.connection.freshness === 'stale' ? h('span', {'data-health-key': 'connection-age', 'data-health-age': '', 'aria-live': 'off'},
-      healthAge(projection.connection.ageSeconds, t)) : null,
-    projection.capabilities.freshness === 'invalidated' ? h('span', {'data-health-key': 'capabilities'},
-      t(refresh?.state === 'loading' ? 'health_capabilities_checking' : 'health_capabilities_reload', {reason: refresh?.reason || 'IDENTITY_UNVERIFIED'})) : null,
-    projection.capabilities.freshness === 'invalidated' && refresh?.state !== 'loading'
-      ? h('button', {'data-health-key': 'reload', onclick: () => location.reload()}, t('health_reload')) : null,
-    projection.otherAttention ? h(projection.other.href ? 'a' : 'span', {href: projection.other.href, 'data-health-key': 'other', 'data-health-other': ''},
-      healthLabel({...projection.other, key: projection.otherAttention === 1 ? 'health_other_machines_one' : 'health_other_machines_many'},
-        (key, vars) => t(key, {count: projection.otherAttention, ...vars}))) : null].filter(Boolean);
-}
 function renderHealthContent(container, projection) {
-  const content = healthSummaryContent(projection), signature = content.map(node => node.outerHTML).join('');
+  const content = healthSummaryContent(projection, {h, t}), signature = content.map(node => node.outerHTML).join('');
   if (container.dataset.signature === signature) return;
   const focused = container.contains(document.activeElement) ? document.activeElement.dataset.healthKey : null;
   const existing = new Map([...container.children].map(node => [node.dataset.healthKey, node]));
@@ -3880,22 +3853,8 @@ async function viewManagedSettings(main) {
   frame.show("fleet");
   let disposeFleet, disposeTailscale;
   if (nativeDesktop) {
-    const login = h("input", {type: "checkbox", disabled: true});
-    const open = h("button", {class: "secondary", onclick: async () => {
-      open.disabled = true;
-      try {guard(); await managedControl({action: "open_browser"}); guard(); status.replaceChildren();}
-      catch (error) {if (connection.generation === generation) status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
-      finally {open.disabled = false;}
-    }}, t("managed_open_browser"));
-    local.append(h("div", {class: "actions"}, open, h("label", {}, login, " ", t("managed_start_login"))));
-    try {const state = await managedControl({action: "status"}); guard(); login.checked = !!state.login_enabled; login.disabled = false;}
-    catch (error) {status.replaceChildren(errorBox(error, {within:status}));}
-    login.addEventListener("change", async () => {
-      const wanted = login.checked; login.disabled = true;
-      try {guard(); const result = await managedControl({action: "set_login", enabled: wanted}); guard(); login.checked = !!result.login_enabled;}
-      catch (error) {if (connection.generation === generation) {login.checked = !wanted; status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}}
-      finally {login.disabled = false;}
-    });
+    await managedServiceControls(local, {h, t, managedControl, errorBox, guard,
+      onStarted: async () => {await nativeTransition('connect');}});
     try {
       const native = await nativeStatus(); guard();
       if (native.configuration_source === "managed" && native.configuration_setup) {
@@ -4038,7 +3997,15 @@ async function viewNativeSettings(main) {
       onVersions:paint=>{versionPainters.add(paint);return()=>versionPainters.delete(paint);}});
     if (mine !== generation || !main.contains(details)) { disposeUpdates?.(); return; }
     const row = (label, value) => { if (value) details.append(h("dt", {}, t(label)), h("dd", {}, value)); };
-    if (status.configuration_setup === true) {
+    const service = await managedServiceControls(frame.panel('connection'), {h, t, managedControl, errorBox,
+      guard: () => {if (mine !== generation) throw new Error('VIEW_CHANGED');},
+      onStarted: async () => {await nativeTransition('connect');}});
+    if (mine !== generation) return;
+    const serviceHeld = status.configuration_source === 'managed' && service?.lifecycle?.state !== 'running' && !!service?.lifecycle;
+    if (serviceHeld) {
+      details.hidden = true; actions.hidden = true; platform.hidden = true; introduction.hidden = true; saved.hidden = true;
+    }
+    if (status.configuration_setup === true && !serviceHeld) {
       firstConnection = true;
       setup.hidden = false;
       details.hidden = true;

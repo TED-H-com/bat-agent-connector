@@ -77,6 +77,7 @@ fn mode(path: &Path, value: &str) {
     let dir = path.parent().unwrap();
     for file in [
         "started",
+        "status-count",
         "finished",
         "argv-ok",
         "ping-ok",
@@ -249,4 +250,54 @@ async fn aliases_for_the_same_peer_share_one_owned_native_ping_and_release_after
             .await
     );
     assert_eq!(std::fs::read_to_string(&count).unwrap().lines().count(), 2);
+}
+
+#[tokio::test]
+async fn native_missing_idle_and_unreadable_peer_explain_direct_requirement_without_fallback() {
+    use bat_fleet_core::{
+        inventory::Inventory,
+        ownership::ProbeGeneration,
+        route::{HostPolicy, Routes, SelectionRequest},
+    };
+    let (_temp, path) = fixture();
+    let probe = NativeRouteProbe::new(Some(&path)).unwrap();
+    let mut inventory: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/inventory.json")).unwrap();
+    inventory["hosts"][0]["routes"] =
+        serde_json::json!([{"kind":"direct","alias":"fixture-direct","probe":"100.64.0.1:22"}]);
+    inventory["hosts"][0]["provision_route"] = "direct".into();
+    let inventory = Inventory::parse(&serde_json::to_vec(&inventory).unwrap()).unwrap();
+    let routes = Routes::from_inventory(&inventory, "node-1").unwrap();
+    let generation = ProbeGeneration {
+        epoch: "fixture".into(),
+        configuration_binding: "fixture".into(),
+        selection_revision: "fixture".into(),
+        generation: 1,
+    };
+    for (value, expected) in [
+        ("missing", "DIRECT_PEER_UNKNOWN"),
+        ("idle", "DIRECT_NOT_CONFIRMED"),
+        ("invalid_json", "DIRECT_PEER_UNKNOWN"),
+    ] {
+        mode(&path, value);
+        let policy = HostPolicy::new(&routes, generation.clone());
+        let failure = SelectionRequest::new(&routes, &policy, generation.clone(), 1000)
+            .unwrap()
+            .run(&probe, Duration::from_secs(2))
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(failure).unwrap()["route_requirement"],
+            expected
+        );
+        assert_eq!(
+            std::fs::read_to_string(path.parent().unwrap().join("status-count"))
+                .unwrap()
+                .lines()
+                .count(),
+            1
+        );
+        assert!(!path.parent().unwrap().join("ping-count").exists());
+    }
 }

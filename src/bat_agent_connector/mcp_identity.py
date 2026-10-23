@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from mcp.server.mcpserver import MCPServer
 
 from .build_identity import build_identity
+from .updater import connector_update_status
 
 _STARTED_AT = time.time()
 
@@ -14,7 +15,16 @@ _STARTED_AT = time.time()
 def register(server: MCPServer, capabilities: Callable[[], Awaitable[dict]]) -> None:
     @server.resource("batc://identity", mime_type="application/json")
     async def identity() -> dict:
-        """Loaded MCP build and a separate central capabilities observation; no installation or restart claim."""
+        """This process's loaded build, proven next launch, and separate central observation."""
+        loaded = build_identity()
+        update = connector_update_status(loaded)
+        installed = update.get("installed") if update["state"] == "reported" else None
+        difference = ("same" if installed["commit"] == loaded["commit"] else "differs") if installed else "unknown"
+        next_launch = {"source": "connector_update", "state": update["state"], "installed": installed,
+                       "observed_at": time.time(), "difference": difference, "restart_notice": None}
+        if difference == "differs":
+            next_launch["restart_notice"] = {"en": f"Restart to load {installed['version']}",
+                                             "zh-TW": f"重新啟動以載入 {installed['version']}"}
         central = {"source": "central_capabilities", "build": None,
                    "status": "unavailable", "reason": "CENTRAL_IDENTITY_UNAVAILABLE"}
         try:
@@ -30,5 +40,5 @@ def register(server: MCPServer, capabilities: Callable[[], Awaitable[dict]]) -> 
             # arbitrary transport errors, credentials or private endpoint details.
             central.update(status="unavailable", reason="CENTRAL_IDENTITY_UNAVAILABLE")
         central["observed_at"] = time.time()
-        return {"mcp": {"source": "mcp_process", "build": build_identity(), "started_at": _STARTED_AT},
-                "central": central}
+        return {"mcp": {"source": "mcp_process", "build": loaded, "started_at": _STARTED_AT},
+                "central": central, "next_launch": next_launch}

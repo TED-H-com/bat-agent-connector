@@ -40,9 +40,21 @@ their existing namespaces. No display state authorizes work or changes final gat
 | Native Fleet machine attention | Existing native `Entry::observed` readiness, through `fleet::sanitize_result` / `readiness_row`, consumed by the existing Fleet status/overview read. | Row `observed_at`, readiness stale state and the shared `fleetDiagnosis` (including monitor/selection state). Native aliases are a separate identity domain; never join them to central host names. |
 | Route kind and observation time | Native accepted `RouteChoice`, through `Entry::observed`, `Context::status` and the IPC allowlist. | Last supervisor-verified use, the shared 60-second deadline and active route generation. No new probes. |
 | Desktop and managed runtime versions | Existing native `app_build` and managed status producers; each remains its own version fact. | Bootstrap/version/build invalidation. Installed and launch-observed versions are separate. |
-| Loaded MCP process version (required, not built) | Missing process-owned MCP runtime identity producer; see the lifecycle follow-up below. Existing adapter/version facts cannot establish this identity. | The future observation must bind loaded version/build to process generation. Installing does not prove an existing process loaded new code. |
+| Loaded MCP process version | `batc://identity` reports only the calling MCP process’s loaded build and start time, separately from its central capabilities observation. | Its next-launch comparison reuses the updater’s process installation proof. Dashboard has no MCP observation transport and leaves this row unknown. |
 
 ## Summary and compact presentation
+
+Relative ages share `desktop/src/relative-age.js`: English uses `min`, `hr`, `d`
+with spaces; zh-TW uses `分鐘`, `小時`, `天`. Units roll over at 60 minutes and
+24 hours. This formatter never chooses a clock or evaluates freshness. Health
+retains its observation/deadline clock, Overview its projection clock, and shared
+timestamps their display clock and existing switch to calendar dates after a day.
+
+The compact installation strip (including its Settings copy) retains each state and last-known age, then says
+Checking once after all facets, equally in visible and accessible text. Full
+health rows, Fleet rows and their per-fact descriptions retain Checking per fact;
+they do not repeat it inside a single fact. The priority and expiry rules below
+are unchanged.
 
 The header describes the selected workspace's installation only. Connector connection
 is explicitly labelled **Connector**; it does not mean BAT, authentication scopes,
@@ -335,6 +347,32 @@ Connector remains the name for the Connector service; a configured SSH route is 
 proof of Connector or BAT readiness. Native sanitizer fixtures do not establish
 physical route acceptance.
 
+The optional `route_requirement` explains the last failed route selection in the
+current generation while no tunnel exists, including the wait between attempts.
+It is a closed explanation from the existing selector: `DIRECT_PEER_UNKNOWN`,
+`DIRECT_NOT_CONFIRMED`, `DIRECT_TCP_UNREACHABLE`
+or `CONFIGURED_ROUTES_EXHAUSTED`. The first three describe a direct-only configuration
+and its observed missing prerequisite; unknown peer evidence stays unknown. It is
+independent of chosen route kind/time, adds no probe, fallback or retry, and carries
+no peer data or latency. Native IPC allowlists the code; the shared row translates
+it in English and Traditional Chinese. Success, invalidation (selection, credential
+or generation change), an unrelated failure, or expiry withdraws the explanation
+from the row. A row with current probe evidence cannot carry it. Unresolved native Fleet `STOP_UNCONFIRMED`
+survives deselection, file expiry and re-reads until ownership reconciliation proves
+the stop. Expiry still clears current readiness and successful layers; it cannot
+erase the unresolved outcome or cause another stop. Managed Connector lifecycle
+retains its separate owner.
+
+`route_requirement` 在尚無 tunnel 時，以封閉代碼說明目前世代最後一次失敗的路徑選擇，
+包括兩次嘗試之間的等待。僅設定直連時，
+分別保留 peer 證據未知、直連未確認或 TCP 不通，其他情況說明所有設定路徑均不符合條件。
+已選路徑的種類與確認時間仍獨立，不新增探測、替代路徑或重試，也不推測 relay 或延遲。
+原生 IPC 僅接受列出的代碼，共用狀態列提供英語與繁中說明。路徑成功、失效（選取、憑證
+或世代改變）、出現其他無關失敗或過期時，列上的說明會撤回；已有目前 probe 觀測的列也
+不帶此說明。原生 Fleet 未確認的停止結果
+會跨取消選取、過期與重讀保留，直到原擁有權核對證明已停止；過期仍撤回就緒與成功分層，
+不抹去未決結果或再次送出停止。代管 Connector 的生命週期仍由其原擁有者處理。
+
 ## Lifecycle ownership
 
 On every platform Desktop ensures its managed Connector. Closing a window hides
@@ -346,13 +384,29 @@ Windows Fleet monitor and tunnels belong to the native application. Quit stops o
 its own resources, preserving uncertain ownership refusals. An external/plain
 Connector belongs to its service manager; the application never stops it.
 
-Long-running MCP processes are never restarted automatically. The required display
-when a newer version is installed is **Restart to load {version} / 重新啟動以載入
-{version}**. **This notice is not built.** There is no producer reporting the loaded
-version/build of each running MCP process, and no corresponding UI copy/consumer.
-The follow-up needs a process-owned MCP runtime identity observation (loaded
-version/build and process generation), separately compared with the updater's
-installed-for-next-launch version. Installing must not change the loaded identity.
-Diagnostics' existing `diag_runtime_differs` compares bundled and launch-observed
-managed runtime versions; it cannot prove a running MCP process's loaded version.
+Long-running MCP processes are never restarted automatically. `batc://identity`
+reports the calling process's loaded build and start time, with an independent
+central capabilities observation. Its `next_launch` observation reuses
+`connector_update_status` and the updater's captured startup installation proof.
+Only a snapshot belonging to that same updater installation can yield `same` or
+`differs`. A difference supplies **Restart to load {version} / 重新啟動以載入
+{version}** for this identified process only; it may reflect an upgrade or rollback.
+Different installations, missing enrollment, an unproven loaded package or an
+unreadable pointer yield `unknown` and no restart advice. Central unavailability
+or authorization failure does not hide the loaded MCP build or local comparison.
+Installing never changes the loaded identity. There is no MCP process scan,
+registry or Dashboard transport; the Dashboard MCP row remains explicitly unknown.
+Diagnostics' `diag_runtime_differs` compares bundled and launch-observed managed
+runtime versions and cannot fill the MCP row.
+
+The shared version projection also retains independent released rows for Desktop
+and Connector. Unknown is the default: no loaded, installed or answering value can
+fill a released slot. Desktop uses only the native updater's validated candidate
+and its completed-check clock. Failed checks retain the prior candidate's original
+clock; Status never renews it. Connector uses only its updater's persisted,
+completed release check for the current channel, with separate completion and
+publication times. Capabilities reads that private state without a lease, writes
+or network access; old states without this observation stay unknown. Check policy
+and activation are unchanged. About, Updates and diagnostics export share these
+same facts; read time is never substituted for check completion or publication.
 This display slice makes no lifecycle changes or claim of native/live acceptance.

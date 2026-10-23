@@ -1119,3 +1119,6 @@ fn migration_restored_before_complete_has_a_terminal_bound_to_reverse_bytes() {
 
 #[path = "creation_evidence/negative.rs"]
 mod negative;
+
+#[path = "creation_evidence/terminations.rs"]
+mod terminations;

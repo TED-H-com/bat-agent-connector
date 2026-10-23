@@ -22,7 +22,7 @@ from tests.test_connector_updates import deployment, make_package, release
 async def serve(directory):
     updater, receipt, _ = deployment.__wrapped__(directory)
     updater.enroll(receipt, 'preview')
-    updater.find_release = lambda _: release('b' * 40, '0.2.8')
+    updater.find_release = lambda _, observation=None: release('b' * 40, '0.2.8')
     updater.install = lambda root, candidate, **_: make_package(root, candidate)
     state = updater.home / '.local/state/bat-agent-connector'
     platform_files.ensure_private_directory(state)

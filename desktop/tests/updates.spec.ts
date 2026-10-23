@@ -1,14 +1,17 @@
 import {test, expect} from "@playwright/test";
+import {readFileSync} from 'node:fs';
+import {managedStatusFixture} from './managed-status-fixture.ts';
+const nativeCandidate=JSON.parse(readFileSync(new URL('../../tests/fixtures/desktop-update-candidate.json',import.meta.url),'utf8'));
 
 async function setup(page: any, options: any = {}) {
-  await page.addInitScript(({options}: any) => {
-    const candidate = {candidate_id: "opaque-native-candidate", version: "0.2.0", source_sha: "a".repeat(40), workflow_version: "2026-10-08.9"};
+  await page.addInitScript(({options,candidate,managed}: any) => {
     const env = {calls: [] as any[], failReads: false, ...options,
       status: {current_version: "0.1.0", available: options.signed !== false, phase: "idle", candidate: null as any,
         code: options.signed === false ? "UPDATE_SIGNING_NOT_CONFIGURED" : null, installation: null as any}};
     Object.assign(window, {isTauri: true, __updates: env, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
       if (command === "native_status") return {updates: true, endpoint: null, credential_available: false};
       if (command === "fleet_availability") return {configured: false, platform_supported: true};
+      if (command === "managed_control" && args.input.action === "status") return structuredClone(managed);
       if (command !== "desktop_update") throw new Error("unexpected command");
       const input = structuredClone(args.input);
       env.calls.push(input);
@@ -18,7 +21,10 @@ async function setup(page: any, options: any = {}) {
       }
       if (env.failAction === input.action) throw new Error("fixture failed");
       if (input.action === "status" && env.failReads) throw new Error("fixture unavailable");
-      if (input.action === "check") Object.assign(env.status, {phase: "available", candidate});
+      if (input.action === "check") {
+        if(env.failCheck)Object.assign(env.status,{phase:"check_failed",code:"UPDATE_CHECK_FAILED"});
+        else Object.assign(env.status, {phase: "available", candidate});
+      }
       if (input.action === "download") {
         if (input.candidate_id !== candidate.candidate_id) throw new Error("wrong candidate");
         Object.assign(env.status, {phase: options.badSignature ? "download_failed" : "verified",
@@ -31,7 +37,7 @@ async function setup(page: any, options: any = {}) {
       }
       return structuredClone(env.status);
     }}});
-  }, {options});
+  }, {options,candidate:nativeCandidate,managed:managedStatusFixture(false)});
   await page.goto("/dashboard/#/settings");
   await page.getByRole("link", {name: /^(Updates|更新)$/}).click();
 }
@@ -143,3 +149,32 @@ for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {
     await context.close();
   });
 }
+
+
+for(const locale of ['en-US','zh-TW'])test(`released Desktop check clock survives Status and failed recheck ${locale}`,async({browser})=>{
+  const context=await browser.newContext({locale}),page=await context.newPage();
+  const en=locale==='en-US',clock=new Date(nativeCandidate.checked_at*1000).toISOString();
+  try {
+    await setup(page);
+    const panel=page.getByRole('region',{name:en?'Desktop updates':'桌面更新'});
+    const released=panel.locator('[data-version-row=desktop_released]');
+    await expect(released).toContainText(en?'unknown':'未知');
+    await panel.getByRole('button',{name:en?'Check for updates':'檢查更新',exact:true}).click();
+    for(const value of [nativeCandidate.version,nativeCandidate.source_sha,clock])await expect(released).toContainText(value);
+    await panel.getByRole('button',{name:en?'Read update status':'查詢更新狀態',exact:true}).click();
+    await expect(released).toContainText(clock);
+    await page.evaluate(()=>{(window as any).__updates.failCheck=true;});
+    await panel.getByRole('button',{name:en?'Check for updates':'檢查更新',exact:true}).click();
+    await expect(released).toContainText(clock);
+    await page.locator('#settings-tab-about').click();
+    const about=page.locator('#settings-panel-about [data-version-row=desktop_released]');
+    await expect(about).toContainText(clock);
+    await expect(page.locator('#settings-panel-connection [data-api-error]')).toHaveCount(0);
+    await page.locator('#settings-panel-about [data-export-diagnostics]').click();
+    await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+    const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+    expect(bundle.versions.rows.find(row=>row.id==='desktop_released')).toMatchObject({
+      version:nativeCandidate.version,commit:nativeCandidate.source_sha,observed_at:clock,source:'desktop_updater'});
+    await expect(page.locator('[data-diagnostics-summary] [data-version-row=desktop_released]')).toContainText(clock);
+  }finally{await context.close();}
+});

@@ -1,4 +1,6 @@
 import {healthStrings} from './health-strings.js';
+import {setupObservationStrings} from './setup-observation-strings.js';
+import {relativeAgeStrings} from './relative-age.js';
 import {resultSourcesStrings} from './result-sources-strings.js';
 import {earlierDraftStrings} from './earlier-drafts-strings.js';
 import {externalHistoryStrings} from './pm-external-history-strings.js';
@@ -40,7 +42,9 @@ import {FLEET_STRINGS} from './fleet-strings.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 export const STRINGS = {
   "zh-TW": {
+    ...relativeAgeStrings['zh-TW'],
     ...healthStrings['zh-TW'],
+    ...setupObservationStrings['zh-TW'],
     ...FLEET_STRINGS['zh-TW'],
     ...workbenchStrings["zh-TW"],
     ...resultSourcesStrings["zh-TW"],
@@ -175,8 +179,6 @@ export const STRINGS = {
     connection_scope_merge: "合併",
     setup_link_ready: "已收到連線資料，請按「繼續設定」。",
     setup_waiting: "可以開始設定了",
-    setup_connection_connected: "已連線", setup_connection_checking: "確認連線中…", setup_connection_unreachable: "目前無法連線",
-    setup_connection_action: "請確認 BAT 已開啟，再按「重新整理」。", setup_connection_checking_help: "目前還沒有最新的連線結果，請稍後重新整理。",
     setup_language: "顯示語言", setup_language_en: "English", setup_language_zh: "繁體中文",
     setup_review_connection: "預覽連線",
     setup_reviewing_connection: "正在預覽連線",
@@ -253,7 +255,15 @@ export const STRINGS = {
     desktop_role_saving: "正在儲存用途…",
     desktop_role_changed: "此安裝已變更。請重新開啟以讀取已儲存的用途。",
     managed_join_existing: "加入既有的 Connector", managed_join_help: "輸入另一個 Connector 的位址與預期帳號，在原生視窗確認後，再加入該 Connector 的憑證。此電腦原有的背景工作會繼續運作。",
-    managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。", managed_open_browser: "在瀏覽器開啟 Dashboard", managed_start_login: "登入電腦時啟動",
+    managed_background_help: "關閉這個畫面不會停止背景工作。可使用「停止背景服務」停止本機 Connector。", managed_open_browser: "在瀏覽器開啟 Dashboard", managed_start_login: "登入電腦時啟動",
+    managed_stop: "停止背景服務", managed_start: "啟動背景服務", managed_stop_confirm: "確認停止",
+    managed_running: "背景服務運作中", managed_stopped: "背景服務已停止", managed_stopping: "背景服務停止中",
+    managed_still_stopping: "背景服務仍在停止中。你可以等待，或再次選擇停止服務。",
+    managed_busy: "背景服務目前忙碌，請先完成或核對目前工作，再停止服務。",
+    managed_action_busy: "另一個背景服務操作仍在進行中，請等它完成後再試。",
+    managed_stop_local: "本機 Connector 會停止。",
+    managed_stop_hold: "在你選擇啟動之前，開啟程式、登入電腦、自動恢復或在瀏覽器開啟都不會重新啟動。",
+    managed_stop_busy: "尚未完成或核對的工作會阻擋停止。", managed_stop_external: "外部連線不受影響。",
     managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
     delivery_list_prs: "瀏覽 Pull Requests",
     delivery_no_prs: "找不到 PR。",
@@ -1156,7 +1166,9 @@ export const STRINGS = {
     integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。",
   },
   en: {
+    ...relativeAgeStrings.en,
     ...healthStrings.en,
+    ...setupObservationStrings.en,
     ...FLEET_STRINGS.en,
     ...workbenchStrings.en,
     ...resultSourcesStrings.en,
@@ -1291,8 +1303,6 @@ export const STRINGS = {
     connection_scope_merge: "Merge",
     setup_link_ready: "Connection details are ready. Select Continue setup.",
     setup_waiting: "Ready to set up",
-    setup_connection_connected: "Connected", setup_connection_checking: "Checking…", setup_connection_unreachable: "Can’t reach this connection",
-    setup_connection_action: "Make sure BAT is open, then select Refresh.", setup_connection_checking_help: "There’s no recent connection result yet. Refresh in a moment.",
     setup_language: "Language", setup_language_en: "English", setup_language_zh: "繁體中文",
     setup_review_connection: "Review connection",
     setup_reviewing_connection: "Reviewing connection",
@@ -1369,7 +1379,15 @@ export const STRINGS = {
     desktop_role_saving: "Saving your choice…",
     desktop_role_changed: "This installation changed. Reopen to read its saved role.",
     managed_join_existing: "Join another Connector", managed_join_help: "Enter the address and expected account for another Connector, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
-    managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.", managed_open_browser: "Open Dashboard in browser", managed_start_login: "Start when I sign in",
+    managed_background_help: "Closing this view does not stop background work. Use Stop background service to stop the local Connector.", managed_open_browser: "Open Dashboard in browser", managed_start_login: "Start when I sign in",
+    managed_stop: "Stop background service", managed_start: "Start background service", managed_stop_confirm: "Confirm stop",
+    managed_running: "Background service running", managed_stopped: "Background service stopped", managed_stopping: "Background service stopping",
+    managed_still_stopping: "The background service is still stopping. You can wait or stop it again.",
+    managed_busy: "The background service is busy. Finish or reconcile current work before stopping.",
+    managed_action_busy: "Another background service action is still running. Try again when it finishes.",
+    managed_stop_local: "The local Connector will stop.",
+    managed_stop_hold: "App open, sign-in, recovery and Open in browser will not restart it until you choose Start.",
+    managed_stop_busy: "Unsettled work blocks stopping.", managed_stop_external: "External connections are unaffected.",
     managed_browser_help: "This browser uses your desktop identity. After signing out, reopen Dashboard from the desktop menu.",
     workspace_navigation: "Projects and work", workspace_search: "Search loaded projects and work", workspace_manage: "Add / manage projects",
     workspace_all_sessions: "All sessions", workspace_tools: "Tools", workspace_connection: "Connection / Fleet",

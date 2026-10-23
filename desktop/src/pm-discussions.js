@@ -4,6 +4,7 @@ import {viewState} from './ui/view-state.js';
 import {sheetHistory} from './ui/sheet-history.js';
 import {locale} from './i18n.js';
 import {findingName} from './ui/finding-name.js';
+import {timeStamp, timeText, timeLabel} from './ui/stamps.js';
 
 // Unknown enums are neutral, never machine keys in the reading surface.
 export function discussionLabel(t, prefix, value) {
@@ -121,14 +122,24 @@ export function discussionFeedback({t, request, node, eligible}) {
   const failed = error || ['failed', 'cancelled', 'uncertain', 'needs_attention'].includes(operation?.status);
   const running = ['running', 'accepted', 'queued', 'pending'].includes(operation?.status);
   const checked = request?.checking() === true;
-  const label = running ? t(checked ? 'pd_working' : 'pd_status_unchecked') : discussionOperation(t, operation) || error?.textContent || '';
+  const outcome = discussionOperation(t, operation);
+  const label = running ? t(checked ? 'pd_working' : 'pd_status_unchecked') : outcome
+    ? t('pd_last_run', {outcome}) : error?.textContent || '';
   let status = node.querySelector('[role=status]');
   if (!status) {node.removeAttribute('role'); status = h('span', {role: 'status'}); node.append(status, h('span', {'aria-hidden': 'true', 'data-discussion-elapsed': ''}), h('span', {'data-discussion-retry': ''}));}
   // Never mutate the live region for a clock tick or an unchanged status.
   if (status.textContent !== label) status.textContent = label;
   const elapsed = node.querySelector('[data-discussion-elapsed]');
   const time = running && checked ? discussionOperation(t, operation).slice(t('pd_working').length) : '';
-  if (elapsed.textContent !== time) elapsed.textContent = time;
+  const updated = !running ? operation?.updated_at : null;
+  const stamp = updated != null && timeText(updated) ? timeStamp(updated) : null;
+  const timeSignature = JSON.stringify([time, stamp?.outerHTML]);
+  if (elapsed.dataset.time !== timeSignature) {
+    elapsed.dataset.time = timeSignature;
+    elapsed.removeAttribute('aria-hidden');
+    elapsed.replaceChildren(...(stamp ? [' · ', timeLabel(t, 'pd_run_updated', {when: stamp})] : [time]));
+    if (running) elapsed.setAttribute('aria-hidden', 'true');
+  }
   const retry = node.querySelector('[data-discussion-retry]'), disabled = request?.replaceable() ? !eligible : !request?.canSubmit();
   const signature = JSON.stringify([Boolean(failed), disabled]);
   if (retry.dataset.state !== signature) {

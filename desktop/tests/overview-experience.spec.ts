@@ -355,9 +355,9 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
     await waiting.evaluate(node => {(window as any).clockAttention = node;});
     await completed.evaluate(node => {(window as any).clockDecision = node;});
     for (const [seconds, enWait, zhWait, enPast, zhPast] of [
-      [0, '<1m', '不到 1 分鐘', 'just now', '剛剛'], [59, '<1m', '不到 1 分鐘', 'just now', '剛剛'],
-      [60, '1m', '1 分鐘', '1m ago', '1 分鐘前'], [300, '5m', '5 分鐘', '5m ago', '5 分鐘前'],
-      [10800, '3h', '3 小時', '3h ago', '3 小時前'], [172800, '2d', '2 天', '2d ago', '2 天前'],
+      [0, '<1 min', '不到 1 分鐘', 'just now', '剛剛'], [59, '<1 min', '不到 1 分鐘', 'just now', '剛剛'],
+      [60, '1 min', '1 分鐘', '1 min ago', '1 分鐘前'], [300, '5 min', '5 分鐘', '5 min ago', '5 分鐘前'],
+      [10800, '3 hr', '3 小時', '3 hr ago', '3 小時前'], [172800, '2 d', '2 天', '2 d ago', '2 天前'],
     ] as const) {
       f.state.data.as_of = now + seconds; await refresh(page);
       await expect(waiting.locator('[data-overview-age]')).toHaveText(locale === 'en' ? enWait : zhWait);
@@ -405,7 +405,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
   const recent = metric(page, 'decision').locator('[data-overview-recent-decisions]');
   await expect(recent).toContainText(locale === 'en' ? 'Recently decided' : '近期決策');
   await expect(recent).toContainText(row.title); await expect(recent).toContainText(f.ids.actor);
-  await expect(recent).toContainText(locale === 'en' ? '1h ago' : '1 小時前');
+  await expect(recent).toContainText(locale === 'en' ? '1 hr ago' : '1 小時前');
   await recent.getByRole('button').click();
   await expect(page.locator(`[data-reg-inspector][data-reg-row="${row.key}"]`)).toBeVisible();
   expect(f.state.writes).toEqual([]); await context.close();
@@ -788,14 +788,14 @@ for (const target of ['attention', 'blocker', 'milestone', 'delivery']) test(`re
 test('cached attention ages advance without moving the reading row', async ({page}) => {
   const f = fixture(); await boot(page, f);
   const row = root(page).locator('[data-overview-row]').first(), control = row.locator('button');
-  await expect(row.locator('[data-overview-age]')).toHaveText('5d'); await control.focus();
+  await expect(row.locator('[data-overview-age]')).toHaveText('5 d'); await control.focus();
   await row.evaluate(node => {(window as any).readingRow = node;});
   const y = (await row.boundingBox())!.y;
   f.state.data.as_of += 3 * 86400; f.state.cursor++;
-  await expect(row.locator('[data-overview-age]')).toHaveText('8d'); await expect(control).toBeFocused();
+  await expect(row.locator('[data-overview-age]')).toHaveText('8 d'); await expect(control).toBeFocused();
   expect(await row.evaluate(node => node === (window as any).readingRow)).toBe(true); expect((await row.boundingBox())!.y).toBe(y);
   f.state.data.as_of += 3 * 86400; f.state.data.attention_counts.decision++; f.state.cursor++;
-  await expect(row.locator('[data-overview-age]')).toHaveText('11d'); await expect(control).toBeFocused(); expect(f.state.writes).toEqual([]);
+  await expect(row.locator('[data-overview-age]')).toHaveText('11 d'); await expect(control).toBeFocused(); expect(f.state.writes).toEqual([]);
 });
 
 test('390px navigation selects visible requirement and work after an earlier visit', async ({page}) => {

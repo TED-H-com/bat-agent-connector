@@ -7,7 +7,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::Mutex,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -38,6 +38,7 @@ pub struct Candidate {
     pub version: String,
     pub source_sha: String,
     pub workflow_version: String,
+    pub checked_at: f64,
 }
 
 #[derive(Clone, Serialize)]
@@ -155,6 +156,10 @@ fn metadata(update: &Update) -> Result<Candidate, String> {
         version: update.version.clone(),
         source_sha: source.into(),
         workflow_version: workflow.into(),
+        checked_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| "UPDATE_CLOCK_UNAVAILABLE")?
+            .as_secs_f64(),
     })
 }
 
@@ -498,6 +503,14 @@ mod tests {
             metadata(update).expect("release producer's canonical workflow must be accepted");
         assert_eq!(candidate.workflow_version, workflow);
         assert_eq!(candidate.version, update.version);
+        let mut candidate = serde_json::to_value(candidate).unwrap();
+        candidate["candidate_id"] = serde_json::json!("opaque-native-candidate");
+        candidate["checked_at"] = serde_json::json!(1792670400.125);
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/desktop-update-candidate.json"
+        ))
+        .unwrap();
+        assert_eq!(candidate, golden);
     }
 
     // The real updater verifies ephemeral signatures against a bounded loopback peer.
@@ -606,6 +619,20 @@ mod tests {
             .update
             .download_url = format!("http://{address}/payload").parse().unwrap();
         (updates, directory, peer)
+    }
+
+    #[tokio::test]
+    async fn released_candidate_keeps_its_completed_check_clock() {
+        let (updates, _directory, _peer) = download_fixture(false, Some("2.0.0")).await;
+        let first = serde_json::to_value(updates.status().unwrap()).unwrap();
+        assert!(first["candidate"]["checked_at"].as_f64().is_some());
+        assert_eq!(
+            serde_json::to_value(updates.status().unwrap()).unwrap(),
+            first
+        );
+        let failed = serde_json::to_value(updates.finish_check(Err(())).unwrap()).unwrap();
+        assert_eq!(failed["candidate"], first["candidate"]);
+        assert!(updates.finish_check(Ok(None)).unwrap().candidate.is_none());
     }
 
     #[tokio::test]

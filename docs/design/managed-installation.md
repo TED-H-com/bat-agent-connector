@@ -18,27 +18,87 @@ Existing external-central configuration stays selected. **Advanced: join an exis
 
 ## Setup connection readout
 
-Setup previously read `daemon.fleet._clients[name].connected`, the write-capable pool's open-socket flag. Session observation uses a separate read-only inventory pool, whose scheduled scans deliberately close idle sockets. Setup therefore reported disconnected hosts even after successful session scans.
+`GET /managed/setup` adds `connection_observation` to each configured host. GET
+never probes BAT, refreshes Inventory or sends a POST. Inventory remains the source
+and validity authority: Setup and Work use `Inventory.current_source_evidence`,
+`_observation_reason` and Inventory's `_valid_until`. No second binding hash or
+freshness window is computed.
 
-Setup now uses an authenticated active write connection or existing inventory evidence matching the current endpoint, certificate pin and profile binding within the inventory freshness window. Current success is **Connected / 已連線**. A recent failure is **Can’t reach this connection / 目前無法連線**, with one suggestion to check BAT and refresh. Missing, expired or mismatched evidence is **Checking… / 確認連線中…**, suggesting a refresh shortly. Legacy `connected: false` alone also means checking. Refresh reads observation evidence; it does not launch probes or change observer backoff.
+The bounded envelope is `{version: 1, facets: {transport, service, trust_sign_in,
+connection}}`. Every facet has `value` (`ready`, `unavailable`, `missing`, `unknown`),
+`observed_at` (epoch seconds or null), `valid_until` (producer ISO deadline or null),
+`reason` (bounded code or null for successful observation), and `source`:
+`{host, profile_id, binding_version, kind, ref}`. The accessor supplies the current
+binding even before an observation exists. Inventory facts reference
+`hosts_observed:<host>`; writer transport references `fleet_client:<host>`.
+Changed bindings withdraw earlier evidence. The overall connection uses the same
+value, attempt time, success-based deadline and reason as Work's Inventory-derived
+`can_observe`, independently of Work's configuration/action blockers.
 
-`GET /managed/setup` adds per-host `connection_status` and `connection_checked_at`. `connected` is `null` for unknown reachability. No schema, migration, permission or token-handling changes are introduced. Status is a recent observation, not a continuous network guarantee. Configured installs retain IDs, history, non-secret drafts and original operation keys and never automatically repeat setup.
+Inventory records `failure_reason` by exception type at failure production:
+`ConnectionLost` → `transport`, `FingerprintMismatch` → `tls_trust`, `AuthError` →
+`auth_or_protocol`, `TokenUnavailable` → `credential_missing`, `InvokeError` →
+`service_refused`, `InvokeTimeout` → `service_timeout`; all other types → `unknown`.
+`AuthError` covers both sign-in and protocol negotiation; no finer claim is made.
+Error text is never parsed or included in Setup. Idempotent nullable-column DDL
+runs when Inventory opens; old rows retain unknown classification, with no data
+step or `user_version` allocation. Success clears the metadata. Overall currentness
+retains Inventory/Work's `never_observed`, `host_unreachable`, `host_not_refreshed`
+and `DISCOVERY_SCOPE_CHANGED` reasons; typed failures explain the affected facet.
 
-A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
+A live writer's reader starts after authentication and negotiation (`client.py`,
+BAT `bat-remote/v2`). Observing it supplies only transport evidence with an explicit
+read clock, Inventory-produced deadline and `authenticated_socket` reason. It
+cannot establish workspace, Work capabilities or `setup_ready`.
+
+Compatibility is additive. Older desktops receive byte-identical `connected`,
+`connection_status` and `connection_checked_at` behavior, including the historical
+inclusive recency window and live-client null clock. New desktops consume only
+supported version-1 envelopes. Older Connectors, absent envelopes and future
+versions show unknown and cannot produce `setup_ready`. The `connected === true`
+fallback and Setup's local three-state formatter/labels are retired. No legacy
+producer rule is removed: it is retained solely for older desktop compatibility.
+
+All four facets use shared `displayFact` / `healthLabel`. Expiry is inclusive
+(`now >= valid_until`), with no implicit local validity fallback. The existing
+shell `health-display-tick` repaints ages and expiry; no second timer is added.
+Settings and Work share `claimObservationRenewal`: record a deadline before
+awaiting one GET; failures and unchanged deadlines never retry. A normal read with
+a new deadline permits renewal. One setup GET covers every configured host, so all
+due source/deadline pairs are claimed together before that read. Pending reads keep
+Checking; only completed failures or unchanged responses show an unrenewed result.
+Full reads take priority: a deadline is still spent when its observation-only
+read is skipped behind an in-flight full read, and a later full read supersedes
+any pending observation reply. No discarded or skipped read retries that deadline.
+For an unchanged configuration revision, host-name set and source bindings,
+renewal patches only observations, keeping mounted draft controls, focus, review
+and receipt. A changed revision or source identity applies the reply through the
+normal refresh path, including review invalidation. It needs no extra GET.
+Normal updates and clock paints share one automatic-status computation: review
+support, reviewing and changed-review messages, then applying an existing intent,
+then the observation/receipt status. Read failures retain aged facts and show the
+failure through the shared formatter. These display clocks admit no actions.
+
+A succeeded `setup.host` receipt records verification and saved configuration at
+its `updated_at` completion time. `setup_verified_saved` always uses that time,
+never the observation clock. Current readiness requires the matching target host's
+fresh overall Inventory fact; a live writer or unrelated host cannot override it.
+IDs, history, drafts and original operation keys remain intact. This readout makes
+no additional claim about starting Work and never resubmits setup.
 
 ## 與「加入機器」共用的契約（已定，尚未實作）
 
 本節補充上方現行首次設定，未實作新的角色精靈。程式查核包含 main `511fc618`
-與合併後的連線預覽實作；下列 `file:line` 已重核位置。預覽 API 見 [setup API 契約](api-v1.md#managed-setup連線預覽與受理)。
+與合併後的連線預覽實作；下列 `file:line` 已於合併 main `94dbddc8` 後重核位置。預覽 API 見 [setup API 契約](api-v1.md#managed-setup連線預覽與受理)。
 責任分工只維護於 [Fleet 唯一責任表](fleet-configuration.md#責任表與退休條件)；
 共用欄位、狀態、變更、lifecycle、健康投影、驗收與 D1–D8 的產品決定／技術預設
 均引用 [Fleet 共用契約](fleet-configuration.md#加入機器共用契約)，本處不另訂一份。
 
 | 首次設定特有行為（現況） | 可核對的輸入／輸出 |
 | --- | --- |
-| UI 選 BAT 來源 | 自動模式沿用可讀 BAT profile，多項時選擇，無可用項目時貼遮蔽連結；parser 拆出 endpoint／pin／token。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[managed-setup.js:342](../../desktop/src/managed-setup.js#L342) |
-| 簡易連線預覽送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:551](../../desktop/src/managed-setup.js#L551) |
-| UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:507](../../desktop/src/managed-setup.js#L507)、[managed-setup.js:522](../../desktop/src/managed-setup.js#L522) |
+| UI 選 BAT 來源 | 自動模式沿用可讀 BAT profile，多項時選擇，無可用項目時貼遮蔽連結；parser 拆出 endpoint／pin／token。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[managed-setup.js:360](../../desktop/src/managed-setup.js#L360) |
+| 簡易連線預覽送出值 | writes／orchestrate／shared_clone_worktrees 為 false，managed_roots 為空；advanced 才送 SSH／管理選擇。[managed-setup.js:677](../../desktop/src/managed-setup.js#L677) |
+| UI 恢復原請求及接受收據 | 已知 operation ID 時用 GET 查原操作，否則帶原 request／key 送出；接受收據前核對 operation ID、actor、action、target、params、preconditions 及 key。[managed-setup.js:618](../../desktop/src/managed-setup.js#L618)、[managed-setup.js:635](../../desktop/src/managed-setup.js#L635) |
 
 2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，角色入口須移至本機服務準備前，
 完整保留與驗收規則只維護於 [已定契約](fleet-configuration.md#已決定的產品契約2026-10-22經-owner-授權)。
@@ -91,9 +151,9 @@ makes it unknown. `differs` means the running service is not that bundle and the
 change waits for the service's next launch. These facts do not trigger replacement,
 restart, stop or refusal. Same-version reuse and the existing version upgrade gates
 are unchanged; readiness is not a build comparison. Native launch/status fields are
-additive and optional, and recovery refreshes the recorded observations. Same-version
-restart/refusal policy and each platform's ensure/stop ownership are owner decisions
-that have not been made.
+additive and optional, and recovery refreshes the recorded observations. Build
+differences do not trigger a restart. Explicit owned-service stop/resume follows
+the lifecycle contract below, with Python as its sole owner.
 
 - The persistent installation manifest binds runtime version, data location, installation actor, server ID and principal ID. Reopening and concurrent clients recover that installation.
 - Central uses kernel file leases, not an occupied port, stale PID or matching path, to enforce a single owner. The endpoint pointer is checked against the owned database, then a challenge verifies the live service before any bearer is sent.
@@ -496,3 +556,106 @@ separate plain-updater rollback cases cannot stand in for a managed rollback.
 The owner explicitly excluded formal signing, Mac notarization, production update channels and Linux persistent native credential enrollment from this delivery. Full human execution of the 46-item real-environment acceptance matrix is user-owned and is not an outstanding agent task. Exclusion does not mean these capabilities or checks were completed. Unknown native BAT merge acknowledgements preserve original work under the [merge contract](worktree-merge.md); its separate human-adjudication API is not a delivery gate.
 
 See [first use](../getting-started.md), [implementation status](../product/implementation-status.md), [acceptance reference](../product/acceptance-v2.md) and [shared frontend lifecycle](shared-frontend.md).
+
+## Deliberately stopping the owned background service
+
+Provider and Both installations offer **Stop background service** in native Settings.
+The preview explains that the local Connector stops, unsettled work blocks shutdown,
+external connections are unaffected, and app open, sign-in, recovery and **Open in
+browser** will keep it stopped until **Start background service**. One confirmation
+sends the request. Client installations own no service and offer neither control;
+native Stop/Start also refuse them before calling the launcher.
+
+Python remains the sole start/stop owner. Under `launcher.lock`, it writes a private,
+versioned `state/lifecycle.json` stop hold (`version: 1`, `state`, `requested_at`,
+`stopped_at`) before sending the proven installation owner's authenticated
+`/api/v1/managed/stop` request. The existing operations, tasks and active-work busy
+gates are unchanged for the first accepted stop. Any HTTP 4xx is a definitive
+refusal before an effect and removes the hold: 409 returns `SERVICE_BUSY` with a
+registered reason, or generic localized busy text for an unknown reason; other
+4xx responses return `SERVICE_STOP_REFUSED`. The service remains running. An
+acknowledgement followed by release of the service's kernel lease records `stopped`
+and its time. No PID or port is used to stop a service.
+
+An acknowledgement without lease release at the deadline, a 5xx response, a bad
+acknowledgement or a transport failure retains `stop_pending`. This means
+**stopping**, not running or failed. Both Stop and Start remain available. The
+person can wait or choose Stop again, review the same preview and confirm once.
+That new explicit action verifies the owner and sends one stop request if the
+lease is still held; if it is free, it records `stopped` without sending. The
+same refusal and uncertainty rules apply. The authenticated stop route is
+idempotent once shutdown is accepted: it returns the same acknowledgement without
+re-running busy admission or signaling a second effect. Ensure, resume, status
+and recovery never resend a pending stop automatically.
+
+Native Status returns the cached snapshot without the launcher or the operation
+serial lock. Launcher results and refusals carrying lifecycle refresh that cache;
+successful ensure/resume record running. An external CLI stop is observed by the
+next recovery ensure, and an external resume by the person's Start action. CLI
+status still reads the hold without writing, even if the service subsequently
+exits. Only stop, ensure or resume, while holding `launcher.lock`, may reconcile
+`stop_pending` to `stopped`.
+
+Every ensure path honours the hold before starting: ordinary native startup, the
+background recovery loop, `--managed-login`, browser handoff and CLI `ensure` or
+`browser`. They receive `SERVICE_STOPPED` with the lifecycle and its times. Native
+startup opens Settings normally with the stopped state; login entry stays quiet.
+A cached hold skips the recovering announcement and launcher. Real recovery
+attempts announce `MANAGED_RECOVERING`; a hold first discovered by that ensure
+may briefly show recovering before settling and clearing the recovery error,
+without retries or backoff growth. The internal CLI `serve` also refuses an
+existing hold. Unreadable, symlinked,
+foreign-owned or unknown-version holds return `SERVICE_LIFECYCLE_UNPROVEN`; none
+falls back to provisioning.
+
+To start a service while its stop hold remains, choose explicit **Start background
+service** / CLI `resume`. Under `launcher.lock`, while the previous service retains
+its lease, resume returns
+`SERVICE_STILL_STOPPING` and keeps the hold. Once the lease is free, it removes and
+syncs the hold, then runs ordinary ensure once under that same lock. Both-role
+external connections retain their existing endpoint, credentials and selection.
+This runtime-root file adds no SQL DDL or journal data step.
+
+## 主動停止自有背景服務
+
+Provider 與 Both 安裝在原生設定提供「停止背景服務」。預覽先說明本機 Connector
+會停止、尚未完成或核對的工作會阻擋停止、外部連線不受影響，以及開啟程式、登入電腦、
+自動恢復或「在瀏覽器開啟」都不會重新啟動，直到選擇「啟動背景服務」。確認一次後才送出。
+Client 沒有自有服務，不顯示這兩個控制；原生 Stop／Start 也會在呼叫 launcher 前拒絕。
+
+Python 是唯一啟停 owner。在 `launcher.lock` 內，先寫私有、具版本的
+`state/lifecycle.json`（`version: 1`、`state`、`requested_at`、`stopped_at`），
+再以已證明的安裝 owner 憑證呼叫 `/api/v1/managed/stop`。首次停止時，既有操作、任務
+及執行中工作的 busy gate 完全保留。任何 HTTP 4xx 都是副作用前的明確拒絕，會移除 hold：
+409 回傳 `SERVICE_BUSY` 與已登記的原有原因；未知原因只顯示通用的在地化忙碌訊息。
+其他 4xx 回傳 `SERVICE_STOP_REFUSED`，服務維持運作。收到停止確認且 kernel lease
+已釋放，才記錄 `stopped` 與時間。
+不使用 PID 或 port 終止服務。
+
+若已確認但 deadline 到時 lease 仍未釋放、收到 5xx、不正確的確認或 transport 失敗，
+保留 `stop_pending`，顯示「停止中」，不宣稱運作中或失敗，並同時提供停止與啟動。
+你可以等待，或再次選擇停止，查看相同預覽並確認一次。這個新的明確操作會先驗證 owner；
+lease 仍在時只送一次停止請求，已釋放則直接記錄 `stopped`，不送請求，結果規則與首次相同。
+停止路由已受理後具冪等性：同一個已驗證 owner 的重複請求回傳相同確認，不重跑 busy gate，
+也不再次發出停止信號。ensure、resume、status 及自動恢復不會自動重送 pending 的停止。
+
+原生 Status 直接回傳快取，不執行 launcher，也不取得操作的 serial lock。帶有 lifecycle
+的 launcher 結果及拒絕會更新快取；成功的 ensure／resume 記錄運作中。外部 CLI 停止由
+下一次 recovery ensure 觀察，外部 resume 則由使用者選擇啟動時觀察。CLI status 讀 hold
+不寫檔，稍後程序退出也一樣。只有 stop、ensure 或 resume 在持有 `launcher.lock` 時，
+才能將 `stop_pending` 對帳為 `stopped`。
+
+所有 ensure 入口在啟動前遵守 hold：原生開啟程式、自動恢復、`--managed-login`、瀏覽器
+handoff，以及 CLI `ensure`／`browser`，都回傳含 lifecycle 與時間的 `SERVICE_STOPPED`。
+原生開啟正常進入設定並顯示已停止；登入啟動保持安靜、不顯示視窗。恢復流程將 hold 視為穩定
+狀態。已快取的 hold 不公告恢復中，也不呼叫 launcher；真正恢復時公告
+`MANAGED_RECOVERING`。若該次 ensure 才發現外部 CLI 建立的 hold，可短暫顯示恢復中，
+隨後穩定為停止並清除恢復錯誤，不重試、不增加 backoff。內部 CLI `serve` 也拒絕既有 hold。
+不可讀、symlink、非目前使用者所有或未知版本的 hold 回傳 `SERVICE_LIFECYCLE_UNPROVEN`，
+不會退回建立服務。
+
+若 stop hold 仍存在，要啟動服務必須明確選擇「啟動背景服務」或 CLI `resume`，
+由 Python 在 `launcher.lock` 內處理。
+舊服務仍持有 lease 時回傳 `SERVICE_STILL_STOPPING` 並保留 hold；lease 釋放後才刪除並
+同步 hold，在同一把 lock 內執行一次普通 ensure。Both 角色的外部連線位址、憑證與選擇
+維持原狀。此檔案只屬 runtime root，不新增 SQL DDL 或 journal data step。

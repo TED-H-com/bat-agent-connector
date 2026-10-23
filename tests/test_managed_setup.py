@@ -4,15 +4,28 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 import pytest
 
-from bat_agent_connector import api_auth, dashboard_sync, managed_runtime, platform_files, registry
+from bat_agent_connector import (
+    api_auth,
+    client,
+    dashboard_sync,
+    inventory,
+    managed_runtime,
+    platform_files,
+    pm_work_profiles,
+    registry,
+)
 from bat_agent_connector import managed_setup as setup
 from bat_agent_connector.channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS, WRITE_CHANNELS
-from bat_agent_connector.config import load_config, parse_config, tomllib
+from bat_agent_connector.config import GitHubRepo, RepositorySyncConfig, load_config, parse_config, tomllib
+from bat_agent_connector.host_git import HostGitRunner
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests.operation_helpers import settle_operations
@@ -828,3 +841,185 @@ async def test_setup_connectivity_requires_current_recent_evidence(installed, mo
     assert host["connection_status"] == expected
     assert host["connected"] is (None if expected == "checking" else expected == "connected")
     assert "synthetic unreachable" not in json.dumps(host)
+
+
+@pytest.fixture
+async def connection_evidence(installed, mock, monkeypatch):
+    """Producer scenarios: real TLS, authentication, protocol and read refusal."""
+    daemon, principal, root = installed
+    profiles = root / "profiles"
+    profiles.mkdir()
+    (profiles / "index.json").write_text('{"profiles": []}')
+    monkeypatch.setattr(setup, "_profile_directory", lambda _: profiles)
+    async def ssh(_alias):
+        pass
+    monkeypatch.setattr(setup, "_probe_ssh", ssh)
+    operation = await settle(installed, create(installed, "setup.host", {"host": "fixture"},
+        host_params(daemon, principal, mock, ssh_alias="fixture-bat")))
+    assert operation["status"] == "succeeded"
+    original = daemon.fleet.config.host("fixture")
+    daemon.fleet.config.github.repos["acme/widget"] = GitHubRepo("acme/widget",
+        sync=RepositorySyncConfig("https://github.com/acme/widget.git", (("fixture", "ws-1"),)))
+    clock = {"now": 1800000600.0}
+    for module in (setup, inventory, pm_work_profiles):
+        monkeypatch.setattr(module, "time", SimpleNamespace(time=lambda: clock["now"],
+            strftime=time.strftime, gmtime=time.gmtime, strptime=time.strptime))
+    created, _ = daemon.ops.create(principal, action="pm.workspace.create", params={"name": "Connection evidence"},
+        idempotency_key="connection-workspace")
+    workspace = (await settle(installed, created))["result"]["workspace"]["workspace_id"]
+    created, _ = daemon.ops.create(principal, action=pm_work_profiles.ACTION, target={"workspace_id": workspace},
+        params={"document": {"version": 1, "binding": {"repository": "acme/widget", "host": "fixture", "workspace_id": "ws-1"},
+        "agent": "claude"}}, idempotency_key="connection-work-profile")
+    profile = (await settle(installed, created))["result"]["profile_id"]
+    row = daemon.journal.db.execute("SELECT * FROM work_profiles WHERE profile_id=?", (profile,)).fetchone()
+    cases = {}
+
+    def capture(name):
+        daemon.ops.context["git_runner"] = HostGitRunner(daemon.fleet.config, {"fixture": "fixture-bat"})
+        before = (list(mock.frames), daemon.journal.db.total_changes, daemon.journal.api_head())
+        state = setup.state(daemon, principal)
+        work = pm_work_profiles._readiness_body(daemon.ops, principal, workspace, row)
+        cases[name] = {"setup": state, "inventory": daemon.inventory.hosts(clock["now"])[0],
+            "work": work["states"]["can_observe"]}
+        assert before == (list(mock.frames), daemon.journal.db.total_changes, daemon.journal.api_head())
+
+    capture("never_observed")
+    await daemon.fleet.client("fixture").connect()
+    capture("active_writer")
+    await daemon.fleet.close()
+    daemon.fleet._clients.clear()
+    await daemon.inventory._refresh_scheduled("fixture")
+    capture("connected")
+    # A second configured alias is observed by the actual Inventory producer at
+    # the same clock. One setup GET reads both sources, including their deadline.
+    daemon.fleet.config.hosts["fixture-second"] = replace(original, name="fixture-second")
+    try:
+        await daemon.inventory._refresh_scheduled("fixture-second")
+        before = (list(mock.frames), daemon.journal.db.total_changes)
+        cases["connected"]["multiple_hosts"] = setup.state(daemon, principal)
+        assert before == (list(mock.frames), daemon.journal.db.total_changes)
+    finally:
+        del daemon.fleet.config.hosts["fixture-second"]
+    clock["now"] += daemon.inventory.settings.stale_after_s - 1
+    capture("before_expiry")
+    clock["now"] += 1
+    capture("expired")
+    await daemon.inventory._refresh_scheduled("fixture")
+    capture("renewed")
+    clock["now"] += 1
+    for name in ("authentication", "protocol", "tls_trust", "missing_credential", "service_refusal", "service_timeout", "unknown", "transport"):
+        daemon.fleet.config.hosts["fixture"] = original
+        await daemon.inventory.fleet.close()
+        daemon.inventory.fleet._clients.clear()
+        if name == "tls_trust":
+            daemon.fleet.config.hosts["fixture"] = replace(original, fingerprint="00" * 32)
+            # Observe this configured source, with no older discovery binding.
+            with daemon.journal.tx():
+                daemon.journal.db.execute("DELETE FROM discovery_latest WHERE host='fixture'")
+        elif name == "missing_credential":
+            daemon.fleet.config.hosts["fixture"] = replace(original, token_ref="env:BATC_FIXTURE_MISSING")
+            monkeypatch.delenv("BATC_FIXTURE_MISSING", raising=False)
+        elif name == "authentication":
+            mock.token = "different-fixture-token"
+        elif name == "protocol":
+            mock.protocol = "bat-remote/unsupported"
+        elif name in {"service_refusal", "unknown"}:
+            def read(_):
+                if name == "service_refusal":
+                    raise RuntimeError("fixture read refused")
+                return None
+            mock.handlers["workspace:load"] = read
+        elif name == "service_timeout":
+            async def slow_read(_):
+                await asyncio.sleep(0.1)
+                return mock.ws_doc
+            mock.handlers["workspace:load"] = slow_read
+        elif name == "transport":
+            await mock.stop()
+        with monkeypatch.context() as deadline:
+            if name == "service_timeout":
+                deadline.setattr(client, "timeout_for", lambda _: 0.01)
+            await daemon.inventory._refresh_scheduled("fixture")
+        capture(name)
+        mock.token = original.resolve_token()
+        mock.protocol = "bat-remote/v2"
+        mock.handlers.clear()
+        if name != "transport":
+            with daemon.journal.tx():
+                daemon.journal.db.execute("DELETE FROM discovery_latest WHERE host='fixture'")
+        clock["now"] += 1
+    daemon.fleet.config.hosts["fixture"] = replace(original, profile_id="other-profile")
+    capture("changed_binding")
+    bearer = token(daemon, "other-setup-reader", "observe", "manage")
+    before = list(mock.frames)
+    server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
+    try:
+        status, response = await http(server.sockets[0].getsockname()[1], "GET", "/api/v1/managed/setup", tok=bearer)
+        assert status == 403 and response["error"]["code"] == "FORBIDDEN"
+        cases["connected"]["read_refusal"] = {"status": status, "body": response}
+        assert mock.frames == before
+    finally:
+        server.close()
+        await server.wait_closed()
+    assert daemon.ops.get(operation["operation_id"]) == operation
+    return {"operation": operation, "cases": cases}
+
+
+async def test_connection_envelope_is_inventory_evidence_and_preserves_receipt(connection_evidence):
+    expected = {"authentication": "auth_or_protocol", "protocol": "auth_or_protocol", "tls_trust": "tls_trust",
+        "missing_credential": "credential_missing", "service_refusal": "service_refused", "service_timeout": "service_timeout",
+        "unknown": "unknown", "transport": "transport"}
+    for name, case in connection_evidence["cases"].items():
+        host = case["setup"]["hosts"][0]
+        envelope = host["connection_observation"]
+        assert envelope["version"] == 1
+        assert set(envelope["facets"]) == {"transport", "service", "trust_sign_in", "connection"}
+        for fact in envelope["facets"].values():
+            assert set(fact) == {"value", "observed_at", "valid_until", "reason", "source"}
+            assert fact["source"]["host"] == "fixture"
+            assert len(fact["source"]["binding_version"]) == 64
+        fact = envelope["facets"]["connection"]
+        work = case["work"]
+        assert (fact["value"], fact["reason"], fact["observed_at"], fact["valid_until"]) == (
+            work["value"], work["reason"], work.get("observed_at"), work.get("valid_until"))
+        if name != "changed_binding":
+            observed = case["inventory"]
+            assert (fact["reason"], fact["valid_until"]) == (observed["stale_reason"], observed["valid_until"])
+            assert fact["observed_at"] == (datetime.fromisoformat(observed["last_attempt_at"].replace("Z", "+00:00")).timestamp()
+                if observed["last_attempt_at"] is not None else None)
+            assert fact["value"] == ("unknown" if observed["reachable"] is None else "unavailable" if observed["stale"] else "ready")
+        if name in expected:
+            assert case["inventory"]["failure_reason"] == expected[name]
+            assert expected[name] in {f["reason"] for f in envelope["facets"].values()}
+        if name == "active_writer":
+            assert host["connected"] is True and host["connection_checked_at"] is None
+            assert fact["value"] == "unknown"
+            assert envelope["facets"]["transport"]["reason"] == "authenticated_socket"
+            assert envelope["facets"]["transport"]["observed_at"] == 1800000600.0
+            for axis in ("service", "trust_sign_in", "connection"):
+                assert envelope["facets"][axis]["value"] == "unknown"
+                assert envelope["facets"][axis]["observed_at"] is None
+        if name == "connected":
+            hosts = case["multiple_hosts"]["hosts"]
+            assert len(hosts) == 2
+            assert {row["connection_observation"]["facets"]["connection"]["valid_until"] for row in hosts} == {fact["valid_until"]}
+        if name == "expired":
+            assert fact["value"] == "unavailable" and fact["reason"] == "host_not_refreshed"
+            assert host["connected"] is True  # The legacy window remains inclusive.
+        if name == "changed_binding":
+            assert fact["reason"] == "DISCOVERY_SCOPE_CHANGED"
+
+
+async def test_failure_reason_upgrade_is_idempotent_and_old_rows_stay_unknown(installed):
+    daemon, _, _ = installed
+    from bat_agent_connector.errors import ConnectionLost
+    from bat_agent_connector.inventory import Inventory
+    daemon.journal.db.execute("ALTER TABLE hosts_observed DROP COLUMN failure_reason")
+    daemon.journal.db.execute("INSERT INTO hosts_observed(host,reachable,error) VALUES('old',0,'AuthError: not a type')")
+    version = daemon.journal.db.execute("PRAGMA user_version").fetchone()[0]
+    for _ in range(2):
+        Inventory(daemon.journal, daemon.fleet.config)
+    assert daemon.journal.db.execute("PRAGMA user_version").fetchone()[0] == version
+    assert daemon.journal.db.execute("SELECT failure_reason FROM hosts_observed WHERE host='old'").fetchone()[0] is None
+    assert inventory._failure_reason(ValueError("AuthError: text must not classify")) == "unknown"
+    assert inventory._failure_reason(ConnectionLost("private details")) == "transport"
