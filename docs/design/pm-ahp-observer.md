@@ -33,8 +33,8 @@ inline tokens and BAT credential reuse are not supported. File resolution retain
 Connector's private regular-file permissions and byte limit.
 
 Only `wss://` with normal certificate verification, or `ws://` to a literal loopback
-IP, is accepted. Unix-socket editor endpoints are currently unsupported; an operator
-must explicitly configure an already running TCP AHP endpoint. Configuration URLs
+IP, is accepted. This registered observer requires an already running TCP endpoint;
+the separate Linux local reader below does not accept TCP configuration URLs. URLs
 cannot contain userinfo, query or fragment. The VS Code connection-token mode adds
 `tkn` privately to the WebSocket upgrade query. `bearer_header` is an explicit
 alternative for deployments using HTTP bearer authentication. AHP `authenticate`
@@ -271,6 +271,120 @@ version string. Editor socket/named-pipe transport,
 headless configuration, credentials and real provider behavior remain outside the
 current explicitly configured TCP fixture acceptance.
 
+## Owned-work wire pin (disabled)
+
+[`ahp_protocol.py`](../../src/bat_agent_connector/ahp_protocol.py) adds two offline
+decoders for the same fixed commits above: upstream **1.0.0** and VS Code **0.10.0**.
+The selected wire version is exact; a distribution version or `serverInfo` cannot
+select a decoder, and unknown versions refuse. Canonical `ahp-session:` identities
+remain distinct from the stable distribution's provider-scheme identities.
+The module has only the bounded local read caller below, with no write transport,
+registered action or enable switch.
+`require_owned_write()` always refuses. The existing observer still permits only
+`initialize`, `reconnect`, `listSessions` and `subscribe`; its bounds and capability
+projection are unchanged. All manual and foreign sessions remain read-only.
+
+| Pinned subset | Wire shape and refusal boundary |
+| --- | --- |
+| Create | `createSession` and `createChat` are RPC requests with numeric IDs and `null` success results. A null result proves neither native identity nor completion. |
+| Turn | `dispatchAction` is a notification with `channel`, `clientSeq`, and `chat/turnStarted` (`turnId`, `startedAt`, `message.text`, `message.origin.kind`). Client messages must have origin `user`. |
+| Cancel | `chat/turnCancelled` is dispatched as a notification with `turnId` and producer-supplied `duration`; no `cancelTurn` RPC is introduced. |
+| Echo / terminal events | Server `action` carries `channel`, `serverSeq`, `action`, optional `origin` (`clientId`, `clientSeq`) and `rejectionReason`. `chat/turnComplete`, `chat/turnCancelled`, and `chat/error` carry producer duration. No timestamp subtraction or success inference occurs. |
+| Readback | `fetchTurns` accepts a chat channel and optional cursor and returns `{}`; the host loads history through `chat/turnsLoaded`. This module does not decode history or a Result envelope. |
+| Busy | `SessionStatus` is a bitset: Idle=1, Error=2, InProgress=8, InputNeeded=24, IsRead=32, IsArchived=64. InputNeeded is busy; metadata bits do not erase Idle. Busy wins if both Idle and InProgress are present. |
+| Refusal | Standard JSON-RPC and pinned AHP errors retain their original code/message/data; version refusal requires `supportedVersions`, authentication refusal requires `resources`. No authentication, permission request or retry follows. Initialization error envelopes can be decoded, but successful initialization remains outside this subset. |
+
+These fields come from the two pins' `common/messages.ts`, `common/commands.ts`,
+`common/actions.ts`, `common/errors.ts`, `channels-session/{commands,state}.ts`, and
+`channels-chat/{commands,actions,state}.ts`. The upstream paths begin with `types/`;
+the VS Code paths begin with `src/vs/platform/agentHost/common/state/protocol/`.
+See [notification routing](https://github.com/microsoft/agent-host-protocol/blob/5f16d81bb7045b66d7bc768d244feab75002d943/types/common/messages.ts),
+[turn actions](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/channels-chat/actions.ts),
+and [busy bits](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/channels-session/state.ts).
+The conservative subset supports text messages and empty active-client tools;
+attachments, model/agent selections, contributed tools, customizations, forks and
+side chats refuse. Provider config and metadata objects remain opaque. Shape decoding
+does not validate provider policy, correlate replies to durable operations, establish
+creation evidence, or replace controller admission and the final frame guard.
+
+[`pins.json`](../../tests/fixtures/ahp-owned/pins.json) records the upstream repository,
+commit and paths. Every row in [`protocol-shapes.jsonl`](../../tests/fixtures/ahp-owned/protocol-shapes.jsonl)
+is labeled **synthetic** and includes its source repository, commit and file path.
+These are hand-written offline protocol examples, never de-identified real traces.
+Golden byte comparisons use LF on every platform. They prove no installed host or
+provider behavior; `tested_host_versions` stays empty.
+
+Two current blockers keep owned writes unavailable. First,
+[`host_git.py`](../../src/bat_agent_connector/host_git.py) disables local Git. A
+local-only profile cannot create owned work unless it has an explicitly bound SSH
+Git route to the same host; an editor endpoint does not establish that binding.
+Second, neither pin provides an atomic conditional-turn RPC. Observing Idle and the
+existence of `TurnInProgress` (-32004) do not prove the host refuses a concurrent turn.
+A write cell stays off until a real trace proves that profile's busy refusal.
+There is no invented result, busy-query or conditional-turn RPC. This is an E07
+contract increment, not R3/E11 real-device acceptance or completion of A12/A21/A22/A26.
+
+繁體中文：本增量只加入兩個固定版本的離線 wire decoder，未接上正式執行路徑，
+所有自有工作寫入仍停用；既有 observer 的四個唯讀方法、限制及人工 session 保護不變。
+建立成功回覆是 `null`；turn／cancel 是 notification，不可當成有 result 的 RPC。
+busy 必須按 bit 判讀，InputNeeded 仍算忙碌；idle 或回覆成功都不是完成或寫入許可。
+fixtures 每筆標示 synthetic 並附公開來源，沒有真實 editor trace，也不代表 R3／E11 驗收。
+目前本機 Git 停用，local-only profile 除非明確綁定同主機 SSH Git 路線，否則不能建立自有工作。
+pin 沒有原子條件式 turn；在真實 trace 證明該 profile 的 busy refusal 前，寫入能力保持關閉。
+
+## Selected Linux editor verification
+
+[`ahp_local_endpoint.py`](../../src/bat_agent_connector/ahp_local_endpoint.py) provides
+an internal central reader for one explicitly bound `LocalAhpProfile`. The binding
+names its VS Code user-data root, selected entry identity, resources/app installation
+directory, provider and optional session URIs. It carries no token. This increment
+does not register a new API action or UI; callers must supply the existing authority
+check, which runs before every application frame and before retaining a receipt.
+Windows named pipes and macOS refuse. No account selection, sign-in, provider probe,
+dummy session, process launch or stale-file removal occurs.
+
+Discovery follows the pinned [LOCAL_ENDPOINT.md](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/LOCAL_ENDPOINT.md):
+only the selected root's `agent-host/local-endpoint/entries` and read-only legacy
+`metadata.json` are inspected. Metadata directories require owner-only 0700 and
+regular metadata files 0600; descriptor walks reject symlinks in every component.
+Unknown schemas and malformed entries are excluded individually. Canonical entry
+filenames hash `(type, pid, instanceId)`; new files win legacy collisions. Unknown
+PID liveness stays unknown, and an absent selected identity never selects another
+window. Enumeration is bounded to 32 entries (including fallback candidates),
+64 KiB per file; limit failures never establish an empty or complete catalog.
+
+The reader connects to the exact published Unix socket path. Before sending the
+upgrade token it checks Linux peer UID/PID against the same-user entry. The token
+is read into temporary backend memory and sent only as `?tkn=...`; socket logging
+is disabled and transport errors become fixed local reasons. HTTP 403 reports
+`connection_token_unavailable`. Token-source, metadata, socket or installation
+changes invalidate the previous proposal. Peer UID/PID is not instance ownership
+or running-binary attestation; all writes remain disabled.
+
+One connection offers only the selected `0.10.0` wire version. Initialization reads
+root provider/capability/model/config observations, then the bounded catalog and explicitly
+selected session/chat snapshots. The shared wire decoder checks native identities,
+status bits and supported chat action envelopes. Unknown action shapes refuse.
+The observer's unchanged 30 s / 4 MiB / 512-frame / eight-page / 200-session bounds
+apply, with 1 MiB frames and at most eight selected sessions and eight chats. There
+is no reconnect; at most one verification per profile and sixteen per process run.
+
+Selected installation files (`package.json` version and `product.json` commit) must
+be regular, trusted-owner, non-writable-by-others readbacks of the fixed 1.141.0 pin.
+`serverInfo` only cross-checks that evidence. A private process-local receipt retains
+binding and installation digests, endpoint incarnation, negotiated version, decoder,
+provider/config/model digest, observation time and coverage. Provider details remain
+opaque observations, not model or tool-policy validation. It contains no token or
+transcript and expires on restart. Public projection is limited to profile ID, fixed
+reason and validity window; its 60-second TTL is a proposal, never a write grant.
+Synthetic disk-backed Unix-socket tests do not establish R3/E11 live acceptance.
+
+繁體中文：新增明確綁定 Linux editor instance 的中央唯讀驗證器；不自動選窗、啟動、
+登入或清理。只讀選定 user-data root 的安全 metadata，沿公告 socket 原路徑連線；
+token 僅短暫留在後端並用於 upgrade，不進入回執、公開資料或紀錄。
+安裝版本須由選定安裝檔案讀回，不能只相信 serverInfo。回執只在程序內私存，
+公開僅有 profile ID、原因與期限；60 秒不是授權。來源變更即失效，寫入仍停用。
+
 ## Remaining M5 work
 
 W22-B must use fixed checkpoint continuation into newly created managed resources
@@ -281,3 +395,19 @@ context discussion turn is not that adapter. W24 still needs a persisted workspa
 working-adapter transition with PM document continuity and the original writer queue;
 the native/BAT discussion selector does not establish that contract. These execution,
 create-own and adapter-switch capabilities remain explicitly unsupported here.
+
+## Owned-resource authority seam
+
+The [central resource policy](resource-policy.md#ahp-owned-resource-frame-seam)
+now defines a private append-only AHP ledger, typed policy-issued grant and final
+frame boundary. Reservations confer no ownership; typed same-connection creation
+receipts are distinct from observation receipts. Current authority and identity
+checks precede lineage validation and a committed sent fence; uncertain effects
+remain unknown and cannot be resent. This does not change observer permissions,
+budgets or `require_owned_write()`. Production create, turn, result, API and UI
+remain absent. Permission answers stay in the editor; each Work has a thirty-minute
+budget. Synthetic Unix-peer tests are not R3/E11 editor acceptance.
+
+繁體中文：中央政策新增 AHP 所有權與 final-frame 接縫；預留及唯讀驗證回執均不是
+建立證據。送出前重驗權限與身分、通過 lineage、提交 fence；未知效果只查回、不重送。
+既有 observer 不變，寫入仍停用，沒有 create、turn、result、API 或 UI。
