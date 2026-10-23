@@ -372,7 +372,7 @@ fn windows_native_long_and_forward_slash_paths_never_leave_partial_targets() {
     assert!(parent.as_os_str().len() > 260);
     for forward in [false, true] {
         let target = parent.join(if forward { "slash.json" } else { "long.json" });
-        let stage = target.with_extension("stage");
+        let stage = parent.join(if forward { ".s.stage" } else { ".l.stage" });
         let spell = |p: &Path| {
             if forward {
                 PathBuf::from(
