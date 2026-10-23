@@ -45,6 +45,11 @@ fn present(path: &Path) -> Result<bool> {
 impl<S: Security> Reader<S> {
     fn new(expected: ProvisioningReceipt, security: S) -> Result<Self> {
         Record::Provisioning(Box::new(expected.clone())).encode()?;
+        // Managed identity requires its native manifest/service attestation.
+        // The observation-only boundary cannot establish that binding yet.
+        if expected.managed_connector.is_some() {
+            return Err(UNSUPPORTED);
+        }
         let login = security.login()?;
         if !login.valid() || login.owner_sid != expected.creator.owner_sid {
             return Err("OTHER_LOGIN_OWNER");

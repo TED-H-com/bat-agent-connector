@@ -271,3 +271,21 @@ fn reader_rechecks_login_guards_role_and_security_without_repair() {
         b"changed"
     );
 }
+#[test]
+fn reader_refuses_managed_receipts_without_native_manifest_attestation() {
+    let f = Fixture::new();
+    let mut receipt = f.reader.expected.clone();
+    receipt.managed_connector = Some(ManagedIdentity {
+        installation_id: "c".repeat(32),
+        manifest_sha256: digest(b"unverified manifest"),
+        actor: format!("desktop-{}", "c".repeat(32)),
+        server_id: "server-a".into(),
+        principal_id: "principal-a".into(),
+    });
+    let security = SecurityFixture {
+        login: RefCell::new(f.reader.login.clone()),
+        held: Cell::new(true),
+        denied: RefCell::default(),
+    };
+    assert!(Reader::new(receipt, security).is_err());
+}
