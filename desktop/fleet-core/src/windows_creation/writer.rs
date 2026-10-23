@@ -96,6 +96,9 @@ impl<S: Security> CreationWriter<'_, S> {
         }
         let parent = path.parent().ok_or(UNPROVEN)?;
         let parent_identity = self.parent_proof(parent)?;
+        // Read original histories while every existing directory is recorded.
+        // These immutable views remain inside the same held guard scope.
+        let histories = self.platform.histories()?;
         authorize()?;
         self.verify_effect_context()?;
         if self.parent_proof(parent)? != parent_identity {
@@ -121,7 +124,14 @@ impl<S: Security> CreationWriter<'_, S> {
             .expected
             .owner(&self.platform.reader.root_bytes()?)?;
         // The directory and its record are one level's authorized effect.
-        self.append(&owner, &Record::Directory(record), &mut || Ok(()))?;
+        evidence::append(
+            self,
+            &owner,
+            &Record::Directory(record),
+            &histories,
+            &[],
+            &mut || Ok(()),
+        )?;
         self.platform
             .reader
             .directory(path, &self.receipt_hash()?)?;

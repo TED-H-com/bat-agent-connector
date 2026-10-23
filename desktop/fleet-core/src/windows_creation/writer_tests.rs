@@ -396,3 +396,74 @@ fn writer_first_reservation_refuses_without_creating_unrecorded_namespace() {
     assert!(!p.reader.root().exists());
     assert!(!p.reader.expected.scope.kit_root.exists());
 }
+
+#[test]
+fn writer_records_a_directory_after_real_intended_publication_history() {
+    let f = Fixture::new();
+    let profiles = f
+        .reader
+        .expected
+        .path(Artifact::ProfileIndex)
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let key = f.reader.entries().unwrap().into_iter().find(|key| {
+        matches!(Record::decode(key, &f.reader.read_private(key, RECEIPT_LIMIT).unwrap().unwrap()).unwrap(),
+            Record::Directory(d) if d.canonical_path == profiles)
+    }).unwrap();
+    f.reader.directories.borrow_mut().clear();
+    std::fs::remove_dir(&profiles).unwrap();
+    std::fs::remove_file(f.reader.key_path(&key).unwrap()).unwrap();
+    let (mut p, _, _, _) = super::platform_tests::admitted(&f);
+    // Seal the fixture producer's fixed namespace directories with real IDs.
+    for path in p.reader.namespace_directories().unwrap() {
+        if path.exists() {
+            let record = Record::Directory(DirectoryCreated {
+                binding: p
+                    .reader
+                    .expected
+                    .binding(parse_owner_reference(&f.owner).unwrap(), 7)
+                    .unwrap(),
+                parent_identity: p.reader.identity(path.parent().unwrap()).unwrap(),
+                identity: p.reader.identity(&path).unwrap(),
+                canonical_path: path,
+            });
+            write_private(
+                &p.reader.key_path(&record.key()).unwrap(),
+                &record.encode().unwrap(),
+            );
+        }
+    }
+    p.reader.security.held.set(false);
+    p.with_writer(|w| {
+        w.directory_level(&profiles, &mut || Ok(()))?;
+        let record = w
+            .entries()?
+            .into_iter()
+            .find_map(|key| {
+                let record =
+                    Record::decode(&key, &w.read_private(&key, RECEIPT_LIMIT).unwrap().unwrap())
+                        .unwrap();
+                matches!(&record, Record::Directory(d) if d.canonical_path == profiles)
+                    .then_some(record)
+            })
+            .unwrap();
+        assert_eq!(
+            w.append(&f.owner, &record, &mut || Err("READBACK_ONLY"))?,
+            digest(&record.encode()?)
+        );
+        Ok(())
+    })
+    .unwrap();
+    p.reader.security.held.set(true);
+    assert!(matches!(
+        p.ownership(
+            &f.owner,
+            Artifact::Inventory,
+            p.reader.expected.path(Artifact::Inventory),
+            None
+        )
+        .unwrap(),
+        FileOwnership::Owned { .. }
+    ));
+}
