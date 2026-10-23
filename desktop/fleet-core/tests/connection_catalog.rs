@@ -13,7 +13,6 @@ fn entry(n: usize) -> Entry {
         },
         connection_id: Some(format!("conn_{n:032x}")),
         state: State::Attached,
-        receipt_refs: vec!["b".repeat(64)],
     }
 }
 fn changed(current: &ReadOutcome, change: Change) -> ReadOutcome {
@@ -54,12 +53,6 @@ fn create() -> Change {
         installation_ref: INSTALLATION.into(),
     }
 }
-fn append(id: String, hash: char) -> Change {
-    Change::AppendReceipts {
-        id,
-        receipts: vec![hash.to_string().repeat(64)],
-    }
-}
 fn unchanged(current: &ReadOutcome, change: Change) {
     assert_eq!(transition(current, change), Ok(Transition::Unchanged));
 }
@@ -77,6 +70,43 @@ fn raw(current: &ReadOutcome) -> Value {
 }
 fn read(value: &Value) -> ReadOutcome {
     load(Some(&serde_json::to_vec(value).unwrap()))
+}
+
+#[test]
+fn receipt_references_are_unknown_fields() {
+    let mut value = raw(&populated());
+    value["entries"][0]["receipt_refs"] = json!([]);
+    assert_eq!(read(&value), ReadOutcome::Invalid("CATALOG_INVALID"));
+}
+
+#[test]
+fn add_requires_an_attached_entry() {
+    let mut detached = entry(2);
+    detached.state = State::Detached;
+    refused(&initial(), Change::Add(detached), "CATALOG_INVALID");
+}
+
+#[test]
+fn every_change_predicts_identical_bytes_from_the_same_input() {
+    let absent = ReadOutcome::Absent;
+    let empty = initial();
+    let attached = populated();
+    let id = entry(1).id;
+    let selected = changed(&attached, Change::Select(Some(id.clone())));
+    let detached = changed(&selected, Change::Detach(id.clone()));
+    for (before, change) in [
+        (&absent, create()),
+        (&empty, Change::Add(entry(1))),
+        (&selected, Change::Detach(id.clone())),
+        (&detached, Change::Reattach(id.clone())),
+        (&attached, Change::Select(Some(id))),
+        (&selected, Change::Select(None)),
+    ] {
+        let first = transition(before, change.clone()).unwrap();
+        let second = transition(before, change).unwrap();
+        assert!(matches!(first, Transition::Changed { .. }));
+        assert_eq!(first, second);
+    }
 }
 
 #[test]
@@ -140,7 +170,6 @@ fn strict_keys_fields_syntax_selection_and_uniqueness() {
         ("/entries/0/configuration/id", json!("../config")),
         ("/entries/0/configuration/sha256", json!("A".repeat(64))),
         ("/entries/0/connection_id", json!("conn_bad")),
-        ("/entries/0/receipt_refs/0", json!("b".repeat(63))),
         ("/entries/0/server_id", json!("x".repeat(257))),
         ("/entries/0/principal_id", json!("bad\nidentity")),
         ("/selected", json!(entry(2).id)),
@@ -201,12 +230,6 @@ fn transitions_preserve_inactive_history_and_report_noops() {
     );
     current = changed(&current, Change::Reattach(id.clone()));
     assert_eq!(catalog(&current).entries[0], retained);
-    current = changed(&current, append(id.clone(), 'c'));
-    assert_eq!(
-        catalog(&current).entries[0].receipt_refs,
-        vec!["b".repeat(64), "c".repeat(64)]
-    );
-    unchanged(&current, append(id, 'b'));
     let mut central = entry(2);
     central.connection_id = None;
     current = changed(&current, Change::Add(central));
@@ -243,13 +266,11 @@ fn bounds_refuse_without_pruning_and_overflow_is_closed() {
     ));
     padded.push(b' ');
     assert_eq!(load(Some(&padded)), ReadOutcome::Invalid("CATALOG_BOUND"));
-    let mut receipts = entry(1);
-    receipts.receipt_refs = (0..RECEIPT_BOUND).map(|i| format!("{i:064x}")).collect();
-    let full_receipts = changed(&initial(), Change::Add(receipts));
-    refused(&full_receipts, append(entry(1).id, 'f'), "CATALOG_BOUND");
     value = raw(&full);
     for row in value["entries"].as_array_mut().unwrap() {
-        row["receipt_refs"] = json!(catalog(&full_receipts).entries[0].receipt_refs);
+        // Escaping can exceed the document bound even with individually bounded strings.
+        row["server_id"] = json!("\"".repeat(256));
+        row["principal_id"] = json!("\"".repeat(256));
     }
     let oversized: Catalog = serde_json::from_value(value).unwrap();
     assert_eq!(serialize(&oversized), Err("CATALOG_BOUND"));
@@ -278,21 +299,17 @@ fn bounds_refuse_without_pruning_and_overflow_is_closed() {
 fn seeded_transitions_never_remove_history_or_skip_revisions() {
     let mut current = initial();
     let mut seed = 0x9e3779b97f4a7c15u64;
-    for i in 0..600 {
+    for _ in 0..600 {
         seed ^= seed << 13;
         seed ^= seed >> 7;
         seed ^= seed << 17;
         let before = catalog(&current).clone();
         let id = entry((seed as usize >> 8) % 40).id;
-        let change = match seed % 6 {
+        let change = match seed % 5 {
             0 => Change::Add(entry((seed as usize >> 8) % 40)),
             1 => Change::Detach(id),
             2 => Change::Reattach(id),
             3 => Change::Select(Some(id)),
-            4 => Change::AppendReceipts {
-                id,
-                receipts: vec![format!("{i:064x}")],
-            },
             _ => Change::Select(None),
         };
         match transition(&current, change) {
@@ -306,7 +323,6 @@ fn seeded_transitions_never_remove_history_or_skip_revisions() {
                 for (old, new) in before.entries.iter().zip(&after.entries) {
                     assert_eq!(old.id, new.id);
                     assert_eq!(old.configuration, new.configuration);
-                    assert!(new.receipt_refs.starts_with(&old.receipt_refs));
                 }
                 assert_eq!(digest(&bytes), sha256);
                 current = load(Some(&bytes));

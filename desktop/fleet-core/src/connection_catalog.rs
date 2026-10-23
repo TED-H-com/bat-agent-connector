@@ -1,11 +1,12 @@
 //! Pure native association format. No persistence, ownership proof or central-config validation.
+//! Candidate bytes depend only on the current document and Change. The catalog
+//! records no receipt or operation IDs, so a review can predict its after bytes.
 use crate::{digest, strict_json, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 pub const DOCUMENT_BOUND: usize = 1024 * 1024;
 pub const ENTRY_BOUND: usize = 1000;
-pub const RECEIPT_BOUND: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -36,7 +37,6 @@ pub struct Entry {
     #[serde(deserialize_with = "required_option")]
     pub connection_id: Option<String>,
     pub state: State,
-    pub receipt_refs: Vec<String>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -129,7 +129,6 @@ impl Catalog {
         let mut ids = HashSet::new();
         let mut connections = HashSet::new();
         for entry in &self.entries {
-            require(entry.receipt_refs.len() <= RECEIPT_BOUND, "CATALOG_BOUND")?;
             if !id(&entry.id, "entry_")
                 || !opaque(&entry.server_id)
                 || !opaque(&entry.principal_id)
@@ -139,13 +138,10 @@ impl Catalog {
                     .connection_id
                     .as_ref()
                     .is_some_and(|c| !id(c, "conn_"))
-                || entry.receipt_refs.iter().any(|r| !hex(r, 64))
             {
                 return Err("CATALOG_INVALID");
             }
-            let mut receipts = HashSet::new();
             if !ids.insert(&entry.id)
-                || entry.receipt_refs.iter().any(|r| !receipts.insert(r))
                 || entry.connection_id.as_ref().is_some_and(|c| {
                     !connections.insert((&entry.server_id, &entry.principal_id, c))
                 })
@@ -165,7 +161,7 @@ impl Catalog {
     }
 }
 /// The sole canonical encoder: compact UTF-8 JSON in declaration order, no newline.
-/// Entry and receipt order are history; neither is sorted or normalized.
+/// Entry order is history; it is never sorted or normalized.
 pub fn serialize(catalog: &Catalog) -> Result<Vec<u8>> {
     catalog.validate()?;
     let bytes = serde_json::to_vec(catalog).map_err(|_| "CATALOG_INVALID")?;
@@ -181,7 +177,6 @@ pub enum Change {
     Detach(String),
     Reattach(String),
     Select(Option<String>),
-    AppendReceipts { id: String, receipts: Vec<String> },
 }
 #[derive(Debug, PartialEq, Eq)]
 pub enum Transition {
@@ -215,6 +210,7 @@ pub fn transition(current: &ReadOutcome, change: Change) -> Result<Transition> {
             match change {
                 Change::Create { .. } => return Err("CATALOG_CONFLICT"),
                 Change::Add(entry) => {
+                    require(entry.state == State::Attached, "CATALOG_INVALID")?;
                     if next.entries.len() == ENTRY_BOUND {
                         return Err("CATALOG_BOUND");
                     }
@@ -222,10 +218,9 @@ pub fn transition(current: &ReadOutcome, change: Change) -> Result<Transition> {
                 }
                 Change::Select(selected) => next.selected = selected,
                 change => {
-                    let (id, state, receipts) = match change {
-                        Change::Detach(id) => (id, Some(State::Detached), vec![]),
-                        Change::Reattach(id) => (id, Some(State::Attached), vec![]),
-                        Change::AppendReceipts { id, receipts } => (id, None, receipts),
+                    let (id, state) = match change {
+                        Change::Detach(id) => (id, State::Detached),
+                        Change::Reattach(id) => (id, State::Attached),
                         _ => unreachable!(),
                     };
                     let entry = next
@@ -233,16 +228,9 @@ pub fn transition(current: &ReadOutcome, change: Change) -> Result<Transition> {
                         .iter_mut()
                         .find(|e| e.id == id)
                         .ok_or("CATALOG_CONFLICT")?;
-                    if let Some(state) = state {
-                        entry.state = state;
-                        if state == State::Detached && next.selected.as_ref() == Some(&id) {
-                            next.selected = None;
-                        }
-                    }
-                    for receipt in receipts {
-                        if !entry.receipt_refs.contains(&receipt) {
-                            entry.receipt_refs.push(receipt);
-                        }
+                    entry.state = state;
+                    if state == State::Detached && next.selected.as_ref() == Some(&id) {
+                        next.selected = None;
                     }
                 }
             }
