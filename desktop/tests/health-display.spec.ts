@@ -1,5 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
+import {setTimeout as delay} from 'node:timers/promises';
 import {conversationFixture, mountConversation} from './conversation-fixture';
 import {STRINGS} from '../src/i18n.js';
 import {runtimeGolden} from './session-runtime-fixture';
@@ -398,11 +399,15 @@ for (const locale of ['en-US', 'zh-TW']) {
     const context = await browser.newContext({locale}), page = await context.newPage();
     const fixture = conversationFixture(); let changed = false, bootstraps = 0;
     let release!: () => void; const held = new Promise<void>(resolve => {release = resolve;});
+    let finishTicks!: () => void; const ticksFinished = new Promise<void>(resolve => {finishTicks = resolve;});
     await page.clock.install({time: at}); await page.clock.pauseAt(at);
     await mountConversation(page, false, async input => {
       const path = new URL(input.path, 'http://fixture').pathname;
       if (path === '/bootstrap') {
         bootstraps++;
+        // Keep the verification reply behind the test's initial display ticks.
+        // This is a real Node timer, independent of the paused page clock.
+        if (bootstraps > 1) {await ticksFinished; await delay(1_500);}
         if (failure === 'pending' && bootstraps > 1) await held;
         if (failure === true && bootstraps > 1) return {status: 503, data: {error: {code: 'TEMPORARY_UNAVAILABLE'}}};
       }
@@ -423,6 +428,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect(page.locator('.global-connection-facts')).toBeVisible();
       await page.clock.runFor(1_000);
       await page.clock.runFor(1_000);
+      finishTicks();
       await expect.poll(() => bootstraps).toBe(2);
       if (failure === 'pending') await page.clock.runFor(61_000);
       if (failure) await expect(page.locator('#installation-health [data-health-key=reload]')).toBeVisible();
@@ -430,6 +436,6 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect(page.locator('#installation-health [data-health-selected]')).toBeVisible();
       await page.clock.runFor(10_000); expect(bootstraps).toBe(2);
       expect(await page.evaluate(() => localStorage.getItem('batc.key.fixture.health'))).toBe('retained-key');
-    } finally {release(); await context.close();}
+    } finally {finishTicks(); release(); await context.close();}
   });
 }
