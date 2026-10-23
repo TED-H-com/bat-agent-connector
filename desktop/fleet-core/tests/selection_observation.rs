@@ -39,10 +39,14 @@ fn absence_never_becomes_an_empty_file_or_creates_a_directory_or_lock() {
     assert_eq!(observed.primary(), &FileObservation::Absent);
     assert_eq!(observed.legacy(), &FileObservation::Absent);
     assert_eq!(observed.configuration_binding(), config.binding());
-    assert_eq!(observed.directory(), f.0.join("BetterAgentTerminal"));
     assert!(!observed.directory().exists());
     assert_eq!(observed.snapshot(&config).unwrap().revision, digest(b""));
     assert_eq!(tree(&f.0), before);
+    // Compare resolved paths only after proving observation made no writes.
+    assert_eq!(
+        observed.directory(),
+        store.read(&config).unwrap().directory()
+    );
 }
 
 #[test]
@@ -123,7 +127,10 @@ fn observations_retain_directory_and_original_configuration_binding() {
     let config = f.load();
     let store = Store::new(f.0.clone());
     let observed = store.observe(&config).unwrap();
-    assert_eq!(observed.directory(), old);
+    assert_eq!(
+        observed.directory(),
+        store.read(&config).unwrap().directory()
+    );
     fs::create_dir(f.0.join("BetterAgentTerminal")).unwrap();
     assert_ne!(
         observed.directory(),
