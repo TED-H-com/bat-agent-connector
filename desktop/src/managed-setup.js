@@ -1,5 +1,9 @@
 import {operationStatusLabel} from './global-labels.js';
 import {timeLabel, timeStamp} from './ui/stamps.js';
+import {displayFact, healthLabel} from './health-display.js';
+import {healthReadError} from './health-fact.js';
+import {claimObservationRenewal} from './observation-renewal.js';
+import {patch} from './ui/patch.js';
 // BAT v3.2.15 renderer/src/utils/connection-url.ts grammar. Trust comes from
 // BAT's own copied fingerprint, never a network probe or a loopback assumption.
 export function normalizeSetupFingerprint(value) {
@@ -30,21 +34,40 @@ export function validSetupEndpoint(value) {
   } catch {return false;}
 }
 export const validSetupHostId = value => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
-// Legacy servers report a socket bool; false alone cannot prove failed reachability.
-export function setupConnectionStatus(host) {
-  return ['connected', 'checking', 'unreachable'].includes(host.connection_status) ? host.connection_status
-    : host.connected === true ? 'connected' : 'checking';
+const connectionFacets = ['transport', 'service', 'trust_sign_in', 'connection'];
+const connectionReasons = new Set(['never_observed', 'host_unreachable', 'host_not_refreshed', 'DISCOVERY_SCOPE_CHANGED',
+  'transport', 'tls_trust', 'auth_or_protocol', 'credential_missing', 'service_refused', 'service_timeout', 'unknown', 'authenticated_socket']);
+// Adapt the versioned producer facts; all wording and expiry use shared health.
+// Legacy booleans and the response's arrival time cannot establish currentness.
+export function setupConnectionFacts(host, {now = Date.now(), error = null} = {}) {
+  const envelope = host?.connection_observation;
+  return Object.fromEntries(connectionFacets.map(name => {
+    const raw = envelope?.version === 1 ? envelope.facets?.[name] : null;
+    const bound = raw?.source && typeof host.name === 'string' && raw.source.host === host.name && raw.source.profile_id === host.profile_id &&
+      /^[0-9a-f]{64}$/.test(raw.source.binding_version) && (raw.source.kind === 'hosts_observed' || name === 'transport' && raw.source.kind === 'fleet_client') &&
+      raw.source.ref === `${raw.source.kind}:${host.name}` && (raw.reason === null || connectionReasons.has(raw.reason));
+    const value = bound && ['ready', 'unavailable', 'missing', 'unknown'].includes(raw.value) ? raw.value : 'unknown';
+    const reason = bound && connectionReasons.has(raw.reason) ? raw.reason : null;
+    const deadline = bound && typeof raw.valid_until === 'string' ? Date.parse(raw.valid_until) : NaN;
+    const observed = bound && typeof raw.observed_at === 'number' && Number.isFinite(raw.observed_at) ? raw.observed_at * 1000 : null;
+    return [name, displayFact({value, key: `wpf_${value}`, reason, source: bound ? raw.source : null,
+      observed_at: observed, valid_until: Number.isFinite(deadline) ? deadline : null,
+      stale: ['host_unreachable', 'host_not_refreshed'].includes(reason), stale_reason: reason,
+      // No implicit 60-second validity for undeclared observations.
+      ...(Number.isFinite(deadline) ? {} : {observed_at: null}), error: healthReadError(reason, error)}, {now})];
+  }));
 }
 // A successful receipt records past verification, not current reachability.
-export function setupStatusLine({busy = false, operation = null, hosts = [], readReady = false}) {
+export function setupStatusLine({busy = false, operation = null, hosts = [], readReady = false, now = Date.now()}) {
+  const ready = host => {const fact = setupConnectionFacts(host, {now}).connection; return fact.value === 'ready' && fact.freshness === 'current';};
   if (busy) return {key: 'setup_checking'};
   if (operation?.status === 'succeeded' && operation.action === 'setup.host') {
     const host = hosts.find(row => row.name === operation.target?.host);
-    if (readReady && host && setupConnectionStatus(host) === 'connected') return {key: 'setup_ready'};
+    if (readReady && host && ready(host)) return {key: 'setup_ready'};
     // updated_at is the succeeded receipt's completion time, not the inventory time.
     return {key: 'setup_verified_saved', verifiedAt: operation.updated_at};
   }
-  if (readReady && hosts.length && hosts.every(row => setupConnectionStatus(row) === 'connected')) return {key: 'setup_ready'};
+  if (readReady && hosts.length && hosts.every(ready)) return {key: 'setup_ready'};
   if (operation) return {key: ['succeeded', 'failed', 'cancelled'].includes(operation.status) ? 'setup_failed_operation' : 'setup_saving'};
   return {key: !readReady ? 'setup_loading' : hosts.length ? '' : 'setup_waiting'};
 }
@@ -72,6 +95,8 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   const stagedSecrets = new Map(); // Principal/kind-bound references expire centrally after one hour.
   let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
   let discovery = null, discovering = false, discoverySerial = 0, secretTimer;
+  const renewedObservations = new Map();
+  let observationRead = false, fullReadSerial = 0;
   try { saved = JSON.parse(localStorage.getItem(key) || "{}"); } catch { /* fresh draft */ }
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) saved = {};
   // Old clients stored these codes as refusals without retaining admission proof.
@@ -509,6 +534,15 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         ? error.message : t('error_generic');
     message.replaceChildren(errorBox(error, {summary, ...options, within:message})); update();
   }}
+  function paintAutomaticStatus() {
+    const status = setupStatusLine({busy, operation, hosts: snapshot?.hosts || [], readReady});
+    const reviewStatus = !saved.intent && (snapshot && snapshot.preview_contract_version !== 1 ? 'setup_review_unsupported'
+      : reviewing ? 'setup_reviewing_connection' : reviewChanged ? 'setup_review_changed' : null);
+    automaticStatus.replaceChildren(reviewStatus ? t(reviewStatus) : busy && saved.intent?.request.action === 'setup.host' ? t('setup_applying_connection') : status.key === 'setup_verified_saved'
+      ? timeLabel(t, status.key, {host: operation.target.host, time: timeStamp(status.verifiedAt)})
+      : status.key ? t(status.key) : '');
+    automaticStatus.hidden = !automaticStatus.textContent;
+  }
   function update() {
     if (!alive()) return;
     const locked = busy || !snapshot || !readReady || !!saved.intent || snapshot.busy;
@@ -540,13 +574,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     connectionChoice.disabled = !!locked || !allowed('host');
     simple.hidden = !!snapshot?.hosts?.length;
     connectionStatus.hidden = !readReady;
-    const status = setupStatusLine({busy, operation, hosts: snapshot?.hosts || [], readReady});
-    const reviewStatus = !saved.intent && (!supported && snapshot ? 'setup_review_unsupported'
-      : reviewing ? 'setup_reviewing_connection' : reviewChanged ? 'setup_review_changed' : null);
-    automaticStatus.replaceChildren(reviewStatus ? t(reviewStatus) : busy && saved.intent?.request.action === 'setup.host' ? t('setup_applying_connection') : status.key === 'setup_verified_saved'
-      ? timeLabel(t, status.key, {host: operation.target.host, time: timeStamp(status.verifiedAt)})
-      : status.key ? t(status.key) : '');
-    automaticStatus.hidden = !automaticStatus.textContent;
+    paintAutomaticStatus();
     const base = saved.verification_base;
     const stale = base && base.revision !== snapshot?.revision;
     verificationNotice.hidden = !stale;
@@ -611,6 +639,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         preconditions: {...review.request.preconditions, review_digest: review.digest}}};
       try {persist();} catch (error) {delete saved.intent; throw error;}
       review = null;
+      paintAutomaticStatus();
       await sendOriginal(); sourceRefresh = true; await refresh();
     } catch (error) {handleSubmissionError(error, 'host', {sourceRefresh});}
     finally {busy = false; if (alive()) update();}
@@ -744,11 +773,76 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         saved.workspace_id = fields.get("workspace_id").value; persist(); unsaved.hidden = false;
       }}, `${row.name || row.title || row.workspace_id || row.id} · ${row.workspace_id || row.id}`)));
   }
-  async function refresh() {
-    const serial = ++readSerial;
+  const observationKey = (row, fact) => JSON.stringify([row.connection_observation?.version,
+    fact.source?.host, fact.source?.profile_id, fact.source?.binding_version, fact.source?.kind, fact.valid_until]);
+  const observationBindings = state => (state.hosts || []).map(row => [row.name, row.profile_id,
+    connectionFacets.map(name => {
+      const source = row.connection_observation?.facets?.[name]?.source;
+      return [source?.host, source?.profile_id, source?.binding_version];
+    })]).sort(([a], [b]) => String(a).localeCompare(String(b)));
+  function paintObservations() {
+    if (!alive() || document.hidden || !snapshot) return;
+    for (const row of snapshot.hosts || []) {
+      const facts = setupConnectionFacts(row);
+      for (const name of connectionFacets) {
+        const fact = facts[name], attempt = renewedObservations.get(observationKey(row, fact));
+        const shown = setupConnectionFacts(row, {error: attempt?.pending ? null : attempt?.error})[name];
+        const node = [...connectionStatus.querySelectorAll('[data-setup-facet]')].find(node => node.dataset.host === row.name && node.dataset.setupFacet === name);
+        if (node) {
+          node.dataset.freshness = shown.freshness;
+          node.querySelector('[data-setup-fact-value]').textContent = healthLabel(shown, t);
+        }
+      }
+    }
+    paintAutomaticStatus();
+  }
+  function renderObservations() {
+    patch(connectionStatus, h('div', {'data-setup-host-status': '', hidden: connectionStatus.hidden}, ...(snapshot.hosts || []).map(row => {
+      const facts = setupConnectionFacts(row);
+      return h('section', {'data-setup-host-state': '', 'data-host': row.name}, h('h3', {}, row.name),
+        ...connectionFacets.map(name => {
+          const fact = facts[name], raw = row.connection_observation?.version === 1 ? row.connection_observation.facets?.[name] : null;
+          return h('div', {'data-setup-facet': name, 'data-host': row.name},
+            h('p', {}, h('strong', {}, t(`setup_observation_${name}`)), ' · ', h('span', {'data-setup-fact-value': ''})),
+            h('p', {'data-setup-fact-reason': '', class: 'muted'}, t(`setup_observation_reason_${fact.reason || (fact.value === 'ready' ? 'observed' : 'unknown')}`)),
+            fact.source && typeof raw?.observed_at === 'number' ? h('p', {class: 'muted'}, timeLabel(t, 'setup_connection_checked', {time: timeStamp(raw.observed_at)})) : null,
+            fact.source ? h('details', {}, h('summary', {}, t('setup_observation_source')),
+              h('p', {}, t(`setup_observation_${fact.source.kind}`), ' · ', fact.source.profile_id),
+              h('code', {}, fact.source.ref), h('p', {}, h('code', {}, fact.source.binding_version))) : null);
+        }));
+    })));
+    paintObservations();
+  }
+  async function renewObservations() {
+    paintObservations();
+    if (!alive() || document.hidden || observationRead || !snapshot) return;
+    const attempts = [], now = Date.now();
+    for (const row of snapshot.hosts || []) for (const fact of Object.values(setupConnectionFacts(row, {now}))) {
+      const at = fact.valid_until, key = observationKey(row, fact);
+      const attempt = claimObservationRenewal(renewedObservations, key, at, now);
+      if (!attempt) continue;
+      attempt.pending = true; attempts.push(attempt);
+    }
+    if (!attempts.length) return;
+    // One setup read covers all configured hosts. Spend every due deadline
+    // before awaiting it, including aliases with the same producer deadline.
+    observationRead = true;
+    try {await refresh({observationOnly: true});}
+    catch (error) {for (const attempt of attempts) attempt.error = {code: error.code || error.status || 'READ_FAILED'};}
+    finally {for (const attempt of attempts) attempt.pending = false; observationRead = false; paintObservations();}
+  }
+  document.addEventListener('health-display-tick', renewObservations);
+  document.addEventListener('visibilitychange', renewObservations);
+  async function refresh({observationOnly = false} = {}) {
+    // Deadline claims are already spent. A renewal neither starts behind a
+    // full read nor supersedes it; a later full read invalidates this reply.
+    if (observationOnly && fullReadSerial) return;
+    const serial = observationOnly ? readSerial : ++readSerial;
+    if (!observationOnly) fullReadSerial = serial;
     let result;
     try {result = await api("GET", "/managed/setup"); guard();}
     catch (error) {
+      if (observationOnly) {if (!disposed && serial === readSerial) throw error; return;}
       if (alive() && serial === readSerial) {
         invalidateReview();
         readReady = false;
@@ -759,8 +853,20 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         update();
       }
       throw error;
+    } finally {
+      if (!observationOnly && fullReadSerial === serial) fullReadSerial = 0;
     }
     if (disposed || serial !== readSerial) return;
+    const configurationChanged = snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) ||
+      snapshot.preview_contract_version !== result.preview_contract_version || snapshot.discovery_contract_version !== result.discovery_contract_version ||
+      !equal(observationBindings(snapshot), observationBindings(result)));
+    if (observationOnly && snapshot && !configurationChanged) {
+      // Only the same configuration can patch readouts while retaining review,
+      // draft and receipt nodes. Changed sources use the normal path below.
+      snapshot = {...snapshot, hosts: result.hosts || []};
+      renderObservations();
+      return;
+    }
     if (!validVerification(result.verification)) {
       if (allowed("verification")) {
         readReady = false; update();
@@ -768,7 +874,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       }
       result.verification = {commands: {}, timeout_s: 600};
     }
-    if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1 || snapshot.discovery_contract_version !== result.discovery_contract_version)) invalidateDiscovery();
+    if (configurationChanged || snapshot && result.preview_contract_version !== 1) invalidateDiscovery();
     snapshot = result; readReady = true;
     if (!hostDisclosureReady) {hostDisclosure.open = !result.hosts?.length; hostDisclosureReady = true;}
     suggestLocal();
@@ -777,13 +883,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       h("details", {}, h("summary", {}, project), h("pre", {class: "pre"}, argv.join("\n")),
         h("button", {type: "button", class: "mini", onclick: () => fillVerification(project)}, t("setup_verification_edit", {project})))));
     const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
-    connectionStatus.replaceChildren(...(result.hosts || []).map(row => {
-      const status = setupConnectionStatus(row);
-      return h('div', {'data-setup-host-state': status}, h('p', {}, h('strong', {}, row.name), ' · ', t(`setup_connection_${status}`)),
-        row.connection_checked_at == null ? null : h('p', {class: 'muted'},
-          timeLabel(t, 'setup_connection_checked', {time: timeStamp(row.connection_checked_at)})),
-        status === 'connected' ? null : h('p', {class: 'muted'}, t(status === 'unreachable' ? 'setup_connection_action' : 'setup_connection_checking_help')));
-    }));
+    renderObservations();
     summary.replaceChildren(h("p", {}, t("setup_counts", {hosts, repositories,
       hostLabel: t(hosts === 1 ? 'setup_count_host_one' : 'setup_count_host_many'),
       repositoryLabel: t(repositories === 1 ? 'setup_count_repository_one' : 'setup_count_repository_many')})),
@@ -810,5 +910,6 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   return {box, reload: () => refresh().catch(showError),
     async load() {try {await refresh(); if (saved.intent?.operation_id) await recover();} catch (error) {showError(error);}},
-    dispose() {copyInput.value = ""; disposed = true; clearTimeout(secretTimer); stagedSecrets.clear(); for (const name of ['connection_url', "bat_secret", "github_secret"]) fields.get(name).value = "";}};
+    dispose() {copyInput.value = ""; disposed = true; document.removeEventListener('health-display-tick', renewObservations);
+      document.removeEventListener('visibilitychange', renewObservations); clearTimeout(secretTimer); stagedSecrets.clear(); for (const name of ['connection_url', "bat_secret", "github_secret"]) fields.get(name).value = "";}};
 }

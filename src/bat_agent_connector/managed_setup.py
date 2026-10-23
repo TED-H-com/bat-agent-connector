@@ -36,6 +36,7 @@ from .connection_sources import (
 )
 from .errors import ConfigError, TokenUnavailable
 from .github import GitHubClient
+from .inventory import _observation_reason
 from .operations import RERUN, TERMINAL, ActionDef, NeedsAttention, OperationError, Uncertain
 from .redact import redact, redact_secrets, register_secret
 from .task_verifier import parse_settings
@@ -164,6 +165,45 @@ def _connection_state(daemon, name, host):
             "connection_status": status, "connection_checked_at": checked}
 
 
+def _connection_observation(daemon, name, host):
+    """Read Inventory's facts, keeping a live writer's transport fact separate.
+
+    The three legacy fields above deliberately retain their historical mapping.
+    They are not inputs to this versioned display contract or any action gate.
+    """
+    inventory = daemon.inventory
+    current = inventory.current_source_evidence(name)
+    row = current.observation
+    now = time.time()
+    reason = current.reason or _observation_reason(row, now, inventory.settings.stale_after_s)
+    observed = row.get("last_attempt_at") if row else None
+    deadline = inventory._valid_until(row.get("last_success_at") if row else None)
+    source = {**(current.source or {}), "kind": "hosts_observed", "ref": f"hosts_observed:{name}"}
+
+    def fact(value, code):
+        return {"value": value, "observed_at": observed, "valid_until": deadline, "reason": code, "source": source}
+
+    value = "ready" if reason is None else "unknown" if reason in {"never_observed", "DISCOVERY_SCOPE_CHANGED"} else "unavailable"
+    facets = {"connection": fact(value, reason)}
+    failure = row.get("failure_reason") or "unknown" if row and not row.get("reachable") else None
+    for name_ in ("transport", "service", "trust_sign_in"):
+        facets[name_] = fact("ready" if reason is None else "unknown", reason)
+    if failure:
+        axis = {"transport": "transport", "tls_trust": "trust_sign_in", "auth_or_protocol": "trust_sign_in",
+                "credential_missing": "trust_sign_in", "service_refused": "service", "service_timeout": "service"}.get(failure)
+        if axis:
+            facets[axis] = fact("missing" if failure == "credential_missing" else "unavailable", failure)
+        else:
+            facets["service"] = fact("unknown", "unknown")
+    client = daemon.fleet._clients.get(name)
+    if client and client.connected and client.host == host:
+        # connected means a reader started AFTER authentication and negotiation.
+        # Observing it now proves transport liveness, never workspace readiness.
+        facets["transport"] = {"value": "ready", "observed_at": now, "valid_until": inventory._valid_until(now),
+            "reason": "authenticated_socket", "source": {**source, "kind": "fleet_client", "ref": f"fleet_client:{name}"}}
+    return {"version": 1, "facets": facets}
+
+
 def state(daemon, principal):
     _installation(daemon, principal)
     _, _, document, revision = _configuration(daemon)
@@ -175,6 +215,7 @@ def state(daemon, principal):
             "profile_id": host.profile_id, "writes": host.writes, "orchestrate": host.orchestrate,
             "shared_clone_worktrees": host.shared_clone_worktrees,
             "managed_roots": list(host.managed_roots), **_connection_state(daemon, name, host),
+            "connection_observation": _connection_observation(daemon, name, host),
             "token_available": host.token_available(),
             "ssh_alias": document.get("managed_setup", {}).get("ssh_hosts", {}).get(name)})
     repos = [{"repository": repo.repository, "bindings": [{"host": host, "workspace_id": workspace}

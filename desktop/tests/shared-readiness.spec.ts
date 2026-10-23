@@ -1,9 +1,60 @@
 import {test, expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {mountProfilePicker} from './work-profile-picker-fixture.ts';
+import {mountSetupObservation} from './setup-observation-fixture.ts';
 
 const fleet = JSON.parse(readFileSync(new URL('./fixtures/fleet-status.golden.json', import.meta.url), 'utf8'));
 const profiles = JSON.parse(readFileSync(new URL('../../tests/fixtures/work-profile-readiness.json', import.meta.url), 'utf8'));
+const setup = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url), 'utf8'));
+
+for(const locale of ['en','zh-TW'])for(const width of [390,1440])test(`${locale} Settings producer reasons and shared facts at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:900});
+  await page.clock.install({time:new Date(1800000790000)});await page.clock.pauseAt(1800000790000);
+  const reasons=locale==='en'?{
+    authentication:'Sign-in or protocol negotiation failed.',protocol:'Sign-in or protocol negotiation failed.',
+    tls_trust:'The certificate did not match the trusted fingerprint.',missing_credential:'The configured credential is unavailable.',
+    service_refusal:'BAT refused the read.',service_timeout:'BAT did not answer the read in time.',
+    unknown:'No classified observation is available.',transport:'The client could not establish or keep the transport.',
+    changed_binding:'The configured source changed; earlier observations do not apply.',
+  }:{
+    authentication:'登入或協定協商失敗。',protocol:'登入或協定協商失敗。',tls_trust:'憑證與信任的指紋不符。',
+    missing_credential:'設定的憑證目前無法使用。',service_refusal:'BAT 拒絕讀取。',service_timeout:'BAT 未在期限內回應讀取。',
+    unknown:'目前沒有已分類的觀察結果。',transport:'用戶端無法建立或維持傳輸連線。',
+    changed_binding:'設定的來源已變更，先前觀察不適用。',
+  };
+  for(const [name,body] of Object.entries(setup.observations) as [string,any][]){
+    const f=await mountSetupObservation(page,body.setup,setup.operation,locale);
+    if(reasons[name])await expect(f.panel).toContainText(reasons[name]);
+    await expect(f.panel.locator('[data-setup-facet]')).toHaveCount(4);
+    const expected=await page.evaluate(async({state,now})=>{
+      const {profileStateFacts}=await import('/src/pm-work-profile-state.js');
+      const {healthLabel}=await import('/src/health-display.js');const {t}=await import('/src/i18n.js');
+      const fact=profileStateFacts(state,{now}).fact;return fact?healthLabel(fact,t):null;
+    },{state:body.work,now:1800000790000});
+    if(expected)await expect(f.fact('connection')).toHaveText(expected);
+    if(name==='active_writer'){
+      await expect(f.fact('transport')).toHaveText(locale==='en'?'Ready · 3 min ago · Checking':'已就緒 · 3 分鐘前 · 檢查中');
+      await expect(f.panel.locator('[data-setup-progress]')).not.toContainText(locale==='en'?'Setup is complete.':'設定完成，');
+    }
+    expect(f.posts).toEqual([]);
+    expect(f.reads.every(path=>path.endsWith('/managed/setup')||path.includes('/operations/'))).toBe(true);
+    await page.evaluate(()=>(window as any).__setupObservation.dispose());
+    await page.unroute('**/api/v1/**');
+  }
+  for(const version of [null,2]){
+    const body=structuredClone(setup.observations.connected.setup);
+    if(version===null)delete body.hosts[0].connection_observation;
+    else body.hosts[0].connection_observation.version=version;
+    const f=await mountSetupObservation(page,body,setup.operation,locale);
+    await expect(f.fact('connection')).toHaveText(locale==='en'?'Not verified yet · Checking':'尚未驗證 · 檢查中');
+    await expect(f.panel.locator('[data-setup-progress]')).not.toContainText(locale==='en'?'Setup is complete.':'設定完成，');
+    const count=f.reads.length;
+    await page.clock.fastForward(3600000);
+    expect(f.reads.length).toBe(count);expect(f.posts).toEqual([]);
+    await page.evaluate(()=>(window as any).__setupObservation.dispose());
+    await page.unroute('**/api/v1/**');
+  }
+});
 
 for (const locale of ['en-US', 'zh-TW']) test.describe(`shared readiness ${locale}`, () => {
   test.use({locale});

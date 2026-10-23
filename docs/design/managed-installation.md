@@ -18,22 +18,73 @@ Existing external-central configuration stays selected. **Advanced: join an exis
 
 ## Setup connection readout
 
-Setup previously read `daemon.fleet._clients[name].connected`, the write-capable pool's open-socket flag. Session observation uses a separate read-only inventory pool, whose scheduled scans deliberately close idle sockets. Setup therefore reported disconnected hosts even after successful session scans.
+`GET /managed/setup` adds `connection_observation` to each configured host. GET
+never probes BAT, refreshes Inventory or sends a POST. Inventory remains the source
+and validity authority: Setup and Work use `Inventory.current_source_evidence`,
+`_observation_reason` and Inventory's `_valid_until`. No second binding hash or
+freshness window is computed.
 
-Setup now uses an authenticated active write connection or existing inventory evidence matching the current endpoint, certificate pin and profile binding within the inventory freshness window. Current success is **Connected / 已連線**. A recent failure is **Can’t reach this connection / 目前無法連線**, with one suggestion to check BAT and refresh. Missing, expired or mismatched evidence is **Checking… / 確認連線中…**, suggesting a refresh shortly. Legacy `connected: false` alone also means checking. Refresh reads observation evidence; it does not launch probes or change observer backoff.
+The bounded envelope is `{version: 1, facets: {transport, service, trust_sign_in,
+connection}}`. Every facet has `value` (`ready`, `unavailable`, `missing`, `unknown`),
+`observed_at` (epoch seconds or null), `valid_until` (producer ISO deadline or null),
+`reason` (bounded code or null for successful observation), and `source`:
+`{host, profile_id, binding_version, kind, ref}`. The accessor supplies the current
+binding even before an observation exists. Inventory facts reference
+`hosts_observed:<host>`; writer transport references `fleet_client:<host>`.
+Changed bindings withdraw earlier evidence. The overall connection uses the same
+value, attempt time, success-based deadline and reason as Work's Inventory-derived
+`can_observe`, independently of Work's configuration/action blockers.
 
-Setup and Work share `Inventory.current_source_evidence(name)`. Setup reads its
-`observation` instead of maintaining a separate source-binding SQL join. This
-refactor preserves behavior: the accessor starts from discovery and left-joins
-the observation, while Setup's former inner join started from the observation.
-If either row is missing, neither supplies observation evidence to Setup. The
-`same_source` comparison between Setup's host and Inventory's configured host
-remains, as do the live-client shortcut, `stale_after_s` recency rule and all three
-connection-state mappings.
+Inventory records `failure_reason` by exception type at failure production:
+`ConnectionLost` → `transport`, `FingerprintMismatch` → `tls_trust`, `AuthError` →
+`auth_or_protocol`, `TokenUnavailable` → `credential_missing`, `InvokeError` →
+`service_refused`, `InvokeTimeout` → `service_timeout`; all other types → `unknown`.
+`AuthError` covers both sign-in and protocol negotiation; no finer claim is made.
+Error text is never parsed or included in Setup. Idempotent nullable-column DDL
+runs when Inventory opens; old rows retain unknown classification, with no data
+step or `user_version` allocation. Success clears the metadata. Overall currentness
+retains Inventory/Work's `never_observed`, `host_unreachable`, `host_not_refreshed`
+and `DISCOVERY_SCOPE_CHANGED` reasons; typed failures explain the affected facet.
 
-`GET /managed/setup` adds per-host `connection_status` and `connection_checked_at`. `connected` is `null` for unknown reachability. No schema, migration, permission or token-handling changes are introduced. Status is a recent observation, not a continuous network guarantee. Configured installs retain IDs, history, non-secret drafts and original operation keys and never automatically repeat setup.
+A live writer's reader starts after authentication and negotiation (`client.py`,
+BAT `bat-remote/v2`). Observing it supplies only transport evidence with an explicit
+read clock, Inventory-produced deadline and `authenticated_socket` reason. It
+cannot establish workspace, Work capabilities or `setup_ready`.
 
-A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
+Compatibility is additive. Older desktops receive byte-identical `connected`,
+`connection_status` and `connection_checked_at` behavior, including the historical
+inclusive recency window and live-client null clock. New desktops consume only
+supported version-1 envelopes. Older Connectors, absent envelopes and future
+versions show unknown and cannot produce `setup_ready`. The `connected === true`
+fallback and Setup's local three-state formatter/labels are retired. No legacy
+producer rule is removed: it is retained solely for older desktop compatibility.
+
+All four facets use shared `displayFact` / `healthLabel`. Expiry is inclusive
+(`now >= valid_until`), with no implicit local validity fallback. The existing
+shell `health-display-tick` repaints ages and expiry; no second timer is added.
+Settings and Work share `claimObservationRenewal`: record a deadline before
+awaiting one GET; failures and unchanged deadlines never retry. A normal read with
+a new deadline permits renewal. One setup GET covers every configured host, so all
+due source/deadline pairs are claimed together before that read. Pending reads keep
+Checking; only completed failures or unchanged responses show an unrenewed result.
+Full reads take priority: a deadline is still spent when its observation-only
+read is skipped behind an in-flight full read, and a later full read supersedes
+any pending observation reply. No discarded or skipped read retries that deadline.
+For an unchanged configuration revision, host-name set and source bindings,
+renewal patches only observations, keeping mounted draft controls, focus, review
+and receipt. A changed revision or source identity applies the reply through the
+normal refresh path, including review invalidation. It needs no extra GET.
+Normal updates and clock paints share one automatic-status computation: review
+support, reviewing and changed-review messages, then applying an existing intent,
+then the observation/receipt status. Read failures retain aged facts and show the
+failure through the shared formatter. These display clocks admit no actions.
+
+A succeeded `setup.host` receipt records verification and saved configuration at
+its `updated_at` completion time. `setup_verified_saved` always uses that time,
+never the observation clock. Current readiness requires the matching target host's
+fresh overall Inventory fact; a live writer or unrelated host cannot override it.
+IDs, history, drafts and original operation keys remain intact. This readout makes
+no additional claim about starting Work and never resubmits setup.
 
 ## 與「加入機器」共用的契約（已定，尚未實作）
 

@@ -68,6 +68,63 @@
           "connected": false,
           "connection_status": "unreachable",
           "connection_checked_at": 1800000600.0,
+          "connection_observation": {
+            "version": 1,
+            "facets": {
+              "connection": {
+                "value": "unavailable",
+                "observed_at": 1800000600.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": "host_unreachable",
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "transport": {
+                "value": "unavailable",
+                "observed_at": 1800000600.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": "transport",
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "service": {
+                "value": "unknown",
+                "observed_at": 1800000600.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": "host_unreachable",
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "trust_sign_in": {
+                "value": "unknown",
+                "observed_at": 1800000600.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": "host_unreachable",
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              }
+            }
+          },
           "token_available": true,
           "ssh_alias": null
         }
@@ -107,6 +164,63 @@
           "connected": null,
           "connection_status": "checking",
           "connection_checked_at": 1799999700.0,
+          "connection_observation": {
+            "version": 1,
+            "facets": {
+              "connection": {
+                "value": "unavailable",
+                "observed_at": 1799999700.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": "host_unreachable",
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "transport": {
+                "value": "unavailable",
+                "observed_at": 1799999700.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": "transport",
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "service": {
+                "value": "unknown",
+                "observed_at": 1799999700.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": "host_unreachable",
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "trust_sign_in": {
+                "value": "unknown",
+                "observed_at": 1799999700.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": "host_unreachable",
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              }
+            }
+          },
           "token_available": true,
           "ssh_alias": null
         }
@@ -146,6 +260,63 @@
           "connected": true,
           "connection_status": "connected",
           "connection_checked_at": 1800000600.0,
+          "connection_observation": {
+            "version": 1,
+            "facets": {
+              "connection": {
+                "value": "ready",
+                "observed_at": 1800000600.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": null,
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "transport": {
+                "value": "ready",
+                "observed_at": 1800000600.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": null,
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "service": {
+                "value": "ready",
+                "observed_at": 1800000600.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": null,
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              },
+              "trust_sign_in": {
+                "value": "ready",
+                "observed_at": 1800000600.0,
+                "valid_until": "2027-01-15T08:13:00Z",
+                "reason": null,
+                "source": {
+                  "host": "fixture",
+                  "profile_id": "default",
+                  "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "kind": "hosts_observed",
+                  "ref": "hosts_observed:fixture"
+                }
+              }
+            }
+          },
           "token_available": true,
           "ssh_alias": null
         }
@@ -158,6 +329,2946 @@
       },
       "profiles_error": "No complete remote BAT profiles were found",
       "busy": false
+    }
+  },
+  "observations": {
+    "never_observed": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": null,
+            "connection_status": "checking",
+            "connection_checked_at": null,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "never_observed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "never_observed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "never_observed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "never_observed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": null,
+        "error": null,
+        "failure_reason": null,
+        "server_version": null,
+        "sessions": null,
+        "last_attempt_at": null,
+        "last_success_at": null,
+        "valid_until": null,
+        "consecutive_failures": 0,
+        "stale": true,
+        "stale_reason": "never_observed",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unknown",
+        "reason": "never_observed",
+        "evidence_ref": null,
+        "verified": null,
+        "observed_at": null,
+        "valid_until": null
+      }
+    },
+    "active_writer": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": null,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "never_observed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": "authenticated_socket",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "fleet_client",
+                    "ref": "fleet_client:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "never_observed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "never_observed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": null,
+        "error": null,
+        "failure_reason": null,
+        "server_version": null,
+        "sessions": null,
+        "last_attempt_at": null,
+        "last_success_at": null,
+        "valid_until": null,
+        "consecutive_failures": 0,
+        "stale": true,
+        "stale_reason": "never_observed",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unknown",
+        "reason": "never_observed",
+        "evidence_ref": null,
+        "verified": null,
+        "observed_at": null,
+        "valid_until": null
+      }
+    },
+    "connected": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": 1800000600.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": true,
+        "error": null,
+        "failure_reason": null,
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:10:00Z",
+        "last_success_at": "2027-01-15T08:10:00Z",
+        "valid_until": "2027-01-15T08:13:00Z",
+        "consecutive_failures": 0,
+        "stale": false,
+        "stale_reason": null,
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "ready",
+        "reason": null,
+        "evidence_ref": {
+          "kind": "hosts_observed",
+          "last_success_at": 1800000600.0
+        },
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000600.0
+          },
+          "verified": null,
+          "observed_at": 1800000600.0
+        },
+        "observed_at": 1800000600.0,
+        "valid_until": "2027-01-15T08:13:00Z"
+      },
+      "multiple_hosts": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": 1800000600.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          },
+          {
+            "name": "fixture-second",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": false,
+              "reason": "host_unknown",
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": 1800000600.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture-second",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture-second"
+                  }
+                },
+                "transport": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture-second",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture-second"
+                  }
+                },
+                "service": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture-second",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture-second"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture-second",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture-second"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": null
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "read_refusal": {
+        "status": 403,
+        "body": {
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "Setup belongs to the installation's personal identity"
+          }
+        }
+      }
+    },
+    "before_expiry": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": 1800000600.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": true,
+        "error": null,
+        "failure_reason": null,
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:10:00Z",
+        "last_success_at": "2027-01-15T08:10:00Z",
+        "valid_until": "2027-01-15T08:13:00Z",
+        "consecutive_failures": 0,
+        "stale": false,
+        "stale_reason": null,
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "ready",
+        "reason": null,
+        "evidence_ref": {
+          "kind": "hosts_observed",
+          "last_success_at": 1800000600.0
+        },
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000600.0
+          },
+          "verified": null,
+          "observed_at": 1800000600.0
+        },
+        "observed_at": 1800000600.0,
+        "valid_until": "2027-01-15T08:13:00Z"
+      }
+    },
+    "expired": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": 1800000600.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": "host_not_refreshed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": "host_not_refreshed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": "host_not_refreshed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unknown",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": "host_not_refreshed",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": true,
+        "error": null,
+        "failure_reason": null,
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:10:00Z",
+        "last_success_at": "2027-01-15T08:10:00Z",
+        "valid_until": "2027-01-15T08:13:00Z",
+        "consecutive_failures": 0,
+        "stale": true,
+        "stale_reason": "host_not_refreshed",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_not_refreshed",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000600.0
+          },
+          "verified": null,
+          "observed_at": 1800000600.0
+        },
+        "observed_at": 1800000600.0,
+        "valid_until": "2027-01-15T08:13:00Z"
+      }
+    },
+    "renewed": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": 1800000780.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "ready",
+                  "observed_at": 1800000780.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "ready",
+                  "observed_at": 1800000780.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "ready",
+                  "observed_at": 1800000780.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "ready",
+                  "observed_at": 1800000780.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": true,
+        "error": null,
+        "failure_reason": null,
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:00Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 0,
+        "stale": false,
+        "stale_reason": null,
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "ready",
+        "reason": null,
+        "evidence_ref": {
+          "kind": "hosts_observed",
+          "last_success_at": 1800000780.0
+        },
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000780.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "authentication": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": false,
+            "connection_status": "unreachable",
+            "connection_checked_at": 1800000781.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000781.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": 1800000781.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": 1800000781.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unavailable",
+                  "observed_at": 1800000781.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "auth_or_protocol",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "auth_or_protocol",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:01Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 1,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_unreachable",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000781.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "protocol": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": false,
+            "connection_status": "unreachable",
+            "connection_checked_at": 1800000782.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000782.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": 1800000782.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": 1800000782.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unavailable",
+                  "observed_at": 1800000782.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "auth_or_protocol",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "auth_or_protocol",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:02Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 2,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_unreachable",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000782.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "tls_trust": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": false,
+            "connection_status": "unreachable",
+            "connection_checked_at": 1800000783.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000783.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "2222222222222222222222222222222222222222222222222222222222222222",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": 1800000783.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "2222222222222222222222222222222222222222222222222222222222222222",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": 1800000783.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "2222222222222222222222222222222222222222222222222222222222222222",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unavailable",
+                  "observed_at": 1800000783.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "tls_trust",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "2222222222222222222222222222222222222222222222222222222222222222",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "tls_trust",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:03Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 3,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_unreachable",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000783.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "missing_credential": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": false,
+            "connection_status": "unreachable",
+            "connection_checked_at": 1800000784.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000784.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": 1800000784.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": 1800000784.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "missing",
+                  "observed_at": 1800000784.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "credential_missing",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": false,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "credential_missing",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:04Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 4,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_unreachable",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000784.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "service_refusal": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": false,
+            "connection_status": "unreachable",
+            "connection_checked_at": 1800000785.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000785.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": 1800000785.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unavailable",
+                  "observed_at": 1800000785.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "service_refused",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unknown",
+                  "observed_at": 1800000785.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "service_refused",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:05Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 5,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_unreachable",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000785.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "service_timeout": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": false,
+            "connection_status": "unreachable",
+            "connection_checked_at": 1800000786.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000786.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": 1800000786.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unavailable",
+                  "observed_at": 1800000786.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "service_timeout",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unknown",
+                  "observed_at": 1800000786.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "service_timeout",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:06Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 6,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_unreachable",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000786.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "unknown": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": false,
+            "connection_status": "unreachable",
+            "connection_checked_at": 1800000787.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000787.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": 1800000787.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": 1800000787.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "unknown",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unknown",
+                  "observed_at": 1800000787.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "unknown",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:07Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 7,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_unreachable",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000787.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "transport": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": false,
+            "connection_status": "unreachable",
+            "connection_checked_at": 1800000788.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unavailable",
+                  "observed_at": 1800000788.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unavailable",
+                  "observed_at": 1800000788.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "transport",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": 1800000788.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unknown",
+                  "observed_at": 1800000788.0,
+                  "valid_until": "2027-01-15T08:16:00Z",
+                  "reason": "host_unreachable",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "transport",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:08Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 8,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unavailable",
+        "reason": "host_unreachable",
+        "evidence_ref": null,
+        "verified": {
+          "value": "ready",
+          "reason": null,
+          "evidence_ref": {
+            "kind": "hosts_observed",
+            "last_success_at": 1800000780.0
+          },
+          "verified": null,
+          "observed_at": 1800000780.0
+        },
+        "observed_at": 1800000788.0,
+        "valid_until": "2027-01-15T08:16:00Z"
+      }
+    },
+    "changed_binding": {
+      "setup": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "other-profile",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": null,
+            "connection_status": "checking",
+            "connection_checked_at": null,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "DISCOVERY_SCOPE_CHANGED",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "other-profile",
+                    "binding_version": "3333333333333333333333333333333333333333333333333333333333333333",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "DISCOVERY_SCOPE_CHANGED",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "other-profile",
+                    "binding_version": "3333333333333333333333333333333333333333333333333333333333333333",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "DISCOVERY_SCOPE_CHANGED",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "other-profile",
+                    "binding_version": "3333333333333333333333333333333333333333333333333333333333333333",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "unknown",
+                  "observed_at": null,
+                  "valid_until": null,
+                  "reason": "DISCOVERY_SCOPE_CHANGED",
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "other-profile",
+                    "binding_version": "3333333333333333333333333333333333333333333333333333333333333333",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
+      "inventory": {
+        "host": "fixture",
+        "reachable": false,
+        "error": null,
+        "failure_reason": "transport",
+        "server_version": "9.9.9",
+        "sessions": 3,
+        "last_attempt_at": "2027-01-15T08:13:08Z",
+        "last_success_at": "2027-01-15T08:13:00Z",
+        "valid_until": "2027-01-15T08:16:00Z",
+        "consecutive_failures": 8,
+        "stale": true,
+        "stale_reason": "host_unreachable",
+        "confinement": {
+          "policy": "default",
+          "host_account": {
+            "declared": false,
+            "status": "unknown",
+            "reason": "unchecked_or_stale",
+            "protected_roots": [],
+            "checked_at": null,
+            "config_sha256": "e56647a84e1c82b505f98f29cfa166190b8446f78faecd34b3da6ac981cabe4a",
+            "start_effect": "fallback_default"
+          },
+          "network_configurable": false,
+          "writable_roots_configurable": false,
+          "agents": {
+            "claude": {
+              "requested_level": "prompt_gated",
+              "verified_level": "none",
+              "reachable_options": [
+                "permissionMode"
+              ],
+              "limits": [
+                "preapproved_rules_and_shell_can_write_outside",
+                "host_account_declared_roots_only"
+              ],
+              "gap": "plain_default_requires_approvals"
+            },
+            "codex": {
+              "requested_level": "os_sandbox",
+              "verified_level": "none",
+              "reachable_options": [
+                "codexSandboxMode",
+                "codexApprovalPolicy"
+              ],
+              "limits": [
+                "individual_approval_can_escape",
+                "writable_roots_not_configurable",
+                "network_not_configurable"
+              ],
+              "gap": "sandbox_enforcement_unverified"
+            }
+          }
+        }
+      },
+      "work": {
+        "value": "unknown",
+        "reason": "DISCOVERY_SCOPE_CHANGED",
+        "evidence_ref": null,
+        "verified": null
+      }
     }
   }
 }
