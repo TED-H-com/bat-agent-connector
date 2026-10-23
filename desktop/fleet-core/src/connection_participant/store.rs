@@ -204,6 +204,7 @@ impl Record {
                                 && !self.parts.contains_key(&Part::Receipt(1))
                                 && hash(&journal_digest)
                                 && text(&abandonment.reference, 1024)
+                                && abandonment.reference.len() <= 1024
                                 && abandonment.recorded_at_unix_ms > 0,
                         )?;
                         if let Some(first) = self.value(Part::Receipt(0)) {

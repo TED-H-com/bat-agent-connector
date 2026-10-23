@@ -460,6 +460,14 @@ fn only_one_uncertain_and_one_acknowledged_definitive_successor_are_retained() {
         )
         .is_err());
     // An immutable decision fence survives a crash before or after its sidecar.
+    let invalid = json!({"abandonment":{"reference":"機".repeat(342),"recorded_at_unix_ms":NOW},"journal_digest":"d".repeat(64)});
+    assert!(store
+        .append(
+            &f.intent,
+            Part::Attempt(0),
+            &serde_json::to_vec(&invalid).unwrap()
+        )
+        .is_err());
     let decision = json!({"abandonment":{"reference":"original-human-decision","recorded_at_unix_ms":NOW},"journal_digest":"d".repeat(64)});
     f.save(&mut store, Part::Attempt(0), &decision);
     let recovered = store.load(&f.intent).unwrap();
