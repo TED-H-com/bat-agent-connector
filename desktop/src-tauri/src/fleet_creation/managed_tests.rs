@@ -235,6 +235,19 @@ fn managed_reader_refuses_missing_or_mismatched_attestation_and_unverified_bridg
     assert!(make(receipt.clone(), f.f.security.clone()).is_err());
     let security = f.security(&ticket);
     let _guard = security.launcher_guard(&|| Ok(())).unwrap();
+    let mut unbound = receipt.clone();
+    unbound.managed_connector = None;
+    assert!(
+        CreationPlatform::with_security(
+            unbound,
+            f.f.data.clone(),
+            &f.f.data.join("Startup"),
+            &f.f.data.join("user"),
+            f.security(&ticket),
+        )
+        .is_err(),
+        "a later managed binding cannot attach to an unbound receipt"
+    );
     receipt.managed_connector.as_mut().unwrap().manifest_sha256 = "0".repeat(64);
     assert!(CreationPlatform::with_security(
         receipt,
