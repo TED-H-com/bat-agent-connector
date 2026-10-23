@@ -116,9 +116,7 @@ impl<S: Security> Reader<S> {
     fn new(expected: ProvisioningReceipt, security: S) -> Result<Self> {
         Record::Provisioning(Box::new(expected.clone())).encode()?;
         // Existing observers provide no attestation and still refuse managed receipts.
-        if expected.managed_connector.is_some()
-            && security.managed_identity()? != expected.managed_connector
-        {
+        if security.managed_identity()? != expected.managed_connector {
             return Err(UNSUPPORTED);
         }
         let login = security.login()?;
