@@ -1,11 +1,11 @@
 # PM v1.2 開發狀態
 
-2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `fea4a1c0` 的 33 個新增合併 PR，
+2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `eb1e087e` 的 51 個新增合併 PR，
 並列出 Fleet Apply 與本機參與者尚缺的能力。沒有新發布；預覽版仍為 Connector 0.2.13／desktop 0.1.9
 （`437ee6a7`），穩定版仍為 0.2.12／0.1.8。新增合併均未發布、安裝或實機驗收；下方保留歷史紀錄。
 
-October 23: the [latest main progress](progress-2026-10-23.md) records 33 additional merged PRs through
-`fea4a1c0` and the remaining Fleet Apply and native-participant capabilities. There is no new release:
+October 23: the [latest main progress](progress-2026-10-23.md) records 51 additional merged PRs through
+`eb1e087e` and the remaining Fleet Apply and native-participant capabilities. There is no new release:
 preview remains Connector 0.2.13 / desktop 0.1.9 (`437ee6a7`), stable 0.2.12 / 0.1.8.
 The additional merges are unreleased, uninstalled and not live-tested; the entries below remain historical.
 
