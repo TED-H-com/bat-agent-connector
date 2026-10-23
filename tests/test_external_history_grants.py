@@ -178,3 +178,48 @@ async def test_empty_schema_before_activation_does_not_grant(collected, isolated
     with pytest.raises(OperationError, match='PM_HISTORY_SOURCE_UNAVAILABLE'):
         with refs.current_grants(isolated_journal.db, OWNER, wid):
             pytest.fail('Schema installation is not activation')
+
+
+async def test_observer_tracks_projection_writes_without_caching_reader_authority(collected):
+    from bat_agent_connector import pm_source_history as history
+    from bat_agent_connector import pm_source_reads as reads
+
+    d, wid, source = collected
+    calls = []
+
+    def predicate():
+        calls.append(True)
+        return bool(read(d, wid, source)['entries'])
+
+    def check():
+        return reads.check(d.journal.db, OWNER, 'baseline_sources', 'history-reference', predicate)
+
+    with history.operation(d.journal.db, 'observer-fixture'):
+        assert check() and check() and len(calls) == 1
+        config = d.history_collector.config
+        d.history_collector.config = HistoryConfig()
+        with pytest.raises(OperationError):
+            check()
+        assert len(calls) == 2
+        d.history_collector.config = config
+        assert check() and check() and len(calls) == 3
+        d.journal.db.execute('UPDATE temp.session_history_current_grants SET generation=generation')
+        assert check() and len(calls) == 4
+    assert read(d, wid, source)['entries']
+
+
+@pytest.mark.parametrize('table', ['unrelated', 'shadowed_grants'])
+async def test_observer_never_exempts_unknown_or_shadowing_temp_tables(collected, table):
+    from bat_agent_connector import pm_source_history as history
+    from bat_agent_connector import pm_source_reads as reads
+
+    d, _, _ = collected
+    if table == 'unrelated':
+        d.journal.db.execute('CREATE TEMP TABLE untracked(value)')
+    else:
+        d.journal.db.execute('CREATE TABLE main.session_history_current_grants AS SELECT * FROM temp.session_history_current_grants')
+    calls = []
+    with history.operation(d.journal.db, 'observer-fixture'):
+        for _ in range(2):
+            assert reads.check(d.journal.db, OWNER, 'baseline_sources', 'fixture', lambda: calls.append(True) or True)
+    assert len(calls) == 2

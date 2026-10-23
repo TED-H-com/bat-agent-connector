@@ -13,6 +13,7 @@ from .pm_workspace import require_member, server_id
 SCHEMA = 'external_history_ref/v1'
 MAX_CODEPOINTS = 16000
 MAX_PREVIEW_BYTES = 128 * 1024
+GRANT_TABLES = frozenset({'session_history_grant_state', 'session_history_current_grants'})
 
 
 def unavailable():

@@ -65,6 +65,10 @@ new activation succeeds. Withdrawing and regranting the same source still change
 generation and invalidates an in-progress read. No new durable table, data step or
 `user_version` is allocated by this projection.
 
+The existing observation memo tracks writes to these two TEMP tables as well as
+its main tables. Grant changes invalidate its historical proofs. Unknown TEMP
+tables, or a grant table that shadows a main object, still disable memo reuse.
+
 ## Fixed retained references
 
 `pm_external_history.preview` is an internal read-only resolver, without an HTTP,
