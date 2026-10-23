@@ -163,5 +163,22 @@
     "env": {},
     "pass_fds": [],
     "start_new_session": true
-  }
+  },
+  "writable_storage": [
+    {
+      "capacity_bytes": 67108864,
+      "device": 7,
+      "target": "<carrier>"
+    },
+    {
+      "capacity_bytes": 67108864,
+      "device": 7,
+      "target": "/scratch"
+    },
+    {
+      "capacity_bytes": 67108864,
+      "device": 7,
+      "target": "/state"
+    }
+  ]
 }

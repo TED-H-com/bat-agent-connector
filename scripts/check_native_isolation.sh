@@ -21,4 +21,4 @@ if [ -z "${BAC_ISOLATION_QUOTA_ROOT:-}" ]; then
   export BAC_ISOLATION_QUOTA_ROOT="$isolation_run/volume"
 fi
 BAC_REQUIRE_BWRAP=1 \
-  uv run pytest -q tests/test_native_isolation.py --basetemp="$isolation_run/pytest"
+  uv run pytest -q -rP tests/test_native_isolation.py --basetemp="$isolation_run/pytest"

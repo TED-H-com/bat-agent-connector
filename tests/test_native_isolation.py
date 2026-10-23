@@ -1,8 +1,10 @@
 """Coding policy and mandatory-capable OS canary; no model or credentials."""
 import asyncio
+import errno
 import hashlib
 import json
 import os
+import runpy
 import shutil
 import socket
 import sys
@@ -15,6 +17,7 @@ import pytest
 
 from bat_agent_connector import native_isolation as isolation
 from bat_agent_connector import native_process
+from bat_agent_connector.task_journal import Journal
 from tests.test_native_carrier import prepare
 from tests.test_native_carrier import world as carrier_world
 
@@ -34,8 +37,11 @@ def runtime_mounts():
 
 
 async def inputs(world, tmp_path, area_root=None):
-    receipt = await prepare(world)
     root = area_root or tmp_path
+    if area_root is not None:
+        world = SimpleNamespace(**{**vars(world), 'managed': root / 'managed'})
+        world.managed.mkdir()
+    receipt = await prepare(world)
     scratch, state, spool = root / 'scratch', root / 'state', tmp_path / 'spool'
     for path in (scratch, state, spool):
         path.mkdir(mode=0o700)
@@ -58,7 +64,13 @@ async def case(world, tmp_path, monkeypatch):
     which = shutil.which
     monkeypatch.setattr(isolation.shutil, 'which', lambda name: '/usr/bin/bwrap' if name == 'bwrap' else which(name))
     monkeypatch.setattr(isolation, '_disk_info', lambda _: ('ext4', LIMIT))
-    return args
+    monkeypatch.setattr(isolation, '_device', lambda _: 7, raising=False)
+    journal = Journal(tmp_path / 'journal.sqlite')
+    args['ctx'].service.journal = journal
+    try:
+        yield args
+    finally:
+        journal.close()
 
 
 def canonical(plan, case):
@@ -77,6 +89,7 @@ def canonical(plan, case):
     value['argv'] = [path(v) for v in value['argv']]
     value['mounts'] = [{**m, 'source': '<runtime>' if m['target'] == '/runtime' else path(m['source']),
                        'target': path(m['target'])} for m in value['mounts']]
+    value['writable_storage'] = [{**s, 'target': path(s['target'])} for s in value['writable_storage']]
     return value
 
 
@@ -151,6 +164,68 @@ async def test_disk_backing_and_aggregate_capacity_are_required(case, monkeypatc
     monkeypatch.setattr(isolation, '_disk_info', lambda _: disk)
     with pytest.raises(native_process.NativeRuntimeError, match='NATIVE_ISOLATION_QUOTA_UNPROVEN'):
         await isolation.build_plan(**case)
+
+
+@pytest.mark.parametrize('other', ['carrier', 'worktree', 'git_dir', 'state'])
+async def test_every_carrier_identity_shares_the_bounded_device(case, monkeypatch, other):
+    saved = case['receipt'].reference()
+    paths = {Path(saved[name]['path']) for name in ('clone', 'worktree', 'git_dir')}
+    if other != 'carrier':
+        paths = {case['areas'].state if other == 'state' else Path(saved[other]['path'])}
+    monkeypatch.setattr(isolation, '_device', lambda p: 8 if Path(p) in paths else 7)
+    with pytest.raises(native_process.NativeRuntimeError, match=isolation.QUOTA_UNPROVEN):
+        await isolation.build_plan(**case)
+
+
+@pytest.mark.parametrize('where', ['clone', 'worktree', 'git_dir', 'scratch', 'state'])
+async def test_capacity_unavailable_never_means_unbounded(case, monkeypatch, where):
+    saved = case['receipt'].reference()
+    missing = Path(saved[where]['path']) if where in saved else getattr(case['areas'], where)
+    def unavailable(path):
+        if Path(path) == missing:
+            raise OSError('capacity observation unavailable')
+        return 'ext4', LIMIT
+    monkeypatch.setattr(isolation, '_disk_info', unavailable)
+    with pytest.raises(native_process.NativeRuntimeError, match=isolation.QUOTA_UNPROVEN):
+        await isolation.build_plan(**case)
+
+
+async def test_nested_carrier_mount_is_refused_even_on_same_device(case, monkeypatch):
+    nested = Path(case['receipt'].reference()['clone']['path'], 'nested')
+    nested.mkdir()
+    observed = list(isolation._mounts())
+    monkeypatch.setattr(isolation, '_mounts', lambda: iter([*observed, (nested, 'ext4')]))
+    with pytest.raises(native_process.NativeRuntimeError, match=isolation.PATH_UNPROVEN):
+        await isolation.build_plan(**case)
+
+
+def test_disk_capacity_counts_total_blocks_not_available_space(tmp_path, monkeypatch):
+    usage = SimpleNamespace(f_blocks=32768, f_frsize=4096, f_bfree=32, f_bavail=16)
+    monkeypatch.setattr(isolation, 'os', SimpleNamespace(statvfs=lambda _: usage))
+    monkeypatch.setattr(isolation, '_mounts', lambda: iter([(tmp_path, 'ext4')]))
+    assert isolation._disk_info(tmp_path) == ('ext4', 134217728)
+
+
+async def test_manifest_records_each_writable_mount_capacity_once(case):
+    plan = await isolation.build_plan(**case)
+    expected = [{'target': m.target, 'device': 7, 'capacity_bytes': LIMIT} for m in plan.mounts if m.writable]
+    assert plan.manifest()['writable_storage'] == expected
+
+
+def test_canary_fill_target_is_the_carrier_worktree(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    quota = runpy.run_path(str(FIXTURES / 'native-isolation-canary.py'))
+    assert quota['carrier_fill_target']() == tmp_path / 'carrier-fill'
+
+
+async def test_carrier_is_prepared_directly_under_the_provisioned_volume(world, tmp_path):
+    volume = tmp_path / 'volume'
+    volume.mkdir()
+    args = await inputs(world, tmp_path, volume)
+    saved = args['receipt'].reference()
+    assert Path(saved['plan']['managed_root']) == volume / 'managed'
+    assert all(Path(saved[name]['path']).is_relative_to(volume) for name in ('clone', 'worktree', 'git_dir'))
+    assert Path(saved['cwd'], 'hello').read_text() == 'committed\n'
 
 
 async def test_missing_bwrap_is_explicit_before_spawn(case, monkeypatch):
@@ -233,6 +308,8 @@ async def test_real_bwrap_canary(world, tmp_path):
         control_paths(case)[-1].write_text('')
         program = (FIXTURES / 'native-isolation-canary.py').read_text()
         forbidden = [str(p / 'secret') for p in (*case['protected'], case['areas'].spool)]
+        assert Path(forbidden[0]).stat().st_dev != Path(owned).stat().st_dev
+        sentinel_before = Path(forbidden[0]).read_bytes()
         before = {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in forbidden}
         fd = os.open(forbidden[0], os.O_RDWR)
         os.set_inheritable(fd, True)
@@ -240,6 +317,7 @@ async def test_real_bwrap_canary(world, tmp_path):
         listener.bind(('127.0.0.1', 0))
         listener.listen()
         saved = case['receipt'].reference()
+        capacity = isolation._disk_info(Path(saved['cwd']))[1]
         common, gitdir = Path(saved['clone']['path'], '.git'), Path(saved['git_dir']['path'])
         blob = b'blob 6\0canary'
         oid = hashlib.sha1(blob).hexdigest()
@@ -248,7 +326,7 @@ async def test_real_bwrap_canary(world, tmp_path):
                     str(gitdir / 'index'): (gitdir / 'index').read_bytes().hex()}
         case['command'] = ('/runtime/bin/python3', '-I', '-c', program, json.dumps(forbidden),
                            str(fd), str(os.getpid()), str(listener.getsockname()[1]),
-                           json.dumps([str(p) for p in control_paths(case)]), json.dumps(writable))
+                           json.dumps([str(p) for p in control_paths(case)]), json.dumps(writable), str(capacity))
         try:
             try:
                 plan = await isolation.build_plan(**case)
@@ -259,7 +337,9 @@ async def test_real_bwrap_canary(world, tmp_path):
                 pytest.skip(f'OS isolation unavailable: {exc.code}')
             # A pre-existing hardlink cannot be hidden by a mount namespace: deny it before spawn.
             link = Path(case['receipt'].reference()['clone']['path']) / 'hardlink'
-            os.link(forbidden[0], link)
+            hardlink_source = Path(owned, 'hardlink-source')
+            hardlink_source.write_bytes(b'private volume bytes')
+            os.link(hardlink_source, link)
             with pytest.raises(native_process.NativeRuntimeError, match='NATIVE_ISOLATION_PATH_UNPROVEN'):
                 await isolation.build_plan(**case)
             link.unlink()
@@ -269,9 +349,19 @@ async def test_real_bwrap_canary(world, tmp_path):
                 assert runtime.process.returncode == 0
                 return json.loads(line)
             result = await isolation.run(**case, consume=consume, timeout=15)
+            quota_result = result.pop('carrier_quota')
+            assert quota_result['target'] == str(Path(saved['cwd'], 'carrier-fill'))
+            assert quota_result['errno'] == errno.ENOSPC, quota_result
+            assert 0 < quota_result['written_bytes'] <= capacity <= LIMIT, quota_result
+            assert quota_result['file_bytes'] == quota_result['written_bytes'], quota_result
+            assert quota_result['capacity_bytes'] == capacity, quota_result
+            assert quota_result['device'] == saved['worktree']['device'], quota_result
+            assert not Path(quota_result['target']).exists()
+            print('carrier quota:', json.dumps(quota_result, sort_keys=True))
             assert result and all(value is False for value in result.values()), result
             assert Path(case['receipt'].reference()['cwd'], 'canary-edit').read_text() == 'owned'
             assert {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in forbidden} == before
+            assert Path(forbidden[0]).read_bytes() == sentinel_before
             Path(saved['cwd'], 'canary-edit').unlink()
             await isolation.native_carrier.readback(world.ctx, case['receipt'], check=case['check'])
         finally:
