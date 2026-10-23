@@ -9,6 +9,9 @@ pub struct CreationPlatform<S> {
     pub(super) reader: Reader<S>,
     pub(super) roaming: PathBuf,
     pub(super) publisher: Publisher,
+    pub(super) migrations: migration::Store,
+    // Set only by explicit guarded preparation, never by a read or load.
+    pub(super) directories_prepared: bool,
 }
 impl<S: Security> CreationPlatform<S> {
     pub(super) fn with_security(
@@ -20,23 +23,35 @@ impl<S: Security> CreationPlatform<S> {
     ) -> Result<Self> {
         let publisher =
             Publisher::new(&expected.scope.pointer, startup, user).map_err(|_| UNPROVEN)?;
+        let migrations = migration::Store::new(&expected.scope.pointer, startup)?;
         Ok(Self {
             reader: Reader::new(expected, security)?,
             roaming,
             publisher,
+            migrations,
+            directories_prepared: false,
         })
     }
     pub(super) fn observation(&self) -> Result<Option<MonitorIdentity>> {
         self.reader.security.held()?;
         self.reader.base()?;
-        let pointer = &self.reader.expected.scope.pointer;
-        let owner = if !present(pointer)? {
-            self.reader.security.unconfigured(pointer, &self.roaming)?;
-            None
-        } else {
+        let configured = present(&self.reader.expected.scope.pointer)?;
+        if configured {
             // Raw recovery inspection needs intact authority scope, not a
             // parseable pointer or an obsolete whole-Configuration snapshot.
             self.reader.verify_context(&self.reader.expected)?;
+        }
+        let owner = self.process_observation(configured)?;
+        self.reader.base()?;
+        Ok(owner)
+    }
+    pub(super) fn process_observation(&self, configured: bool) -> Result<Option<MonitorIdentity>> {
+        Ok(if !configured {
+            self.reader
+                .security
+                .unconfigured(&self.reader.expected.scope.pointer, &self.roaming)?;
+            None
+        } else {
             let owner = self.reader.security.discover()?;
             if owner.is_none() {
                 self.reader
@@ -44,10 +59,34 @@ impl<S: Security> CreationPlatform<S> {
                     .unpublished(&self.roaming.join("bat-fleet-monitor-launch.json"))?;
             }
             owner
-        };
-        self.reader.base()?;
-        Ok(owner)
+        })
     }
+    pub(super) fn history(
+        &self,
+        reference: &publication::FrozenPlanRef,
+    ) -> Result<publication::PublicationHistory> {
+        let path = self
+            .reader
+            .expected
+            .scope
+            .state_root
+            .join("fleet-publication-plans")
+            .join(format!("{}.json", reference.review_digest));
+        publication::Platform::verify_private_state(
+            self,
+            &path,
+            &self.reader.expected.owner(&self.reader.root_bytes()?)?,
+        )?;
+        let bytes = self
+            .reader
+            .read(&path, publication::FROZEN_PLAN_LIMIT)?
+            .ok_or(UNPROVEN)?;
+        let frozen = FrozenHistory::decode(reference, &bytes).map_err(|_| UNPROVEN)?;
+        self.publisher
+            .read_evidence_history(frozen, self)
+            .map_err(|_| UNPROVEN)
+    }
+
     pub(super) fn histories(&self) -> Result<Vec<publication::PublicationHistory>> {
         let mut histories = Vec::new();
         for key in self.reader.entries()? {
@@ -64,28 +103,7 @@ impl<S: Security> CreationPlatform<S> {
                 if histories.len() >= HISTORY_LIMIT {
                     return Err(UNPROVEN);
                 }
-                let path = self
-                    .reader
-                    .expected
-                    .scope
-                    .state_root
-                    .join("fleet-publication-plans")
-                    .join(format!("{}.json", link.frozen.review_digest));
-                publication::Platform::verify_private_state(
-                    self,
-                    &path,
-                    &self.reader.expected.owner(&self.reader.root_bytes()?)?,
-                )?;
-                let bytes = self
-                    .reader
-                    .read(&path, publication::FROZEN_PLAN_LIMIT)?
-                    .ok_or(UNPROVEN)?;
-                let frozen = FrozenHistory::decode(&link.frozen, &bytes).map_err(|_| UNPROVEN)?;
-                histories.push(
-                    self.publisher
-                        .read_evidence_history(frozen, self)
-                        .map_err(|_| UNPROVEN)?,
-                );
+                histories.push(self.history(&link.frozen)?);
             }
         }
         Ok(histories)
@@ -164,32 +182,59 @@ impl<S: Security> publication::Platform for CreationPlatform<S> {
         if self.reader.expected.owner(&self.reader.root_bytes()?)? != *owner {
             return Err(UNPROVEN);
         }
-        // Until guarded directory creation lands, only recorded existing roots
-        // and their direct, validated history files are available for observation.
-        let root = self
-            .reader
-            .expected
-            .directories
-            .iter()
-            .find(|d| path == d.path() || path.parent() == Some(d.path()))
-            .ok_or(UNPROVEN)?;
-        if !root
-            .path()
-            .starts_with(&self.reader.expected.scope.state_root)
-        {
+        let root = if self.reader.directory_reserved(path)? && present(path)? {
+            path
+        } else {
+            let parent = path.parent().ok_or(UNPROVEN)?;
+            if !self.reader.directory_reserved(parent)? {
+                return Err(UNPROVEN);
+            }
+            parent
+        };
+        if !root.starts_with(&self.reader.expected.scope.state_root) {
             return Err(UNPROVEN);
         }
         self.reader
-            .directory(root.path(), &digest(&self.reader.root_bytes()?))?;
+            .directory(root, &digest(&self.reader.root_bytes()?))?;
         self.reader.walk(path)?;
+        Ok(())
+    }
+    fn prepare_private_directory(&mut self, path: &Path, owner: &OwnerEvidence) -> Result<()> {
+        // Explicit writer preparation must already have recorded this directory.
+        // The publisher must not adopt an existing name or create read-side residue.
+        self.verify_private_state(path, owner)?;
+        if !self
+            .reader
+            .walk(path)?
+            .ok_or(UNPROVEN)?
+            .metadata()
+            .map_err(|_| UNPROVEN)?
+            .is_dir()
+        {
+            return Err(UNPROVEN);
+        }
         Ok(())
     }
     fn prepare_directory(
         &mut self,
-        _: &Path,
-        _: &OwnerEvidence,
+        path: &Path,
+        owner: &OwnerEvidence,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> std::result::Result<(), publication::Error> {
+        if self.directories_prepared {
+            if self.reader.expected.owner(&self.reader.root_bytes()?)? != *owner {
+                return Err(UNPROVEN.into());
+            }
+            let mut denied = None;
+            let result = super::writer::CreationWriter::held(self)?
+                .prepare_parents(path, &mut || {
+                    authorize().inspect_err(|code| denied = Some(*code))
+                });
+            return match denied {
+                Some(code) => Err(publication::Error::Authorization { code }),
+                None => result.map_err(Into::into),
+            };
+        }
         authorize().map_err(|code| publication::Error::Authorization { code })?;
         self.reader.base()?;
         Err(publication::Error::Gate("CREATION_DIRECTORY_UNAVAILABLE"))

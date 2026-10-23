@@ -17,6 +17,8 @@ pub struct WindowsSecurity {
     discovery: DiscoveryConfig,
     #[cfg(test)]
     pub(super) held_for_fixture: bool,
+    #[cfg(test)]
+    pub(super) monitor_for_fixture: bool,
 }
 impl Security for WindowsSecurity {
     type LauncherGuard = Rc<LauncherMutex>;
@@ -83,6 +85,17 @@ impl Security for WindowsSecurity {
         }
         Ok(file)
     }
+    fn effect_held(&self) -> Result<()> {
+        self.held()?;
+        #[cfg(test)]
+        if self.monitor_for_fixture {
+            return Ok(());
+        }
+        if !self.guards.monitor_held() {
+            return Err("MONITOR_GUARD_REQUIRED");
+        }
+        Ok(())
+    }
     fn identity(&self, file: &File) -> Result<ObjectIdentity> {
         file_identity(file)
     }
@@ -114,6 +127,7 @@ pub(super) fn file_identity(file: &File) -> Result<ObjectIdentity> {
 /// Keep this platform and its guards on one synchronous native blocking thread.
 /// Context is native-discovered; no paths or ownership claims come from IPC.
 pub type WindowsCreationPlatform = super::platform::CreationPlatform<WindowsSecurity>;
+pub type WindowsCreationWriter<'a> = super::writer::CreationWriter<'a, WindowsSecurity>;
 impl WindowsCreationPlatform {
     pub fn new(
         expected: ProvisioningReceipt,
@@ -147,6 +161,8 @@ impl WindowsCreationPlatform {
                 discovery,
                 #[cfg(test)]
                 held_for_fixture: false,
+                #[cfg(test)]
+                monitor_for_fixture: false,
             },
         )
     }

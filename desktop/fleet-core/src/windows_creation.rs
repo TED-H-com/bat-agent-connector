@@ -1,6 +1,6 @@
 //! Native creation observation and rooted ownership. No IPC or process effects.
-//! Provisioning writes and directory preparation are deliberately unavailable
-//! until their guarded create-only/readback boundary is supplied.
+//! The default view is read-only. Explicit writer scopes retain effect guards;
+//! first reservation bootstraps only its root, record container and receipt.
 use crate::{
     connection_setup::{Artifact, FileOwnership, OwnerEvidence},
     creation_evidence::{self as evidence, *},
@@ -16,6 +16,12 @@ use std::{
 };
 const UNPROVEN: &str = "CREATION_EVIDENCE_UNPROVEN";
 const UNSUPPORTED: &str = "CREATION_OPERATION_UNSUPPORTED";
+const NAMESPACES: [fn(String) -> EvidenceKey; 4] = [
+    EvidenceKey::Lineage,
+    EvidenceKey::Closure,
+    EvidenceKey::Directory,
+    EvidenceKey::MigrationCompletion,
+];
 
 // Tests substitute OS identity, ACL, path, process and guard observations.
 // All namespace enumeration, bounded reads, parsing and replay remain real.
@@ -31,6 +37,9 @@ pub trait Security {
     fn validate_path(&self, path: &Path) -> Result<()>;
     fn login(&self) -> Result<LoginIdentity>;
     fn held(&self) -> Result<()>;
+    fn effect_held(&self) -> Result<()> {
+        Err(UNSUPPORTED)
+    }
     fn open(&self, path: &Path, private: bool, child_absent: bool) -> Result<File>;
     fn identity(&self, file: &File) -> Result<ObjectIdentity>;
 }
@@ -73,6 +82,13 @@ impl<S: Security> Reader<S> {
     }
     fn key_path(&self, key: &EvidenceKey) -> Result<PathBuf> {
         Ok(self.root().join(key.relative_path()?))
+    }
+    fn directory_container(&self) -> Result<PathBuf> {
+        Ok(self
+            .key_path(&EvidenceKey::Directory("0".repeat(64)))?
+            .parent()
+            .ok_or(UNPROVEN)?
+            .into())
     }
     fn private(&self, path: &Path) -> Result<bool> {
         let role_parent = self
@@ -208,6 +224,48 @@ impl<S: Security> Reader<S> {
         }
         Ok(())
     }
+    fn namespace_directories(&self) -> Result<Vec<PathBuf>> {
+        NAMESPACES
+            .into_iter()
+            .map(|key| {
+                Ok(self.root().join(
+                    key("0".repeat(64))
+                        .relative_path()?
+                        .parent()
+                        .ok_or(UNPROVEN)?,
+                ))
+            })
+            .collect()
+    }
+    fn directory_reserved(&self, path: &Path) -> Result<bool> {
+        if self.expected.directories.iter().any(|d| d.path() == path)
+            || evidence::directory_reserved(&self.expected, path, &[])
+        {
+            return Ok(true);
+        }
+        // Probe only the shape here. Actual admissible reviews come from records;
+        // the resolver validates their full chain before any directory effect.
+        let name = path.file_name().and_then(|n| n.to_str()).ok_or(UNPROVEN)?;
+        if !evidence::directory_reserved(&self.expected, path, &[name]) {
+            return Ok(false);
+        }
+        let mut reviews = Vec::new();
+        for key in self.entries()? {
+            if matches!(key, EvidenceKey::Lineage(_)) {
+                if let Record::Publication(link) = Record::decode(
+                    &key,
+                    &self.read_private(&key, RECORD_LIMIT)?.ok_or(UNPROVEN)?,
+                )? {
+                    reviews.push(link.frozen.review_digest);
+                }
+            }
+        }
+        Ok(evidence::directory_reserved(
+            &self.expected,
+            path,
+            &reviews.iter().map(String::as_str).collect::<Vec<_>>(),
+        ))
+    }
 }
 // The resolver needs EvidenceIo's read boundary. This private view never exposes
 // reserve/append: it cannot manufacture a reservation or a creation attestation.
@@ -232,21 +290,8 @@ impl<S: Security> EvidenceIo for Reader<S> {
                 self.directory(d.path(), &hash)?;
             }
         }
-        // Every newly present intermediate directory must be enumerated by the
-        // original reservation and have its own creation record.
-        for slot in &receipt.slots {
-            for p in slot.canonical_path.parent().ok_or(UNPROVEN)?.ancestors() {
-                if !p.starts_with(&receipt.scope.kit_root)
-                    && slot.nearest_existing_parent.starts_with(p)
-                {
-                    break;
-                }
-                if present(p)? && !receipt.directories.iter().any(|d| d.path() == p) {
-                    return Err(UNPROVEN);
-                }
-            }
-        }
-        Ok(())
+        self.directory(&self.directory_container()?, &hash)?;
+        self.verify_intermediates(receipt)
     }
     fn verify_effect_context(&self) -> Result<()> {
         Err(UNSUPPORTED)
@@ -255,12 +300,7 @@ impl<S: Security> EvidenceIo for Reader<S> {
         self.security.held()?;
         match record {
             Record::Directory(d) => {
-                if !self
-                    .expected
-                    .directories
-                    .iter()
-                    .any(|r| r.path() == d.canonical_path)
-                {
+                if !self.directory_reserved(&d.canonical_path)? {
                     return Err(UNPROVEN);
                 }
                 self.directory(&d.canonical_path, &digest(&self.root_bytes()?))
@@ -273,72 +313,7 @@ impl<S: Security> EvidenceIo for Reader<S> {
         }
     }
     fn entries(&self) -> Result<Vec<EvidenceKey>> {
-        self.security.held()?;
-        let mut allowed = BTreeMap::new();
-        for key in [EvidenceKey::Provisioning, EvidenceKey::Managed] {
-            allowed.insert(key.relative_path()?, Some(key));
-        }
-        let namespaces: [fn(String) -> EvidenceKey; 4] = [
-            EvidenceKey::Lineage,
-            EvidenceKey::Closure,
-            EvidenceKey::Directory,
-            EvidenceKey::MigrationCompletion,
-        ];
-        for namespace in namespaces {
-            allowed.insert(
-                namespace("0".repeat(64))
-                    .relative_path()?
-                    .parent()
-                    .unwrap()
-                    .into(),
-                None,
-            );
-        }
-        let mut keys = Vec::new();
-        self.walk(&self.root())?;
-        if !present(&self.root())? {
-            return Ok(keys);
-        }
-        let mut count = 0;
-        for entry in std::fs::read_dir(self.root()).map_err(|_| UNPROVEN)? {
-            count += 1;
-            if count > ENTRY_LIMIT {
-                return Err(UNPROVEN);
-            }
-            let entry = entry.map_err(|_| UNPROVEN)?;
-            let relative = PathBuf::from(entry.file_name());
-            let selected = allowed.get(&relative).ok_or(UNPROVEN)?;
-            if let Some(key) = selected {
-                keys.push(key.clone());
-                continue;
-            }
-            let path = entry.path();
-            if !self
-                .walk(&path)?
-                .ok_or(UNPROVEN)?
-                .metadata()
-                .map_err(|_| UNPROVEN)?
-                .is_dir()
-            {
-                return Err(UNPROVEN);
-            }
-            for entry in std::fs::read_dir(path).map_err(|_| UNPROVEN)? {
-                count += 1;
-                if count > ENTRY_LIMIT {
-                    return Err(UNPROVEN);
-                }
-                let entry = entry.map_err(|_| UNPROVEN)?;
-                let name = PathBuf::from(entry.file_name());
-                let stem = name.file_stem().and_then(|s| s.to_str()).ok_or(UNPROVEN)?;
-                let key = namespaces
-                    .iter()
-                    .map(|f| f(stem.into()))
-                    .find(|k| k.relative_path().is_ok_and(|p| p == relative.join(&name)))
-                    .ok_or(UNPROVEN)?;
-                keys.push(key);
-            }
-        }
-        Ok(keys)
+        self.entries_except(None)
     }
     fn read_private(&self, key: &EvidenceKey, limit: usize) -> Result<Option<Vec<u8>>> {
         self.security.held()?;
@@ -365,12 +340,100 @@ impl<S: Security> EvidenceIo for Reader<S> {
         Err(UNSUPPORTED)
     }
 }
+impl<S: Security> Reader<S> {
+    fn verify_intermediates(&self, receipt: &ProvisioningReceipt) -> Result<()> {
+        // Every newly present intermediate must belong to the reservation.
+        for slot in &receipt.slots {
+            for p in slot.canonical_path.parent().ok_or(UNPROVEN)?.ancestors() {
+                if !p.starts_with(&receipt.scope.kit_root)
+                    && slot.nearest_existing_parent.starts_with(p)
+                {
+                    break;
+                }
+                if present(p)? && !receipt.directories.iter().any(|d| d.path() == p) {
+                    return Err(UNPROVEN);
+                }
+            }
+        }
+        Ok(())
+    }
+    fn entries_except(&self, staging: Option<&Path>) -> Result<Vec<EvidenceKey>> {
+        self.security.held()?;
+        let mut allowed = BTreeMap::new();
+        for key in [EvidenceKey::Provisioning, EvidenceKey::Managed] {
+            allowed.insert(key.relative_path()?, Some(key));
+        }
+        let namespaces = NAMESPACES;
+        for namespace in namespaces {
+            allowed.insert(
+                namespace("0".repeat(64))
+                    .relative_path()?
+                    .parent()
+                    .unwrap()
+                    .into(),
+                None,
+            );
+        }
+        let mut keys = Vec::new();
+        self.walk(&self.root())?;
+        if !present(&self.root())? {
+            return Ok(keys);
+        }
+        let mut count = 0;
+        for entry in std::fs::read_dir(self.root()).map_err(|_| UNPROVEN)? {
+            count += 1;
+            if count > ENTRY_LIMIT {
+                return Err(UNPROVEN);
+            }
+            let entry = entry.map_err(|_| UNPROVEN)?;
+            if staging == Some(entry.path().as_path()) {
+                continue;
+            }
+            let relative = PathBuf::from(entry.file_name());
+            let selected = allowed.get(&relative).ok_or(UNPROVEN)?;
+            if let Some(key) = selected {
+                keys.push(key.clone());
+                continue;
+            }
+            let path = entry.path();
+            if !self
+                .walk(&path)?
+                .ok_or(UNPROVEN)?
+                .metadata()
+                .map_err(|_| UNPROVEN)?
+                .is_dir()
+            {
+                return Err(UNPROVEN);
+            }
+            for entry in std::fs::read_dir(path).map_err(|_| UNPROVEN)? {
+                count += 1;
+                if count > ENTRY_LIMIT {
+                    return Err(UNPROVEN);
+                }
+                let entry = entry.map_err(|_| UNPROVEN)?;
+                if staging == Some(entry.path().as_path()) {
+                    continue;
+                }
+                let name = PathBuf::from(entry.file_name());
+                let stem = name.file_stem().and_then(|s| s.to_str()).ok_or(UNPROVEN)?;
+                let key = namespaces
+                    .iter()
+                    .map(|f| f(stem.into()))
+                    .find(|k| k.relative_path().is_ok_and(|p| p == relative.join(&name)))
+                    .ok_or(UNPROVEN)?;
+                keys.push(key);
+            }
+        }
+        Ok(keys)
+    }
+}
 
 #[cfg(windows)]
 mod native;
 mod platform;
+mod writer;
 #[cfg(windows)]
-pub use native::WindowsCreationPlatform;
+pub use native::{WindowsCreationPlatform, WindowsCreationWriter};
 
 #[cfg(test)]
 mod tests;

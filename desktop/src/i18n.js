@@ -940,7 +940,7 @@ export const STRINGS = {
     project_repository_optional: "派工儲存庫（選填）", project_repository_later: "稍後選擇",
     new_sub_project: "子專案名稱", rename: "改名", archive: "封存", restore: "復原", more: "更多", move_up: "上移",
     move_down: "下移", pin: "固定在上方", unpin: "取消固定", wi_done_of: "完成 {done}/{total}",
-    wi_state_todo: "未開始", wi_state_doing: "進行中", wi_state_waiting: "等待中", wi_state_done: "已完成",
+    wi_state_todo: uiStrings['zh-TW'].ui_status_todo, wi_state_doing: "進行中", wi_state_waiting: "等待中", wi_state_done: "已完成",
     wi_state_awaiting_approval: "待確認完成",
     wi_err_VERSION_CONFLICT: "這筆資料剛被改過，已重新載入最新內容（你在表單裡的修改還在）；確認後再存一次。", linked_back: "已連回這個工作項目",
     wi_err_ORDER_CHANGED: "順序剛被改過，已重新載入；請再排一次。", wi_err_PIN_CHANGED: "固定狀態剛被改過，已重新載入。",

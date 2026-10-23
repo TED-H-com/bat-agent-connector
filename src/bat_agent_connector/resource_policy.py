@@ -26,6 +26,7 @@ import posixpath
 import re
 from dataclasses import dataclass, field, replace
 from typing import Any
+from weakref import WeakKeyDictionary
 
 from . import controller_authority, registry
 from .channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS, WRITE_CHANNELS
@@ -822,3 +823,102 @@ def check_artifact_destination(hc: HostConfig, clone: str, worktree: str, branch
             or not parts[2] or parts[2] in {".", "..", ".git"}
             or any(c in parts[2] for c in "/\\") or any(ord(c) < 32 or ord(c) == 127 for c in parts[2])):
         raise ResourceReadOnly("DESTINATION_UNKNOWN", "not a continuation input path")
+
+
+# AHP capability issuance lives beside BAT issuance, never in an adapter or route.
+@dataclass(frozen=True, eq=False)
+class AhpGrant:
+    resource_id: str
+    operation_id: str
+    binding_json: str
+    controller_incarnation: str
+    credential_id: str
+    frame_digest: str
+    turn_id: str
+    methods: frozenset[str]
+    actions: frozenset[str]
+
+
+# Object identity prevents construction, copying or dataclass replacement from
+# minting a capability. The stored digest also detects mutation of a minted one.
+_AHP_GRANTS = WeakKeyDictionary()
+
+
+def _ahp_signature(grant):
+    return (grant.resource_id, grant.operation_id, grant.binding_json, grant.controller_incarnation,
+            grant.credential_id, grant.frame_digest, grant.turn_id, grant.methods, grant.actions)
+
+
+def mint_ahp_grant(ctx, resource_id, principal, frame, *, current):
+    """Internal seam only: no registered action calls this policy issuer."""
+    import json
+
+    from . import ahp_owned_resources as ahp
+    live = current()
+    receipt = ahp.owned(ctx.service.journal, resource_id, live)
+    value = AhpGrant(resource_id, ctx.operation_id, json.dumps(receipt['binding'], sort_keys=True),
+        receipt['controller_incarnation'], principal.credential_id, ahp.digest(frame),
+        frame['params']['action']['turnId'], frozenset({'dispatchAction'}), frozenset({'chat/turnStarted'}))
+    _AHP_GRANTS[value] = _ahp_signature(value)
+    try:
+        check_ahp_grant(value, ctx, frame, current=current)
+    except BaseException:
+        del _AHP_GRANTS[value]
+        raise
+    return value
+
+
+def check_ahp_grant(grant, ctx, frame, *, current):
+    """Synchronous current authority, identity and execution checks at every barrier."""
+    import json
+    import time
+
+    from . import ahp_owned_resources as ahp
+    from . import pm_lifecycle_gates, task_control
+    if type(grant) is not AhpGrant or _AHP_GRANTS.get(grant) != _ahp_signature(grant):
+        ahp.refuse('AHP_GRANT_REQUIRED')
+    b = json.loads(grant.binding_json)
+    params = frame.get('params', {})
+    if (ctx.operation_id != grant.operation_id or frame.get('method') not in grant.methods
+            or params.get('action', {}).get('type') not in grant.actions
+            or params.get('channel') != b['chat_uri'] or params.get('action', {}).get('turnId') != grant.turn_id
+            or ahp.digest(frame) != grant.frame_digest):
+        ahp.refuse('AHP_GRANT_MISMATCH')
+    ctx.require_controller()
+    live = current()
+    if not 0 <= time.time() - live['binding']['work_started_at'] < 1800:
+        ahp.refuse('AHP_BUDGET_EXPIRED')
+    receipt = ahp.owned(ctx.service.journal, grant.resource_id, live)
+    controller_authority.require_entry(receipt, expected_incarnation=grant.controller_incarnation)
+    if live['binding'] != b:
+        ahp.refuse('AHP_BINDING_CHANGED')
+    principal = ctx.service.db.execute('SELECT actor,scopes,expires_at,revoked_at FROM api_principals WHERE token_hash=?',
+                                       (grant.credential_id,)).fetchone()
+    actual = controller_authority.require()
+    if (principal is None or principal['actor'] != actual['actor'] or principal['revoked_at'] is not None
+            or principal['expires_at'] is not None and principal['expires_at'] <= time.time()
+            or not {'observe', 'operate'} <= set(json.loads(principal['scopes']))
+            or not {'observe', 'operate'} <= set(actual['scopes'])):
+        ahp.refuse('AHP_SCOPE_CHANGED')
+    task_control.check_binding(ctx)
+    pm_lifecycle_gates.require_local(ctx.service.db, ctx.operation_id)
+    pm_lifecycle_gates._require(pm_lifecycle_gates.head(ctx.service.db, b['workspace_id']), b['lifecycle_epoch'])
+    ctx.check_cancel()
+    row = ctx.service.db.execute('''SELECT response FROM operation_steps
+        WHERE operation_id=? AND name=? AND status='succeeded' ''',
+        (b['managed_operation_id'], b['managed_step'])).fetchone()
+    managed_op = ctx.service._row(b['managed_operation_id'])
+    controller_authority.require_binding(controller_authority.operation_binding(managed_op or {}))
+    if row is None or ahp.digest(json.loads(row['response'])) != b['managed_receipt_digest']:
+        ahp.refuse('AHP_MANAGED_DIRECTORY_CHANGED')
+    directory = json.loads(row['response'])
+    if directory.get('host') != b['host'] or directory.get('path') != b['workdir'] or not directory.get('creation_ref'):
+        ahp.refuse('AHP_MANAGED_DIRECTORY_CHANGED')
+    if live['cancelled'] is not False:
+        ahp.refuse('AHP_CANCELLED')
+    if live['permission_allowed'] is not True:
+        ahp.refuse('AHP_PERMISSION_REQUIRED')
+    if live['busy'] is not False:
+        ahp.refuse('AHP_BUSY')
+    if ahp.pending(ctx.service.journal, grant.resource_id):
+        ahp.refuse('AHP_SENT_UNKNOWN')
