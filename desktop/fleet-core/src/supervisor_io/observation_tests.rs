@@ -84,6 +84,14 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let disk = support::Fixture::new();
+        // Exercise Windows' verbatim temp-path form: embedded '/' is a literal
+        // component there, unlike the native separators returned by read_dir.
+        #[cfg(windows)]
+        let disk = {
+            let mut disk = disk;
+            disk.0 = std::fs::canonicalize(&disk.0).unwrap();
+            disk
+        };
         let c: Configuration = disk.load();
         let store = Store::new(disk.0.clone());
         let selection = store.read(&c).unwrap();
@@ -111,10 +119,10 @@ impl Fixture {
             child: RefCell::default(),
             login: RefCell::new(login),
             unknown: Cell::new(false),
-            image: disk.0.join("system/ssh.exe"),
-            intent: disk
-                .0
-                .join("BetterAgentTerminal/fleet-tunnel-intents")
+            image: disk.0.join("system").join("ssh.exe"),
+            intent: crate::configuration::data_directory(&disk.0)
+                .unwrap()
+                .join("fleet-tunnel-intents")
                 .join(format!("{}.json", plan.name())),
             captured: RefCell::default(),
         };
@@ -129,6 +137,18 @@ impl Fixture {
             &mut os,
         )
         .unwrap();
+        assert_eq!(
+            os.intent,
+            launched
+                .record_path
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("fleet-tunnel-intents")
+                .join(launched.record_path.file_name().unwrap()),
+            "fixture intent must use the producer's native path components"
+        );
         Self {
             disk,
             os,
@@ -349,13 +369,12 @@ fn tunnel_observation_unreadable_and_unparsed_names_are_incomplete() {
 #[test]
 fn tunnel_observation_over_bound_directory_is_incomplete() {
     let f = Fixture::new();
-    // The bound counts names; hard links avoid allocating thousands of files.
-    let seed = f.disk.0.join("candidate-source.json");
-    std::fs::write(&seed, b"").unwrap();
+    // The bound counts names. Separate empty files also work on filesystems
+    // whose per-file hard-link limit is lower than the directory entry bound.
     for index in 0..ENTRY_BOUND {
-        std::fs::hard_link(
-            &seed,
+        std::fs::write(
             f.path.parent().unwrap().join(format!("entry{index}.json")),
+            b"",
         )
         .unwrap();
     }
