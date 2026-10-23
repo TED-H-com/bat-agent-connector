@@ -1,15 +1,17 @@
 import {test, expect} from "@playwright/test";
 import {readFileSync} from 'node:fs';
+import {managedStatusFixture} from './managed-status-fixture.ts';
 const nativeCandidate=JSON.parse(readFileSync(new URL('../../tests/fixtures/desktop-update-candidate.json',import.meta.url),'utf8'));
 
 async function setup(page: any, options: any = {}) {
-  await page.addInitScript(({options,candidate}: any) => {
+  await page.addInitScript(({options,candidate,managed}: any) => {
     const env = {calls: [] as any[], failReads: false, ...options,
       status: {current_version: "0.1.0", available: options.signed !== false, phase: "idle", candidate: null as any,
         code: options.signed === false ? "UPDATE_SIGNING_NOT_CONFIGURED" : null, installation: null as any}};
     Object.assign(window, {isTauri: true, __updates: env, __TAURI_INTERNALS__: {invoke: async (command: string, args: any) => {
       if (command === "native_status") return {updates: true, endpoint: null, credential_available: false};
       if (command === "fleet_availability") return {configured: false, platform_supported: true};
+      if (command === "managed_control" && args.input.action === "status") return structuredClone(managed);
       if (command !== "desktop_update") throw new Error("unexpected command");
       const input = structuredClone(args.input);
       env.calls.push(input);
@@ -35,7 +37,7 @@ async function setup(page: any, options: any = {}) {
       }
       return structuredClone(env.status);
     }}});
-  }, {options,candidate:nativeCandidate});
+  }, {options,candidate:nativeCandidate,managed:managedStatusFixture(false)});
   await page.goto("/dashboard/#/settings");
   await page.getByRole("link", {name: /^(Updates|更新)$/}).click();
 }
@@ -167,7 +169,8 @@ for(const locale of ['en-US','zh-TW'])test(`released Desktop check clock survive
     await page.locator('#settings-tab-about').click();
     const about=page.locator('#settings-panel-about [data-version-row=desktop_released]');
     await expect(about).toContainText(clock);
-    await page.locator('[data-export-diagnostics]').click();
+    await expect(page.locator('#settings-panel-connection [data-api-error]')).toHaveCount(0);
+    await page.locator('#settings-panel-about [data-export-diagnostics]').click();
     await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
     const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
     expect(bundle.versions.rows.find(row=>row.id==='desktop_released')).toMatchObject({

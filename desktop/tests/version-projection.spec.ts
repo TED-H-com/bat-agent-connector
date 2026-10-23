@@ -25,7 +25,7 @@ test(`next-launch installation ${scenario} ${native?'desktop':'browser'} ${local
       : (en?'The next-launch installation comparison is unknown.':'供下次啟動的安裝比較結果未知。');
     await expect(about).toContainText(differs?(en?'Source: Connector update status':'來源：Connector 更新狀態'):(en?'Source: not reported':'來源：未回報'));
     await expect(about).toContainText(sentence);
-    await page.locator('[data-export-diagnostics]').click();
+    await page.locator('#settings-panel-about [data-export-diagnostics]').click();
     const summary=page.locator('[data-diagnostics-summary] [data-version-row=connector_installed]');
     await expect(summary).toContainText(sentence);
     const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
@@ -108,7 +108,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
       // so activation cannot withdraw the preview during the assertions below.
       await page.clock.runFor(1000);
       await expect(connector).toContainText(new Date(at+1000).toISOString());
-      await page.locator('[data-export-diagnostics]').click();
+      await page.locator('#settings-panel-about [data-export-diagnostics]').click();
       await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
       const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
       expect.soft(bundle.versions?.rows).toBeDefined();
@@ -163,7 +163,7 @@ for(const locale of ['en-US','zh-TW'])test(`released Connector and unknown MCP a
     const mcp=about.locator('[data-version-row=mcp]');
     await expect(mcp).toContainText(en?'not observed by Dashboard':'Dashboard 尚無觀察資料');
     await expect(mcp).toContainText(en?'Source: not reported':'來源：未回報');
-    await page.locator('[data-export-diagnostics]').click();
+    await page.locator('#settings-panel-about [data-export-diagnostics]').click();
     const summary=page.locator('[data-diagnostics-summary]');
     await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
     const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
@@ -195,7 +195,7 @@ for(const locale of ['en-US','zh-TW'])test(`publication display failure preserve
     await expect(released).toContainText(locale==='en-US'?'Source: not reported':'來源：未回報');
     await expect(about.locator('[data-version-row=connector_installed]')).toContainText('0.2.9');
     await expect(about.locator('[data-version-row=connector]')).toContainText('0.2.7');
-    await page.locator('[data-export-diagnostics]').click();
+    await page.locator('#settings-panel-about [data-export-diagnostics]').click();
     await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
     const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
     const fact=bundle.versions.rows.find(row=>row.id==='connector_released');
