@@ -107,11 +107,12 @@ pub(crate) async fn reserve<R: tauri::Runtime>(
                 };
                 use tauri::Manager;
                 ticket.verify()?;
-                let config = canonical_local(
-                    &app.path()
-                        .app_config_dir()
-                        .map_err(|_| "LOGIN_PATH_UNAVAILABLE")?,
-                )?;
+                let pointer = app
+                    .try_state::<crate::fleet::FleetBridge>()
+                    .ok_or("INSTALLATION_UNAVAILABLE")?
+                    .creation_pointer();
+                let state = canonical_local(pointer.parent().ok_or("INSTALLATION_INVALID")?)?;
+                let pointer = state.join(pointer.file_name().ok_or("INSTALLATION_INVALID")?);
                 let data = canonical_local(
                     &app.path()
                         .app_local_data_dir()
@@ -126,7 +127,7 @@ pub(crate) async fn reserve<R: tauri::Runtime>(
                 let user = directory("USERPROFILE")?;
                 let startup_directory = bat_fleet_core::windows_startup::startup_directory()?;
                 let input = NativeInput {
-                    pointer: config.join("fleet.json"),
+                    pointer,
                     kit_root: data.join("fleet-kit"),
                     role_record: startup_role::record_path(&data),
                     startup: startup(&data)?,
