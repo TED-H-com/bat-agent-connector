@@ -172,4 +172,44 @@ mod tests {
         .is_ok());
         assert!(validate("S-1-5-32-544", false, &full(), policy).is_ok());
     }
+
+    #[test]
+    fn ancestor_file_rights_distinguish_creation_from_deletion_and_security_writes() {
+        // File-system masks, not directory-service names: SDDL DC is 0x2,
+        // while FILE_DELETE_CHILD is 0x40. Generic write also grants EA/attribute writes.
+        for (right, mask, existing_child_allowed) in [
+            ("FILE_ADD_FILE", 0x2, true),
+            ("FILE_ADD_SUBDIRECTORY", 0x4, true),
+            ("both creation rights", 0x6, true),
+            ("FILE_DELETE_CHILD", 0x40, false),
+            ("DELETE", 0x10000, false),
+            ("WRITE_DAC", 0x40000, false),
+            ("WRITE_OWNER", 0x80000, false),
+            ("GENERIC_WRITE", 0x40000000, false),
+        ] {
+            let mut entries = full();
+            entries.push(entry("S-1-5-21-999", mask));
+            for child_absent in [false, true] {
+                let result = validate(
+                    SID,
+                    false,
+                    &entries,
+                    Policy {
+                        private: false,
+                        child_absent,
+                        ..private()
+                    },
+                );
+                assert_eq!(
+                    result,
+                    if existing_child_allowed && !child_absent {
+                        Ok(())
+                    } else {
+                        Err(UNPROVEN)
+                    },
+                    "{right} ({mask:#x}), child_absent={child_absent}",
+                );
+            }
+        }
+    }
 }

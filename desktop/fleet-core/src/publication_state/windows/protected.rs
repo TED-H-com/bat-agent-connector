@@ -7,14 +7,14 @@ use std::{
     fs::File,
     os::windows::io::{AsRawHandle, FromRawHandle},
     path::Path,
-    ptr,
+    ptr::{self, NonNull},
 };
 use windows_sys::Win32::{
     Foundation::{GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE},
     Security::{
         Authorization::{GetSecurityInfo, SE_FILE_OBJECT},
         GetAce, GetLengthSid, GetSecurityDescriptorControl, IsValidAcl, IsValidSid,
-        LookupAccountNameW, ACCESS_ALLOWED_ACE, ACL, DACL_SECURITY_INFORMATION,
+        LookupAccountNameW, ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION,
         OWNER_SECURITY_INFORMATION, PSID, SE_DACL_PROTECTED,
     },
     Storage::FileSystem::{
@@ -145,32 +145,35 @@ pub(in crate::publication_state) fn acl_file(
         return Err(UNPROVEN);
     }
     let _allocation = Allocation(descriptor);
-    if dacl.is_null() || unsafe { IsValidAcl(dacl) } == 0 {
+    let dacl = NonNull::new(dacl).ok_or(UNPROVEN)?;
+    if unsafe { IsValidAcl(dacl.as_ptr()) } == 0 {
         return Err(UNPROVEN);
     }
     let (mut control, mut revision) = (0, 0);
     if unsafe { GetSecurityDescriptorControl(descriptor, &mut control, &mut revision) } == 0 {
         return Err(UNPROVEN);
     }
-    let count = unsafe { (*dacl).AceCount };
+    let count = unsafe { dacl.as_ref().AceCount };
     if count == 0 || count > 64 {
         return Err(UNPROVEN);
     }
     let mut entries = Vec::with_capacity(count as usize);
     for index in 0..count {
         let mut raw = ptr::null_mut();
-        if unsafe { GetAce(dacl, u32::from(index), &mut raw) } == 0 || raw.is_null() {
+        if unsafe { GetAce(dacl.as_ptr(), u32::from(index), &mut raw) } == 0 {
             return Err(UNPROVEN);
         }
-        let ace = raw.cast::<ACCESS_ALLOWED_ACE>();
-        let header = unsafe { (*ace).Header };
+        let ace = NonNull::new(raw)
+            .ok_or(UNPROVEN)?
+            .cast::<ACCESS_ALLOWED_ACE>();
+        let header = unsafe { *ace.cast::<ACE_HEADER>().as_ref() };
         // Do not interpret SID layout for object/callback/unknown ACE forms.
         if header.AceType != 0
             || usize::from(header.AceSize) < std::mem::offset_of!(ACCESS_ALLOWED_ACE, SidStart) + 8
         {
             return Err(UNPROVEN);
         }
-        let sid: PSID = unsafe { ptr::addr_of_mut!((*ace).SidStart).cast() };
+        let sid: PSID = unsafe { ptr::addr_of_mut!((*ace.as_ptr()).SidStart).cast() };
         let subauthorities = unsafe { *sid.cast::<u8>().add(1) };
         if subauthorities > 15
             || 8 + 4 * usize::from(subauthorities)
@@ -189,7 +192,7 @@ pub(in crate::publication_state) fn acl_file(
         entries.push(acl::Entry {
             kind: header.AceType,
             flags: header.AceFlags,
-            mask: unsafe { (*ace).Mask },
+            mask: unsafe { ace.as_ref().Mask },
             sid: sid_text(sid)?,
         });
     }

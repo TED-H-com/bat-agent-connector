@@ -693,27 +693,71 @@ fn directory_records_bind_reserved_path_and_exact_parent_identity() {
 #[test]
 fn history_views_use_original_validators_without_writes() {
     use bat_fleet_core::connection_publish::FrozenHistory;
+    #[derive(Debug, PartialEq, Eq)]
+    struct SnapshotEntry {
+        modified: std::time::SystemTime,
+        sha256: Option<String>,
+        children: Option<Vec<std::ffi::OsString>>,
+    }
     fn snapshot(
         path: &std::path::Path,
-    ) -> std::collections::BTreeMap<std::path::PathBuf, (std::time::SystemTime, String)> {
+    ) -> std::collections::BTreeMap<std::path::PathBuf, SnapshotEntry> {
+        // Windows directory enumeration can return stale NTFS timestamps.
+        // Query the opened object instead, retaining exact mtime comparison.
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            use windows_sys::Win32::Storage::FileSystem::{
+                FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+            };
+            options.custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        }
+        let mut file = options.open(path).unwrap();
+        let metadata = file.metadata().unwrap();
+        assert!(!metadata.file_type().is_symlink());
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            assert_eq!(metadata.file_attributes() & 0x400, 0);
+        }
         let mut result = std::collections::BTreeMap::new();
-        for entry in std::fs::read_dir(path).unwrap() {
-            let entry = entry.unwrap();
-            let metadata = entry.metadata().unwrap();
-            result.insert(
-                entry.path(),
-                (
-                    metadata.modified().unwrap(),
-                    if metadata.is_file() {
-                        digest(&std::fs::read(entry.path()).unwrap())
-                    } else {
-                        String::new()
-                    },
-                ),
-            );
-            if metadata.is_dir() {
-                result.extend(snapshot(&entry.path()));
+        if metadata.is_dir() {
+            let mut children = std::fs::read_dir(path)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect::<Vec<_>>();
+            children.sort();
+            for child in &children {
+                result.extend(snapshot(&path.join(child)));
             }
+            result.insert(
+                path.to_path_buf(),
+                SnapshotEntry {
+                    modified: metadata.modified().unwrap(),
+                    sha256: None,
+                    children: Some(children),
+                },
+            );
+        } else {
+            assert!(metadata.is_file());
+            use std::io::Read;
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).unwrap();
+            result.insert(
+                path.to_path_buf(),
+                SnapshotEntry {
+                    modified: metadata.modified().unwrap(),
+                    sha256: Some(digest(&bytes)),
+                    children: None,
+                },
+            );
         }
         result
     }

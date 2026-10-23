@@ -345,7 +345,10 @@ mod windows_cases {
         let child = root.join("private");
         publication_state::create_new_directory(&child).unwrap();
         publication_state::verify_ancestors(&child.join("absent"), &child).unwrap();
-        for rights in ["DC", "WD", "WO", "SD", "GW"] {
+        // DC is the directory-service 0x2 right (FILE_ADD_FILE here), not
+        // FILE_DELETE_CHILD (0x40). WD/WO/SD are 0x40000/0x80000/0x10000;
+        // GW maps to file generic write, including EA and attribute writes.
+        for rights in ["0x00000040", "WD", "WO", "SD", "GW"] {
             let sddl = format!(
                 "O:{}D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;;{rights};;;S-1-5-21-123-456-789-4321)",
                 current()
@@ -360,12 +363,15 @@ mod windows_cases {
         );
         set_acl(&root, &read, true, false);
         publication_state::verify_ancestor(&root, false).unwrap();
-        let add = format!(
-            "O:{}D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;;0x00000006;;;S-1-5-21-123-456-789-4321)",
-            current()
-        );
-        set_acl(&root, &add, true, false);
-        assert!(publication_state::verify_ancestor(&root, true).is_err());
+        for rights in ["0x00000002", "0x00000004", "0x00000006"] {
+            let add = format!(
+                "O:{}D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;;{rights};;;S-1-5-21-123-456-789-4321)",
+                current()
+            );
+            set_acl(&root, &add, true, false);
+            publication_state::verify_ancestor(&root, false).unwrap();
+            assert!(publication_state::verify_ancestor(&root, true).is_err());
+        }
         set_acl(&root, &private(), true, false);
     }
     #[test]
