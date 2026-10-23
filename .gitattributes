@@ -8,3 +8,4 @@ src/bat_agent_connector/dashboard/** text eol=lf
 tests/fixtures/native-plan-manifest.json text eol=lf
 # Python packaging and Rust embedding share the same contract bytes.
 src/bat_agent_connector/connection_contract.json text eol=lf
+tests/fixtures/native-isolation-plan.json text eol=lf

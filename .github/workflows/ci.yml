@@ -121,7 +121,7 @@ jobs:
           if-no-files-found: error
 
   pytest-complete:
-    needs: [scope, pytest]
+    needs: [scope, pytest, native-isolation]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -136,6 +136,10 @@ jobs:
         with:
           pattern: pytest-*
           path: ci-results
+      - name: Require the real coding isolation canary
+        env:
+          CANARY_RESULT: ${{ needs.native-isolation.result }}
+        run: test "$CANARY_RESULT" = success
       - name: Require successful shards and an exact partition on every Python version
         env:
           SHARDS_RESULT: ${{ needs.pytest.result }}
@@ -160,3 +164,26 @@ jobs:
           echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
           tar -xzf gitleaks.tgz gitleaks
           ./gitleaks git --redact --verbose .
+
+  native-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked --extra dev
+      - name: Install bubblewrap and enable user namespaces on this disposable runner only
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap e2fsprogs
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Require the real filesystem and process canary on a bounded disk volume
+        env:
+          BAC_REQUIRE_BWRAP: "1"
+        run: bash scripts/check_native_isolation.sh
