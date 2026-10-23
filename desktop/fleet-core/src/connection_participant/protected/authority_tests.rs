@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::{cell::Cell, fs, io::Write};
 
 const ROLE: &[u8] = br#"{"version":1,"installation_ref":"11111111-1111-4111-8111-111111111111","generation":1,"role":"client"}"#;
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fault {
     None,
     Directory,
@@ -63,7 +63,9 @@ fn open(path: &Path) -> File {
         // Deliberately permissive observations: the real walk must reject links itself.
         options.custom_flags(0x02000000).share_mode(7);
     }
-    options.open(path).unwrap()
+    options
+        .open(path)
+        .unwrap_or_else(|error| panic!("fixture open {path:?}: {error:?}"))
 }
 impl Security for Observations<'_> {
     fn verify(&self) -> Result<LoginIdentity> {
@@ -95,15 +97,23 @@ impl Security for Observations<'_> {
         verify: &mut dyn FnMut() -> Result<()>,
     ) -> Result<()> {
         verify()?;
-        let mut file =
-            crate::publication_state::create_new_file(stage).map_err(|_| Error::Conflict)?;
+        let mut file = crate::publication_state::create_new_file(stage).map_err(|error| {
+            eprintln!(
+                "create-only stage {stage:?} for {path:?}: {error}; last OS error: {:?}",
+                std::io::Error::last_os_error()
+            );
+            Error::Conflict
+        })?;
         file.write_all(bytes).unwrap();
         file.sync_all().unwrap();
         self.0.fail(Fault::Stage)?;
         verify()?;
         drop(file);
         // Portable no-replace surrogate; not a Windows durability implementation.
-        fs::hard_link(stage, path).map_err(|_| Error::Conflict)?;
+        fs::hard_link(stage, path).map_err(|error| {
+            eprintln!("create-only link {stage:?} -> {path:?}: {error:?}");
+            Error::Conflict
+        })?;
         self.0.fail(Fault::Linked)?;
         fs::remove_file(stage).unwrap();
         self.0.fail(Fault::Published)?;
@@ -121,10 +131,18 @@ impl Fixture {
         self.context.state.join("connections-v1")
     }
     fn new() -> Self {
-        let temp = std::env::temp_dir().join(format!(
-            "participant-authority-{:032x}",
-            rand::random::<u128>()
-        ));
+        Self::under(&std::env::temp_dir())
+    }
+    fn under(base: &Path) -> Self {
+        // Resolve only the external fixture base, before creating protected state.
+        // This also gives native Windows primitives extended-length path spelling.
+        let temp = base
+            .canonicalize()
+            .unwrap_or_else(|error| panic!("fixture base {base:?}: {error:?}"))
+            .join(format!(
+                "participant-authority-{:032x}",
+                rand::random::<u128>()
+            ));
         fs::create_dir(&temp).unwrap();
         let state = temp.join("state");
         fs::create_dir(&state).unwrap();
@@ -158,7 +176,7 @@ impl Fixture {
             },
             &format!("op_{}", op.to_string().repeat(32)),
         )
-        .unwrap()
+        .unwrap_or_else(|error| panic!("fixture namespace {op}: {error:?}"))
     }
     fn authority(&self) -> Authority<Observations<'_>> {
         Authority::new(
@@ -166,7 +184,7 @@ impl Fixture {
             Observations(self),
             &self.namespace('b'),
         )
-        .unwrap()
+        .unwrap_or_else(|error| panic!("authority for {:?}: {error:?}", self.context.state))
     }
     fn levels(&self) -> [Level; 3] {
         let n = self.namespace('b').relative_path();
@@ -179,9 +197,11 @@ impl Fixture {
     }
     fn prepare(&self) {
         let a = self.authority();
-        a.bootstrap().unwrap();
+        a.bootstrap()
+            .unwrap_or_else(|error| panic!("prepare bootstrap {:?}: {error:?}", self.temp));
         for level in self.levels() {
-            a.create_level(&self.namespace('b'), &level).unwrap();
+            a.create_level(&self.namespace('b'), &level)
+                .unwrap_or_else(|error| panic!("prepare level {}: {error:?}", level.relative()));
         }
     }
 }
@@ -206,6 +226,35 @@ fn snapshot(path: &Path) -> Vec<(PathBuf, Option<Vec<u8>>)> {
     }
     result.sort();
     result
+}
+#[test]
+fn fixture_resolves_temporary_base_alias_before_authority_walk() {
+    let parent = Fixture::new();
+    let alias = parent.temp.join("alias");
+    link_directory(&parent.temp, &alias);
+    {
+        let f = Fixture::under(&alias);
+        assert_eq!(
+            f.temp,
+            f.temp.canonicalize().unwrap(),
+            "resolved fixture base"
+        );
+        f.prepare();
+    }
+    #[cfg(unix)]
+    fs::remove_file(alias).unwrap();
+    #[cfg(windows)]
+    fs::remove_dir(alias).unwrap();
+}
+#[test]
+fn fixture_supports_native_stage_paths_longer_than_max_path() {
+    let parent = Fixture::new();
+    let base = parent.temp.join("long".repeat(40));
+    fs::create_dir(&base).unwrap();
+    let f = Fixture::under(&base);
+    let stage = f.levels()[2].stage(&f.root());
+    assert!(stage.as_os_str().len() > 260, "long-stage case: {stage:?}");
+    f.prepare();
 }
 #[test]
 fn absent_root_is_observation_only_and_complete_chain_reopens() {
@@ -266,7 +315,7 @@ fn root_and_every_level_crash_residue_is_never_adopted_or_deleted() {
                 } else {
                     a.create_level(&ns, &levels[depth - 1])
                 };
-                assert_eq!(result, Err(Error::Unavailable));
+                assert_eq!(result, Err(Error::Unavailable), "depth {depth}, {fault:?}");
             }
             f.fault.set(Fault::None);
             let before = snapshot(&f.temp);
@@ -283,7 +332,8 @@ fn root_and_every_level_crash_residue_is_never_adopted_or_deleted() {
                     Ok(())
                 } else {
                     Err(Error::Invalid)
-                }
+                },
+                "reopen depth {depth}, {fault:?}"
             );
             assert_eq!(snapshot(&f.temp), before);
         }
@@ -414,7 +464,7 @@ fn linked_level(link: impl FnOnce(&Path, &Path)) {
         a.bootstrap().unwrap();
         a.create_level(&f.namespace('b'), &f.levels()[0]).unwrap();
     }
-    let path = f.context.state.join("connections-v1/participant");
+    let path = f.root().join("participant");
     let moved = f.temp.join("original");
     fs::rename(&path, &moved).unwrap();
     link(&moved, &path);
@@ -428,19 +478,36 @@ fn linked_level(link: impl FnOnce(&Path, &Path)) {
 #[cfg(unix)]
 #[test]
 fn followed_symlink_with_original_file_id_is_rejected() {
-    linked_level(|target, path| std::os::unix::fs::symlink(target, path).unwrap());
+    linked_level(link_directory);
 }
 #[cfg(windows)]
 #[test]
 fn followed_junction_with_original_file_id_is_rejected() {
-    linked_level(|target, path| {
-        assert!(std::process::Command::new("cmd")
-            .args(["/C", "mklink", "/J"])
+    linked_level(link_directory);
+}
+fn link_directory(target: &Path, path: &Path) {
+    assert!(target.is_dir(), "link target missing: {target:?}");
+    assert!(
+        !path.try_exists().unwrap(),
+        "link path already exists: {path:?}"
+    );
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(target, path)
+        .unwrap_or_else(|error| panic!("symlink {path:?} -> {target:?}: {error:?}"));
+    #[cfg(windows)]
+    {
+        let output = std::process::Command::new("cmd.exe")
+            .args(["/d", "/c", "mklink", "/J"])
             .arg(path)
             .arg(target)
             .output()
-            .unwrap()
-            .status
-            .success())
-    });
+            .unwrap_or_else(|error| panic!("junction {path:?} -> {target:?}: {error:?}"));
+        assert!(
+            output.status.success(),
+            "junction {path:?} -> {target:?}: status {}; stderr: {}; stdout: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
 }
