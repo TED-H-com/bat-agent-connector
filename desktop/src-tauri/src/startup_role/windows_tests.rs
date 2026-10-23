@@ -127,7 +127,7 @@ fn windows_release_layout_reads_or_reports_owner_refusal_without_rewriting() {
     };
     let bytes = serde_json::to_vec(&record).unwrap();
     let temporary = directory.join(".role-release");
-    let mut file = OpenOptions::new()
+    let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&temporary)
