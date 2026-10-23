@@ -3,11 +3,13 @@ use crate::{fleet_lifecycle::Ticket, startup_role};
 #[cfg(any(windows, test))]
 use bat_fleet_core::windows_creation::NativeInput;
 use bat_fleet_core::{
-    creation_evidence::{
-        Baseline, EvidenceIo, EvidenceKey, Record, StartupBinding, StartupRole, RECEIPT_LIMIT,
-    },
-    windows_creation::{CreationPlatform, Security},
+    creation_evidence::{Baseline, StartupBinding, StartupRole},
     Result,
+};
+#[cfg(any(windows, test))]
+use bat_fleet_core::{
+    creation_evidence::{EvidenceIo, EvidenceKey, Record, RECEIPT_LIMIT},
+    windows_creation::{CreationPlatform, Security},
 };
 use std::path::Path;
 
@@ -50,6 +52,7 @@ fn startup(data: &Path) -> Result<StartupBinding> {
         },
     })
 }
+#[cfg(any(windows, test))]
 fn prepare<S: Security>(platform: &mut CreationPlatform<S>, ticket: &Ticket) -> Result<Prepared> {
     ticket.acquire(|| {
         platform.with_writer(|writer| {
@@ -78,6 +81,7 @@ fn prepare<S: Security>(platform: &mut CreationPlatform<S>, ticket: &Ticket) -> 
         })
     })
 }
+#[cfg(any(windows, test))]
 fn platform_owner<S: Security>(
     writer: &bat_fleet_core::windows_creation::CreationWriter<'_, S>,
     bytes: &[u8],
@@ -120,8 +124,7 @@ pub(crate) async fn reserve<R: tauri::Runtime>(
                 };
                 let roaming = directory("APPDATA")?;
                 let user = directory("USERPROFILE")?;
-                let startup_directory =
-                    roaming.join("Microsoft/Windows/Start Menu/Programs/Startup");
+                let startup_directory = bat_fleet_core::windows_startup::startup_directory()?;
                 let input = NativeInput {
                     pointer: config.join("fleet.json"),
                     kit_root: data.join("fleet-kit"),

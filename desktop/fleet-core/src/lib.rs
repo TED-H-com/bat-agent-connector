@@ -44,7 +44,7 @@ pub mod unconfigured;
 pub mod windows;
 #[cfg(windows)]
 pub mod windows_bootstrap;
-#[cfg(any(windows, test))]
+#[cfg(any(windows, test, feature = "creation-test-support"))]
 pub mod windows_creation;
 #[cfg(any(windows, test))]
 pub mod windows_detach;

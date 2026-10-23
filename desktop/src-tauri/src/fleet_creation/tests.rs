@@ -339,3 +339,21 @@ fn managed_or_providing_context_cannot_fall_back_to_an_unbound_receipt() {
         Err("CREATION_OPERATION_UNSUPPORTED")
     ));
 }
+
+#[cfg(not(windows))]
+#[tokio::test]
+async fn unsupported_native_entry_refuses_before_native_discovery() {
+    let root = tempfile::tempdir().unwrap();
+    let sentinel = root.path().join("sentinel");
+    std::fs::write(&sentinel, b"unchanged").unwrap();
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let tickets = Arc::new(crate::fleet_lifecycle::Tickets::default());
+    assert!(matches!(
+        reserve(app.handle().clone(), tickets.capture()).await,
+        Err("LOCAL_PLATFORM_UNSUPPORTED")
+    ));
+    assert_eq!(std::fs::read(&sentinel).unwrap(), b"unchanged");
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
