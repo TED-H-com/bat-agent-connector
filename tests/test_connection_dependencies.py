@@ -314,3 +314,4 @@ async def test_unavailable_work_link_source_cannot_claim_complete_history(connec
     result = w["read"]()
     assert result["domains"]["work_history"]["reason"] == "REFERENCES_UNAVAILABLE"
     assert not result["server_complete"] and not refs(result, "work_link")
+    assert checkpoint["checkpoint_id"] not in json.dumps(result)

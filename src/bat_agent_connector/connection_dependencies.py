@@ -89,7 +89,7 @@ def _visible(ops, principal, kind, row):
     try:
         if (row.get("workspace_id") or "").startswith("ws_"):
             pm_workspace.require_member(ops.db, principal, row["workspace_id"])
-        if kind == "work_item" and not pm_source_lineage.visible(ops.db, principal, kind, row["work_item_id"]):
+        if kind in {"work_item", "checkpoint"} and not pm_source_lineage.visible(ops.db, principal, kind, row[kind + "_id"]):
             return False
         if kind == "work_link" and not pm_source_lineage.visible(ops.db, principal, row["kind"], row["ref"]):
             return False
