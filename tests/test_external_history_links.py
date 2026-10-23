@@ -245,3 +245,13 @@ async def test_activation_between_resolution_and_response_refuses_cached_read(li
     with pytest.raises(OperationError, match='PM_HISTORY_SOURCE_UNAVAILABLE'):
         read_link(d, req, op['result']['link_id'])
     assert counts(d) == (1, 1, 1)
+
+
+async def test_ungranted_relations_do_not_create_pagination_hints(linked_work, retained):  # noqa: F811
+    d, req, _ = linked_work
+    await submit(d, req)
+    ref = preview(retained, {'kind': 'text', 'part_index': 0, 'start_codepoint': 0, 'end_codepoint': 1})['ref']
+    await submit(d, req | {'idempotency_key': 'second-excerpt', 'params': {'fixed_ref': ref}})
+    d.history_collector.config = HistoryConfig(10, ())
+    result = pm_reads.read(d.ops, OWNER, 'pm_history_links_list', req['target'] | {'limit': 1})
+    assert result == {'links': [], 'next_after': None}

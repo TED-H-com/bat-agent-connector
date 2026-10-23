@@ -297,9 +297,12 @@ def read(ops, principal, method, params):
         else:
             _work(ops.db, principal, wid, params.get('work_item_id'))
         rows = ops.db.execute('''SELECT l.link_id,l.sequence FROM pm_external_links l
-            JOIN pm_external_excerpts e USING(excerpt_id) WHERE l.workspace_id=? AND l.sequence>?
+            JOIN pm_external_excerpts e USING(excerpt_id)
+            JOIN temp.session_history_current_grants g ON g.source_id=e.source_id AND g.workspace_id=e.workspace_id
+                AND g.binding=e.original_binding AND g.actor=?
+            WHERE l.workspace_id=? AND l.sequence>?
             AND l.state='active' AND ((? AND e.source_id=? AND e.entry_id=?) OR (NOT ? AND l.work_item_id=?))
-            ORDER BY l.sequence LIMIT ?''', (wid, after, source, params.get('source_id'), params.get('entry_id'),
+            ORDER BY l.sequence LIMIT ?''', (principal.actor, wid, after, source, params.get('source_id'), params.get('entry_id'),
                 source, params.get('work_item_id'), limit + 1)).fetchall()
         links = []
         for row in rows[:limit]:
