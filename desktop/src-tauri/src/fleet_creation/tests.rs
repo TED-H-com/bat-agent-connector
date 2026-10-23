@@ -223,7 +223,7 @@ fn intended_publication<S: Security>(
             predecessor_terminal: None,
             frozen,
             generator_version: plan.generator_version,
-            baseline: baseline,
+            baseline,
             acceptance_reference: "native-review-fixture".into(),
         });
         w.append(owner, &link, &mut || ticket.verify())?;

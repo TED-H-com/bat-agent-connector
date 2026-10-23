@@ -61,6 +61,7 @@ fn prepare<S: Security>(platform: &mut CreationPlatform<S>, ticket: &Ticket) -> 
                 Some(bytes) => platform_owner(writer, &bytes)?,
                 None => writer.reserve(&mut || ticket.verify())?,
             };
+            let before = writer.baseline(&owner)?;
             let parents = writer
                 .receipt()
                 .slots
@@ -77,6 +78,9 @@ fn prepare<S: Security>(platform: &mut CreationPlatform<S>, ticket: &Ticket) -> 
             }
             writer.prepare_publication_directories(&mut || ticket.verify())?;
             let baseline = writer.baseline(&owner)?;
+            if baseline != before {
+                return Err("CREATION_EVIDENCE_UNPROVEN");
+            }
             Ok(Prepared { owner, baseline })
         })
     })
