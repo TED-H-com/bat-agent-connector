@@ -395,6 +395,10 @@ impl EvidenceIo for Native {
                 return Err("BOUND");
             }
         }
+        if out.is_empty() && !root.join("provision.json").exists() && !self.creating_namespace.get()
+        {
+            return Err("ORPHAN_NAMESPACE");
+        }
         Ok(out)
     }
     fn read_private(&self, key: &EvidenceKey, limit: usize) -> Result<Option<Vec<u8>>> {

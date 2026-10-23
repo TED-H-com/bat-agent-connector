@@ -736,3 +736,11 @@ fn directory_keys_normalize_windows_case_and_separators() {
         Record::Directory(alternate).key()
     );
 }
+
+#[test]
+fn reservation_does_not_adopt_empty_evidence_subdirectories() {
+    let mut f = Fixture::unreserved();
+    std::fs::create_dir_all(f.root.join("native/fleet-creation/lineage")).unwrap();
+    assert!(f.reserve().is_err());
+    assert!(!f.native.evidence_path(&EvidenceKey::Provisioning).exists());
+}
