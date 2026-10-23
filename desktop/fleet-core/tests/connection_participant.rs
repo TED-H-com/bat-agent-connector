@@ -79,6 +79,14 @@ impl Disk {
             .join(namespace.relative_path())
             .join(part.filename().unwrap())
     }
+    fn snapshot(&mut self, namespace: &Namespace) -> Vec<(Part, Vec<u8>)> {
+        let mut parts = self.entries(namespace).unwrap();
+        parts.sort();
+        parts
+            .into_iter()
+            .map(|part| (part, fs::read(self.path(namespace, part)).unwrap()))
+            .collect()
+    }
 }
 impl Backend for Disk {
     fn available(&mut self) -> Result<()> {
@@ -309,6 +317,51 @@ fn restart_loads_the_original_intent_and_frozen_reference_without_a_new_plan() {
         ))
         .unwrap()
         .is_none());
+}
+
+#[test]
+fn stored_future_variants_are_unsupported_without_writes_at_every_entry_point() {
+    for (pointer, value) in [
+        ("/accepted/kind", json!("reference_detach")),
+        ("/accepted/action", json!("connection.reference.apply")),
+        ("/accepted/contract_version", json!(2)),
+        ("/format_version", json!(2)),
+    ] {
+        for extra_field in [false, true] {
+            let f = Fixture::new();
+            let mut store = f.store();
+            f.claimed(&mut store);
+            let namespace = f.intent.namespace();
+            let mut disk = Disk {
+                root: f.root.clone(),
+                fail: None,
+            };
+            let mut body: Value = serde_json::from_slice(&f.intent.bytes().unwrap()).unwrap();
+            *body.pointer_mut(pointer).unwrap() = value.clone();
+            if extra_field {
+                body["accepted"]["future_field"] = json!({"version": 2});
+            }
+            fs::write(
+                disk.path(&namespace, Part::Intent),
+                serde_json::to_vec(&body).unwrap(),
+            )
+            .unwrap();
+            let before = disk.snapshot(&namespace);
+            let opened = store.open(
+                &f.intent.accepted().scope,
+                &f.intent.accepted().operation_id,
+                |_| panic!("unsupported intent must not load frozen history"),
+            );
+            assert_eq!(
+                opened.err(),
+                Some(Error::Unsupported),
+                "{pointer}, extra={extra_field}"
+            );
+            assert_eq!(store.load(&f.intent).err(), Some(Error::Unsupported));
+            assert_eq!(store.begin(&f.intent).err(), Some(Error::Unsupported));
+            assert_eq!(disk.snapshot(&namespace), before);
+        }
+    }
 }
 
 #[test]

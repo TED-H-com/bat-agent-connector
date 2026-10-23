@@ -62,6 +62,17 @@ pub(super) fn typed<T: for<'a> Deserialize<'a> + Serialize>(value: Value) -> Res
     ensure(serde_json::to_value(&result).map_err(|_| Error::Invalid)? == value)?;
     Ok(result)
 }
+/// Classify dispatch before decoding today's fields: future variants are not corruption.
+pub(super) fn validate_variant(value: &Value) -> Result<()> {
+    if value["format_version"] != 1
+        || value["accepted"]["action"] != "setup.connection.apply"
+        || value["accepted"]["contract_version"] != contract::vocabulary()["contract_version"]
+        || !value["accepted"]["kind"].is_null()
+    {
+        return Err(Error::Unsupported);
+    }
+    Ok(())
+}
 
 /// Supplied by the verified native session, never by a request or its paths.
 /// Decoding proves consistency only; authentication/provenance remain caller duties.
@@ -106,12 +117,7 @@ pub struct Accepted {
 }
 impl Accepted {
     fn validate(&self) -> Result<()> {
-        if self.action != "setup.connection.apply"
-            || self.contract_version != contract::vocabulary()["contract_version"]
-            || self.kind.is_some()
-        {
-            return Err(Error::Unsupported);
-        }
+        validate_variant(&serde_json::json!({"format_version": 1, "accepted": self}))?;
         self.scope.validate()?;
         ensure(
             self.target.installation_ref == self.scope.installation_ref
@@ -187,9 +193,7 @@ impl Intent {
     }
     fn stored(bytes: &[u8], scope: &Scope) -> Result<FleetIntent> {
         let value = parse(bytes, Self::limit())?;
-        if value["format_version"].as_u64().is_some_and(|v| v != 1) {
-            return Err(Error::Unsupported);
-        }
+        validate_variant(&value)?;
         let stored: FleetIntent = typed(value)?;
         stored.accepted.validate()?;
         ensure(

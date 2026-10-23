@@ -371,14 +371,7 @@ impl<B: Backend> Store<B> {
             .read(&namespace, Part::Intent, Intent::limit())?
             .ok_or(Error::Invalid)?;
         let dispatch = parse(&stored, Intent::limit())?;
-        if dispatch["format_version"] != 1
-            || dispatch["accepted"]["action"] != "setup.connection.apply"
-            || dispatch["accepted"]["contract_version"]
-                != crate::connection_contract::vocabulary()["contract_version"]
-            || !dispatch["accepted"]["kind"].is_null()
-        {
-            return Err(Error::Unsupported);
-        }
+        validate_variant(&dispatch)?;
         ensure(stored == intent.bytes()?)?;
         parts.sort_by_key(|p| p.order().unwrap_or(u8::MAX));
         ensure(parts.windows(2).all(|p| p[0] != p[1]))?;
