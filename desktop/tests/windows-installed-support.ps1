@@ -35,8 +35,9 @@ function New-FixtureViewAttempt([System.Collections.IDictionary]$Diagnostics) {
 }
 function Set-FixtureViewDiagnostics([System.Collections.IDictionary]$Attempt, [string]$Stderr) {
     # Bound parsing and retained evidence independently of a provider's output.
-    if ($Stderr.Length -gt 16384) { $Attempt.diagnostics_truncated = $true; $Stderr = $Stderr.Substring(0, 16384) }
-    $lines = $Stderr.Split([char]10)
+    $diagnosticText = $Stderr
+    if ($diagnosticText.Length -gt 16384) { $Attempt.diagnostics_truncated = $true; $diagnosticText = $diagnosticText.Substring(0, 16384) }
+    $lines = $diagnosticText.Split([char]10)
     if ($lines.Length -gt 256) { $Attempt.diagnostics_truncated = $true }
     foreach ($line in $lines | Select-Object -First 256) {
         $line = $line.Trim()
@@ -65,12 +66,12 @@ function Get-FixtureWindowResponse {
         [scriptblock]$Now = { [DateTime]::UtcNow })
     $timeout = [int][Math]::Max(0, [Math]::Floor([Math]::Min(200, ($Deadline - (& $Now)).TotalMilliseconds)))
     if ($timeout -eq 0) { return [ordered]@{state='not_sampled'; elapsed_ms=$null; timeout_ms=0; win32_error=$null} }
-    $sample = & $Sample $Window $Owner $timeout
-    if ($sample.State -cnotin @('responsive', 'hung', 'failed', 'owner_changed') -or
-        ($sample.ElapsedMilliseconds -isnot [long] -and $sample.ElapsedMilliseconds -isnot [int]) -or $sample.ElapsedMilliseconds -lt 0 -or
-        $sample.ErrorCode -isnot [int]) { throw 'Invalid native responsiveness diagnostic' }
-    return [ordered]@{state=$sample.State; elapsed_ms=[Math]::Min(60000, $sample.ElapsedMilliseconds);
-        timeout_ms=$timeout; win32_error=$sample.ErrorCode}
+    $windowSample = & $Sample $Window $Owner $timeout
+    if ($windowSample.State -cnotin @('responsive', 'hung', 'failed', 'owner_changed') -or
+        ($windowSample.ElapsedMilliseconds -isnot [long] -and $windowSample.ElapsedMilliseconds -isnot [int]) -or $windowSample.ElapsedMilliseconds -lt 0 -or
+        $windowSample.ErrorCode -isnot [int]) { throw 'Invalid native responsiveness diagnostic' }
+    return [ordered]@{state=$windowSample.State; elapsed_ms=[Math]::Min(60000, $windowSample.ElapsedMilliseconds);
+        timeout_ms=$timeout; win32_error=$windowSample.ErrorCode}
 }
 function Test-FixtureViewResult {
     param([System.Collections.IDictionary]$Attempt, [string]$Output, [System.Collections.IDictionary]$Observed)
