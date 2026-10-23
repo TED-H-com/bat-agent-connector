@@ -53,6 +53,8 @@ pub mod windows_monitor_launch;
 #[cfg(windows)]
 pub mod windows_profiles;
 #[cfg(windows)]
+mod windows_publication_guards;
+#[cfg(windows)]
 pub mod windows_startup;
 #[cfg(windows)]
 pub mod windows_supervisor;
