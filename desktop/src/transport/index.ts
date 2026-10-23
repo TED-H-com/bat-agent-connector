@@ -81,7 +81,7 @@ export const nativeFilesPreview = (reference: unknown) => invoke<any>("native_fi
 export const nativeSelectRole = (input: {role: StartupRole; expected_generation: number}) =>
   invoke<NativeStatus>("managed_select_role", {input});
 export const nativeConnect = () => invoke<any>("connector_connect");
-export const managedControl = (input: {action: "status" | "open_browser"} | {action: "set_login"; enabled: boolean}) =>
+export const managedControl = (input: {action: "status" | "open_browser" | "stop" | "start"} | {action: "set_login"; enabled: boolean}) =>
   invoke<any>("managed_control", {input});
 export const nativeDisconnect = () => invoke<void>("connector_disconnect");
 const nativeDialogLocale = () => locale === "zh-TW" ? "zh-TW" : "en-US";

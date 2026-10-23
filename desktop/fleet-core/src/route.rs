@@ -27,6 +27,42 @@ pub enum RouteKind {
     Cf,
     Configured,
 }
+/// Explanation of existing eligibility only; no routing input leaves the producer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE", try_from = "String")]
+pub enum RouteRequirement {
+    DirectPeerUnknown,
+    DirectNotConfirmed,
+    DirectTcpUnreachable,
+    ConfiguredRoutesExhausted,
+}
+impl TryFrom<String> for RouteRequirement {
+    type Error = &'static str;
+    fn try_from(value: String) -> Result<Self> {
+        // Serde's default enum decoder also accepts externally tagged objects.
+        // Status and IPC carry only a code string, never an object representation.
+        match value.as_str() {
+            "DIRECT_PEER_UNKNOWN" => Ok(Self::DirectPeerUnknown),
+            "DIRECT_NOT_CONFIRMED" => Ok(Self::DirectNotConfirmed),
+            "DIRECT_TCP_UNREACHABLE" => Ok(Self::DirectTcpUnreachable),
+            "CONFIGURED_ROUTES_EXHAUSTED" => Ok(Self::ConfiguredRoutesExhausted),
+            _ => Err("ROUTE_REQUIREMENT_INVALID"),
+        }
+    }
+}
+#[derive(Debug, Serialize)]
+pub struct RouteFailure {
+    pub code: &'static str,
+    pub route_requirement: Option<RouteRequirement>,
+}
+impl From<&'static str> for RouteFailure {
+    fn from(code: &'static str) -> Self {
+        Self {
+            code,
+            route_requirement: None,
+        }
+    }
+}
 #[derive(Clone, PartialEq, Eq)]
 struct Route {
     kind: RouteKind,
@@ -552,19 +588,18 @@ impl SelectionRequest {
                 .collect(),
         })
     }
-    async fn direct<P: RouteProbe>(&self, probe: &P, ip: &str, until: Instant) -> bool {
+    async fn direct<P: RouteProbe>(&self, probe: &P, ip: &str, until: Instant) -> TailscalePeer {
         let peer = timeout_at(until, probe.tailscale_peer(ip, until))
             .await
             .unwrap_or(TailscalePeer::Unknown);
         let mut wake = self.wake.lock().unwrap();
         if wake.epoch != self.wake_epoch {
-            return false;
+            return TailscalePeer::Unknown;
         }
         match peer {
             TailscalePeer::Direct => {
                 wake.failures = 0;
                 wake.next = None;
-                true
             }
             TailscalePeer::Idle => {
                 if !wake.active && !wake.next.is_some_and(|next| Instant::now() < next) {
@@ -576,17 +611,21 @@ impl SelectionRequest {
                     wake.failures = wake.failures.saturating_add(1);
                     self.wake_progress.notify_one();
                 }
-                false
             }
-            TailscalePeer::Unknown => false,
+            TailscalePeer::Unknown => (),
         }
+        peer
     }
     /// No policy borrow or host-global lock across await. Cancellation drops this
     /// request and its status/TCP resources. Wake intent belongs to the policy;
     /// only its native owner may start the separately bounded background task.
-    pub async fn run<P: RouteProbe>(self, probe: &P, budget: Duration) -> Result<RouteChoice> {
+    pub async fn run<P: RouteProbe>(
+        self,
+        probe: &P,
+        budget: Duration,
+    ) -> std::result::Result<RouteChoice, RouteFailure> {
         if budget.is_zero() || budget > Duration::from_secs(30) {
-            return Err("ROUTE_BUDGET_INVALID");
+            return Err("ROUTE_BUDGET_INVALID".into());
         }
         let total = Instant::now() + budget;
         let direct = self
@@ -595,21 +634,28 @@ impl SelectionRequest {
             .iter()
             .find(|r| r.kind == RouteKind::Direct);
         let lan = self.routes.routes.iter().find(|r| r.kind == RouteKind::Lan);
+        let mut direct_requirement = RouteRequirement::DirectPeerUnknown;
         let (direct_ok, lan_ok) = timeout_at(total, async {
             tokio::join!(
                 async {
                     let Some(route) = direct else { return false };
                     let endpoint = route.probe.as_ref().unwrap();
-                    if !self
+                    let peer = self
                         .direct(
                             probe,
                             &endpoint.address,
                             deadline(total, self.routes.probe_budget),
                         )
-                        .await
-                    {
+                        .await;
+                    if peer != TailscalePeer::Direct {
+                        direct_requirement = if peer == TailscalePeer::Idle {
+                            RouteRequirement::DirectNotConfirmed
+                        } else {
+                            RouteRequirement::DirectPeerUnknown
+                        };
                         return false;
                     }
+                    direct_requirement = RouteRequirement::DirectTcpUnreachable;
                     probe
                         .tcp(endpoint, deadline(total, self.routes.probe_budget))
                         .await
@@ -628,7 +674,7 @@ impl SelectionRequest {
         .await
         .map_err(|_| "ROUTE_PROBE_TIMEOUT")?;
         if Instant::now() >= total {
-            return Err("ROUTE_PROBE_TIMEOUT");
+            return Err("ROUTE_PROBE_TIMEOUT".into());
         }
         let eligible: Vec<_> = self
             .routes
@@ -644,12 +690,17 @@ impl SelectionRequest {
             .iter()
             .find(|r| !self.blocked.contains(&r.alias))
             .or_else(|| eligible.first())
-            .ok_or_else(|| {
-                if self.wake.lock().unwrap().active {
+            .ok_or_else(|| RouteFailure {
+                code: if self.wake.lock().unwrap().active {
                     "TAILSCALE_WAKING"
                 } else {
                     "ROUTE_UNAVAILABLE"
-                }
+                },
+                route_requirement: Some(if self.routes.routes.len() == 1 && direct.is_some() {
+                    direct_requirement
+                } else {
+                    RouteRequirement::ConfiguredRoutesExhausted
+                }),
             })?;
         Ok(RouteChoice {
             policy_instance: self.policy_instance,
@@ -676,4 +727,5 @@ pub async fn select<P: RouteProbe>(
     SelectionRequest::new(routes, policy, generation, observed_ms)?
         .run(probe, budget)
         .await
+        .map_err(|failure| failure.code)
 }

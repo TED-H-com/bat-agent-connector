@@ -158,6 +158,7 @@ def _host_names(*values):
 
 
 SETUP_ACTIONS = frozenset({
+    "setup.connection.apply",
     "setup.host",
     "setup.repository",
     "setup.verification",
@@ -211,6 +212,7 @@ HOST_EFFECT_ACTIONS = frozenset({
 })
 
 JOURNAL_ONLY_ACTIONS = frozenset({
+    "connection.reference.apply",
     "artifact.upload",
     "delivery.merge_and_deploy",
     "deployment.rollback",

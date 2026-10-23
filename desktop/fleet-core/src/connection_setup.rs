@@ -16,6 +16,8 @@ use std::{
     path::{Component, PathBuf},
 };
 
+pub(crate) mod frozen;
+
 pub const GENERATOR_VERSION: u32 = 1;
 pub const ALLOCATION_VERSION: u32 = 1;
 pub const SSH_BYTE_LIMIT: usize = 1024 * 1024;
@@ -335,7 +337,8 @@ impl ProvenAssociation {
 /// Configured BAT hosts reserve addresses, as required by inventory uniqueness.
 /// Listeners reserve sockets: 0.0.0.0 conflicts with all addresses on that port
 /// only. Adapters map a dual-stack [::]:port listener to 0.0.0.0:port.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AddressUse {
     pub configured: BTreeSet<Ipv4Addr>,
     pub listening: BTreeSet<SocketAddrV4>,
@@ -409,7 +412,8 @@ impl OwnerEvidence {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub enum FileOwnership {
     Owned {
         owner: OwnerEvidence,
@@ -422,14 +426,16 @@ pub enum FileOwnership {
 
 /// Exact bytes as read by the caller, including its independently recorded digest
 /// and ownership evidence. Absence is represented by no entry in `existing`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ExistingFile {
     pub bytes: Vec<u8>,
     pub sha256: String,
     pub ownership: FileOwnership,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceReference {
     pub key: String,
     pub sha256: String,
@@ -445,15 +451,25 @@ pub struct ObserveHandleReference {
     pub enrollment_receipt: SourceReference,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub enum RouteKind {
-    Direct { probe: Endpoint },
-    Lan { probe: Endpoint },
-    Cloudflare { access_host: String },
+    Direct {
+        #[serde(with = "frozen::InventoryEndpoint")]
+        probe: Endpoint,
+    },
+    Lan {
+        #[serde(with = "frozen::InventoryEndpoint")]
+        probe: Endpoint,
+    },
+    Cloudflare {
+        access_host: String,
+    },
 }
 /// The caller supplies an already authorized route reference, not an editor's
 /// host/port text. Kind/probe/access-host provenance is bound into the preview.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ReviewedRoute {
     pub source: SourceReference,
     pub kind: RouteKind,
@@ -471,7 +487,8 @@ impl ReviewedRoute {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct WorkspaceBinding {
     pub id: String,
     pub workspace_id: String,
@@ -480,7 +497,8 @@ pub struct WorkspaceBinding {
 
 /// These four choices stay independent. They are returned for the existing
 /// selection/startup owners; only BAT windows affect this profile index.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Preferences {
     pub background_connections: bool,
     pub bat_windows: bool,
@@ -488,7 +506,8 @@ pub struct Preferences {
     pub login: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub enum EndpointChoice {
     Preserve,
     Allocate,
@@ -514,7 +533,8 @@ pub struct ReviewedSetup {
     pub existing: BTreeMap<Artifact, ExistingFile>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Output {
     pub artifact: Artifact,
     pub bytes: Vec<u8>,
@@ -544,6 +564,7 @@ pub struct PublicationPlan {
     // Keeps the native proposal tied to build() even though its inspection fields
     // are public. Replacing output bytes and their hashes cannot re-author a review.
     publication_identity: String,
+    original_input: frozen::OriginalInput,
 }
 impl PublicationPlan {
     fn publication_identity(&self) -> String {
@@ -985,6 +1006,7 @@ pub fn build(input: &ReviewedSetup) -> SetupResult<PublicationPlan> {
         reference_route_only: true,
         review_digest: digest(&serde_json::to_vec(&review).map_err(|_| Gap::InvalidInput)?),
         publication_identity: String::new(),
+        original_input: frozen::OriginalInput(input.clone()),
     };
     plan.publication_identity = plan.publication_identity();
     Ok(plan)

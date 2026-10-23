@@ -13,8 +13,10 @@ import pytest
 from bat_agent_connector import pm_lifecycle, pm_work_profiles, pm_work_start, pm_workspace
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.config import GitHubConfig, GitHubRepo, RepositorySyncConfig
+from bat_agent_connector.inventory import Inventory
 from bat_agent_connector.operations import ActionDef, OpContext, OperationError, OperationService
 from bat_agent_connector.task_journal import Journal
+from tests.conftest import make_config
 from tests.operation_helpers import settle_operations
 from tests.test_pm_work_start import STARTER_OWNER
 from tests.test_pm_work_start import pm as _pm_fixture
@@ -412,7 +414,7 @@ def _note(ops, name):
 
 
 def _configure(ops, *, reason=None, available=True, token=True, orchestrate=True, roots=("/srv/repos",),
-               reachable=_UNSET, register_continue=True, register_send=False):
+               register_continue=True, register_send=False):
     fleet = _fleet()
     host = SimpleNamespace(writes=True, orchestrate=orchestrate, managed_roots=roots)
     host.token_available = lambda: bool(token)
@@ -439,13 +441,17 @@ def _configure(ops, *, reason=None, available=True, token=True, orchestrate=True
         _note(ops, "repository.continue")
     if register_send:
         _note(ops, "session.send")
-    if reachable is not _UNSET:
-        ops.db.execute(
-            """INSERT INTO hosts_observed(host, reachable, last_attempt_at, last_success_at, consecutive_failures)
-               VALUES(?,?,?,?,?)""",
-            ("h1", 1 if reachable else 0, time.time(), time.time() if reachable else None, 0),
-        )
     return invokes
+
+
+@pytest.fixture
+async def profile_inventory(ops, mock):
+    current = Inventory(ops.journal, make_config(mock))
+    ops.context["inventory"] = current
+    try:
+        yield current
+    finally:
+        await current.close()
 
 
 def _usage_table(ops):
@@ -521,8 +527,12 @@ async def test_configured_host_never_verified_is_unknown_not_ready(ops):
     assert unexpected.value.code == "INVALID_PARAMS"
 
 
-async def test_offline_host_and_unsigned_agent_stay_separate(ops):
-    invokes = _configure(ops, reachable=False, register_send=True)
+async def test_offline_host_and_unsigned_agent_stay_separate(ops, profile_inventory, mock):
+    invokes = _configure(ops, register_send=True)
+    def offline(_):
+        raise RuntimeError("fixture offline")
+    mock.handlers["workspace:load"] = offline
+    assert (await profile_inventory.refresh_host("h1"))["reachable"] is False
     profile_id = await _profile(ops)
     _usage_table(ops)
     _usage(ops, [
@@ -581,8 +591,9 @@ async def test_local_git_unavailable_has_no_ssh_fallback(ops):
     assert invokes["n"] == 0
 
 
-async def test_readiness_does_not_call_bat_or_write(ops):
-    invokes = _configure(ops, reachable=True, register_send=True)
+async def test_readiness_does_not_call_bat_or_write(ops, profile_inventory, mock):
+    invokes = _configure(ops, register_send=True)
+    assert (await profile_inventory.refresh_host("h1"))["reachable"] is True
     profile_id = await _profile(ops)
     assert "action = 'repository.continue'" in pm_work_profiles._CONTINUE_SQL
     assert "status = 'succeeded'" in pm_work_profiles._CONTINUE_SQL
@@ -593,45 +604,34 @@ async def test_readiness_does_not_call_bat_or_write(ops):
     assert "operations_continue_succeeded" in detail
     assert "USE TEMP B-TREE" not in detail
     before = ops.db.total_changes
+    frames = list(mock.frames)
     schema_version = ops.db.execute("PRAGMA schema_version").fetchone()[0]
     body = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
     assert ops.db.total_changes == before
+    assert mock.frames == frames
     assert ops.db.execute("PRAGMA schema_version").fetchone()[0] == schema_version
     assert invokes["n"] == 0
     assert body["calls_bat"] is False and body["coding_route_ready"] is False
 
 
-def _discovery(ops, profile_key, body):
-    ops.db.execute(
-        """CREATE TABLE IF NOT EXISTS discovery_latest(
-            host TEXT NOT NULL, profile_id TEXT NOT NULL, binding TEXT NOT NULL, body TEXT NOT NULL,
-            PRIMARY KEY(host, profile_id))"""
-    )
-    ops.db.execute(
-        "INSERT INTO discovery_latest VALUES(?,?,?,?)",
-        ("h1", profile_key, "binding", json.dumps(body)),
-    )
-
-
-async def test_discovered_verified_requires_this_workspace(ops):
+async def test_discovered_verified_requires_this_workspace(ops, profile_inventory, mock):
     _configure(ops)
     profile_id = await _profile(ops)
-    _discovery(ops, "other", {
-        "status": "succeeded", "scan_id": "scan-other", "finished_at": 100,
-        "coverage": {"workspace_ids": ["other-ws"]},
-    })
+    assert (await profile_inventory.refresh_host("h1"))["reachable"] is True
+    other, = profile_inventory.discovery("h1")["scopes"]
+    assert "bat-ws" not in other["coverage"]["workspace_ids"]
     missed = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
     assert missed["states"]["discovered"]["verified"] is None
-    assert "scan-other" not in json.dumps(missed["states"]["discovered"])
-    _discovery(ops, "here", {
-        "status": "succeeded", "scan_id": "scan-here", "finished_at": 200,
-        "coverage": {"workspace_ids": ["bat-ws", "other-ws"]},
-    })
+    assert other["scan_id"] not in json.dumps(missed["states"]["discovered"])
+    mock.ws_doc["workspaces"].append({"id": "bat-ws", "name": "fixture", "folderPath": "/srv/fixture"})
+    assert (await profile_inventory.refresh_host("h1"))["reachable"] is True
+    here, = profile_inventory.discovery("h1")["scopes"]
+    assert "bat-ws" in here["coverage"]["workspace_ids"]
     covered = pm_work_profiles.readiness(ops, OWNER, WS, profile_id)
     verified = covered["states"]["discovered"]["verified"]
-    assert verified["evidence_ref"]["scan_id"] == "scan-here"
+    assert verified["evidence_ref"]["scan_id"] == here["scan_id"]
     assert verified["evidence_ref"]["status"] == "succeeded"
-    assert "scan-other" not in json.dumps(verified)
+    assert other["scan_id"] not in json.dumps(verified)
 
 
 async def test_pm_eligibility_does_not_mark_coding_route_ready(ops, monkeypatch):

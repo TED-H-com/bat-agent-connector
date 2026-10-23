@@ -38,6 +38,9 @@ from . import (
     work_items,
 )
 from .build_identity import build_identity
+from .connection_contract import BOUNDS as CONNECTION_BOUNDS
+from .connection_contract import VERSION as CONNECTION_VERSION
+from .connection_contract import decode_native_json
 from .errors import BatError, ResourceReadOnly
 from .operations import STATES, OperationError
 from .updater import connector_update_status
@@ -141,6 +144,8 @@ class ApiV1:
         failover_operations.install(daemon.ops)
         from . import worktree_merge_operations
         worktree_merge_operations.install(daemon.ops)
+        from . import setup_connections
+        setup_connections.install(daemon.ops)
 
         from . import bulk_approval
         bulk_approval.install(daemon.ops, daemon._admin_token)
@@ -400,6 +405,10 @@ class ApiV1:
             ("GET", r"/api/v1/tasks/(?P<task>[0-9a-f-]{8,64})/history", self.task_history, "observe"),
             ("GET", r"/api/v1/tasks/(?P<task>[0-9a-f-]{8,64})/sessions", self.task_sessions, "observe"),
             ("GET", r"/api/v1/policy", self.policy, "observe"),
+            ("GET", r"/api/v1/connections", self.connections, "observe"),
+            ("POST", r"/api/v1/connections/preview", self.connections_preview, None),
+            ("POST", r"/api/v1/connections/receipt", self.connections_receipt, "manage"),
+            ("POST", r"/api/v1/connections/handoff", self.connections_handoff, "manage"),
             ("GET", r"/api/v1/operations", self.operations, "observe"),
             ("POST", r"/api/v1/operations", self.create_operation, None),
             ("GET", r"/api/v1/operations/(?P<op>op_[0-9a-f]{32})", self.operation, "observe"),
@@ -511,8 +520,11 @@ class ApiV1:
                     writer.write(head.encode() + data)
                     await writer.drain()
                 return
-            body = await self._read_body(method, headers, reader)
-            if method == "POST" and getattr(self.daemon, "managed_stopping", False):
+            body = await self._read_body(method, headers, reader,
+                max_body=CONNECTION_BOUNDS["receipt_bytes"] if path == "/api/v1/connections/receipt" else (
+                    CONNECTION_BOUNDS["handoff_bytes"] if path == "/api/v1/connections/handoff" else MAX_BODY), path=path)
+            if (method == "POST" and path != "/api/v1/managed/stop"
+                    and getattr(self.daemon, "managed_stopping", False)):
                 raise ApiError(503, "SERVICE_STOPPING", "owned service is stopping; reopen Dashboard to reconnect")
             principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token,
                                               browser_session=browser_session)
@@ -533,6 +545,11 @@ class ApiV1:
                 elif path == "/api/v1/managed/stop" and method == "POST" and self._bearer(headers):
                     if principal.actor != self.daemon.managed_installation["actor"]:
                         raise ApiError(403, "FORBIDDEN", "service belongs to the installation owner")
+                    if getattr(self.daemon, "managed_stopping", False):
+                        # Same authenticated owner, same accepted effect. Do not
+                        # re-run busy admission or signal shutdown a second time.
+                        await self._send_json(writer, 200, {"protocol": 1, "stopped": True})
+                        return
                     db = self.daemon.journal.db
                     if db.execute("SELECT 1 FROM operations WHERE status NOT IN ('succeeded','failed','cancelled') LIMIT 1").fetchone():
                         raise ApiError(409, "SERVICE_BUSY", "finish or reconcile current operations before stopping")
@@ -571,7 +588,7 @@ class ApiV1:
                 query = parse_qs(parts.query, keep_blank_values=True)
                 kwargs.update(reader=reader, writer=writer,
                               check_authorization=authorizer(self.daemon, token, principal, browser_session=browser_session))
-            if fn in {self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
+            if fn in {self.connections, self.operation, self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
                       self.host_preferences, self.project_skills, self.work_item_results,
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
@@ -670,14 +687,14 @@ class ApiV1:
         return auth[7:].strip() if auth.startswith("Bearer ") else ""
 
     @staticmethod
-    async def _read_body(method: str, headers: dict[str, str], reader) -> dict:
+    async def _read_body(method: str, headers: dict[str, str], reader, *, max_body=MAX_BODY, path=None) -> dict:
         if method != "POST":
             return {}
         raw_length = headers.get("content-length", "0").strip()
         if not raw_length.isdigit():
             raise ApiError(400, "BAD_LENGTH", "invalid Content-Length")
         length = int(raw_length)
-        if length > MAX_BODY:
+        if length > max_body:
             raise ApiError(413, "TOO_LARGE", "request body is too large")
         if length == 0:
             return {}
@@ -691,7 +708,12 @@ class ApiV1:
             raise ApiError(400, "BAD_JSON", "request body must be JSON") from None
         if not isinstance(body, dict):
             raise ApiError(422, "INVALID_REQUEST", "request body must be a JSON object")
-        return body
+        code = {"/api/v1/connections/handoff": "INVALID_CONNECTION_HANDOFF",
+            "/api/v1/connections/receipt": "INVALID_CONNECTION_RECEIPT",
+            "/api/v1/connections/preview": "INVALID_PARAMS"}.get(path)
+        if path in {"/api/v1/operations", "/api/v1/connections/preview"} and body.get("action") == "setup.connection.apply":
+            code = "INVALID_NATIVE_PLAN"
+        return decode_native_json(raw, code=code) if code else body
 
     def _route(self, method: str, path: str):
         allowed = False
@@ -1289,7 +1311,7 @@ class ApiV1:
                                    "hosts": [{"host": h, "configured": self.daemon.ops.context["artifact_host"].available(h),
                                               "readiness": self.daemon.ops.context["artifact_host"].readiness.get(h)} for h in fleet.config.hosts]},
                      "identity": dashboard_sync.identity(self.daemon.journal, principal),
-                     "actions": actions, "operation_statuses": list(STATES),
+                     "actions": actions, "operation_statuses": list(STATES), "connection_contract_version": CONNECTION_VERSION,
                      "cleanup": {"preview_ttl_s": cleanup.TTL_S, "max_items": cleanup.MAX_ITEMS, "restore": False,
                                  "scopes": ["cleanup", "cleanup_discard"], "retention": vars(fleet.config.cleanup),
                                  "read_deadline_s": cleanup.READ_DEADLINE_S, "serialize_previews": True,
@@ -1597,12 +1619,33 @@ class ApiV1:
         with controller_authority.use(controller_authority.binding(self.daemon.journal.db, principal), self.daemon.journal):
             return 200, {"hosts": [await resource_policy.session_policy(self.daemon.fleet, h) for h in names]}
 
+    async def connections(self, query, principal, **_):
+        from . import setup_connections
+        self._exact_query(query, {"installation_ref", "after", "limit"})
+        return 200, setup_connections.list_connections(self.daemon.ops, principal,
+            self._q(query, "installation_ref"), after=self._q(query, "after"), limit=self._int(query, "limit", 50))
+
+    async def connections_preview(self, query, principal, body, **_):
+        from . import setup_connections
+        self._exact_query(query, set())
+        return 200, setup_connections.preview(self.daemon.ops, principal, body)
+
+    async def connections_receipt(self, query, principal, body, **_):
+        from . import connection_handoff
+        self._exact_query(query, set())
+        return 200, connection_handoff.receive(self.daemon.ops, principal, body)
+
+    async def connections_handoff(self, query, principal, body, **_):
+        from . import connection_handoff
+        self._exact_query(query, set())
+        return 200, connection_handoff.claim(self.daemon.ops, principal, body)
+
     async def operations(self, query, principal, **_):
         statuses = [s for s in (self._q(query, "status") or "").split(",") if s]
         before = self._q(query, "before")
         return 200, self.daemon.ops.list(statuses=statuses or None, actor=self._q(query, "actor"),
                                          action=self._q(query, "action"),
-                                         before=float(before) if before else None,
+                                         before=float(before) if before else None, before_id=self._q(query, "before_id"),
                                          limit=self._int(query, "limit", 50), principal=principal)
 
     async def create_operation(self, principal, query, body, headers, **_):
@@ -1622,7 +1665,8 @@ class ApiV1:
             )
             if (not str(action or "").startswith("pm.")
                     and action not in {
-                        "setup.host", "setup.repository", "setup.verification", "work.start", "work.adopt_and_start",
+                        "setup.host", "setup.repository", "setup.verification", "setup.connection.apply",
+                        "connection.reference.apply", "work.start", "work.adopt_and_start",
                         "github.pr.publish",
                     } and not is_work_send):
                 raise
@@ -1642,7 +1686,9 @@ class ApiV1:
         op = await pm_operation_loop.attach(self.daemon.ops, principal, op)
         return (202 if created else 200), {"operation": op, "created": created}
 
-    async def operation(self, op, principal, **_):
+    async def operation(self, op, principal, query=None, **_):
+        if query and "installation_ref" in query:
+            self._exact_query(query, {"installation_ref"})
         from . import pm_work_follow_up
         operation = await pm_operation_loop.attach(
             self.daemon.ops, principal, pm_work_follow_up.enrich_operation(

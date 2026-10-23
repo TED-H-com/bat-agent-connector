@@ -1,3 +1,4 @@
+import {managedStatusFixture} from './managed-status-fixture.ts';
 import {test, expect, type Page} from '@playwright/test';
 import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {mkdir, readFile} from 'node:fs/promises';
@@ -84,6 +85,7 @@ async function setup(page: any, options: any = {}) {
         configuration_reload: true, configuration_file: fixture.configPath ?? 'C:\\Users\\fixture\\AppData\\Roaming\\io.betteragent.dashboard\\central.json',
         credential_source: fixture.available ? fixture.saved ? fixture.store ?? 'windows_credential_manager' : 'launch_environment' : null,
         connected: fixture.connected};
+      if (command === 'managed_control' && args.input.action === 'status') return fixture.managedStatus;
       if (command === 'connector_connect') {if (fixture.delayConnect) await new Promise(resolve => {fixture.releaseConnect = resolve;}); if (!fixture.available) throw new Error('Fixture credential unavailable'); fixture.connected = true; return caps(fixture.principal);}
       if (command === 'connector_setup_configuration') {
         if (fixture.cancel) return null;
@@ -122,7 +124,7 @@ async function setup(page: any, options: any = {}) {
       }
       throw new Error('Unexpected native command ' + command);
     }}});
-  }, options);
+  }, {...options, managedStatus: managedStatusFixture(options.configurationSource === 'managed')});
   await page.goto('/dashboard/#/settings');
   await expect(page.getByRole('region', {name: /Desktop Connector connection|桌面 Connector 連線/})).toBeVisible();
 }

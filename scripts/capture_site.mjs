@@ -12,8 +12,8 @@ import {DEMO_NOW} from '../desktop/tests/demo/project.ts';
 import {mountConversation} from '../desktop/tests/conversation-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-// Published merged source for Connector 0.2.12 / desktop 0.1.8. Documentation-only commits may recapture this tree.
-const source = '14c62830240148b14a4d28a9c428f7f8b5ba8bf3';
+// Published merged source for Connector 0.2.13 / desktop 0.1.9 preview. Documentation-only commits may recapture this tree.
+const source = '437ee6a7143a82e32eae1d6a008203b2df072aaf';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = new Date(DEMO_NOW).toISOString();
@@ -94,7 +94,8 @@ async function prepare(page, scenario, locale) {
   async function openView(view) {
     const entry = page.locator(`[data-pm-view="${view}"]`);
     await entry.waitFor({state: 'attached'});
-    if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
+    if (!await page.locator('.workspace-nav').isVisible()) await page.locator('#workspace-menu').click();
+    if (!await entry.isVisible()) await page.locator('[data-project-management] > summary').click();
     await entry.click();
     await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
   }

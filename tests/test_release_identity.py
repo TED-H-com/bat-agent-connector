@@ -154,7 +154,7 @@ def test_site_release_guard_does_not_limit_explicit_candidate_validation(candida
     monkeypatch.setattr(site_check, "check_link", lambda *args: None)
     with pytest.raises(SystemExit) as refusal:
         site_check.main()
-    assert str(refusal.value) == "Public screenshots must pin merged release source at 14c62830."
+    assert str(refusal.value) == "Public screenshots must pin published preview source at 437ee6a7."
 
 
 @pytest.mark.parametrize("component", AVAILABLE)

@@ -347,6 +347,32 @@ Connector remains the name for the Connector service; a configured SSH route is 
 proof of Connector or BAT readiness. Native sanitizer fixtures do not establish
 physical route acceptance.
 
+The optional `route_requirement` explains the last failed route selection in the
+current generation while no tunnel exists, including the wait between attempts.
+It is a closed explanation from the existing selector: `DIRECT_PEER_UNKNOWN`,
+`DIRECT_NOT_CONFIRMED`, `DIRECT_TCP_UNREACHABLE`
+or `CONFIGURED_ROUTES_EXHAUSTED`. The first three describe a direct-only configuration
+and its observed missing prerequisite; unknown peer evidence stays unknown. It is
+independent of chosen route kind/time, adds no probe, fallback or retry, and carries
+no peer data or latency. Native IPC allowlists the code; the shared row translates
+it in English and Traditional Chinese. Success, invalidation (selection, credential
+or generation change), an unrelated failure, or expiry withdraws the explanation
+from the row. A row with current probe evidence cannot carry it. Unresolved native Fleet `STOP_UNCONFIRMED`
+survives deselection, file expiry and re-reads until ownership reconciliation proves
+the stop. Expiry still clears current readiness and successful layers; it cannot
+erase the unresolved outcome or cause another stop. Managed Connector lifecycle
+retains its separate owner.
+
+`route_requirement` 在尚無 tunnel 時，以封閉代碼說明目前世代最後一次失敗的路徑選擇，
+包括兩次嘗試之間的等待。僅設定直連時，
+分別保留 peer 證據未知、直連未確認或 TCP 不通，其他情況說明所有設定路徑均不符合條件。
+已選路徑的種類與確認時間仍獨立，不新增探測、替代路徑或重試，也不推測 relay 或延遲。
+原生 IPC 僅接受列出的代碼，共用狀態列提供英語與繁中說明。路徑成功、失效（選取、憑證
+或世代改變）、出現其他無關失敗或過期時，列上的說明會撤回；已有目前 probe 觀測的列也
+不帶此說明。原生 Fleet 未確認的停止結果
+會跨取消選取、過期與重讀保留，直到原擁有權核對證明已停止；過期仍撤回就緒與成功分層，
+不抹去未決結果或再次送出停止。代管 Connector 的生命週期仍由其原擁有者處理。
+
 ## Lifecycle ownership
 
 On every platform Desktop ensures its managed Connector. Closing a window hides

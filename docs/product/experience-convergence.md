@@ -1,3 +1,6 @@
+> 2026-10-22：[最新發布與未完成驗收](progress-2026-10-22.md)；下方保留既有決議及歷史紀錄。
+> [Latest publication and remaining acceptance](progress-2026-10-22.md); the decisions and historical records below remain intact.
+
 > 2026-10-17 owner 提供並要求接續的 EC-1.1 增量方向，更新原 EC-1.0 文件；E／UX／R／V／K 編號及未修訂範圍保留，不另立 v1.4。
 > 開工入口仍是 [v1.3 handoff](v1.3-agent-handoff.md)，[差額](experience-convergence-delta.md)與[原驗收表](workbench-ux-acceptance.md#ec-10-整合驗收索引)共同使用。
 > **現況校正：**附件研究時 `f31e7964` CI 尚在執行；現在該來源後端、四平台建置與工作循環均已通過，預覽版已發布並有安裝讀回。#280 的下載文件亦已合併並部署。真 BAT／模型與實體手機驗收仍分開，詳見[發布進度](progress-2026-10-18-delivery.md)。
