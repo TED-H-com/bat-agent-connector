@@ -110,7 +110,21 @@ fn shared_preference_lock_preserves_bytes_and_never_unlinks() {
     let held = PreferenceLock::acquire(&path).unwrap();
     assert!(PreferenceLock::try_acquire(&path).unwrap().is_none());
     assert_eq!(std::fs::read(&path).unwrap(), b"original");
-    assert_eq!(powershell(&Fixture::new(), "try{$f=[IO.File]::Open($env:BAT_FLEET_FIXTURE_LOCK,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None);$f.Dispose();'unexpected'}catch [IO.IOException]{'blocked'}", &[("BAT_FLEET_FIXTURE_LOCK",dir.join("fleet-client.json.lock").to_str().unwrap())]).trim(),"blocked");
+    assert_eq!(powershell(&Fixture::new(), r#"[Console]::Error.Write("BATC_PHASE file-open-before`n");[Console]::Error.Flush()
+try {
+  $f=[IO.File]::Open($env:BAT_FLEET_FIXTURE_LOCK,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None);
+  [Console]::Error.Write("BATC_PHASE file-open-after`n");[Console]::Error.Flush()
+  $f.Dispose();
+  [Console]::Error.Write("BATC_PHASE output-before`n");[Console]::Error.Flush()
+  'unexpected'
+  [Console]::Error.Write("BATC_PHASE output-after`n");[Console]::Error.Flush()
+} catch [IO.IOException] {
+  [Console]::Error.Write("BATC_PHASE file-open-refused`n");[Console]::Error.Flush()
+  [Console]::Error.Write("BATC_PHASE output-before`n");[Console]::Error.Flush()
+  'blocked'
+  [Console]::Error.Write("BATC_PHASE output-after`n");[Console]::Error.Flush()
+}
+[Console]::Error.Write("BATC_PHASE script-end`n");[Console]::Error.Flush()"#, &[("BAT_FLEET_FIXTURE_LOCK",dir.join("fleet-client.json.lock").to_str().unwrap())]).trim(),"blocked");
     drop(held);
     assert!(dir.join("fleet-client.json.lock").exists());
     drop(PreferenceLock::acquire(&path).unwrap());

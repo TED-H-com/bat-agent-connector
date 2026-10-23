@@ -18,6 +18,10 @@ mod cpu;
 mod guard;
 #[path = "powershell_reader.rs"]
 mod reader;
+#[path = "powershell_snapshot.rs"]
+mod snapshot;
+#[path = "powershell_stderr.rs"]
+mod stderr;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct Lifecycle {
@@ -32,6 +36,8 @@ struct Breach {
     wall: Duration,
     child_cpu: String,
     exit_poll_error: Option<std::io::Error>,
+    stderr: stderr::Evidence,
+    system: String,
 }
 
 #[cfg(windows)]
@@ -60,12 +66,16 @@ pub fn command() -> Command {
 pub struct Fixture {
     _guard: MutexGuard<'static, ()>,
     breach: RefCell<Option<Breach>>,
+    stderr: RefCell<Option<Arc<Mutex<stderr::Evidence>>>>,
+    ready_snapshot: RefCell<Option<snapshot::Sample>>,
 }
 impl Fixture {
     pub fn new() -> Self {
         Self {
             _guard: guard::acquire(),
             breach: RefCell::new(None),
+            stderr: RefCell::new(None),
+            ready_snapshot: RefCell::new(None),
         }
     }
 
@@ -76,12 +86,17 @@ impl Fixture {
 
     fn failure_message(&self, reason: &str) -> String {
         match self.breach.borrow().as_ref() {
-            None => reason.to_string(),
+            None => match self.stderr.borrow().as_ref() {
+                None => reason.to_string(),
+                Some(stderr) => format!("{reason}; {}", stderr.lock().unwrap().describe(true)),
+            },
             Some(breach) => format!(
-                "{reason}; before cleanup, relative to spawn call: READY={:?}; stdout_EOF={:?}; process_exit={:?}; wall={:?}; {}; exit_poll_error={:?}",
+                "{reason}; before cleanup, relative to spawn call: READY={:?}; stdout_EOF={:?}; process_exit={:?}; wall={:?}; {}; exit_poll_error={:?}; {}; {}",
                 breach.lifecycle.ready, breach.lifecycle.stdout_eof,
                 breach.lifecycle.process_exit, breach.wall, breach.child_cpu,
                 breach.exit_poll_error,
+                breach.stderr.describe(breach.lifecycle.process_exit.is_some()),
+                breach.system,
             ),
         }
     }
@@ -99,11 +114,26 @@ impl Fixture {
         };
         #[cfg(not(windows))]
         let child_cpu = "child_cpu=unavailable (non-Windows)".to_string();
+        let stderr = self
+            .stderr
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .clone();
+        let system = snapshot::describe(
+            self.ready_snapshot.borrow().as_ref(),
+            &snapshot::capture(began),
+            owned.child.id(),
+        );
         self.breach.replace(Some(Breach {
             lifecycle,
             wall,
             child_cpu,
             exit_poll_error,
+            stderr,
+            system,
         }));
     }
 
@@ -114,24 +144,61 @@ impl Fixture {
         work: Duration,
     ) -> Result<Vec<u8>, &'static str> {
         self.breach.replace(None);
+        self.stderr.replace(None);
+        self.ready_snapshot.replace(None);
         let began = Instant::now();
         let mut owned = Owned {
             child: command
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null())
+                .stderr(Stdio::piped())
                 .spawn()
                 .map_err(|_| "PowerShell fixture spawn failed")?,
             reader: None,
         };
         let lifecycle = Arc::new(Mutex::new(Lifecycle::default()));
         let stop = Arc::new(AtomicBool::new(false));
-        let mut stdout = reader::Stdout::new(
+        let mut stdout = reader::Pipe::new(
             owned.child.stdout.take().unwrap(),
             stop.clone(),
-            lifecycle.clone(),
+            Some(lifecycle.clone()),
             began,
         );
+        let evidence = Arc::new(Mutex::new(stderr::Evidence::default()));
+        self.stderr.replace(Some(evidence.clone()));
+        let mut stderr = reader::Pipe::new(
+            owned.child.stderr.take().unwrap(),
+            stop.clone(),
+            None,
+            began,
+        );
+        let stderr_evidence = evidence.clone();
+        let stderr_stop = stop.clone();
+        let stderr_join = thread::spawn(move || {
+            let mut bytes = [0; 4096];
+            loop {
+                match stderr.read(&mut bytes) {
+                    Ok(0) => {
+                        stderr_evidence.lock().unwrap().eof = true;
+                        break;
+                    }
+                    Ok(count) => stderr_evidence
+                        .lock()
+                        .unwrap()
+                        .feed(&bytes[..count], began.elapsed()),
+                    Err(error) => {
+                        if !stderr_stop.load(Ordering::Relaxed) {
+                            stderr_evidence.lock().unwrap().read_error = Some(error.to_string());
+                        }
+                        break;
+                    }
+                }
+            }
+        });
+        owned.reader = Some(Reader {
+            stop: stop.clone(),
+            joins: vec![stderr_join],
+        });
         let (ready_tx, ready_rx) = mpsc::channel();
         let (output_tx, output_rx) = mpsc::channel();
         let reader_lifecycle = lifecycle.clone();
@@ -157,7 +224,7 @@ impl Fixture {
                 let _ = output_tx.send(result);
             }
         });
-        owned.reader = Some(Reader { stop, join });
+        owned.reader.as_mut().unwrap().joins.push(join);
         let started = loop {
             owned
                 .observe_exit(began, &lifecycle)
@@ -175,6 +242,8 @@ impl Fixture {
                 _ => return Err("PowerShell fixture readiness marker missing or invalid"),
             }
         };
+        // Collection consumes the existing work budget; it never resets it.
+        self.ready_snapshot.replace(Some(snapshot::capture(began)));
         let mut output = None;
         loop {
             // Neither a late exit nor buffered output can borrow startup time.
@@ -195,6 +264,17 @@ impl Fixture {
                 .observe_exit(began, &lifecycle)
                 .map_err(|_| "PowerShell fixture wait failed")?
             {
+                // Drain the exited child's diagnostics as well as its stdout.
+                let stderr_done = {
+                    let e = evidence.lock().unwrap();
+                    e.eof || e.read_error.is_some()
+                };
+                if !stderr_done {
+                    thread::sleep(
+                        Duration::from_millis(10).min(work.saturating_sub(started.elapsed())),
+                    );
+                    continue;
+                }
                 if !status.success() {
                     return Err("PowerShell fixture failed");
                 }
@@ -213,7 +293,7 @@ struct Owned {
 }
 struct Reader {
     stop: Arc<AtomicBool>,
-    join: JoinHandle<()>,
+    joins: Vec<JoinHandle<()>>,
 }
 impl Owned {
     fn observe_exit(
@@ -242,7 +322,9 @@ impl Drop for Owned {
         let _ = self.child.kill();
         let _ = self.child.wait();
         if let Some(reader) = self.reader.take() {
-            let _ = reader.join.join();
+            for join in reader.joins {
+                let _ = join.join();
+            }
         }
     }
 }
