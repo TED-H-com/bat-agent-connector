@@ -66,6 +66,18 @@ pub trait Platform: migration::Platform {
     /// An absent journal/directory must be authorized by its protected parent and
     /// creation authority. This is mandatory, not a path-based default adapter.
     fn verify_private_state(&self, path: &Path, owner: &OwnerEvidence) -> crate::Result<()>;
+    /// Prepare artifact parents under the original effect authorization. Native
+    /// adapters must check authorization before each individual directory effect.
+    /// The default preserves the synthetic adapter's existing directory behavior.
+    fn prepare_directory(
+        &mut self,
+        path: &Path,
+        _owner: &OwnerEvidence,
+        authorize: &mut dyn FnMut() -> crate::Result<()>,
+    ) -> std::result::Result<(), Error> {
+        authorize().map_err(|code| Error::Authorization { code })?;
+        std::fs::create_dir_all(path).map_err(|_| Error::Gate("PUBLICATION_IO"))
+    }
 }
 
 /// Injectable filesystem boundaries; errors model an interrupted call. Recovery
@@ -501,10 +513,11 @@ impl Publisher {
             if self.prove(plan, p, step)? != current {
                 return Err(Error::ThirdBytes { artifact: a });
             }
-            authorize(AuthorizationPoint::BeforeDirectory, a)
-                .map_err(|code| Error::Authorization { code })?;
-            std::fs::create_dir_all(path.parent().ok_or(Error::InvalidPlan)?)
-                .map_err(|_| Error::Gate("PUBLICATION_IO"))?;
+            p.prepare_directory(
+                path.parent().ok_or(Error::InvalidPlan)?,
+                &step.owner,
+                &mut || authorize(AuthorizationPoint::BeforeDirectory, a),
+            )?;
             authorize(AuthorizationPoint::BeforeArtifact, a)
                 .map_err(|code| Error::Authorization { code })?;
             compare_replace::replace(
