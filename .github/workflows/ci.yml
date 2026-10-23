@@ -106,12 +106,23 @@ jobs:
       - name: Sync (locked)
         run: uv sync --locked --extra dev
       - name: Tests (mock server only; existing live-test policy unchanged)
-        run: >-
-          uv run pytest -q -p tests.ci_shard_plugin
-          --ci-shard-index=${{ matrix.shard }} --ci-shard-count=5
-          --ci-shard-manifest=ci-results/manifest.json
-          --junitxml=ci-results/junit.xml -o junit_family=xunit1 --durations=15
-      - name: Preserve collection proof and JUnit results
+        # Run 39922072602: max completed Tests 1705s * 1.5 = 42m37.5s < 43m.
+        # Max setup 11s + Tests 43m + upload/cleanup reserve 1m < job 45m (post-test max 6s).
+        # A step deadline can preserve uploads only while the runner remains healthy.
+        timeout-minutes: 43
+        shell: bash
+        run: |
+          mkdir -p ci-results
+          # Slowest phase 163.23s * 3 = 489.69s < 600s. One plugin-owned timer spans
+          # setup/call/teardown, including failed-call cleanup. Disable the built-in
+          # timer: its exception hook cancels dumps before a failed test's teardown.
+          uv run pytest -q -p tests.ci_shard_plugin -p no:faulthandler \
+            --ci-shard-index=${{ matrix.shard }} --ci-shard-count=5 \
+            --ci-shard-manifest=ci-results/manifest.json \
+            --junitxml=ci-results/junit.xml -o junit_family=xunit1 --durations=15 \
+            --ci-watchdog-seconds=600 \
+            2> >(tee ci-results/tracebacks.log >&2) | tee ci-results/pytest.log
+      - name: Preserve collection proof, progress, tracebacks and JUnit results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
