@@ -288,18 +288,20 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         let marker = dir
             .join("fleet-tunnel-stop-intents")
             .join(format!("{}.json", file.name));
-        let marker_bytes = serde_json::to_vec(&json!({"schema_version":1,"record_digest":crate::digest(&file.bytes),"pid":record.process.pid,"created":record.process.created})).map_err(|_| "OWNER_UNPROVEN")?;
+        let marker_bytes = files::stop_intent_bytes(&file.bytes, record)?;
         let ended = origin_state(
             record.process.pid,
             &record.process.created,
             &self.effects.state(record.process.pid),
         ) == ProcessState::Dead;
         let previous = files::read(&marker)?;
-        if previous
-            .as_ref()
-            .is_some_and(|bytes| bytes != &marker_bytes)
-        {
-            return Err("TUNNEL_RECORD_CHANGED");
+        if let Some(bytes) = &previous {
+            files::classify_intent(
+                files::TunnelKind::StopIntent,
+                bytes,
+                &file.name,
+                Some((&file.bytes, record)),
+            )?;
         }
         if !ended {
             if previous.is_some() {
@@ -346,9 +348,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         // restart to prove the child ended and finish without another stop.
         self.clear_launch_intent(file)?;
         if let Some(bytes) = files::read(&marker)? {
-            if bytes != marker_bytes {
-                return Err("TUNNEL_RECORD_CHANGED");
-            }
+            files::classify_intent(
+                files::TunnelKind::StopIntent,
+                &bytes,
+                &file.name,
+                Some((&file.bytes, record)),
+            )?;
             files::remove(&marker, &bytes)?;
         }
         files::remove(&file.path, &file.bytes)?;
@@ -367,19 +372,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         let Some(bytes) = files::read(&path)? else {
             return Ok(());
         };
-        let doc = crate::strict_json::parse(&bytes, files::BOUND)?;
-        if doc["schema_version"] != 1
-            || doc["name"] != file.name
-            || doc["monitor_instance"] != record.process.monitor_instance
-            || doc["arguments"]
-                != serde_json::to_value(&record.process.arguments).map_err(|_| "OWNER_UNPROVEN")?
-            || !record
-                .origin
-                .as_ref()
-                .is_some_and(|o| doc["monitor_pid"] == o.pid && doc["monitor_created"] == o.created)
-        {
-            return Err("TUNNEL_START_UNSETTLED");
-        }
+        files::classify_intent(
+            files::TunnelKind::LaunchIntent,
+            &bytes,
+            &file.name,
+            Some((&file.bytes, record)),
+        )?;
         files::remove(&path, &bytes)
     }
     fn owned_file(name: &str, owned: &Owned<E::Child>) -> TunnelFile {
