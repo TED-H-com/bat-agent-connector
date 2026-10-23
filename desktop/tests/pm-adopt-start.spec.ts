@@ -219,6 +219,8 @@ test(`Resume keeps the original navigation across an earlier view disposal: ${de
   expect(state.writes.map((row:any)=>({method:row.method,path:row.path,body:row.body})))
     .toEqual([{method:'POST',path:`/operations/${id}/resume`,body:{}}]);
   expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.includes('adopt-start-live')))).toEqual([]);
+  await page.evaluate(({workspaceId,work})=>{location.hash=`#/pm/${workspaceId}/board?select=${work}`;return (window as any).landingRefresh();},{workspaceId,work});
+  await expect(page).toHaveURL(new RegExp('board\\?select='+work));
 });
 
 test('another tab or connection navigation hint cannot open a completed adoption automatically',async({page})=>{

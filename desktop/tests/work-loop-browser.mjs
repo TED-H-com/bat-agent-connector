@@ -606,7 +606,8 @@ try {
     await eventWrites.pause();
     const following = () => page.evaluate(() => Object.entries(sessionStorage)
       .filter(([key]) => key.includes('.adopt-start-live.')));
-    assert.equal((await following()).length, 1);
+    const originalIntent = await following();
+    assert.equal(originalIntent.length, 1);
     await page.evaluate(workspace => {location.hash = `#/pm/${workspace}/overview`;}, f.workspace);
     await expect(page.locator('[data-pm-region="overview"]')).toBeVisible();
     await eventWrites.pause();
@@ -635,6 +636,21 @@ try {
       send({stage: 'resumed-' + kind, operation_id: recovery[kind]});
       assert.equal((await receive()).settled, true);
       await receipt.promise;
+      const read = async path => {
+        const response = await context.request.get(origin + '/api/v1' + path,
+          {headers:{Authorization:'Bearer ' + f.token}});
+        assert.equal(response.status(), 200); return response.json();
+      };
+      const parent = (await read('/operations/' + recovery.parent)).operation;
+      const child = (await read('/operations/' + recovery.start)).operation;
+      const work = (await read('/work-items/' + f.work)).work_item;
+      const {card} = await read(`/pm/workspaces/${f.workspace}/kanban/${f.work}`);
+      writeFileSync(resolve(f.shots, 'recovery-barrier.json'), JSON.stringify({
+        barrier:'parent-settled-before-reload-and-event-delivery', original_intent:originalIntent,
+        resumed_intent:await following(), parent:{id:parent.operation_id,status:parent.status,stage:parent.result.stage},
+        child:{id:child.operation_id,status:child.status,stage:child.result.stage,attempt_id:child.result.attempt_id},
+        work:{id:work.work_item_id,state:work.state}, board:{column:card.column,work_state:card.work.state},
+      }, null, 2) + '\n');
       // Reload with the settled receipt still unread: the new view must make
       // its decision from state, without seeing a completion event transition.
       await page.reload({waitUntil:'domcontentloaded'});
