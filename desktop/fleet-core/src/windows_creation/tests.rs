@@ -6,6 +6,8 @@ use crate::{
     migration::{self, Platform as _},
 };
 use std::{cell::Cell, io::Write, rc::Rc};
+#[path = "writer_tests.rs"]
+mod writer_tests;
 type OpenHook = Rc<RefCell<Option<Box<dyn FnMut(&Path)>>>>;
 mod generator {
     use crate as bat_fleet_core;
@@ -148,6 +150,13 @@ impl Security for SecurityFixture {
         } else {
             Err("LAUNCHER_REQUIRED")
         }
+    }
+    fn effect_held(&self) -> Result<()> {
+        self.held()?;
+        if !self.monitor.get() {
+            return Err("MONITOR_GUARD_REQUIRED");
+        }
+        Ok(())
     }
     fn identity(&self, file: &File) -> Result<ObjectIdentity> {
         self.touch("identity");
