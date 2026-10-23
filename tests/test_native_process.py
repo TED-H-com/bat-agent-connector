@@ -88,6 +88,57 @@ async def test_failed_callback_retains_original_spool_after_confirmed_exit(bound
         b'{"kind":"fixture","source":"adapter"}\n')
 
 
+async def test_close_with_only_recorded_identity_never_signals_or_confirms_exit(boundary, monkeypatch):
+    boundary.process, boundary._persisted = None, False
+    signals = []
+    monkeypatch.setattr(native.os, "kill", lambda *args: signals.append(args))
+    monkeypatch.setattr(native.os, "killpg", lambda *args: signals.append(args))
+    await boundary.close()
+    assert signals == [] and boundary.exit_receipt is None
+    assert boundary.retained_directory == boundary.directory and boundary._spool.closed
+
+
+async def test_unknown_exit_cancels_and_joins_stderr_reader(boundary, monkeypatch):
+    boundary.process = Process(None)
+    monkeypatch.setattr(native.os, "killpg", lambda *_: None)
+    ready, stopped = asyncio.Event(), asyncio.Event()
+
+    async def reader():
+        try:
+            ready.set()
+            await asyncio.Future()
+        finally:
+            stopped.set()
+
+    boundary._stderr_task = asyncio.create_task(reader())
+    await asyncio.wait_for(ready.wait(), 5)
+    try:
+        await boundary.close()
+        assert stopped.is_set() and boundary._stderr_task.cancelled()
+        assert boundary.exit_receipt["kind"] == "process_exit_unknown"
+    finally:
+        boundary._stderr_task.cancel()
+        await asyncio.gather(boundary._stderr_task, return_exceptions=True)
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux process identity")
+async def test_spawn_preserves_pipes_and_owned_child_identity():
+    child = await native._spawn(
+        sys.executable, "-c", "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())",
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE, start_new_session=True, limit=1024)
+    try:
+        identity = native._process_identity(child.pid)
+        assert native.inspect_process(identity)["state"] == "alive"
+        stdout, stderr = await asyncio.wait_for(child.communicate(b"fixture input\n"), 5)
+        assert stdout == b"fixture input\n" and stderr == b"" and child.returncode == 0
+        assert native.inspect_process(identity)["state"] == "dead"
+    finally:
+        if child.returncode is None:
+            child.kill()
+        await child.wait()
+
+
 @pytest.mark.parametrize("count,overflow", [(1, 1024 * 1024 + 1), (8, 3)])
 async def test_stdout_spool_bound_is_exact_and_rejected_line_is_not_recorded(boundary, count, overflow):
     def line(size):
