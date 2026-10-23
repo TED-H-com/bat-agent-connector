@@ -57166,6 +57166,50 @@ function validSetupEndpoint(value) {
 	}
 }
 var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
+var validSetupRemoteUrl = (value) => typeof value === "string" && !/\s/.test(value) && /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/)[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}(?:\.git)?$/i.test(value);
+var setupDraftFields = [
+	"host",
+	"url",
+	"fingerprint",
+	"profile_id",
+	"import_profile_id",
+	"managed_roots",
+	"ssh_alias",
+	"repository",
+	"repository_host",
+	"workspace_id",
+	"remote_url",
+	"verification_project",
+	"verification_executable",
+	"verification_arguments",
+	"verification_timeout",
+	"verification_base",
+	"writes",
+	"orchestrate",
+	"shared_clone_worktrees",
+	"allow_integrate",
+	"allow_merge",
+	"allow_pr_update",
+	"intent"
+];
+function setupDraftForStorage(draft) {
+	const saved = Object.fromEntries(setupDraftFields.filter((name) => Object.hasOwn(draft, name)).map((name) => [name, draft[name]]));
+	const unsafeEndpoint = (value) => typeof value === "string" && /[?@#]/.test(value);
+	if (unsafeEndpoint(saved.url)) saved.url = "";
+	if (typeof saved.remote_url === "string" && !validSetupRemoteUrl(saved.remote_url)) saved.remote_url = "";
+	const request = saved.intent?.request, params = request?.params;
+	if (unsafeEndpoint(params?.url) || params?.remote_url !== void 0 && !validSetupRemoteUrl(params.remote_url)) saved.intent = {
+		key: saved.intent.key,
+		operation_id: saved.intent.operation_id,
+		problemCode: "INVALID_CONFIGURATION",
+		request: {
+			action: request.action,
+			target: request.target,
+			preconditions: request.preconditions
+		}
+	};
+	return saved;
+}
 var connectionFacets = [
 	"transport",
 	"service",
@@ -57267,7 +57311,15 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		saved.intent.problemCode = saved.intent.refused;
 		delete saved.intent.refused;
 	}
-	if (typeof saved.url === "string" && /[?@#]/.test(saved.url)) delete saved.url;
+	const storedDraft = JSON.stringify(saved);
+	saved = setupDraftForStorage(saved);
+	let draftStorageError;
+	if (JSON.stringify(saved) !== storedDraft) try {
+		guard();
+		localStorage.setItem(key, JSON.stringify(saved));
+	} catch (error) {
+		draftStorageError = error;
+	}
 	const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 	function canonical(value) {
 		if (Array.isArray(value)) return value.map(canonical);
@@ -57294,7 +57346,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	};
 	const persist = () => {
 		guard();
-		localStorage.setItem(key, JSON.stringify(saved));
+		localStorage.setItem(key, JSON.stringify(setupDraftForStorage(saved)));
 	};
 	const terminal = () => [
 		"succeeded",
@@ -58267,6 +58319,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			return;
 		}
 		if (kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
+		if (kind === "repository" && !validSetupRemoteUrl(fields.get("remote_url").value.trim())) {
+			fieldError("remote_url", "error_code_INVALID_PARAMS");
+			focusField("remote_url");
+			return;
+		}
 		const serial = ++reviewSerial;
 		if (kind === "host") {
 			reviewing = true;
@@ -58612,6 +58669,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		async load() {
 			try {
 				await refresh();
+				if (draftStorageError) throw draftStorageError;
 				if (saved.intent?.operation_id) await recover();
 			} catch (error) {
 				showError(error);

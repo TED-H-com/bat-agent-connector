@@ -34,6 +34,28 @@ export function validSetupEndpoint(value) {
   } catch {return false;}
 }
 export const validSetupHostId = value => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
+// Guided repository setup accepts the credential-free GitHub forms in config._integrate_url.
+export const validSetupRemoteUrl = value => typeof value === 'string' && !/\s/.test(value) &&
+  /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/)[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}(?:\.git)?$/i.test(value);
+const setupDraftFields = ['host', 'url', 'fingerprint', 'profile_id', 'import_profile_id', 'managed_roots', 'ssh_alias',
+  'repository', 'repository_host', 'workspace_id', 'remote_url', 'verification_project', 'verification_executable',
+  'verification_arguments', 'verification_timeout', 'verification_base', 'writes', 'orchestrate', 'shared_clone_worktrees',
+  'allow_integrate', 'allow_merge', 'allow_pr_update', 'intent'];
+export function setupDraftForStorage(draft) {
+  const saved = Object.fromEntries(setupDraftFields.filter(name => Object.hasOwn(draft, name)).map(name => [name, draft[name]]));
+  const unsafeEndpoint = value => typeof value === 'string' && /[?@#]/.test(value);
+  if (unsafeEndpoint(saved.url)) saved.url = '';
+  if (typeof saved.remote_url === 'string' && !validSetupRemoteUrl(saved.remote_url)) saved.remote_url = '';
+  const request = saved.intent?.request, params = request?.params;
+  if (unsafeEndpoint(params?.url) || params?.remote_url !== undefined && !validSetupRemoteUrl(params.remote_url)) {
+    // Older clients persisted these before central refused admission. Retain the
+    // original identity, but never replay an altered request or create a new key.
+    saved.intent = {key: saved.intent.key, operation_id: saved.intent.operation_id, problemCode: 'INVALID_CONFIGURATION',
+      request: {action: request.action, target: request.target, preconditions: request.preconditions}};
+  }
+  // Staged references in valid intents are necessary for exact-request recovery.
+  return saved;
+}
 const connectionFacets = ['transport', 'service', 'trust_sign_in', 'connection'];
 const connectionReasons = new Set(['never_observed', 'host_unreachable', 'host_not_refreshed', 'DISCOVERY_SCOPE_CHANGED',
   'transport', 'tls_trust', 'auth_or_protocol', 'credential_missing', 'service_refused', 'service_timeout', 'unknown', 'authenticated_socket']);
@@ -102,7 +124,12 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   // Old clients stored these codes as refusals without retaining admission proof.
   // They must recover the original key before any new request is permitted.
   if (saved.intent?.refused) {saved.intent.problemCode = saved.intent.refused; delete saved.intent.refused;}
-  if (typeof saved.url === 'string' && /[?@#]/.test(saved.url)) delete saved.url;
+  const storedDraft = JSON.stringify(saved);
+  saved = setupDraftForStorage(saved);
+  let draftStorageError;
+  if (JSON.stringify(saved) !== storedDraft) {
+    try {guard(); localStorage.setItem(key, JSON.stringify(saved));} catch (error) {draftStorageError = error;}
+  }
   const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
   function canonical(value) {
     if (Array.isArray(value)) return value.map(canonical);
@@ -126,7 +153,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   const allowed = kind => caps()?.scopes?.includes("manage") && caps()?.actions?.some(action => action.action === `setup.${kind}` && action.allowed === true);
   const damaged = !!saved.intent && !validIntent(saved.intent);
   const alive = () => {try {guard(); return !disposed;} catch {return false;}};
-  const persist = () => {guard(); localStorage.setItem(key, JSON.stringify(saved));};
+  const persist = () => {guard(); localStorage.setItem(key, JSON.stringify(setupDraftForStorage(saved)));};
   const terminal = () => ["succeeded", "failed", "cancelled"].includes(operation?.status);
   const message = h("div", {role: "status"}), summary = h("div"), receipt = h("div");
   const unsaved = h("span", {class: "chip", hidden: true}, t("setup_unsaved"));
@@ -681,6 +708,9 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       : kind === 'host' && needsDiscovery() ? discoveryReason() : null;
     if (!alive() || blocked) {showError(Error(t(blocked || 'setup_loading')), {sourceRefresh:false}); return;}
     if (kind === 'host' && !validateHost(undefined, defaults) || !setupFormValidity(form, t)) return; // Fields show the refusal.
+    if (kind === 'repository' && !validSetupRemoteUrl(fields.get('remote_url').value.trim())) {
+      fieldError('remote_url', 'error_code_INVALID_PARAMS'); focusField('remote_url'); return;
+    }
     const serial = ++reviewSerial;
     if (kind === 'host') {reviewing = true; review = null; reviewChanged = false;} else busy = true;
     update(); message.replaceChildren();
@@ -909,7 +939,8 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     update();
   }
   return {box, reload: () => refresh().catch(showError),
-    async load() {try {await refresh(); if (saved.intent?.operation_id) await recover();} catch (error) {showError(error);}},
+    async load() {try {await refresh(); if (draftStorageError) throw draftStorageError;
+      if (saved.intent?.operation_id) await recover();} catch (error) {showError(error);}},
     dispose() {copyInput.value = ""; disposed = true; document.removeEventListener('health-display-tick', renewObservations);
       document.removeEventListener('visibilitychange', renewObservations); clearTimeout(secretTimer); stagedSecrets.clear(); for (const name of ['connection_url', "bat_secret", "github_secret"]) fields.get(name).value = "";}};
 }
