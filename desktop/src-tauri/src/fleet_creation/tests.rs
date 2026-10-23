@@ -33,6 +33,7 @@ impl Security for SecurityFixture {
     type LauncherGuard = Guard;
     type MonitorGuard = Guard;
     fn launcher_guard(&self, check: &dyn Fn() -> Result<()>) -> Result<Guard> {
+        check()?; // Native guard policy also runs before acquisition.
         if self.launcher.replace(true) {
             return Err("LAUNCHER_BUSY");
         }
@@ -345,19 +346,29 @@ mod windows;
 
 #[test]
 fn managed_or_providing_context_cannot_fall_back_to_an_unbound_receipt() {
-    for role in [startup_role::Role::Provider, startup_role::Role::Both] {
+    for role in [
+        startup_role::Role::Provider,
+        startup_role::Role::Both,
+        startup_role::Role::Client,
+    ] {
         let f = Fixture::with_role(role);
-        assert!(matches!(
-            startup(&f.data),
-            Err("CREATION_OPERATION_UNSUPPORTED")
-        ));
+        std::fs::create_dir(f.data.join("managed-central")).unwrap();
+        let (managed, _) =
+            crate::managed::Managed::prepare(&f.data.join("missing"), &f.data, &f.state);
+        let bridge =
+            crate::bridge::Bridge::file_fixture("http://127.0.0.1:41001/", "fixture-token");
+        let binding = binding::Binding {
+            managed: &managed,
+            bridge: &bridge,
+            original: RefCell::default(),
+        };
+        let _guard = f.security.launcher_guard(&|| Ok(())).unwrap();
+        let security = binding::Attested {
+            inner: f.security.clone(),
+            binding,
+        };
+        assert!(security.managed_identity().is_err());
     }
-    let f = Fixture::new();
-    std::fs::create_dir(f.data.join("managed-central")).unwrap();
-    assert!(matches!(
-        startup(&f.data),
-        Err("CREATION_OPERATION_UNSUPPORTED")
-    ));
 }
 
 #[cfg(not(windows))]
@@ -439,3 +450,6 @@ fn unfinished_old_session_refuses_before_creating_artifact_parents() {
         "an unfinished old-session review cannot create artifact parents"
     );
 }
+
+#[path = "managed_tests.rs"]
+mod managed_tests;

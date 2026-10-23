@@ -106,9 +106,18 @@ impl<T: migration::Platform> migration::Platform for Guarded<'_, T> {
 impl<T: bat_fleet_core::windows_creation::Security> bat_fleet_core::windows_creation::Security
     for Guarded<'_, T>
 {
+    fn managed_identity(
+        &self,
+    ) -> Result<Option<bat_fleet_core::creation_evidence::ManagedIdentity>> {
+        self.ticket.verify()?;
+        let identity = self.inner.managed_identity()?;
+        self.ticket.verify()?;
+        Ok(identity)
+    }
     type LauncherGuard = T::LauncherGuard;
     type MonitorGuard = T::MonitorGuard;
     fn launcher_guard(&self, check: &dyn Fn() -> Result<()>) -> Result<Self::LauncherGuard> {
+        self.ticket.verify()?;
         self.ticket.acquire(|| {
             self.inner.launcher_guard(&|| {
                 self.ticket.verify()?;
