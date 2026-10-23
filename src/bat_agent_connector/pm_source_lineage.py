@@ -118,7 +118,7 @@ def _roots_collect(db, kind, identity, *, _seen=None):
     elif kind == "worktree" and _table(db, "session_worktree_bindings"):
         refs += [("session", r[0]) for r in db.execute("SELECT session_resource_id FROM session_worktree_bindings WHERE worktree_id=?", (identity,))]
     elif kind == "checkpoint" and _table(db, "checkpoints"):
-        row = db.execute("SELECT host,session_id FROM checkpoints WHERE checkpoint_id=?", (identity,)).fetchone()
+        row = db.execute("SELECT host,source_session_id FROM checkpoints WHERE checkpoint_id=?", (identity,)).fetchone()
         if row:
             refs.append(("session", row[0] + "/" + row[1]))
     elif kind == "execution" and _table(db, "tasks"):
