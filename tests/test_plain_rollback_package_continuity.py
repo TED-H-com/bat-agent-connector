@@ -123,7 +123,7 @@ def package_pair(tmp_path, request):
     bootstrap = json.loads(run([str(previous / 'tools/bat-agent-connector/bin/python'), '-I', '-B', '-m',
         'bat_agent_connector.installer', str(previous), json.dumps(old), '--source', str(source)], env=env))
     feed = [old]
-    updater = Updater(home, find_release=lambda _: feed[0], install=install)
+    updater = Updater(home, find_release=lambda _, observation=None: feed[0], install=install)
     assert updater.enroll(Path(bootstrap['receipt']), 'preview')['installed'] == old
     # Version fields change build identity only. The fence variant restores the
     # original constant in the new release; all other handlers stay identical.

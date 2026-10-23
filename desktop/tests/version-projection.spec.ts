@@ -25,7 +25,7 @@ test(`next-launch installation ${scenario} ${native?'desktop':'browser'} ${local
       : (en?'The next-launch installation comparison is unknown.':'供下次啟動的安裝比較結果未知。');
     await expect(about).toContainText(differs?(en?'Source: Connector update status':'來源：Connector 更新狀態'):(en?'Source: not reported':'來源：未回報'));
     await expect(about).toContainText(sentence);
-    await page.locator('[data-export-diagnostics]').click();
+    await page.locator('#settings-panel-about [data-export-diagnostics]').click();
     const summary=page.locator('[data-diagnostics-summary] [data-version-row=connector_installed]');
     await expect(summary).toContainText(sentence);
     const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
@@ -69,7 +69,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
         if(command==='desktop_update')return {current_version:'0.1.1',available:false,phase:'idle',candidate:null,
           code:'UPDATE_SIGNING_NOT_CONFIGURED',installation:null};
         if(command==='managed_control')return {mode:'managed',ready:true,background:true,runtime_version:runtime.runtime_version,
-          server_id:runtime.server_id,principal_id:runtime.principal_id,error:null,login_enabled:false,
+          server_id:runtime.server_id,principal_id:runtime.principal_id,error:null,login_enabled:false,lifecycle:{state:'running',requested_at:null,stopped_at:null},
           bundled_runtime:runtime.bundled_runtime,running_runtime:runtime.running_runtime,runtime_difference:runtime.runtime_difference};
         if(command==='fleet_availability')return {configured:false,platform_supported:false};
         return invoke(command,args);
@@ -108,7 +108,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
       // so activation cannot withdraw the preview during the assertions below.
       await page.clock.runFor(1000);
       await expect(connector).toContainText(new Date(at+1000).toISOString());
-      await page.locator('[data-export-diagnostics]').click();
+      await page.locator('#settings-panel-about [data-export-diagnostics]').click();
       await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
       const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
       expect.soft(bundle.versions?.rows).toBeDefined();
@@ -116,8 +116,8 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
         expect(bundle.versions.rows.find(row=>row.id==='connector').commit).toBe(answering.commit);
         for(const row of bundle.versions.rows){
           const rendered=page.locator(`[data-diagnostics-summary] [data-version-row=${row.id}]`);
-          if(!native&&['desktop','desktop_update'].includes(row.id)){await expect(rendered).toHaveCount(0);continue;}
-          for(const value of [row.version,row.commit,row.digest,row.observed_at,row.recorded_at].filter(Boolean)){
+          if(!native&&['desktop','desktop_update','desktop_released'].includes(row.id)){await expect(rendered).toHaveCount(0);continue;}
+          for(const value of [row.version,row.commit,row.digest,row.observed_at,row.recorded_at,row.installed_at].filter(Boolean)){
             await expect(rendered).toContainText(value);
             await expect(about.locator(`[data-version-row=${row.id}]`)).toContainText(value);
           }
@@ -143,3 +143,64 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
     }finally{await context.close();}
   });
 }
+
+
+for(const locale of ['en-US','zh-TW'])test(`released Connector and unknown MCP agree across screen and export ${locale}`,async({browser})=>{
+  const context=await browser.newContext({locale}),page=await context.newPage();
+  await page.clock.setFixedTime(Date.UTC(2026,9,23));
+  const producer=structuredClone(bootstrap);
+  Object.assign(producer.capabilities,connectorUpdates.released);
+  const state=await diagnosticsFixture(page,false,true,producer);
+  try {
+    await page.goto('/dashboard/#/settings?section=about');
+    const about=page.locator('#settings-panel-about');
+    const released=about.locator('[data-version-row=connector_released]');
+    const en=locale==='en-US';
+    await expect(released).toContainText(en?'Released Connector':'已發布的 Connector');
+    for(const value of ['0.2.9','c'.repeat(40),'2026-10-22T13:00:00.123456+00:00','2026-10-17T00:00:00Z'])await expect(released).toContainText(value);
+    await expect(about.locator('[data-version-row=connector_installed]')).toContainText('0.2.8');
+    await expect(about.locator('[data-version-row=connector]')).toContainText('0.2.7');
+    const mcp=about.locator('[data-version-row=mcp]');
+    await expect(mcp).toContainText(en?'not observed by Dashboard':'Dashboard 尚無觀察資料');
+    await expect(mcp).toContainText(en?'Source: not reported':'來源：未回報');
+    await page.locator('#settings-panel-about [data-export-diagnostics]').click();
+    const summary=page.locator('[data-diagnostics-summary]');
+    await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+    const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+    for(const id of ['connector_released','connector_installed','connector','mcp']){
+      const fact=bundle.versions.rows.find(row=>row.id===id);
+      for(const value of [fact.version,fact.commit,fact.observed_at,fact.published_at,fact.installed_at].filter(Boolean)) {
+        await expect(about.locator(`[data-version-row=${id}]`)).toContainText(value);
+        await expect(summary.locator(`[data-version-row=${id}]`)).toContainText(value);
+      }
+    }
+    const facts=Object.fromEntries(bundle.versions.rows.map(row=>[row.id,row]));
+    expect(new Set([facts.connector_released.observed_at,facts.connector_installed.installed_at,facts.connector.observed_at]).size).toBe(3);
+    expect(facts.mcp.source).toBe('not_reported');
+    expect(state.reads.some(path=>path.includes('identity')||path.includes('mcp'))).toBe(false);
+  }finally{await context.close();}
+});
+
+
+for(const locale of ['en-US','zh-TW'])test(`publication display failure preserves next launch and stays unknown in export ${locale}`,async({browser})=>{
+  const context=await browser.newContext({locale}),page=await context.newPage();
+  const producer=structuredClone(bootstrap);
+  Object.assign(producer.capabilities,connectorUpdates.publication_unknown);
+  await diagnosticsFixture(page,false,true,producer);
+  try{
+    await page.goto('/dashboard/#/settings?section=about');
+    const about=page.locator('#settings-panel-about');
+    const released=about.locator('[data-version-row=connector_released]');
+    await expect(released).toContainText(locale==='en-US'?'unknown':'未知');
+    await expect(released).toContainText(locale==='en-US'?'Source: not reported':'來源：未回報');
+    await expect(about.locator('[data-version-row=connector_installed]')).toContainText('0.2.9');
+    await expect(about.locator('[data-version-row=connector]')).toContainText('0.2.7');
+    await page.locator('#settings-panel-about [data-export-diagnostics]').click();
+    await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+    const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+    const fact=bundle.versions.rows.find(row=>row.id==='connector_released');
+    expect(fact).toMatchObject({version:null,commit:null,published_at:null,observed_at:null,source:'not_reported'});
+    await expect(page.locator('[data-diagnostics-summary] [data-version-row=connector_released]')).toContainText(locale==='en-US'?'unknown':'未知');
+    expect(bundle.versions.rows.find(row=>row.id==='connector_installed').version).toBe('0.2.9');
+  }finally{await context.close();}
+});

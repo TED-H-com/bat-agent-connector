@@ -1,5 +1,13 @@
 export const diagnosticsStrings = {
   en: {
+    diag_version_desktop_released:'Released Desktop app',
+    diag_version_connector_released:'Released Connector',
+    diag_version_mcp:'Loaded MCP process (not observed by Dashboard)',
+    diag_version_source_connector_release_check:'Source: validated Connector release check',
+    diag_version_period_release_check:'Release check completed at',
+    diag_version_installed_at:'Installation pointer confirmed at {time}',
+    diag_version_published:'Release published at {time}',
+
     diag_version_connector_installed:'Connector installed for the next launch',
     diag_version_source_connector_update:'Source: Connector update status',
     diag_version_period_next_launch:'Installed for the next launch',
@@ -70,6 +78,14 @@ export const diagnosticsStrings = {
     diag_connected:'Connected', diag_disconnected:'Disconnected', diag_reconnecting:'Reconnecting', diag_never_connected:'Never connected', diag_stale:'Stale', diag_reachable:'Reachable', diag_unreachable:'Unreachable', diag_state_unknown:'Unknown',
   },
   'zh-TW': {
+    diag_version_desktop_released:'已發布的桌面程式',
+    diag_version_connector_released:'已發布的 Connector',
+    diag_version_mcp:'已載入的 MCP 程序（Dashboard 尚無觀察資料）',
+    diag_version_source_connector_release_check:'來源：已驗證的 Connector 發布檢查',
+    diag_version_period_release_check:'發布檢查完成時間',
+    diag_version_installed_at:'安裝指標確認時間：{time}',
+    diag_version_published:'發布時間：{time}',
+
     diag_version_connector_installed:'供下次啟動的 Connector 安裝',
     diag_version_source_connector_update:'來源：Connector 更新狀態',
     diag_version_period_next_launch:'已安裝，供下次啟動使用',

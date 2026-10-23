@@ -212,12 +212,75 @@ def _running(root):
         return True
 
 
-def _stop_owned(root, launch, until):
+class LifecycleRefusal(ValueError):
+    def __init__(self, code, message, lifecycle=None):
+        super().__init__(message)
+        self.code = code
+        self.lifecycle = lifecycle
+
+
+def lifecycle(raw):
+    """Private, read-only projection. Only launcher-lock holders reconcile a hold."""
+    path = Path(raw) / "state" / "lifecycle.json"
+    try:
+        doc = json.loads(read_private(path, max_bytes=4096))
+    except FileNotFoundError:
+        # A dangling alias is still evidence of an untrusted hold.
+        if path.is_symlink():
+            raise LifecycleRefusal("SERVICE_LIFECYCLE_UNPROVEN", "service stop hold cannot be verified") from None
+        return {"state": "running", "requested_at": None, "stopped_at": None}
+    except (OSError, ValueError):
+        raise LifecycleRefusal("SERVICE_LIFECYCLE_UNPROVEN", "service stop hold cannot be verified") from None
+    if (not isinstance(doc, dict) or type(doc.get("version")) is not int or doc["version"] != 1
+            or doc.get("state") not in ("stop_pending", "stopped")
+            or not _timestamp(doc.get("requested_at"))
+            or (doc["state"] == "stopped" and not _timestamp(doc.get("stopped_at")))
+            or (doc["state"] == "stop_pending" and doc.get("stopped_at") is not None)):
+        raise LifecycleRefusal("SERVICE_LIFECYCLE_UNPROVEN", "service stop hold cannot be verified")
+    return {key: doc.get(key) for key in ("state", "requested_at", "stopped_at")}
+
+
+def _timestamp(value):
+    return type(value) in (int, float) and 0 < value < float("inf")
+
+
+def _save_lifecycle(root, state):
+    _write(root / "state" / "lifecycle.json", {"version": 1, **state})
+    return state
+
+
+def _clear_hold(root):
+    # Validate again before mutation. The private parent and leaf use the same
+    # platform protections as the other launcher-owned state.
+    lifecycle(root)
+    (root / "state" / "lifecycle.json").unlink()
+    platform_files.sync_directory(root / "state")
+
+
+def _settle_hold(root, state):
+    # Caller holds launcher.lock. Reading status never calls this mutation.
+    if state["state"] == "stop_pending" and not _running(root):
+        return _save_lifecycle(root, {**state, "state": "stopped", "stopped_at": time.time()})
+    return state
+
+
+def _stop_owned(root, launch, until, *, lifecycle_stop=False):
     # Called with launcher.lock held. Only the proven Python owner decides whether
     # work is quiescent; no PID/port from disk is ever used to terminate a process.
     try:
         result = _request(launch["endpoint"], "/api/v1/managed/stop", token=launch["token"], body={})
     except urllib.error.HTTPError as error:
+        if lifecycle_stop and 400 <= error.code < 500:
+            if error.code != 409:
+                raise LifecycleRefusal("SERVICE_STOP_REFUSED", "owned service refused shutdown") from None
+            try:
+                reason = json.loads(error.read(4096))["error"]["message"]
+            except (ValueError, KeyError, TypeError):
+                reason = None
+            reasons = {"finish or reconcile current operations before stopping",
+                       "finish or pause service shutdown until current tasks settle", "current work is still running"}
+            raise LifecycleRefusal("SERVICE_BUSY", reason if isinstance(reason, str) and reason in reasons else
+                                   "owned service is busy; finish or reconcile current work before stopping") from None
         if error.code == 409:
             raise ValueError("owned service is busy; finish or reconcile current work before upgrading") from None
         raise
@@ -234,9 +297,38 @@ def stop(raw, *, timeout=30):
     root = _root(raw)
     with _locked(root / "launcher.lock"):
         doc = _manifest(root)
-        if not _running(root):
-            return {"protocol": PROTOCOL, "stopped": True}
-        return _stop_owned(root, _verify(root, doc), time.monotonic() + timeout)
+        state = lifecycle(root)
+        if state["state"] != "running":
+            state = _settle_hold(root, state)
+            if state["state"] == "stopped":
+                return {"protocol": PROTOCOL, "stopped": True, "lifecycle": state}
+        running = _running(root)
+        launch = _verify(root, doc) if running else None
+        if state["state"] == "running":
+            state = _save_lifecycle(root, {"state": "stop_pending", "requested_at": time.time(), "stopped_at": None})
+        if launch is not None:
+            try:
+                _stop_owned(root, launch, time.monotonic() + timeout, lifecycle_stop=True)
+            except LifecycleRefusal as error:
+                _clear_hold(root)  # every 4xx is an authoritative refusal before any effect
+                error.lifecycle = lifecycle(root)
+                raise
+            except (OSError, ValueError):
+                # Keep uncertainty durable. Only a later explicit stop may send again.
+                return {"protocol": PROTOCOL, "stopped": False, "lifecycle": state}
+        state = _settle_hold(root, state)
+        return {"protocol": PROTOCOL, "stopped": state["state"] == "stopped", "lifecycle": state}
+
+
+def resume(raw, *, timeout=45):
+    root = _root(raw)
+    with _locked(root / "launcher.lock"):
+        state = lifecycle(root)
+        if state["state"] != "running":
+            if _running(root):
+                raise LifecycleRefusal("SERVICE_STILL_STOPPING", "owned service is still stopping", state)
+            _clear_hold(root)
+        return _ensure_locked(root, timeout=timeout)
 
 
 def _journal_startup_failure(root):
@@ -257,43 +349,54 @@ def _journal_startup_failure(root):
 def ensure(raw, *, timeout=45):
     root = _root(raw)
     with _locked(root / "launcher.lock"):
-        doc = _prepare(root)
-        ensure_private_directory(root / "state")
-        # A locked service lease is evidence of an owner, not proof of its endpoint.
-        running = _running(root)
-        if not running:
-            _check_upgrade(doc.get("runtime_version"))
-        child = None if running else _spawn(root)
-        until = time.monotonic() + timeout
-        last_error = None
-        while time.monotonic() < until:
-            launch = None
-            try:
-                doc = _manifest(root)
-                if doc["state"] == "ready":
-                    launch = _verify(root, doc)
-            except (OSError, ValueError, KeyError, urllib.error.URLError) as error:
-                last_error = type(error).__name__
-            if launch is not None:
-                if launch["runtime_version"] == __version__:
-                    return launch
-                _check_upgrade(launch["runtime_version"])
-                _stop_owned(root, launch, until)
-                # Interrupted upgrades retain the same ready manifest and journal.
-                # A later ensure can recover this installation if spawning fails.
-                child = _spawn(root)
-            if child and child.poll() is not None:
-                if failure := _journal_startup_failure(root):
-                    raise failure
-                raise ValueError("managed service initialization failed; existing data was preserved")
-            time.sleep(0.1)
-        # Never kill a PID read from a pointer or create a second database after a failure.
-        raise ValueError("managed service unavailable; retry this installation" +
-                         (f" ({last_error})" if last_error else ""))
+        return _ensure_locked(root, timeout=timeout)
+
+
+def _ensure_locked(root, *, timeout):
+    state = lifecycle(root)
+    if state["state"] != "running":
+        state = _settle_hold(root, state)
+        raise LifecycleRefusal("SERVICE_STOPPED", "background service stays stopped until Start", state)
+    doc = _prepare(root)
+    ensure_private_directory(root / "state")
+    # A locked service lease is evidence of an owner, not proof of its endpoint.
+    running = _running(root)
+    if not running:
+        _check_upgrade(doc.get("runtime_version"))
+    child = None if running else _spawn(root)
+    until = time.monotonic() + timeout
+    last_error = None
+    while time.monotonic() < until:
+        launch = None
+        try:
+            doc = _manifest(root)
+            if doc["state"] == "ready":
+                launch = _verify(root, doc)
+        except (OSError, ValueError, KeyError, urllib.error.URLError) as error:
+            last_error = type(error).__name__
+        if launch is not None:
+            if launch["runtime_version"] == __version__:
+                return launch
+            _check_upgrade(launch["runtime_version"])
+            _stop_owned(root, launch, until)
+            # Interrupted upgrades retain the same ready manifest and journal.
+            # A later ensure can recover this installation if spawning fails.
+            child = _spawn(root)
+        if child and child.poll() is not None:
+            if failure := _journal_startup_failure(root):
+                raise failure
+            raise ValueError("managed service initialization failed; existing data was preserved")
+        time.sleep(0.1)
+    # Never kill a PID read from a pointer or create a second database after a failure.
+    raise ValueError("managed service unavailable; retry this installation" +
+                     (f" ({last_error})" if last_error else ""))
 
 
 async def serve(raw):
     root = _root(raw)
+    state = lifecycle(root)
+    if state["state"] != "running":
+        raise LifecycleRefusal("SERVICE_STOPPED", "background service stays stopped until Start", state)
     doc = _manifest(root)
     ensure_private_directory(root / "config")
     ensure_private_directory(root / "state")
@@ -413,7 +516,7 @@ def _failure_location(error):
 
 def main():
     parser = argparse.ArgumentParser(description="Managed desktop central runtime")
-    parser.add_argument("command", choices=("ensure", "serve", "browser", "stop"))
+    parser.add_argument("command", choices=("ensure", "serve", "browser", "stop", "resume", "status"))
     parser.add_argument("--data-dir", required=True)
     args = parser.parse_args()
     try:
@@ -423,7 +526,10 @@ def main():
         if args.command == "stop":
             print(json.dumps(stop(args.data_dir)), flush=True)
             return
-        result = ensure(args.data_dir)
+        if args.command == "status":
+            print(json.dumps({"protocol": PROTOCOL, "lifecycle": lifecycle(args.data_dir)}), flush=True)
+            return
+        result = resume(args.data_dir) if args.command == "resume" else ensure(args.data_dir)
         if args.command == "browser":
             result = _request(result["endpoint"], "/api/v1/managed/browser-file", token=result["token"], body={})
         print(json.dumps(result), flush=True)
@@ -432,6 +538,10 @@ def main():
                    "message": type(error).__name__ + ": managed installation needs recovery",
                    "errno": getattr(error, "errno", None), "winerror": getattr(error, "winerror", None),
                    "location": _failure_location(error)}
+        if isinstance(error, LifecycleRefusal):
+            failure.update(error=error.code, message=str(error))
+            if error.lifecycle is not None:
+                failure["lifecycle"] = error.lifecycle
         if isinstance(error, JournalNewerDataStep):
             failure.update(error=error.code, message=str(error), recorded_data_step=error.recorded,
                            supported_data_step=LATEST_DATA_STEP)

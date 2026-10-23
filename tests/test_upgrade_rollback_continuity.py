@@ -25,6 +25,7 @@ from bat_agent_connector import (
 )
 from bat_agent_connector.errors import ConnectionLost
 from bat_agent_connector.task_daemon import TaskDaemon
+from desktop.tests.managed_runtime_assertions import assert_stopped_reply, service_stays_stopped
 from tests import test_repository_sync
 from tests.conftest import make_config
 from tests.operation_helpers import settle_operations, stop_workers
@@ -91,7 +92,7 @@ async def world(request, tmp_path, mock, monkeypatch):
 def enroll(deployment):
     updater, receipt, _ = deployment
     updater.enroll(receipt, 'preview')
-    updater.find_release = lambda _: release('b' * 40, '0.2.8')
+    updater.find_release = lambda _, observation=None: release('b' * 40, '0.2.8')
     updater.install = lambda root, candidate, **_: make_package(root, candidate)
     return updater
 
@@ -308,7 +309,7 @@ async def lose_outer_completion(w, monkeypatch, request=None, principal=DELIVERE
     return await crash_after_201(w, monkeypatch, request or envelope(w), principal)
 
 
-async def test_managed_upgrade_recovers_original_201(start_ready, mock, monkeypatch, request):
+async def test_managed_upgrade_recovers_original_201(start_ready, mock, monkeypatch, request, capsys):
     w = start_ready
     root, original = request.getfixturevalue('managed_seed')
     info = await seed_publication(w, mock, monkeypatch, root)
@@ -318,7 +319,20 @@ async def test_managed_upgrade_recovers_original_201(start_ready, mock, monkeypa
     await close_daemon(w)
     monkeypatch.setattr(managed_runtime, '__version__', '1.1.0')
     try:
-        upgraded = await asyncio.to_thread(managed_runtime.ensure, root, timeout=15)
+        children = request.getfixturevalue('versioned_installation')[1]
+        starts = len(children)
+        held = managed_runtime.lifecycle(root)
+        # managed_seed deliberately requested a user Stop. A package upgrade
+        # cannot undo that hold; ordinary running upgrades use _stop_owned.
+        capsys.readouterr()
+        with service_stays_stopped(root), monkeypatch.context() as cli:
+            cli.setattr(sys, 'argv', ['runtime', 'ensure', '--data-dir', str(root)])
+            with pytest.raises(SystemExit) as refused:
+                managed_runtime.main()
+            assert_stopped_reply(refused.value.code, json.loads(capsys.readouterr().out), held)
+            assert len(children) == starts
+        upgraded = await asyncio.to_thread(managed_runtime.resume, root, timeout=15)
+        assert len(children) == starts + 1
         assert {key: upgraded[key] for key in ('actor', 'server_id', 'principal_id', 'token')} == {
             key: original[key] for key in ('actor', 'server_id', 'principal_id', 'token')}
         assert upgraded['runtime_version'] == '1.1.0'

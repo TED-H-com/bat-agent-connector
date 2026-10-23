@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 
 REPOSITORY = "https://github.com/TED-H-com/bat-agent-connector"
 API = "https://api.github.com/repos/TED-H-com/bat-agent-connector/releases?per_page=30"
@@ -111,8 +112,19 @@ def manifest(release, raw):
         raise UpdateError("release_manifest_invalid") from exc
 
 
-def discover(channel, *, download=fetch):
+def publication_time(value):
+    """Optional display clock; never part of release acceptance or selection."""
+    if not isinstance(value, str) or len(value) > 40:
+        return None
+    try:
+        return value if datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is not None else None
+    except ValueError:
+        return None
+
+
+def discover(channel, *, download=None, observation=None):
     require(channel in {"stable", "preview"}, "invalid_channel")
+    download = fetch if download is None else download
     try:
         releases = json.loads(download(API))
         require(isinstance(releases, list) and len(releases) <= 30, "release_list_invalid")
@@ -137,13 +149,17 @@ def discover(channel, *, download=fetch):
             doc = json.loads(raw)
             if "connector_update" not in doc:
                 continue  # Older releases did not opt in to unattended installation.
-            candidates.append(manifest(item, raw))
-        candidates.sort(key=lambda r: version(r["version"]), reverse=True)
+            candidates.append((manifest(item, raw), item))
+        candidates.sort(key=lambda entry: version(entry[0]["version"]), reverse=True)
         if candidates:
-            best = candidates[0]
-            require(all(r["commit"] == best["commit"] for r in candidates if r["version"] == best["version"]),
+            best, item = candidates[0]
+            require(all(r["commit"] == best["commit"] for r, _ in candidates if r["version"] == best["version"]),
                     "release_version_republished")
+            if observation is not None:
+                observation["published_at"] = publication_time(item.get("published_at"))
             return best
+        if observation is not None:
+            observation["published_at"] = None
         return None
     except (KeyError, TypeError, AttributeError, json.JSONDecodeError) as exc:
         raise UpdateError("release_list_invalid") from exc

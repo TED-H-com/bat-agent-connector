@@ -523,7 +523,8 @@ class ApiV1:
             body = await self._read_body(method, headers, reader,
                 max_body=CONNECTION_BOUNDS["receipt_bytes"] if path == "/api/v1/connections/receipt" else (
                     CONNECTION_BOUNDS["handoff_bytes"] if path == "/api/v1/connections/handoff" else MAX_BODY), path=path)
-            if method == "POST" and getattr(self.daemon, "managed_stopping", False):
+            if (method == "POST" and path != "/api/v1/managed/stop"
+                    and getattr(self.daemon, "managed_stopping", False)):
                 raise ApiError(503, "SERVICE_STOPPING", "owned service is stopping; reopen Dashboard to reconnect")
             principal = api_auth.authenticate(self.daemon.journal.db, token, self.daemon._admin_token,
                                               browser_session=browser_session)
@@ -544,6 +545,11 @@ class ApiV1:
                 elif path == "/api/v1/managed/stop" and method == "POST" and self._bearer(headers):
                     if principal.actor != self.daemon.managed_installation["actor"]:
                         raise ApiError(403, "FORBIDDEN", "service belongs to the installation owner")
+                    if getattr(self.daemon, "managed_stopping", False):
+                        # Same authenticated owner, same accepted effect. Do not
+                        # re-run busy admission or signal shutdown a second time.
+                        await self._send_json(writer, 200, {"protocol": 1, "stopped": True})
+                        return
                     db = self.daemon.journal.db
                     if db.execute("SELECT 1 FROM operations WHERE status NOT IN ('succeeded','failed','cancelled') LIMIT 1").fetchone():
                         raise ApiError(409, "SERVICE_BUSY", "finish or reconcile current operations before stopping")

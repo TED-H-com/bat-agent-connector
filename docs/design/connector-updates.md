@@ -216,3 +216,25 @@ are reported explicitly. No root service or unrelated scheduler is modified.
 - Fleet receipts record enrollment policy, scheduler state, installed identity
   and original process continuity separately. Physical mobile, native desktop
   and real BAT/model acceptance retain their own EC-1.1 evidence.
+
+
+Completed `check` and automatic `run` release discovery retain `release_check`
+in the existing private updater state, before any installation. The public
+projection contains only completion time and the validated candidate's version,
+commit and publication time. Publication time is display-only: the existing
+check records a timezone-aware ISO string of at most 40 characters from the same
+selected release item. Other values record no clock and leave the released slot
+unknown. This step never rejects a release or changes its installation candidate;
+the shared manifest fields and bootstrap publication acceptance remain identical.
+Existing private records retain their shape and meaning. A completed check with no candidate reports a null
+candidate. A failed check preserves the earlier completed observation without
+renewing its time; changing channels withdraws that observation until a check of
+the selected channel completes. Older states have no released observation.
+`batc://identity` reuses this installation status for the calling MCP process,
+independently from any central service; only its captured startup installation
+proof permits a next-launch comparison and process-specific restart notice.
+
+`installed_at` retains the successful enrollment/switch/rollback receipt time
+independently of later check failures or policy changes. Older state without that
+clock reports it unknown. The shared installation row keeps its separate client
+read time as well; neither clock fills the released or answering slot.

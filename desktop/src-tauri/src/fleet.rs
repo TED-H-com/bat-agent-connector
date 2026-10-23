@@ -1317,8 +1317,19 @@ mod tests {
         );
     }
     #[cfg(windows)]
-    #[tokio::test]
-    async fn windows_contract_fixture_uses_actual_system_powershell() {
+    #[test]
+    fn windows_contract_fixture_uses_actual_system_powershell() {
+        // Acquire outside the private current-thread runtime. No other test or
+        // gate waiter is driven by this runtime; diagnostics share this guard.
+        let _guard = crate::powershell_guard::acquire();
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(windows_contract_fixture());
+    }
+    #[cfg(windows)]
+    async fn windows_contract_fixture() {
         let temp = Temp::new();
         let root = temp.0.join("kit with spaces ' 雪 $value");
         std::fs::create_dir_all(root.join("client")).unwrap();
@@ -1370,11 +1381,29 @@ mod tests {
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
                         .kill_on_drop(true);
+                    let child_spawned = std::time::Instant::now();
                     let mut child = command.spawn().unwrap();
-                    format!(
-                        "{:?}",
-                        tokio::time::timeout(Duration::from_secs(5), child.wait()).await
-                    )
+                    let waited = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
+                    if waited.is_err() {
+                        // Only this existing probe exposes its child to the test.
+                        // Sample before try_wait can retire Tokio's handle and
+                        // before kill_on_drop runs. Null stdout has no observable
+                        // READY/EOF; never invent either lifecycle timestamp.
+                        let wall = child_spawned.elapsed();
+                        let cpu = child.raw_handle().map(|raw| {
+                            // The child owns this handle for the entire sample.
+                            let handle =
+                                unsafe { std::os::windows::io::BorrowedHandle::borrow_raw(raw) };
+                            crate::powershell_cpu::describe(handle, wall)
+                        });
+                        let exit = child
+                            .try_wait()
+                            .map(|status| status.map(|status| (child_spawned.elapsed(), status)));
+                        eprintln!(
+                            "synthetic null-input breach before cleanup: wall={wall:?}; READY=unobservable (stdout=null); stdout_EOF=unobservable (stdout=null); process_exit_first_observed={exit:?}; {cpu:?}"
+                        );
+                    }
+                    format!("{waited:?}")
                 } else {
                     if probe == "console" {
                         command.creation_flags(0);

@@ -239,7 +239,7 @@ for (const locale of ['en','zh-TW'] as const) test(`successful send ages through
   const stamp=page.locator('.session-send-line time'); await expect(stamp).toHaveText(locale==='en'?'just now':'剛剛');
   await expect(stamp).toHaveAttribute('datetime',now.toISOString()); await expect(stamp).toHaveAttribute('title',/.+/);
   await stamp.evaluate(node=>{(window as any).sentStamp=node;}); await box.fill('Preserved next draft'); await box.focus();
-  await page.clock.fastForward(120_000); await expect(stamp).toHaveText(locale==='en'?'2m ago':'2 分鐘前');
+  await page.clock.fastForward(120_000); await expect(stamp).toHaveText(locale==='en'?'2 min ago':'2 分鐘前');
   expect(await stamp.evaluate(node=>node===(window as any).sentStamp)).toBe(true);
   await expect(box).toHaveValue('Preserved next draft'); await expect(box).toBeFocused(); await context.close();
 });

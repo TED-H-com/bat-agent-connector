@@ -19,6 +19,301 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
+//#region src/relative-age.js
+function relativeAgeTranslator(locale = "en") {
+	const strings = relativeAgeStrings[String(locale).toLowerCase().startsWith("zh") ? "zh-TW" : "en"];
+	return (key, vars = {}) => (strings[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ""));
+}
+function relativeAge(seconds, t, { direction = "past" } = {}) {
+	if (!Number.isFinite(seconds)) return t("age_unknown");
+	const age = Math.max(0, seconds);
+	if (age < 60) return t(direction === "duration" ? "age_under_minute" : "age_recent");
+	const [unit, size] = age >= 86400 ? ["day", 86400] : age >= 3600 ? ["hour", 3600] : ["minute", 60];
+	const value = t("age_" + unit, { n: Math.floor(age / size) });
+	return direction === "duration" ? value : t("age_" + direction, { age: value });
+}
+var relativeAgeStrings;
+var init_relative_age = __esmMin((() => {
+	relativeAgeStrings = {
+		en: {
+			age_unknown: "Age unknown",
+			age_recent: "just now",
+			age_under_minute: "<1 min",
+			age_minute: "{n} min",
+			age_hour: "{n} hr",
+			age_day: "{n} d",
+			age_past: "{age} ago",
+			age_future: "in {age}"
+		},
+		"zh-TW": {
+			age_unknown: "時間未知",
+			age_recent: "剛剛",
+			age_under_minute: "不到 1 分鐘",
+			age_minute: "{n} 分鐘",
+			age_hour: "{n} 小時",
+			age_day: "{n} 天",
+			age_past: "{age}前",
+			age_future: "{age}後"
+		}
+	};
+}));
+//#endregion
+//#region src/health-fact.js
+function healthReadError(reason, error) {
+	return reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
+}
+function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
+	const observed = time$2(fact.observed_at), deadline = time$2(fact.valid_until);
+	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
+	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
+	return {
+		...fact,
+		freshness,
+		ageSeconds
+	};
+}
+function healthWaiting(fact) {
+	return fact && [
+		"stale",
+		"unknown",
+		"invalidated"
+	].includes(fact.freshness) && fact.key !== "ui_connecting" && !fact.error && fact.stale_reason !== "host_unreachable";
+}
+function healthLabel(fact, t, { age = true, checking = true } = {}) {
+	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
+	if (fact.error) return t("health_read_failed", {
+		value: label,
+		age: relativeAge(fact.ageSeconds, t),
+		reason: fact.error.code || fact.error.status
+	});
+	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
+		value: label,
+		age: relativeAge(fact.ageSeconds, t)
+	});
+	if (!checking) return fact.freshness === "stale" && age ? t("health_join", {
+		left: label,
+		right: relativeAge(fact.ageSeconds, t)
+	}) : label;
+	if (fact.freshness === "stale" && age) return t("health_stale_value", {
+		value: label,
+		age: relativeAge(fact.ageSeconds, t),
+		checking: t("health_checking")
+	});
+	if ([
+		"stale",
+		"unknown",
+		"invalidated"
+	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
+		value: label,
+		checking: t("health_checking")
+	});
+	return label;
+}
+var time$2;
+var init_health_fact = __esmMin((() => {
+	init_relative_age();
+	time$2 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
+}));
+//#endregion
+//#region src/health-summary.js
+init_health_fact();
+function healthSummaryContent(projection, { h, t }) {
+	const summary = projection.summary;
+	const pair = (label, value) => t("health_pair", {
+		label: t(label),
+		value
+	});
+	const join = (values) => values.reduce((left, right) => t("health_join", {
+		left,
+		right
+	}));
+	const last = summary?.facts.filter((row) => row.activity.freshness === "stale").sort((a, b) => (b.activity.ageSeconds || 0) - (a.activity.ageSeconds || 0))[0];
+	const refresh = projection.capabilities.refresh;
+	const checking = summary?.stale || summary?.unknown || healthWaiting(summary?.connection) || healthWaiting(last?.activity) || healthWaiting(projection.connection) || healthWaiting(projection.other) || projection.capabilities.freshness === "invalidated" && refresh?.state === "loading";
+	return [
+		summary ? h("span", {
+			"data-health-key": "selected",
+			"data-health-selected": "",
+			class: "health-selected"
+		}, h("span", {}, pair(summary.selected.workspaceId ? "health_selected_workspace" : "health_selected_work", summary.selected.label || summary.selected.host)), h("span", {
+			class: "ui-pill",
+			"data-health-compact": summary.compact
+		}, t("health_" + summary.compact)), summary.connection ? h("span", { class: "health-installation-connection" }, healthLabel({
+			...summary.connection,
+			key: summary.connection.value === "connected" ? "ui_connected" : summary.connection.value === "not_connected" ? "health_connection_problem" : "health_unknown"
+		}, t, { checking: false })) : null, h("span", { class: "health-facets" }, join([
+			pair("health_attention_label", t(summary.attention ? "health_attention" : "health_none")),
+			pair("health_activity", t("health_" + summary.activity)),
+			pair("health_freshness", t(summary.stale ? "health_stale" : summary.unknown ? "health_unknown" : "health_current"))
+		])), last ? h("span", { class: "health-last-value" }, healthLabel({
+			...last.activity,
+			key: ["streaming", "starting"].includes(last.activity.value) ? "health_working" : last.activity.value === "not_streaming" ? "health_idle" : "health_unknown"
+		}, t, { checking: false })) : null) : null,
+		projection.connection.freshness === "stale" ? h("span", {
+			"data-health-key": "connection-age",
+			"data-health-age": "",
+			"aria-live": "off"
+		}, relativeAge(projection.connection.ageSeconds, t)) : null,
+		projection.capabilities.freshness === "invalidated" ? h("span", { "data-health-key": "capabilities" }, t(refresh?.state === "loading" ? "health_capabilities_changed" : "health_capabilities_reload", { reason: refresh?.reason || "IDENTITY_UNVERIFIED" })) : null,
+		projection.capabilities.freshness === "invalidated" && refresh?.state !== "loading" ? h("button", {
+			"data-health-key": "reload",
+			onclick: () => location.reload()
+		}, t("health_reload")) : null,
+		projection.otherAttention ? h(projection.other.href ? "a" : "span", {
+			href: projection.other.href,
+			"data-health-key": "other",
+			"data-health-other": ""
+		}, healthLabel({
+			...projection.other,
+			key: projection.otherAttention === 1 ? "health_other_machines_one" : "health_other_machines_many"
+		}, (key, vars) => t(key, {
+			count: projection.otherAttention,
+			...vars
+		}), { checking: false })) : null,
+		checking ? h("span", {
+			"data-health-key": "checking",
+			"data-health-checking": ""
+		}, t("health_checking")) : null
+	].filter(Boolean);
+}
+//#endregion
+//#region src/managed-service.js
+async function managedServiceControls(root, { h, t, managedControl, errorBox, guard, onStarted }) {
+	const box = h("section", { "data-managed-service": "" });
+	const facts = h("p", {
+		"data-managed-lifecycle": "",
+		role: "status"
+	});
+	const time = h("time");
+	const actions = h("div", { class: "actions" });
+	const preview = h("div", {
+		"data-managed-stop-preview": "",
+		hidden: true
+	});
+	const errors = h("div", { "aria-live": "polite" });
+	let status, busy = false;
+	const run = async (action) => {
+		if (busy) return;
+		busy = true;
+		paint();
+		try {
+			guard();
+			status = await managedControl({ action });
+			guard();
+			errors.replaceChildren();
+			preview.hidden = true;
+			if (action === "start" && status.mode === "managed") await onStarted?.();
+		} catch (error) {
+			try {
+				guard();
+			} catch {
+				return;
+			}
+			try {
+				status = await managedControl({ action: "status" });
+				guard();
+			} catch {}
+			const code = String(error?.message || error);
+			if (code.includes("SERVICE_STILL_STOPPING")) errors.replaceChildren(h("p", {}, t("managed_still_stopping")));
+			else if (code === "MANAGED_SERVICE_BUSY") errors.replaceChildren(h("p", {}, t("managed_action_busy")));
+			else if (code === "SERVICE_BUSY") errors.replaceChildren(h("p", {}, t("managed_busy")));
+			else if (code.includes("SERVICE_STOPPED")) errors.replaceChildren(h("p", {}, t(status?.lifecycle?.state === "stop_pending" ? "managed_stopping" : "managed_stopped")));
+			else errors.replaceChildren(errorBox(error, {
+				sourceRefresh: false,
+				within: errors
+			}));
+		} finally {
+			busy = false;
+			paint();
+		}
+	};
+	const stop = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			preview.hidden = false;
+		}
+	}, t("managed_stop"));
+	const start = h("button", {
+		type: "button",
+		class: "primary",
+		onclick: () => run("start")
+	}, t("managed_start"));
+	const open = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => run("open_browser")
+	}, t("managed_open_browser"));
+	const login = h("input", { type: "checkbox" });
+	login.addEventListener("change", async () => {
+		if (busy) return;
+		busy = true;
+		login.disabled = true;
+		try {
+			guard();
+			status = await managedControl({
+				action: "set_login",
+				enabled: login.checked
+			});
+			guard();
+			errors.replaceChildren();
+		} catch (error) {
+			try {
+				guard();
+				errors.replaceChildren(errorBox(error, { within: errors }));
+			} catch {
+				return;
+			}
+		} finally {
+			busy = false;
+			paint();
+		}
+	});
+	const confirm = h("button", {
+		type: "button",
+		class: "danger",
+		onclick: () => run("stop")
+	}, t("managed_stop_confirm"));
+	preview.append(h("p", {}, t("managed_stop_local")), h("p", {}, t("managed_stop_hold")), h("p", {}, t("managed_stop_busy")), h("p", {}, t("managed_stop_external")), h("div", { class: "actions" }, confirm, h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			preview.hidden = true;
+		}
+	}, t("cancel"))));
+	function paint() {
+		const lifecycle = status?.lifecycle;
+		const held = lifecycle?.state === "stopped" || lifecycle?.state === "stop_pending";
+		facts.textContent = t(lifecycle?.state === "stop_pending" ? "managed_stopping" : held ? "managed_stopped" : "managed_running");
+		const at = lifecycle?.stopped_at || lifecycle?.requested_at;
+		time.textContent = at ? new Date(at * 1e3).toLocaleString() : "";
+		if (at) time.dateTime = new Date(at * 1e3).toISOString();
+		stop.hidden = lifecycle?.state === "stopped";
+		start.hidden = !held;
+		open.disabled = busy || held;
+		for (const button of [
+			stop,
+			start,
+			confirm
+		]) button.disabled = busy;
+		login.disabled = busy;
+		login.checked = !!status?.login_enabled;
+	}
+	try {
+		status = await managedControl({ action: "status" });
+		guard();
+		if (!status.background || !status.lifecycle) return status;
+		actions.append(stop, start, open, h("label", {}, login, " ", t("managed_start_login")));
+		box.append(facts, time, actions, preview, errors);
+		paint();
+		root.append(box);
+	} catch (error) {
+		guard();
+		root.append(errorBox(error, { within: root }));
+	}
+	return status;
+}
+//#endregion
 //#region src/startup-role.js
 function startupRoleChoice({ h, t, errorBox, snapshot, select }) {
 	let busy = false;
@@ -94,9 +389,6 @@ var init_health_strings = __esmMin((() => {
 	healthStrings = {
 		en: {
 			health_checking: "Checking",
-			health_age_recent: "Less than a minute ago",
-			health_age_minutes: "{count} min ago",
-			health_age_unknown: "Age unknown",
 			health_connection_problem: "Connection needs attention",
 			health_stale_value: "{value} · {age} · {checking}",
 			health_unknown_value: "{value} · {checking}",
@@ -105,8 +397,8 @@ var init_health_strings = __esmMin((() => {
 			health_selected_work: "Selected work",
 			health_selected_workspace: "Selected workspace",
 			health_attention: "Needs attention",
-			health_stale: "Stale · Checking",
-			health_unknown: "Unknown · Checking",
+			health_stale: "Stale",
+			health_unknown: "Unknown",
 			health_working: "Working",
 			health_idle: "Idle",
 			health_activity: "Output activity",
@@ -119,15 +411,13 @@ var init_health_strings = __esmMin((() => {
 			health_unreachable_value: "{value} · Last attempt: {age}; host unreachable, last successful observation is stale",
 			health_capabilities_reload: "Capabilities changed; verification unavailable ({reason}). Reload to verify.",
 			health_reload: "Reload",
+			health_capabilities_changed: "Capabilities changed",
 			health_current: "Current",
 			health_none: "None observed",
 			health_capabilities_checking: "Capabilities changed · Checking"
 		},
 		"zh-TW": {
 			health_checking: "檢查中",
-			health_age_recent: "不到一分鐘前",
-			health_age_minutes: "{count} 分鐘前",
-			health_age_unknown: "時間未知",
 			health_connection_problem: "連線需要處理",
 			health_stale_value: "{value} · {age} · {checking}",
 			health_unknown_value: "{value} · {checking}",
@@ -136,8 +426,8 @@ var init_health_strings = __esmMin((() => {
 			health_selected_work: "所選工作",
 			health_selected_workspace: "所選工作區",
 			health_attention: "需要處理",
-			health_stale: "已過期 · 檢查中",
-			health_unknown: "未知 · 檢查中",
+			health_stale: "已過期",
+			health_unknown: "未知",
 			health_working: "工作中",
 			health_idle: "閒置",
 			health_activity: "輸出活動",
@@ -150,6 +440,7 @@ var init_health_strings = __esmMin((() => {
 			health_unreachable_value: "{value} · 上次嘗試：{age}；無法連至主機，上次成功觀察已過期",
 			health_capabilities_reload: "能力資料已變更；無法完成驗證（{reason}）。請重新載入以驗證。",
 			health_reload: "重新載入",
+			health_capabilities_changed: "能力資料已變更",
 			health_current: "目前有效",
 			health_none: "未觀察到",
 			health_capabilities_checking: "能力資料已變更 · 檢查中"
@@ -1228,6 +1519,13 @@ var diagnosticsStrings;
 var init_diagnostics_strings = __esmMin((() => {
 	diagnosticsStrings = {
 		en: {
+			diag_version_desktop_released: "Released Desktop app",
+			diag_version_connector_released: "Released Connector",
+			diag_version_mcp: "Loaded MCP process (not observed by Dashboard)",
+			diag_version_source_connector_release_check: "Source: validated Connector release check",
+			diag_version_period_release_check: "Release check completed at",
+			diag_version_installed_at: "Installation pointer confirmed at {time}",
+			diag_version_published: "Release published at {time}",
 			diag_version_connector_installed: "Connector installed for the next launch",
 			diag_version_source_connector_update: "Source: Connector update status",
 			diag_version_period_next_launch: "Installed for the next launch",
@@ -1337,6 +1635,13 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_state_unknown: "Unknown"
 		},
 		"zh-TW": {
+			diag_version_desktop_released: "已發布的桌面程式",
+			diag_version_connector_released: "已發布的 Connector",
+			diag_version_mcp: "已載入的 MCP 程序（Dashboard 尚無觀察資料）",
+			diag_version_source_connector_release_check: "來源：已驗證的 Connector 發布檢查",
+			diag_version_period_release_check: "發布檢查完成時間",
+			diag_version_installed_at: "安裝指標確認時間：{time}",
+			diag_version_published: "發布時間：{time}",
 			diag_version_connector_installed: "供下次啟動的 Connector 安裝",
 			diag_version_source_connector_update: "來源：Connector 更新狀態",
 			diag_version_period_next_launch: "已安裝，供下次啟動使用",
@@ -1644,13 +1949,7 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_context_requirement: "{n} requirements",
 			ov_context_work: "Related work",
 			ov_context_milestone: "Milestone",
-			ov_day: "{n}d",
-			ov_hour: "{n}h",
-			ov_minute: "{n}m",
 			ov_delta: "+{n}d",
-			ov_just_now: "just now",
-			ov_under_minute: "<1m",
-			ov_ago: "{age} ago",
 			ov_partial_history: "More reports available",
 			ov_loading_report: "Loading report…",
 			ov_report_previous: "Previous report",
@@ -1715,13 +2014,7 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_context_requirement: "{n} 項需求",
 			ov_context_work: "相關工作",
 			ov_context_milestone: "里程碑",
-			ov_day: "{n} 天",
-			ov_hour: "{n} 小時",
-			ov_minute: "{n} 分鐘",
 			ov_delta: "+{n} 天",
-			ov_just_now: "剛剛",
-			ov_under_minute: "不到 1 分鐘",
-			ov_ago: "{age}前",
 			ov_partial_history: "還有其他報告",
 			ov_loading_report: "正在載入報告…",
 			ov_report_previous: "上一份報告",
@@ -5214,6 +5507,7 @@ var dependencyStrings;
 var init_pm_dependencies_strings = __esmMin((() => {
 	dependencyStrings = {
 		en: {
+			dep_scroll_hint: "Scroll or use the arrow keys to explore all nodes. Focus a node to read its full name.",
 			dep_capture: "Capture again",
 			dep_meta: "Captured at {commit} · {date}",
 			dep_meta_commit: "Captured at {commit}",
@@ -5347,6 +5641,7 @@ var init_pm_dependencies_strings = __esmMin((() => {
 			dep_matrix: "矩陣",
 			dep_graph: "關係圖",
 			dep_search: "搜尋相依",
+			dep_scroll_hint: "捲動或使用方向鍵查看所有節點；聚焦節點可閱讀完整名稱。",
 			dep_runtime: "執行期",
 			dep_build: "建置",
 			dep_test: "測試",
@@ -5570,6 +5865,8 @@ var discussionStrings;
 var init_pm_discussions_strings = __esmMin((() => {
 	discussionStrings = {
 		en: {
+			pd_last_run: "This discussion’s last PM run: {outcome}",
+			pd_run_updated: "status updated {when}",
 			pcb_title: "Continue from here",
 			pcb_purpose: "Focus for this summary",
 			pcb_default_purpose: "Preserve the goal and decisions, review remaining work, and suggest the next one or two steps.",
@@ -5706,6 +6003,8 @@ var init_pm_discussions_strings = __esmMin((() => {
 			pm_mode_follow_up: "Follow-up"
 		},
 		"zh-TW": {
+			pd_last_run: "此討論上次的 PM 執行：{outcome}",
+			pd_run_updated: "狀態更新於{when}",
 			pcb_title: "從這裡接續",
 			pcb_purpose: "本次整理重點",
 			pcb_default_purpose: "保留原目標與決定，檢視剩餘工作，提出最值得處理的一至兩個下一步。",
@@ -5934,13 +6233,6 @@ var init_pm_resources_strings = __esmMin((() => {
 			res_observed_range: "{start} – {end} · {zone}",
 			res_window_hours: "{hours}-hour window",
 			res_window_days: "{days}-day window",
-			res_just_now: "just now",
-			res_min_ago: "{n} min ago",
-			res_hr_ago: "{n} hr ago",
-			res_day_ago: "{n} d ago",
-			res_in_min: "in {n} min",
-			res_in_hr: "in {n} hr",
-			res_in_day: "in {n} d",
 			res_tokens: "Tokens observed",
 			res_sources: "Sources",
 			res_sources_value: "{current} / {total}",
@@ -6042,13 +6334,6 @@ var init_pm_resources_strings = __esmMin((() => {
 			res_observed_range: "{start}–{end} · {zone}",
 			res_window_hours: "{hours} 小時區間",
 			res_window_days: "{days} 天區間",
-			res_just_now: "剛剛",
-			res_min_ago: "{n} 分鐘前",
-			res_hr_ago: "{n} 小時前",
-			res_day_ago: "{n} 天前",
-			res_in_min: "{n} 分鐘後",
-			res_in_hr: "{n} 小時後",
-			res_in_day: "{n} 天後",
 			res_tokens: "已觀測用量",
 			res_sources: "來源",
 			res_sources_value: "{current} / {total}",
@@ -10409,6 +10694,7 @@ var STRINGS, locale;
 var init_i18n = __esmMin((() => {
 	init_health_strings();
 	init_setup_observation_strings();
+	init_relative_age();
 	init_result_sources_strings();
 	init_earlier_drafts_strings();
 	init_pm_external_history_strings();
@@ -10449,6 +10735,7 @@ var init_i18n = __esmMin((() => {
 	init_fleet_strings();
 	STRINGS = {
 		"zh-TW": {
+			...relativeAgeStrings["zh-TW"],
 			...healthStrings["zh-TW"],
 			...setupObservationStrings["zh-TW"],
 			...FLEET_STRINGS["zh-TW"],
@@ -10719,9 +11006,22 @@ var init_i18n = __esmMin((() => {
 			desktop_role_changed: "此安裝已變更。請重新開啟以讀取已儲存的用途。",
 			managed_join_existing: "加入既有的 Connector",
 			managed_join_help: "輸入另一個 Connector 的位址與預期帳號，在原生視窗確認後，再加入該 Connector 的憑證。此電腦原有的背景工作會繼續運作。",
-			managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
+			managed_background_help: "關閉這個畫面不會停止背景工作。可使用「停止背景服務」停止本機 Connector。",
 			managed_open_browser: "在瀏覽器開啟 Dashboard",
 			managed_start_login: "登入電腦時啟動",
+			managed_stop: "停止背景服務",
+			managed_start: "啟動背景服務",
+			managed_stop_confirm: "確認停止",
+			managed_running: "背景服務運作中",
+			managed_stopped: "背景服務已停止",
+			managed_stopping: "背景服務停止中",
+			managed_still_stopping: "背景服務仍在停止中。你可以等待，或再次選擇停止服務。",
+			managed_busy: "背景服務目前忙碌，請先完成或核對目前工作，再停止服務。",
+			managed_action_busy: "另一個背景服務操作仍在進行中，請等它完成後再試。",
+			managed_stop_local: "本機 Connector 會停止。",
+			managed_stop_hold: "在你選擇啟動之前，開啟程式、登入電腦、自動恢復或在瀏覽器開啟都不會重新啟動。",
+			managed_stop_busy: "尚未完成或核對的工作會阻擋停止。",
+			managed_stop_external: "外部連線不受影響。",
 			managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
 			delivery_list_prs: "瀏覽 Pull Requests",
 			delivery_no_prs: "找不到 PR。",
@@ -12196,6 +12496,7 @@ var init_i18n = __esmMin((() => {
 			integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 		},
 		en: {
+			...relativeAgeStrings.en,
 			...healthStrings.en,
 			...setupObservationStrings.en,
 			...FLEET_STRINGS.en,
@@ -12466,9 +12767,22 @@ var init_i18n = __esmMin((() => {
 			desktop_role_changed: "This installation changed. Reopen to read its saved role.",
 			managed_join_existing: "Join another Connector",
 			managed_join_help: "Enter the address and expected account for another Connector, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
-			managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
+			managed_background_help: "Closing this view does not stop background work. Use Stop background service to stop the local Connector.",
 			managed_open_browser: "Open Dashboard in browser",
 			managed_start_login: "Start when I sign in",
+			managed_stop: "Stop background service",
+			managed_start: "Start background service",
+			managed_stop_confirm: "Confirm stop",
+			managed_running: "Background service running",
+			managed_stopped: "Background service stopped",
+			managed_stopping: "Background service stopping",
+			managed_still_stopping: "The background service is still stopping. You can wait or stop it again.",
+			managed_busy: "The background service is busy. Finish or reconcile current work before stopping.",
+			managed_action_busy: "Another background service action is still running. Try again when it finishes.",
+			managed_stop_local: "The local Connector will stop.",
+			managed_stop_hold: "App open, sign-in, recovery and Open in browser will not restart it until you choose Start.",
+			managed_stop_busy: "Unsettled work blocks stopping.",
+			managed_stop_external: "External connections are unaffected.",
 			managed_browser_help: "This browser uses your desktop identity. After signing out, reopen Dashboard from the desktop menu.",
 			workspace_navigation: "Projects and work",
 			workspace_search: "Search loaded projects and work",
@@ -14263,56 +14577,7 @@ var clientActionCode = (reason) => `CLIENT_ACTION_${reason.toUpperCase()}`;
 var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}`;
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
-//#region src/health-fact.js
-function healthReadError(reason, error) {
-	return reason === "host_unreachable" && error?.unchangedDeadline === true ? null : error;
-}
-function displayFact(fact = {}, { now = Date.now(), bootstrap, version } = {}) {
-	const observed = time$2(fact.observed_at), deadline = time$2(fact.valid_until);
-	const ageSeconds = Number.isFinite(observed) ? Math.max(0, Math.floor((now - observed) / 1e3)) : null;
-	const freshness = fact.static && (fact.bootstrap !== bootstrap || fact.version !== version) ? "invalidated" : fact.static ? "current" : fact.stale ? "stale" : !Number.isFinite(observed) ? "unknown" : Number.isFinite(deadline) ? now >= deadline ? "stale" : "current" : now - observed >= 6e4 ? "stale" : "current";
-	return {
-		...fact,
-		freshness,
-		ageSeconds
-	};
-}
-function healthAge(seconds, t) {
-	return seconds === null ? t("health_age_unknown") : seconds < 60 ? t("health_age_recent") : t("health_age_minutes", { count: Math.floor(seconds / 60) });
-}
-function healthLabel(fact, t, { age = true } = {}) {
-	const label = t(fact.key === "health_unknown" ? "obs_unknown" : fact.key || fact.value);
-	if (fact.error) return t("health_read_failed", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		reason: fact.error.code || fact.error.status
-	});
-	if (fact.stale_reason === "host_unreachable") return t("health_unreachable_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t)
-	});
-	if (fact.freshness === "stale" && age) return t("health_stale_value", {
-		value: label,
-		age: healthAge(fact.ageSeconds, t),
-		checking: t("health_checking")
-	});
-	if ([
-		"stale",
-		"unknown",
-		"invalidated"
-	].includes(fact.freshness) && fact.key !== "ui_connecting") return label.includes(t("health_checking")) ? label : t("health_unknown_value", {
-		value: label,
-		checking: t("health_checking")
-	});
-	return label;
-}
-var time$2;
-var init_health_fact = __esmMin((() => {
-	time$2 = (value) => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && value ? Date.parse(value) : NaN;
-}));
-//#endregion
 //#region src/state/sessions.js
-init_health_fact();
 var text$6 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
 	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
@@ -14676,6 +14941,7 @@ function fleetRoute(row, { h, t, snapshot, readable, entry, now }) {
 }
 var codeReason, layerReason, layerStep, lookup, routeRequirement;
 var init_fleet_status = __esmMin((() => {
+	init_health_fact();
 	codeReason = {
 		TAILSCALE_WAKING: "waking",
 		ROUTE_UNAVAILABLE: "network",
@@ -16578,6 +16844,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 }
 //#endregion
 //#region src/ui/time.js
+init_relative_age();
 var MONTHS = [
 	"Jan",
 	"Feb",
@@ -16630,12 +16897,7 @@ function compactTime(value, { locale = "en", now = Date.now() } = {}) {
 	const date = parse(value);
 	if (!date) return "";
 	const chinese = zh(locale), delta = Number(now) - date.getTime(), distance = Math.abs(delta);
-	if (distance < DAY$1) {
-		if (distance < 6e4) return chinese ? "剛剛" : "just now";
-		const minutes = Math.floor(distance / 6e4), n = minutes < 60 ? minutes : Math.floor(minutes / 60);
-		const unit = minutes < 60 ? chinese ? "分鐘" : "m" : chinese ? "小時" : "h";
-		return chinese ? `${n} ${unit}${delta < 0 ? "後" : "前"}` : delta < 0 ? `in ${n}${unit}` : `${n}${unit} ago`;
-	}
+	if (distance < DAY$1) return relativeAge(distance / 1e3, relativeAgeTranslator(locale), { direction: delta < 0 ? "future" : "past" });
 	return `${compactDate(date, {
 		locale,
 		now
@@ -17531,6 +17793,10 @@ var fact$1 = (id, value, source, at, period, extra = {}) => {
 		...extra
 	};
 };
+var released = (id, candidate, source, at) => {
+	const known = version$2(candidate?.version) && commit(candidate?.commit) && time(at);
+	return fact$1(id, known ? candidate : null, source, known ? at : null, "release_check", { published_at: known ? time(candidate.published_at) : null });
+};
 function versionProjection(input = {}) {
 	const caps = input.online === false ? null : input.caps;
 	const managed = input.managedRuntime;
@@ -17539,6 +17805,8 @@ function versionProjection(input = {}) {
 	const frontend = input.frontendBuild === void 0 ? frontendBuild : input.frontendBuild;
 	const update = caps?.connector_update;
 	const reported = update?.state === "reported";
+	const releaseCheck = reported ? update.release_check : null;
+	const candidate = input.updaterReadFailed ? null : input.updater?.candidate;
 	const last = reported && updateResults.includes(update.last?.status) ? {
 		status: update.last.status,
 		code: updateCode(update.last.code),
@@ -17546,6 +17814,12 @@ function versionProjection(input = {}) {
 	} : null;
 	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$10(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
 	const rows = [
+		released("desktop_released", input.desktop && candidate ? {
+			version: candidate.version,
+			commit: candidate.source_sha
+		} : null, "desktop_updater", input.desktop ? candidate?.checked_at : null),
+		released("connector_released", releaseCheck?.candidate, "connector_release_check", releaseCheck?.completed_at),
+		fact$1("mcp", null, "not_reported", null, "unknown"),
 		fact$1("desktop", input.desktop ? input.appBuild : null, "native_app_build", input.nativeReadAt, "loaded"),
 		fact$1("loaded_ui", { digest: frontend?.frontend_digest }, "loaded_ui", loadedAt, "loaded"),
 		fact$1("served_ui", { digest: caps?.frontend?.digest }, "capabilities", caps ? input.capabilitiesReadAt : null, "read"),
@@ -17554,6 +17828,7 @@ function versionProjection(input = {}) {
 			version: caps.build?.version ?? caps.connector
 		} : null, "capabilities", caps ? input.capabilitiesReadAt : null, "read"),
 		fact$1("connector_installed", reported ? update.installed : null, "connector_update", reported ? input.capabilitiesReadAt : null, "next_launch", {
+			installed_at: reported ? time(update.installed_at) : null,
 			state: updateStates.includes(update?.state) ? update.state : "not_reported",
 			code: update?.state === "unreadable" ? updateCode(update.code) : null,
 			enabled: reported && typeof update.enabled === "boolean" ? update.enabled : null,
@@ -17919,7 +18194,10 @@ function versionFactText(row, t) {
 	const unknown = t("diag_unknown");
 	if ([
 		"desktop",
+		"desktop_released",
 		"connector",
+		"connector_released",
+		"mcp",
 		"connector_installed",
 		"bundled_runtime",
 		"running_runtime"
@@ -17929,14 +18207,18 @@ function versionFactText(row, t) {
 	return t("diag_version_number", { version: row.version || unknown });
 }
 function versionFacts({ h, t, projection }) {
-	const rows = projection.rows.filter((row) => projection.platform === "desktop" || !["desktop", "desktop_update"].includes(row.id));
+	const rows = projection.rows.filter((row) => projection.platform === "desktop" || ![
+		"desktop",
+		"desktop_update",
+		"desktop_released"
+	].includes(row.id));
 	return h("section", {
 		class: "version-facts",
 		"data-version-facts": ""
-	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.id === "connector_installed" ? h("div", {}, row.state !== "reported" ? h("p", { class: "muted" }, t("diag_version_update_" + row.state), row.code ? " · " + row.code : "") : null, row.channel ? h("p", { class: "muted" }, t("diag_version_update_channel", { channel: t("diag_version_channel_" + row.channel) })) : null, row.enabled !== null ? h("p", { class: "muted" }, t("diag_version_update_" + (row.enabled ? "enabled" : "disabled"))) : null, row.pending === true ? h("p", { class: "muted" }, t("diag_version_update_pending")) : null, row.last ? h("p", { class: "muted" }, t("diag_version_update_last", {
+	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.id === "connector_installed" ? h("div", {}, row.state !== "reported" ? h("p", { class: "muted" }, t("diag_version_update_" + row.state), row.code ? " · " + row.code : "") : null, row.installed_at ? h("p", { class: "muted" }, t("diag_version_installed_at", { time: row.installed_at })) : null, row.channel ? h("p", { class: "muted" }, t("diag_version_update_channel", { channel: t("diag_version_channel_" + row.channel) })) : null, row.enabled !== null ? h("p", { class: "muted" }, t("diag_version_update_" + (row.enabled ? "enabled" : "disabled"))) : null, row.pending === true ? h("p", { class: "muted" }, t("diag_version_update_pending")) : null, row.last ? h("p", { class: "muted" }, t("diag_version_update_last", {
 		result: t("diag_version_result_" + row.last.status),
 		at: row.last.at || t("diag_version_time_unknown")
-	}), row.last.code ? " · " + row.last.code : "") : null, h("p", { "data-connector-installation-difference": "" }, t("diag_version_installation_" + projection.connector_installation_difference))) : null, row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
+	}), row.last.code ? " · " + row.last.code : "") : null, h("p", { "data-connector-installation-difference": "" }, t("diag_version_installation_" + projection.connector_installation_difference))) : null, row.published_at ? h("p", { class: "muted" }, t("diag_version_published", { time: row.published_at })) : null, row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
 }
 //#endregion
 //#region src/diagnostics-dialog.js
@@ -23876,7 +24158,8 @@ function discussionFeedback({ t, request, node, eligible }) {
 		"pending"
 	].includes(operation?.status);
 	const checked = request?.checking() === true;
-	const label = running ? t(checked ? "pd_working" : "pd_status_unchecked") : discussionOperation(t, operation) || error?.textContent || "";
+	const outcome = discussionOperation(t, operation);
+	const label = running ? t(checked ? "pd_working" : "pd_status_unchecked") : outcome ? t("pd_last_run", { outcome }) : error?.textContent || "";
 	let status = node.querySelector("[role=status]");
 	if (!status) {
 		node.removeAttribute("role");
@@ -23889,7 +24172,15 @@ function discussionFeedback({ t, request, node, eligible }) {
 	if (status.textContent !== label) status.textContent = label;
 	const elapsed = node.querySelector("[data-discussion-elapsed]");
 	const time = running && checked ? discussionOperation(t, operation).slice(t("pd_working").length) : "";
-	if (elapsed.textContent !== time) elapsed.textContent = time;
+	const updated = !running ? operation?.updated_at : null;
+	const stamp = updated != null && timeText(updated) ? timeStamp(updated) : null;
+	const timeSignature = JSON.stringify([time, stamp?.outerHTML]);
+	if (elapsed.dataset.time !== timeSignature) {
+		elapsed.dataset.time = timeSignature;
+		elapsed.removeAttribute("aria-hidden");
+		elapsed.replaceChildren(...stamp ? [" · ", timeLabel(t, "pd_run_updated", { when: stamp })] : [time]);
+		if (running) elapsed.setAttribute("aria-hidden", "true");
+	}
 	const retry = node.querySelector("[data-discussion-retry]"), disabled = request?.replaceable() ? !eligible : !request?.canSubmit();
 	const signature = JSON.stringify([Boolean(failed), disabled]);
 	if (retry.dataset.state !== signature) {
@@ -28143,6 +28434,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 }
 //#endregion
 //#region src/pm-overview.js
+init_relative_age();
 init_ui_strings();
 init_i18n();
 init_finding_name();
@@ -28423,11 +28715,7 @@ function workspaceOverview(options) {
 	}
 	function age(since, past = false) {
 		if (!Number.isFinite(since) || !Number.isFinite(projection?.as_of)) return null;
-		const seconds = Math.max(0, projection.as_of - since);
-		if (seconds < 60) return t(past ? "ov_just_now" : "ov_under_minute");
-		const [key, unit] = seconds >= 86400 ? ["ov_day", 86400] : seconds >= 3600 ? ["ov_hour", 3600] : ["ov_minute", 60];
-		const elapsed = t(key, { n: Math.floor(seconds / unit) });
-		return past ? t("ov_ago", { age: elapsed }) : elapsed;
+		return relativeAge(Math.max(0, projection.as_of - since), t, { direction: past ? "past" : "duration" });
 	}
 	const decisionMeta = (row) => [age(row.decided_at, true), row.actor].filter(Boolean).join(" · ");
 	function recentDecisions(data) {
@@ -29209,6 +29497,42 @@ function layoutGraph(nodes, links) {
 	};
 }
 //#endregion
+//#region src/pm-dependencies-labels.js
+function dependencyNodeNames(nodes) {
+	const groups = new Map(), names = new Map(), seen = new Set();
+	for (const { id, name } of nodes) {
+		if (seen.has(id)) continue;
+		seen.add(id);
+		if (!groups.has(name)) groups.set(name, new Set());
+		groups.get(name).add(id);
+	}
+	for (const [name, ids] of groups) [...ids].sort().forEach((id, index) => {
+		names.set(id, name + (ids.size > 1 ? ` [${index + 1}]` : ""));
+	});
+	return (id) => names.get(id) || "";
+}
+function wrapDependencyName(name, width, measure) {
+	const segments = String(name).match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]|[^\s\-_/\.\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]+[\s\-_/\.]*|[\s\-_/\.]+/gu) || [""];
+	const lines = [];
+	let line = "";
+	for (const segment of segments) {
+		if (line && measure(line + segment) > width) {
+			lines.push(line);
+			line = "";
+		}
+		if (measure(segment) > width) for (const char of segment) {
+			if (line && measure(line + char) > width) {
+				lines.push(line);
+				line = "";
+			}
+			line += char;
+		}
+		else line += segment;
+	}
+	lines.push(line);
+	return lines;
+}
+//#endregion
 //#region src/pm-dependencies.js
 init_ui_strings();
 var RELATIONS = [
@@ -29252,6 +29576,7 @@ var FILE_STATUS = {
 var SVG = "http://www.w3.org/2000/svg";
 var NODE_W = 148;
 var NODE_H = 36;
+var GAP_X = 132;
 var GAP_Y = 18;
 var PAD = 20;
 var LOCAL_REASONS = new Set([
@@ -29320,8 +29645,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		expected_workspace_version: data.workspace_version,
 		expected_binding_digest: data.source.binding_digest
 	});
-	const dependencyName = (key) => dependencyByKey().get(key)?.name || "";
-	const componentName = (id) => (data?.components || []).find((row) => row.component_id === id)?.name || (data?.external_components || []).find((row) => row.component_id === id)?.name || "";
+	let nodeName = () => "";
+	const dependencyName = (key) => nodeName("d:" + key);
+	const componentName = (id) => nodeName("c:" + id);
 	function dependencyByKey() {
 		const map = new Map();
 		for (const kind of KINDS) for (const row of data?.dependencies?.[kind] || []) if (row?.key && !map.has(row.key)) map.set(row.key, row);
@@ -29391,7 +29717,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			const row = externalById(link.target_component_id) || externalById(link.component_id);
 			if (!row || seen.has(row.component_id)) continue;
 			seen.add(row.component_id);
-			labels.push(joinLabel([row.name, otherRepositoryLabel(row)]));
+			labels.push(joinLabel([componentName(row.component_id), otherRepositoryLabel(row)]));
 		}
 		return labels.join(" · ");
 	}
@@ -29510,6 +29836,25 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		class: "dep-graph-scroll",
 		"data-dep-graph": ""
 	});
+	const graphHint = h("p", {
+		class: "ui-meta",
+		"data-dep-scroll-hint": ""
+	}, t("dep_scroll_hint"));
+	const graphName = h("p", {
+		class: "ui-meta",
+		"data-dep-node-name": "",
+		hidden: true
+	});
+	graphScroll.addEventListener("focusin", (event) => {
+		const node = event.target.closest?.("[data-dep-node]");
+		if (!node) return;
+		graphName.textContent = node.getAttribute("aria-label");
+		graphName.hidden = false;
+		node.scrollIntoView({
+			block: "nearest",
+			inline: "nearest"
+		});
+	});
 	const zoomOut = button({
 		size: "sm",
 		label: "−",
@@ -29529,7 +29874,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"data-dep-loaded": ""
 	}, `${Math.round(zoom * 100)}%`);
 	const graphBar = h("div", { class: "dep-graph-bar" }, h("div", { class: "dep-graph-controls" }, loaded, zoomOut, zoomIn));
-	const graphHost = h("div", { "data-dep-graph-host": "" }, graphBar, graphScroll);
+	const graphHost = h("div", { "data-dep-graph-host": "" }, graphBar, graphHint, graphName, graphScroll);
 	const detailBody = h("div");
 	const details = disclosure({
 		label: t("dep_details"),
@@ -29799,8 +30144,22 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"data-dep-view": ""
 	}, captureHint, toolbar, coverage, statusBox, captureForm.box, legend, matrixHost, graphHost, details, holder);
 	function fillComponents() {
+		nodeName = dependencyNodeNames([
+			...(data?.components || []).map((row) => ({
+				id: "c:" + row.component_id,
+				name: row.name || row.component_id
+			})),
+			...(data?.external_components || []).map((row) => ({
+				id: "c:" + row.component_id,
+				name: row.name || row.component_id
+			})),
+			...[...dependencyByKey()].map(([key, row]) => ({
+				id: "d:" + key,
+				name: row.name || key
+			}))
+		]);
 		const value = componentSelect.value;
-		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, row.name || row.component_id)));
+		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, componentName(row.component_id))));
 		if ([...componentSelect.options].some((option) => option.value === value)) componentSelect.value = value;
 	}
 	function fillRetract() {
@@ -30079,7 +30438,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			facts.append(h("dt", {}, label), h("dd", {}, value));
 			if (note) facts.append(h("dd", { class: "dep-note" }, note));
 		};
-		if (dep || selection.type !== "component") add(t("dep_name"), dep?.name || dependencyName(selectedKey()) || t("dep_dash"));
+		if (dep || selection.type !== "component") add(t("dep_name"), dependencyName(selectedKey()) || t("dep_dash"));
 		if (selection.type === "component") {
 			facts.dataset.depComponentFacts = "";
 			add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
@@ -30242,8 +30601,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}
 		const layout = layoutGraph([...nodes.values()], links);
 		const placed = new Map(layout.positions.map((position) => [position.id, position]));
-		const nodeHeight = narrow() ? 44 : NODE_H;
-		const strideX = Math.max(280, (graphScroll.clientWidth - 40 - NODE_W) / Math.max(1, layout.layers - 1));
+		const measure = document.createElement("canvas").getContext("2d");
+		measure.font = `12px ${getComputedStyle(graphScroll).fontFamily}`;
+		const lines = new Map([...nodes].map(([id, node]) => [id, wrapDependencyName(node.name, 128, (text) => measure.measureText(text).width)]));
+		const nodeHeight = Math.max(narrow() ? 44 : NODE_H, ...[...nodes].map(([id, node]) => lines.get(id).length * 16 + 16 + (node.external ? 16 : 0)));
+		const strideX = Math.max(NODE_W + (narrow() ? 16 : GAP_X), (graphScroll.clientWidth - 2 - 40 - NODE_W) / Math.max(1, layout.layers - 1));
 		const width = Math.max(1, 188 + Math.max(0, layout.layers - 1) * strideX);
 		const depth = layout.positions.reduce((max, position) => Math.max(max, position.y), 0);
 		const height = Math.max(nodeHeight + 40, 40 + (layout.positions.length ? (depth + 1) * nodeHeight + depth * GAP_Y : 0));
@@ -30323,7 +30685,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				"data-dep-focus": id.startsWith("d:") ? `col:${id.slice(2)}` : `row:${id.slice(2)}`,
 				"data-dep-mark": markOf(id)
 			});
-			const nameY = top + (repo ? Math.round(nodeHeight * .42) : nodeHeight / 2 + 5);
+			const wrapped = lines.get(id), nameY = top + (nodeHeight - wrapped.length * 16 - (repo ? 16 : 0)) / 2 + 12;
 			const shownRepo = repo && repo.length > 22 ? repo.slice(0, 21) + "…" : repo;
 			place(group, "append", svg("title", {}, accessible), svg("rect", {
 				x: left,
@@ -30332,13 +30694,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				height: nodeHeight,
 				rx: 6,
 				class: "dep-node-shape"
-			}), svg("text", {
+			}), svg("text", { class: "dep-node-name" }, ...wrapped.map((line, index) => svg("tspan", {
 				x: left + 10,
-				y: nameY,
-				class: "dep-node-name"
-			}, abbreviate(node.name)), repo ? svg("text", {
+				y: nameY + index * 16
+			}, line))), repo ? svg("text", {
 				x: left + 10,
-				y: top + Math.round(nodeHeight * .82),
+				y: top + nodeHeight - 8,
 				class: "dep-node-repo"
 			}, shownRepo) : null);
 			picture.append(group);
@@ -30351,6 +30712,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	}
 	function render() {
 		const previous = document.activeElement?.getAttribute?.("data-dep-focus");
+		graphName.textContent = "";
+		graphName.hidden = true;
 		element.dataset.depMode = mode;
 		toolbar.hidden = !data;
 		details.hidden = !data;
@@ -30440,7 +30803,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 					colOf.set(dep.key, col);
 					const selectedCol = selection?.type === "dependency" && selection.dependencyKey === dep.key;
 					const peer = peerCaption(dep.key);
-					const columnLabel = joinLabel([dep.name, peer]);
+					const columnLabel = joinLabel([dependencyName(dep.key), peer]);
 					headName.append(h("th", {
 						scope: "col",
 						title: columnLabel
@@ -30457,7 +30820,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 							type: "dependency",
 							dependencyKey: dep.key
 						}, true)
-					}, abbreviate(dep.name), peer ? h("span", {
+					}, abbreviate(dependencyName(dep.key)), peer ? h("span", {
 						class: "dep-peer",
 						"data-dep-peer": ""
 					}, peer) : null)));
@@ -30479,7 +30842,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						type: "component",
 						componentId: component.component_id
 					}, true)
-				}, component.name)));
+				}, componentName(component.component_id))));
 				for (const dep of columnDeps) {
 					const cellEdges = edges.filter((edge) => edge.component_id === component.component_id && edge.dependency_key === dep.key);
 					const selectedCell = selection?.type === "edge" && selection.componentId === component.component_id && selection.dependencyKey === dep.key;
@@ -30492,8 +30855,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						"data-row": String(row),
 						"data-col": String(colOf.get(dep.key)),
 						tabindex: "-1",
-						title: label || dep.name,
-						"aria-label": label || joinLabel([component.name, dep.name]),
+						title: label || dependencyName(dep.key),
+						"aria-label": label || joinLabel([componentName(component.component_id), dependencyName(dep.key)]),
 						"aria-pressed": String(selectedCell),
 						onclick: cellEdges.length ? () => choose({
 							type: "edge",
@@ -30512,7 +30875,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			matrixScroll.scrollTop = preference.matrixTop || 0;
 			listHost.replaceChildren(...(narrow() && mode === "matrix" ? visibleRows : []).map((component) => {
 				const own = edges.filter((edge) => edge.component_id === component.component_id);
-				return h("section", { class: "dep-group" }, h("h2", {}, component.name), ...own.map((edge) => {
+				return h("section", { class: "dep-group" }, h("h2", {}, componentName(component.component_id)), ...own.map((edge) => {
 					const selectedPick = selection?.type === "edge" && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
 					const peer = peerCaption(edge.dependency_key, edge.component_id);
 					return h("button", {
@@ -45779,6 +46142,37 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		"data-schedule-axis-caption": ""
 	});
 	const unscheduled = h$1("div", { class: "schedule-unscheduled" }), error = h$1("div");
+	const labelTip = h$1("div", {
+		class: "schedule-label-tip",
+		role: "tooltip",
+		id: `${workspaceId}-schedule-label`,
+		hidden: true
+	});
+	let tipCell = null;
+	function hideLabel() {
+		labelTip.hidden = true;
+		tipCell = null;
+	}
+	function showLabel(cell, text) {
+		if (tipCell === cell) return;
+		tipCell = cell;
+		labelTip.textContent = text;
+		labelTip.hidden = false;
+		positionLabel(cell);
+	}
+	function positionLabel(cell) {
+		const box = cell.getBoundingClientRect();
+		labelTip.style.left = `${Math.max(8, Math.min(box.left, innerWidth - labelTip.offsetWidth - 8))}px`;
+		labelTip.style.top = `${Math.max(8, Math.min(box.bottom, innerHeight - labelTip.offsetHeight - 8))}px`;
+	}
+	function treeDate(value) {
+		const stamp = timeStamp(value, { dateOnly: true });
+		if (stamp instanceof HTMLElement) {
+			stamp.setAttribute("aria-description", stamp.title);
+			stamp.removeAttribute("title");
+		}
+		return stamp;
+	}
 	const main = h$1("div", { class: "schedule-main" }, error, viewport, unscheduled);
 	viewport.append(caption, chart);
 	const legend = h$1("div", {
@@ -45823,7 +46217,11 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	const element = h$1("section", {
 		"data-pm-schedule": "",
 		class: "pm-schedule"
-	}, toolbar, layout);
+	}, toolbar, layout, labelTip);
+	viewport.addEventListener("scroll", () => {
+		if (tipCell?.contains(document.activeElement)) positionLabel(tipCell);
+		else hideLabel();
+	}, { passive: true });
 	viewport.addEventListener("scroll", saveScroll, { passive: true });
 	function fitViewport() {
 		if (!data || fitting) return;
@@ -46197,8 +46595,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			const dates = spans(row).map((span) => {
 				const s = row[span.kind].start?.slice(0, 10) || "—";
 				const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
-				const suffix = span.open ? [" → ", t("sched_open")] : span.unknownEnd ? [" → ", reasonLabel(t, "terminal_time_unrecorded")] : e && e !== s ? [" → ", timeStamp(e, { dateOnly: true })] : [];
-				return h$1("span", {}, t("sched_" + span.kind), " ", timeStamp(s, { dateOnly: true }), ...suffix);
+				const suffix = span.open ? [" → ", t("sched_open")] : span.unknownEnd ? [" → ", reasonLabel(t, "terminal_time_unrecorded")] : e && e !== s ? [" → ", treeDate(e)] : [];
+				return h$1("span", {}, t("sched_" + span.kind), " ", treeDate(s), ...suffix);
 			});
 			const deltaValue = row.kind === "milestone" ? milestoneDelta(row) : null;
 			const dateChildren = dates.length ? dates.flatMap((date, index) => index ? [" · ", date] : [date]) : [t("sched_no_dates")];
@@ -46206,24 +46604,38 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			const pill = row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null;
 			const descId = `sched-desc-${index}`, statusId = pill ? `sched-status-${index}` : null;
 			if (pill) pill.id = statusId;
+			const fullTitle = scheduleTitle(row) || label(row);
 			const cell = h$1("div", {
 				class: "schedule-tree-cell",
 				role: "treeitem",
 				"aria-level": depth,
 				"aria-expanded": expandable ? String(!collapsed.has(row.id)) : null,
-				"aria-label": label(row),
+				"aria-label": fullTitle,
 				"aria-describedby": [statusId, descId].filter(Boolean).join(" "),
 				tabindex: tabId === row.id ? 0 : -1,
 				"data-schedule-select": row.id,
 				onclick: (event) => row.kind === "group" ? toggle(row.id) : select(row.id, event.currentTarget),
 				onkeydown: (event) => keydown(event, item, index)
-			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
-				class: "schedule-title",
-				title: scheduleTitle(row)
-			}, label(row)), h$1("span", {
+			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", { class: "schedule-title" }, label(row)), h$1("span", {
 				id: descId,
 				class: "schedule-date-range"
 			}, ...dateChildren)), pill);
+			const hoverLabel = () => {
+				const focused = document.activeElement?.closest(".schedule-tree-cell");
+				if (!focused || focused === cell) showLabel(cell, fullTitle);
+			};
+			cell.addEventListener("mouseenter", hoverLabel);
+			cell.addEventListener("mousemove", hoverLabel);
+			cell.addEventListener("mouseleave", () => {
+				if (tipCell === cell && !cell.contains(document.activeElement)) hideLabel();
+			});
+			cell.addEventListener("focusin", () => showLabel(cell, fullTitle));
+			cell.addEventListener("focusout", (event) => {
+				if (tipCell === cell && !cell.contains(event.relatedTarget)) hideLabel();
+			});
+			cell.addEventListener("keydown", (event) => {
+				if (event.key === "Escape") hideLabel();
+			});
 			cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
 			const lane = h$1("div", { class: "schedule-lane" }, track(row));
 			lane.addEventListener("scroll", () => {
@@ -46241,6 +46653,14 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			tree.append(line);
 		});
 		chart.replaceChildren(axis, tree);
+		if (!phone()) {
+			const needed = Math.max(328, ...[...tree.querySelectorAll(".schedule-tree-cell")].map((cell) => {
+				const title = cell.querySelector(".schedule-title");
+				return title.scrollWidth + cell.clientWidth - title.clientWidth + 2;
+			}));
+			chart.style.setProperty("--schedule-tree", `${Math.min(needed, Math.max(328, viewport.clientWidth - 480))}px`);
+		}
+		if (tipCell && !tipCell.isConnected) hideLabel();
 		if (!visible.length) chart.replaceChildren(emptyState({ title: t("sched_empty") }));
 		else if (phone()) for (const trackNode of chart.querySelectorAll(".schedule-track")) containPhone(trackNode);
 		else trimAxis(axis);
@@ -46299,6 +46719,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		showPanel();
 	}
 	function withdraw() {
+		hideLabel();
 		serial++;
 		stale = false;
 		pendingRefresh = null;
@@ -46395,6 +46816,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		setActive(value) {
 			active = value;
 			if (!value) {
+				hideLabel();
 				saveScroll();
 				closePanel(false);
 			} else {
@@ -63762,7 +64184,14 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 			value = next;
 			readable = true;
 			readAt = new Date().toISOString();
-			onRead({ current_version: next.current_version }, readAt);
+			onRead({
+				current_version: next.current_version,
+				candidate: next.candidate ? {
+					version: next.candidate.version,
+					source_sha: next.candidate.source_sha,
+					checked_at: next.candidate.checked_at
+				} : null
+			}, readAt);
 			if (next.code && next.available && !next.installation) message.textContent = `${t("update_problem")} ${next.code}`;
 		} catch {
 			if (active()) {
@@ -70840,62 +71269,11 @@ function paintConnection(waiting = false, paused = false) {
 	for (const paint of [...connectionPainters]) paint();
 	paintVersions();
 }
-function healthSummaryContent(projection) {
-	const summary = projection.summary;
-	const pair = (label, value) => t("health_pair", {
-		label: t(label),
-		value
-	});
-	const join = (values) => values.reduce((left, right) => t("health_join", {
-		left,
-		right
-	}));
-	const last = summary?.facts.filter((row) => row.activity.freshness === "stale").sort((a, b) => (b.activity.ageSeconds || 0) - (a.activity.ageSeconds || 0))[0];
-	const refresh = projection.capabilities.refresh;
-	return [
-		summary ? h("span", {
-			"data-health-key": "selected",
-			"data-health-selected": "",
-			class: "health-selected"
-		}, h("span", {}, pair(summary.selected.workspaceId ? "health_selected_workspace" : "health_selected_work", summary.selected.label || summary.selected.host)), h("span", {
-			class: "ui-pill",
-			"data-health-compact": summary.compact
-		}, t("health_" + summary.compact)), summary.connection ? h("span", { class: "health-installation-connection" }, healthLabel({
-			...summary.connection,
-			key: summary.connection.value === "connected" ? "ui_connected" : summary.connection.value === "not_connected" ? "health_connection_problem" : "health_unknown"
-		}, t)) : null, h("span", { class: "health-facets" }, join([
-			pair("health_attention_label", t(summary.attention ? "health_attention" : "health_none")),
-			pair("health_activity", t("health_" + summary.activity)),
-			pair("health_freshness", t(summary.stale ? "health_stale" : summary.unknown ? "health_unknown" : "health_current"))
-		])), last ? h("span", { class: "health-last-value" }, healthLabel({
-			...last.activity,
-			key: ["streaming", "starting"].includes(last.activity.value) ? "health_working" : last.activity.value === "not_streaming" ? "health_idle" : "health_unknown"
-		}, t)) : null) : null,
-		projection.connection.freshness === "stale" ? h("span", {
-			"data-health-key": "connection-age",
-			"data-health-age": "",
-			"aria-live": "off"
-		}, healthAge(projection.connection.ageSeconds, t)) : null,
-		projection.capabilities.freshness === "invalidated" ? h("span", { "data-health-key": "capabilities" }, t(refresh?.state === "loading" ? "health_capabilities_checking" : "health_capabilities_reload", { reason: refresh?.reason || "IDENTITY_UNVERIFIED" })) : null,
-		projection.capabilities.freshness === "invalidated" && refresh?.state !== "loading" ? h("button", {
-			"data-health-key": "reload",
-			onclick: () => location.reload()
-		}, t("health_reload")) : null,
-		projection.otherAttention ? h(projection.other.href ? "a" : "span", {
-			href: projection.other.href,
-			"data-health-key": "other",
-			"data-health-other": ""
-		}, healthLabel({
-			...projection.other,
-			key: projection.otherAttention === 1 ? "health_other_machines_one" : "health_other_machines_many"
-		}, (key, vars) => t(key, {
-			count: projection.otherAttention,
-			...vars
-		}))) : null
-	].filter(Boolean);
-}
 function renderHealthContent(container, projection) {
-	const content = healthSummaryContent(projection), signature = content.map((node) => node.outerHTML).join("");
+	const content = healthSummaryContent(projection, {
+		h,
+		t
+	}), signature = content.map((node) => node.outerHTML).join("");
 	if (container.dataset.signature === signature) return;
 	const focused = container.contains(document.activeElement) ? document.activeElement.dataset.healthKey : null;
 	const existing = new Map([...container.children].map((node) => [node.dataset.healthKey, node]));
@@ -75188,59 +75566,14 @@ async function viewManagedSettings(main) {
 	frame.show("fleet");
 	let disposeFleet, disposeTailscale;
 	if (nativeDesktop) {
-		const login = h("input", {
-			type: "checkbox",
-			disabled: true
-		});
-		const open = h("button", {
-			class: "secondary",
-			onclick: async () => {
-				open.disabled = true;
-				try {
-					guard();
-					await managedControl({ action: "open_browser" });
-					guard();
-					status.replaceChildren();
-				} catch (error) {
-					if (connection.generation === generation) status.replaceChildren(errorBox(error, {
-						sourceRefresh: false,
-						within: status
-					}));
-				} finally {
-					open.disabled = false;
-				}
-			}
-		}, t("managed_open_browser"));
-		local.append(h("div", { class: "actions" }, open, h("label", {}, login, " ", t("managed_start_login"))));
-		try {
-			const state = await managedControl({ action: "status" });
-			guard();
-			login.checked = !!state.login_enabled;
-			login.disabled = false;
-		} catch (error) {
-			status.replaceChildren(errorBox(error, { within: status }));
-		}
-		login.addEventListener("change", async () => {
-			const wanted = login.checked;
-			login.disabled = true;
-			try {
-				guard();
-				const result = await managedControl({
-					action: "set_login",
-					enabled: wanted
-				});
-				guard();
-				login.checked = !!result.login_enabled;
-			} catch (error) {
-				if (connection.generation === generation) {
-					login.checked = !wanted;
-					status.replaceChildren(errorBox(error, {
-						sourceRefresh: false,
-						within: status
-					}));
-				}
-			} finally {
-				login.disabled = false;
+		await managedServiceControls(local, {
+			h,
+			t,
+			managedControl,
+			errorBox,
+			guard,
+			onStarted: async () => {
+				await nativeTransition("connect");
 			}
 		});
 		try {
@@ -75462,7 +75795,28 @@ async function viewNativeSettings(main) {
 		const row = (label, value) => {
 			if (value) details.append(h("dt", {}, t(label)), h("dd", {}, value));
 		};
-		if (status.configuration_setup === true) {
+		const service = await managedServiceControls(frame.panel("connection"), {
+			h,
+			t,
+			managedControl,
+			errorBox,
+			guard: () => {
+				if (mine !== generation) throw new Error("VIEW_CHANGED");
+			},
+			onStarted: async () => {
+				await nativeTransition("connect");
+			}
+		});
+		if (mine !== generation) return;
+		const serviceHeld = status.configuration_source === "managed" && service?.lifecycle?.state !== "running" && !!service?.lifecycle;
+		if (serviceHeld) {
+			details.hidden = true;
+			actions.hidden = true;
+			platform.hidden = true;
+			introduction.hidden = true;
+			saved.hidden = true;
+		}
+		if (status.configuration_setup === true && !serviceHeld) {
 			firstConnection = true;
 			setup.hidden = false;
 			details.hidden = true;
