@@ -43,6 +43,7 @@ struct State {
     active: usize,
     peak: usize,
     cancelled: usize,
+    requirement_events: Option<tokio::sync::mpsc::UnboundedSender<RequirementEvent>>,
 }
 type Shared = Arc<Mutex<State>>;
 fn login() -> LoginIdentity {
@@ -256,6 +257,11 @@ impl ProbeFactory for FakeProbes {
             let _guard = Worker(shared.clone());
             while shared.lock().unwrap().hold.contains(&name) {
                 tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+            if let Some(events) = &shared.lock().unwrap().requirement_events {
+                events
+                    .send(RequirementEvent::ProbeReady(name.clone()))
+                    .unwrap();
             }
             ProbeObservation {
                 generation,
@@ -1748,11 +1754,18 @@ async fn unknown_ownership_keeps_route_age_despite_fresh_probe_and_snapshot_read
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
+enum RequirementEvent {
+    RouteProbe,
+    WakeStarted(String),
+    ProbeReady(String),
+}
 struct RequirementRoutes {
     peer: bat_fleet_core::route::TailscalePeer,
     calls: Mutex<Vec<String>>,
     hold: AtomicBool,
     healthy: AtomicBool,
+    wake_ended: Arc<AtomicBool>,
+    events: tokio::sync::mpsc::UnboundedSender<RequirementEvent>,
 }
 impl RouteProbe for RequirementRoutes {
     fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
@@ -1765,6 +1778,7 @@ impl RouteProbe for RequirementRoutes {
     ) -> bat_fleet_core::route::PeerFuture<'a> {
         Box::pin(async move {
             self.calls.lock().unwrap().push(ip.into());
+            self.events.send(RequirementEvent::RouteProbe).unwrap();
             if ip == "100.64.0.1" && self.hold.load(Ordering::Relaxed) {
                 return std::future::pending().await;
             }
@@ -1785,12 +1799,23 @@ impl RouteProbe for RequirementRoutes {
                 .lock()
                 .unwrap()
                 .push(format!("tcp:{}", endpoint.address));
+            self.events.send(RequirementEvent::RouteProbe).unwrap();
             endpoint.address == "100.64.0.1" && self.healthy.load(Ordering::Relaxed)
         })
     }
     fn tailscale_wake<'a>(&'a self, ip: &'a str, _: Instant) -> ProbeFuture<'a> {
         Box::pin(async move {
+            struct WakeEnd(Arc<AtomicBool>);
+            impl Drop for WakeEnd {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::SeqCst);
+                }
+            }
+            let _end = (ip == "100.64.0.1").then(|| WakeEnd(self.wake_ended.clone()));
             self.calls.lock().unwrap().push(format!("wake:{ip}"));
+            self.events
+                .send(RequirementEvent::WakeStarted(ip.into()))
+                .unwrap();
             std::future::pending().await
         })
     }
@@ -1801,19 +1826,24 @@ struct RequirementFixture {
     runtime: Supervisor<FakeEffects, FakeProbes, RequirementRoutes>,
     probe: Arc<RequirementRoutes>,
     expected: bat_fleet_core::route::RouteRequirement,
+    events: tokio::sync::mpsc::UnboundedReceiver<RequirementEvent>,
 }
 fn requirement_fixture(
     peer: bat_fleet_core::route::TailscalePeer,
     exhausted: bool,
 ) -> RequirementFixture {
     use bat_fleet_core::route::{RouteRequirement, TailscalePeer};
+    let (events, receiver) = tokio::sync::mpsc::unbounded_channel();
     let probe = Arc::new(RequirementRoutes {
         peer,
         calls: Mutex::new(Vec::new()),
         hold: AtomicBool::new(false),
         healthy: AtomicBool::new(false),
+        wake_ended: Arc::default(),
+        events: events.clone(),
     });
     let (files, state, runtime) = fixture_with_routes(probe.clone());
+    state.lock().unwrap().requirement_events = Some(events);
     let path = files.0.join("kit/fleet-inventory.json");
     let mut inventory: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -1848,6 +1878,7 @@ fn requirement_fixture(
         runtime,
         probe,
         expected,
+        events: receiver,
     }
 }
 fn requirement_row(status: &Status) -> &bat_fleet_core::supervisor_status::Entry {
@@ -1859,10 +1890,44 @@ fn requirement_row(status: &Status) -> &bat_fleet_core::supervisor_status::Entry
 }
 impl RequirementFixture {
     async fn settle(&mut self, now: u64) {
+        // These current-thread tests pause Tokio time. Disk IO must not consume
+        // the product's five-second wake deadline or the held route's budget.
+        let start = Instant::now();
+        self.runtime.tick(now).await.unwrap();
+        let mut ready = HashSet::new();
         let mut saw_failure = false;
-        for _ in 0..20 {
+        let waking = self.probe.peer == bat_fleet_core::route::TailscalePeer::Idle;
+        let mut wake_started = false;
+        loop {
+            // Drive one supervisor transition per actual fixture effect, never
+            // retry a wrong publication or guess completion from a tick count.
+            // Ready probes return in this same poll without another await.
+            match self.events.recv().await.unwrap() {
+                RequirementEvent::ProbeReady(name) => {
+                    ready.insert(name);
+                }
+                RequirementEvent::WakeStarted(ip) => {
+                    if ip == "100.64.0.1" {
+                        wake_started = true;
+                        // Consume the reservation notification. A later progress
+                        // wait must prove actual completion, not this old permit.
+                        self.runtime.route_progress().await;
+                    }
+                }
+                RequirementEvent::RouteProbe => (),
+            }
             let published = self.runtime.tick(now).await.unwrap();
             let row = requirement_row(&published);
+            if wake_started {
+                assert!(self
+                    .probe
+                    .calls
+                    .lock()
+                    .unwrap()
+                    .contains(&"wake:100.64.0.1".into()));
+                assert!(!self.probe.wake_ended.load(Ordering::SeqCst));
+                assert_eq!(row.code.as_deref(), Some("TAILSCALE_WAKING"));
+            }
             if matches!(
                 row.code.as_deref(),
                 Some("ROUTE_UNAVAILABLE" | "TAILSCALE_WAKING")
@@ -1871,9 +1936,76 @@ impl RequirementFixture {
                 assert_eq!(row.route_requirement, Some(self.expected));
                 saw_failure = true;
             }
-            tokio::time::sleep(Duration::from_millis(1)).await;
+            let expected_ready: &[&str] = if waking {
+                // Wake also gates these peers' probes; only Connector is
+                // expected to finish while their wake effects remain pending.
+                &["connector"]
+            } else {
+                &["connector", "node-2", "node-3", "node-4"]
+            };
+            if expected_ready.iter().all(|name| ready.contains(*name))
+                && saw_failure
+                && (!waking || wake_started)
+            {
+                for name in expected_ready {
+                    assert!(ready.contains(*name));
+                    assert_eq!(
+                        published
+                            .entries
+                            .iter()
+                            .find(|row| row.name == *name)
+                            .unwrap()
+                            .level,
+                        "ready"
+                    );
+                }
+                break;
+            }
         }
         assert!(saw_failure);
+        assert_eq!(Instant::now(), start);
+    }
+    async fn wait_for_calls(
+        &mut self,
+        peer_attempts: usize,
+        tcp_attempts: usize,
+        lan_attempts: usize,
+    ) {
+        loop {
+            let complete = {
+                let calls = self.probe.calls.lock().unwrap();
+                [
+                    ("100.64.0.1", peer_attempts),
+                    ("tcp:100.64.0.1", tcp_attempts),
+                    ("tcp:192.0.2.10", lan_attempts),
+                ]
+                .into_iter()
+                .all(|(call, expected)| {
+                    calls.iter().filter(|value| *value == call).count() >= expected
+                })
+            };
+            if complete {
+                return;
+            }
+            assert!(matches!(
+                self.events.recv().await.unwrap(),
+                RequirementEvent::RouteProbe
+            ));
+        }
+    }
+    async fn wait_for_probe(&mut self, expected: &str) {
+        // Earlier route-effect notifications may still be queued; only the
+        // named observation's completion authorizes the next harvest tick.
+        loop {
+            match self.events.recv().await.unwrap() {
+                RequirementEvent::ProbeReady(name) => {
+                    assert_eq!(name, expected);
+                    return;
+                }
+                RequirementEvent::RouteProbe => (),
+                RequirementEvent::WakeStarted(_) => panic!("unexpected wake"),
+            }
+        }
     }
     fn bytes(&self) -> Vec<u8> {
         std::fs::read(
@@ -1921,7 +2053,41 @@ impl RequirementFixture {
         }
     }
 }
-#[tokio::test]
+#[tokio::test(start_paused = true)]
+async fn requirement_settle_returns_a_live_waking_publication() {
+    let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Idle, false);
+    f.settle(1000).await;
+    assert_eq!(
+        requirement_row(&f.parse(1000)).code.as_deref(),
+        Some("TAILSCALE_WAKING")
+    );
+    assert!(!f.probe.wake_ended.load(Ordering::SeqCst));
+    f.runtime.shutdown(1001).await.unwrap();
+}
+#[tokio::test(start_paused = true)]
+async fn requirement_wake_deadline_ends_the_effect_before_pending() {
+    let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Idle, false);
+    f.settle(1000).await;
+    tokio::time::advance(Duration::from_secs(4)).await;
+    let waking = f.runtime.tick(1001).await.unwrap();
+    assert_eq!(
+        requirement_row(&waking).code.as_deref(),
+        Some("TAILSCALE_WAKING")
+    );
+    assert!(!f.probe.wake_ended.load(Ordering::SeqCst));
+    f.assert_effects(&waking, 1, 0, 0, 1);
+    tokio::time::advance(Duration::from_secs(1)).await;
+    f.runtime.route_progress().await;
+    assert!(f.probe.wake_ended.load(Ordering::SeqCst));
+    let pending = f.runtime.tick(1002).await.unwrap();
+    assert_eq!(
+        requirement_row(&pending).code.as_deref(),
+        Some("PROBE_PENDING")
+    );
+    f.assert_effects(&pending, 1, 0, 0, 1);
+    f.runtime.shutdown(1003).await.unwrap();
+}
+#[tokio::test(start_paused = true)]
 async fn direct_requirement_survives_between_and_during_route_attempts() {
     use bat_fleet_core::route::TailscalePeer;
     for (peer, exhausted) in [
@@ -1962,7 +2128,7 @@ async fn direct_requirement_survives_between_and_during_route_attempts() {
         if wakes == 0 {
             f.probe.hold.store(true, Ordering::Relaxed);
             f.runtime.tick(16000).await.unwrap();
-            tokio::time::sleep(Duration::from_millis(1)).await;
+            f.wait_for_calls(2, tcp, lan * 2).await;
             let status = f.runtime.tick(16001).await.unwrap();
             let row = requirement_row(&status);
             assert_eq!(row.code.as_deref(), Some("PROBE_PENDING"));
@@ -1973,26 +2139,20 @@ async fn direct_requirement_survives_between_and_during_route_attempts() {
         f.runtime.shutdown(16002).await.unwrap();
     }
 }
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn route_requirement_clears_on_success_before_a_probe_arrives() {
     let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Unknown, false);
     f.settle(1000).await;
     f.probe.healthy.store(true, Ordering::Relaxed);
-    let mut saw_chosen = false;
-    for _ in 0..20 {
-        let status = f.runtime.tick(16000).await.unwrap();
-        let row = requirement_row(&status);
-        if row.route.is_some() {
-            if !saw_chosen {
-                assert!(row.observed_at.is_none());
-                assert_eq!(row.code.as_deref(), Some("PROBE_PENDING"));
-            }
-            assert!(row.route_requirement.is_none());
-            saw_chosen = true;
-        }
-        tokio::time::sleep(Duration::from_millis(1)).await;
-    }
-    assert!(saw_chosen);
+    f.runtime.tick(16000).await.unwrap();
+    f.wait_for_calls(2, 1, 0).await;
+    let status = f.runtime.tick(16000).await.unwrap();
+    let row = requirement_row(&status);
+    assert!(row.route.is_some());
+    assert!(row.observed_at.is_none());
+    assert_eq!(row.code.as_deref(), Some("PROBE_PENDING"));
+    assert!(row.route_requirement.is_none());
+    f.wait_for_probe("node-1").await;
     let status = f.runtime.tick(16001).await.unwrap();
     assert_eq!(requirement_row(&status).level, "ready");
     assert!(requirement_row(&status).route_requirement.is_none());
@@ -2010,7 +2170,7 @@ async fn route_requirement_clears_on_success_before_a_probe_arrives() {
     }
     f.runtime.shutdown(16002).await.unwrap();
 }
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn route_requirement_clears_on_selection_invalidation() {
     let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Unknown, false);
     f.settle(1000).await;
@@ -2043,7 +2203,7 @@ async fn route_requirement_clears_on_selection_invalidation() {
         .any(|name| name == "node-1"));
     f.runtime.shutdown(1400).await.unwrap();
 }
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn route_requirement_clears_on_credential_generation_change() {
     let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Unknown, false);
     f.settle(1000).await;
@@ -2069,7 +2229,7 @@ async fn route_requirement_clears_on_credential_generation_change() {
         .any(|name| name == "node-1"));
     f.runtime.shutdown(1300).await.unwrap();
 }
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn route_requirement_withholds_credential_errors() {
     let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Unknown, false);
     f.settle(1000).await;
@@ -2136,12 +2296,12 @@ async fn pending_requirement_fixture() -> serde_json::Value {
     }
     cases
 }
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 #[ignore = "explicit fixture regeneration only"]
 async fn generate_pending_requirement_fixture() {
     println!("FLEET_PENDING={}", pending_requirement_fixture().await);
 }
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn pending_requirement_rows_match_native_fixture() {
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-pending.json")).unwrap();
