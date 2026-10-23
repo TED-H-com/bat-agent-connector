@@ -511,7 +511,7 @@ impl ProvisioningReceipt {
     pub fn path(&self, artifact: Artifact) -> &Path {
         &self.slots[index(artifact)].canonical_path
     }
-    pub(super) fn allowed_directories(&self) -> Vec<PathBuf> {
+    pub(crate) fn allowed_directories(&self) -> Vec<PathBuf> {
         let root = &self.scope.kit_root;
         let state = &self.scope.state_root;
         vec![
