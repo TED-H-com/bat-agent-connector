@@ -264,16 +264,23 @@ fn validate_termination(
     intent: &MigrationIntent,
     termination: &MigrationTermination,
     migrations: &[crate::migration::MigrationHistory],
+    replaying: bool,
 ) -> Result<()> {
     ensure(termination.binding == intent.binding)?;
     let observed = migration_history(c, &intent.migration_id, &intent.startup_path, migrations)?;
     match &termination.outcome {
-        MigrationOutcome::Refused => ensure(observed.saved().is_none()),
+        // Only these Store changes are confined to Installation on replay:
+        // Saved appearing after Refused, or the source/restore hash or phase
+        // changing. New outcomes must still seal the exact admissible state.
+        // Missing required Saved/views, invalid readers, scope/binding, intent
+        // contents and restore lineage/SID/bytes remain resolution conflicts.
+        MigrationOutcome::Refused => ensure(replaying || observed.saved().is_none()),
         MigrationOutcome::Abandoned | MigrationOutcome::Restored { .. } => {
             let saved = observed.saved().ok_or(INVALID)?;
             ensure(
-                termination.saved_sha256.as_deref() == Some(saved.sha256())
-                    && saved.phase() != crate::migration::Phase::Complete,
+                replaying
+                    || (termination.saved_sha256.as_deref() == Some(saved.sha256())
+                        && saved.phase() != crate::migration::Phase::Complete),
             )?;
             validate_saved_intent(c, intent, saved)?;
             if let MigrationOutcome::Restored {
@@ -286,9 +293,12 @@ fn validate_termination(
                     .saved()
                     .ok_or(INVALID)?;
                 ensure(
-                    restore.sha256() == saved_sha256
-                        && restore.phase() == crate::migration::Phase::Complete
-                        && restore.login().owner_sid == intent.binding.owner_sid
+                    replaying
+                        || (restore.sha256() == saved_sha256
+                            && restore.phase() == crate::migration::Phase::Complete),
+                )?;
+                ensure(
+                    restore.login().owner_sid == intent.binding.owner_sid
                         && restore.restores() == Some(intent.migration_id.as_str())
                         && restore.config(true)? == saved.config(false)?
                         && (restore.config(false)? == saved.config(true)?
@@ -328,7 +338,7 @@ fn apply_migration(
         return Ok(None);
     };
     if let Record::MigrationTermination(termination) = &stored.record {
-        validate_termination(c, intent, termination, migrations)?;
+        validate_termination(c, intent, termination, migrations, true)?;
         slot.clear();
         used.insert(key);
         return Ok(Some(Terminal {
@@ -619,7 +629,16 @@ pub(super) fn validate_append(
         resolve(&candidate(c, record)?, publications, migrations)?.baseline()?;
         return Ok(());
     }
-    if matches!(record, Record::MigrationTermination(_)) {
+    if let Record::MigrationTermination(termination) = record {
+        let intent = c
+            .records
+            .values()
+            .find(|s| digest(&s.bytes) == termination.intent_sha256)
+            .ok_or(INVALID)?;
+        let Record::MigrationIntent(intent) = &intent.record else {
+            return Err(INVALID);
+        };
+        validate_termination(c, intent, termination, migrations, false)?;
         resolve(&candidate(c, record)?, publications, migrations)?;
         return Ok(());
     }

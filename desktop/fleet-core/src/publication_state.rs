@@ -224,6 +224,19 @@ pub(crate) fn create_file(path: &Path) -> Result<std::fs::File> {
     windows::create_file(path)
 }
 
+/// Open without reparse traversal, verify the handle ACL, and retain exclusion
+/// against directory replacement. This proves security, never creation authority.
+#[cfg(windows)]
+pub(crate) fn checked_handle(
+    path: &Path,
+    private: bool,
+    child_absent: bool,
+) -> Result<std::fs::File> {
+    let file = windows::open_no_follow(path, true).map_err(|_| UNPROVEN)?;
+    windows::acl_file(&file, private, child_absent)?;
+    Ok(file)
+}
+
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
@@ -293,6 +306,9 @@ mod acl;
 /// This is an access-control property, never a creation/ownership decision.
 pub fn verify_protected(path: &Path) -> Result<()> {
     no_links(path)?;
+    private_handle(&open_metadata(path)?)
+}
+fn open_metadata(path: &Path) -> Result<std::fs::File> {
     #[cfg(windows)]
     let file = windows::open_no_follow(path, false).map_err(|_| UNPROVEN)?;
     #[cfg(unix)]
@@ -304,7 +320,7 @@ pub fn verify_protected(path: &Path) -> Result<()> {
             .open(path)
             .map_err(|_| UNPROVEN)?
     };
-    private_handle(&file)
+    Ok(file)
 }
 fn private_handle(file: &std::fs::File) -> Result<()> {
     let metadata = file.metadata().map_err(|_| UNPROVEN)?;
@@ -322,7 +338,39 @@ fn private_handle(file: &std::fs::File) -> Result<()> {
     windows::acl_file(file, true, false)?;
     Ok(())
 }
-fn no_links(path: &Path) -> Result<()> {
+/// One root-to-leaf traversal for metadata-only and checked-handle callers.
+/// The checker receives the traversed child so it can enforce absence-sensitive
+/// ACL policy. Retained directory handles and identities survive later reads.
+pub(crate) struct WalkObject<H, I> {
+    pub metadata: std::fs::Metadata,
+    pub handle: H,
+    pub identity: I,
+    pub linked: bool,
+}
+impl<H, I> WalkObject<H, I> {
+    pub(crate) fn new(metadata: std::fs::Metadata, handle: H, identity: I) -> Self {
+        let linked = metadata.file_type().is_symlink();
+        #[cfg(windows)]
+        let linked = {
+            use std::os::windows::fs::MetadataExt;
+            linked || metadata.file_attributes() & 0x400 != 0
+        };
+        Self {
+            metadata,
+            handle,
+            identity,
+            linked,
+        }
+    }
+}
+pub(crate) fn metadata(path: &Path) -> Result<Option<std::fs::Metadata>> {
+    match path.symlink_metadata() {
+        Ok(m) => Ok(Some(m)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err(UNPROVEN),
+    }
+}
+fn validate_walk_path(path: &Path, error: &'static str) -> Result<()> {
     use std::path::Component;
     if !path.is_absolute()
         || path
@@ -332,27 +380,54 @@ fn no_links(path: &Path) -> Result<()> {
             .to_str()
             .is_none_or(|s| s.contains('\0') || s.split(['/', '\\']).any(|c| c == "." || c == ".."))
     {
-        return Err(UNPROVEN);
-    }
-    for p in path.ancestors() {
-        match p.symlink_metadata() {
-            Ok(m) => {
-                if m.file_type().is_symlink() || (p != path && !m.is_dir()) {
-                    return Err(UNPROVEN);
-                }
-                #[cfg(windows)]
-                {
-                    use std::os::windows::fs::MetadataExt;
-                    if m.file_attributes() & 0x400 != 0 {
-                        return Err(UNPROVEN);
-                    }
-                }
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-            Err(_) => return Err(UNPROVEN),
-        }
+        return Err(error);
     }
     Ok(())
+}
+pub(crate) fn walk_checked<H: Clone, I: Clone + PartialEq>(
+    path: &Path,
+    retained: &mut std::collections::BTreeMap<std::path::PathBuf, (H, I)>,
+    error: &'static str,
+    mut check: impl FnMut(&Path, Option<&Path>) -> Result<Option<WalkObject<H, I>>>,
+) -> Result<Option<WalkObject<H, I>>> {
+    validate_walk_path(path, error)?;
+    let chain: Vec<_> = path.ancestors().collect();
+    let mut leaf = None;
+    let mut missing = false;
+    for (index, &p) in chain.iter().enumerate().rev() {
+        let Some(object) = check(p, index.checked_sub(1).map(|i| chain[i]))? else {
+            missing = true;
+            continue;
+        };
+        if missing {
+            return Err(error);
+        }
+        if object.linked || (p != path && !object.metadata.is_dir()) {
+            return Err(error);
+        }
+        if object.metadata.is_dir() {
+            if retained
+                .get(p)
+                .is_some_and(|(_, id)| *id != object.identity)
+            {
+                return Err(error);
+            }
+            retained.insert(p.into(), (object.handle.clone(), object.identity.clone()));
+        }
+        if p == path {
+            leaf = Some(object);
+        }
+    }
+    if metadata(path)?.is_some() != leaf.is_some() {
+        return Err(error);
+    }
+    Ok(leaf)
+}
+fn no_links(path: &Path) -> Result<()> {
+    walk_checked(path, &mut Default::default(), UNPROVEN, |p, _| {
+        Ok(metadata(p)?.map(|metadata| WalkObject::new(metadata, (), ())))
+    })
+    .map(|_| ())
 }
 /// Check one existing environmental directory's replacement/security rights.
 /// `child_absent` also forbids untrusted child-creation grants. Caller rechecks
@@ -361,64 +436,75 @@ pub fn verify_ancestor(path: &Path, child_absent: bool) -> Result<()> {
     no_links(path)?;
     #[cfg(windows)]
     {
-        let file = windows::open_no_follow(path, false).map_err(|_| UNPROVEN)?;
-        if !file.metadata().map_err(|_| UNPROVEN)?.is_dir() {
-            return Err(UNPROVEN);
-        }
-        windows::acl_file(&file, false, child_absent)
+        ancestor_handle(&open_metadata(path)?, child_absent)
     }
     #[cfg(unix)]
     {
-        use std::os::unix::fs::MetadataExt;
-        let metadata = path.symlink_metadata().map_err(|_| UNPROVEN)?;
-        let _ = child_absent;
-        if !metadata.is_dir()
-            || (metadata.uid() != 0 && metadata.uid() != unsafe { libc::geteuid() })
-            || metadata.mode() & 0o022 != 0
-        {
-            return Err(UNPROVEN);
-        }
-        Ok(())
+        ancestor_metadata(
+            &path.symlink_metadata().map_err(|_| UNPROVEN)?,
+            child_absent,
+        )
     }
+}
+#[cfg(windows)]
+fn ancestor_handle(file: &std::fs::File, child_absent: bool) -> Result<()> {
+    if !file.metadata().map_err(|_| UNPROVEN)?.is_dir() {
+        return Err(UNPROVEN);
+    }
+    windows::acl_file(file, false, child_absent)
+}
+#[cfg(unix)]
+fn ancestor_metadata(metadata: &std::fs::Metadata, child_absent: bool) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    let _ = child_absent;
+    if !metadata.is_dir()
+        || (metadata.uid() != 0 && metadata.uid() != unsafe { libc::geteuid() })
+        || metadata.mode() & 0o022 != 0
+    {
+        return Err(UNPROVEN);
+    }
+    Ok(())
 }
 /// Walk every ancestor through the filesystem root. Existing directories within
 /// `protected_root` require private protection; outside it use environmental ACL
 /// policy. Missing components are permitted only below an existing protected
 /// root. This grants no right to create any of them.
 pub fn verify_ancestors(path: &Path, protected_root: &Path) -> Result<()> {
-    no_links(path)?;
-    no_links(protected_root)?;
+    validate_walk_path(protected_root, UNPROVEN)?;
     if !path.starts_with(protected_root) || !protected_root.is_dir() {
         return Err(UNPROVEN);
     }
-    verify_protected(protected_root)?;
-    let mut child_absent = match path.symlink_metadata() {
-        Ok(_) => false,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
-        Err(_) => return Err(UNPROVEN),
-    };
-    for parent in path.ancestors().skip(1) {
-        match parent.symlink_metadata() {
-            Ok(m) => {
-                if !m.is_dir() {
-                    return Err(UNPROVEN);
-                }
-                if parent.starts_with(protected_root) {
-                    verify_protected(parent)?;
-                } else {
-                    verify_ancestor(parent, child_absent)?;
-                }
-                child_absent = false;
+    walk_checked(path, &mut Default::default(), UNPROVEN, |p, child| {
+        let Some(m) = metadata(p)? else {
+            if !p.starts_with(protected_root) {
+                return Err(UNPROVEN);
             }
-            Err(e)
-                if e.kind() == std::io::ErrorKind::NotFound
-                    && parent.starts_with(protected_root) =>
+            return Ok(None);
+        };
+        // Preserve the public verifier's policy: it validates the root and
+        // ancestors, while callers validate the leaf independently.
+        let handle = if p == protected_root || (p != path && p.starts_with(protected_root)) {
+            let file = open_metadata(p)?;
+            private_handle(&file)?;
+            Some(std::rc::Rc::new(file))
+        } else if p != path {
+            let child_absent = child.is_some_and(|c| matches!(metadata(c), Ok(None)));
+            #[cfg(windows)]
             {
-                child_absent = true
+                let file = open_metadata(p)?;
+                ancestor_handle(&file, child_absent)?;
+                Some(std::rc::Rc::new(file))
             }
-            Err(_) => return Err(UNPROVEN),
-        }
-    }
+            #[cfg(unix)]
+            {
+                ancestor_metadata(&m, child_absent)?;
+                None
+            }
+        } else {
+            None
+        };
+        Ok(Some(WalkObject::new(m, handle, ())))
+    })?;
     Ok(())
 }
 /// Strict create-new with explicit private permissions. An existing object is
@@ -464,10 +550,7 @@ pub fn create_new_file(path: &Path) -> Result<std::fs::File> {
 /// weak ACLs and overlarge bytes are errors; only genuine NotFound is None.
 /// This does not substitute for verify_ancestors or native object-identity guards.
 pub fn read_private(path: &Path, limit: usize) -> Result<Option<Vec<u8>>> {
-    use std::io::Read;
-    if limit == 0 || limit > 32 * 1024 * 1024 {
-        return Err(UNPROVEN);
-    }
+    read_limit(limit)?;
     no_links(path)?;
     #[cfg(windows)]
     let opened = windows::open_no_follow(path, true);
@@ -484,19 +567,34 @@ pub fn read_private(path: &Path, limit: usize) -> Result<Option<Vec<u8>>> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(_) => return Err(UNPROVEN),
     };
+    private_handle(&file)?;
+    let bytes = read_bounded(&file, limit)?;
+    private_handle(&file)?;
+    no_links(path)?;
+    Ok(Some(bytes))
+}
+
+/// Shared bound validation also runs before an absent-path return.
+pub(crate) fn read_limit(limit: usize) -> Result<()> {
+    if limit == 0 || limit > 32 * 1024 * 1024 {
+        return Err(UNPROVEN);
+    }
+    Ok(())
+}
+/// One bounded read from an already-open handle. Security and identity checks
+/// belong to the caller and surround this read.
+pub(crate) fn read_bounded(file: &std::fs::File, limit: usize) -> Result<Vec<u8>> {
+    use std::io::Read;
+    read_limit(limit)?;
     if !file.metadata().map_err(|_| UNPROVEN)?.is_file() {
         return Err(UNPROVEN);
     }
-    private_handle(&file)?;
     let mut bytes = Vec::new();
-    (&file)
-        .take(limit as u64 + 1)
+    file.take(limit as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| UNPROVEN)?;
     if bytes.len() > limit {
         return Err(UNPROVEN);
     }
-    private_handle(&file)?;
-    no_links(path)?;
-    Ok(Some(bytes))
+    Ok(bytes)
 }
