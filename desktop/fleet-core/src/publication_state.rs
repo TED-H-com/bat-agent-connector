@@ -273,7 +273,6 @@ mod tests {
     }
     #[test]
     fn windows_held_directory_allows_publication_but_denies_rename_and_delete() {
-        use std::io::ErrorKind::PermissionDenied;
         let temp = Temp::new();
         let directory = temp.0.join("held");
         create_new_directory(&directory).unwrap();
@@ -306,10 +305,19 @@ mod tests {
         assert_eq!(read_private(&path, 64).unwrap().unwrap(), b"second");
         std::fs::remove_file(&path).unwrap();
         let moved = temp.0.join("moved");
-        assert_eq!(
-            std::fs::rename(&directory, &moved).unwrap_err().kind(),
-            PermissionDenied
+        let rename_error = std::fs::rename(&directory, &moved)
+            .unwrap_err()
+            .raw_os_error();
+        assert!(
+            [
+                Some(ERROR_ACCESS_DENIED as i32),
+                Some(ERROR_SHARING_VIOLATION as i32),
+            ]
+            .contains(&rename_error),
+            "unexpected held-directory rename error: {rename_error:?}"
         );
+        assert!(!moved.try_exists().unwrap());
+        assert!(held.metadata().unwrap().is_dir());
         let delete_error = std::fs::remove_dir(&directory).unwrap_err().raw_os_error();
         // Deletion may report ERROR_ACCESS_DENIED or ERROR_SHARING_VIOLATION.
         assert!(

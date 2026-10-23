@@ -50,6 +50,7 @@ from tests.test_pm_package_handoff import (
     world as handoff_world_fixture,
 )
 from tests.test_pm_work_attempt_result import (
+    _advance_start_public,
     _call_mcp_tool,
     _seed_worktree_commits,
     _set_turn_messages,
@@ -242,6 +243,41 @@ async def _drain_uncertain(ops, op_id, monkeypatch):
 
 
 # --------------------------------------------------------------------------- 1
+
+
+@pytest.mark.parametrize("before_send_failure", [False, True])
+async def test_initial_turn_marker_uses_real_start_handoff(start_ready, mock, before_send_failure):
+    # A successful repository.continue always records its own message_id, and
+    # follow-up admission persists it. Empty fallback is therefore tested at
+    # the helper boundary, using attempts made by the real HTTP start action.
+    w = start_ready
+    ops = w["d"].ops
+    if before_send_failure:
+        # A real BAT read shape with a mismatched root stops the handoff before
+        # any send request exists. Its operation ID alone is not a turn marker.
+        mock.handlers["git:getRoot"] = lambda params: "/different-root"
+    env = await _start_envelope(w)
+    key = env.pop("idempotency_key")
+    status, body = await http(w["port"], "POST", "/api/v1/operations", tok=w["owner_token"],
+                              body=env, headers={"Idempotency-Key": key})
+    assert status == 202, body
+    done = await _advance_start_public(ops, body["operation"]["operation_id"])
+    assert done["status"] == ("failed" if before_send_failure else "succeeded"), done
+    attempt_id = done["result"]["attempt_id"]
+    handoff_id = done["result"]["children"]["handoff"]
+    assert handoff_id
+    handoff = await _get_op(w, handoff_id)
+    if before_send_failure:
+        assert handoff["error_code"] == "START_MISMATCH", handoff
+        assert not any(step["name"] == "send" for step in ops.get(handoff_id)["steps"])
+        expected = None
+    else:
+        expected = handoff["result"]["message_id"]
+        assert expected
+        assert len(_frames(mock, expected)) == 1
+    assert pm_work_follow_up._initial_attempt_turn_marker(ops.db, attempt_id, fallback="") == expected
+    assert pm_work_follow_up._initial_attempt_turn_marker(ops.db, attempt_id, fallback="  recorded-marker  ") == "recorded-marker"
+    assert pm_work_follow_up._initial_attempt_turn_marker(ops.db, "absent") is None
 
 
 async def test_follow_up_fifo_order(start_ready, mock, monkeypatch):

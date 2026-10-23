@@ -657,9 +657,13 @@ class OperationService:
             refs["resolved_params"] = _resolved_params
         now = time.time()
         with self.journal.tx():
-            if action in {"setup.connection.apply", "connection.reference.apply"}:
+            if action in {"setup.connection.apply", "connection.reference.apply", "connection.reference.detach"}:
                 from .setup_connections import _require_connection_available
-                _require_connection_available(self, binding["principal_id"], target)
+                if action == "connection.reference.detach":
+                    from .connection_detach import admit as admit_detach
+                    admit_detach(self, principal, target, params, preconditions)
+                else:
+                    _require_connection_available(self, binding["principal_id"], target)
             from .pm_overview_assessments import ACTION as OVERVIEW_ACTION
             from .pm_overview_assessments import admit_operation as admit_overview
             if action == OVERVIEW_ACTION:
@@ -750,7 +754,7 @@ class OperationService:
         cancel_work_follow_up(self, principal, op)
         if op["status"] in TERMINAL:
             return op
-        if op["action"] == "setup.connection.apply" and op["status"] == "needs_attention":
+        if op["action"] in {"setup.connection.apply", "connection.reference.detach"} and op["status"] == "needs_attention":
             if op["error_code"] == "CONNECTION_PROJECTION_CHANGED":
                 from .setup_connections import cancel_projection_conflict
                 return cancel_projection_conflict(self, principal, op)
@@ -825,7 +829,7 @@ class OperationService:
         if op["status"] != "needs_attention":
             raise OperationError("NOT_RESUMABLE", f"only needs_attention operations resume (this one is "
                                  f"{op['status']})", 409)
-        if op["action"] == "setup.connection.apply":
+        if op["action"] in {"setup.connection.apply", "connection.reference.detach"}:
             from .connection_handoff import renew_unclaimed
             renew_unclaimed(self, op)
         op = self._transition(operation_id, "running", reason=f"resumed by {principal.actor}", uncertain_tries=0,
