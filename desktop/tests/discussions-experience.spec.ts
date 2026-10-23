@@ -721,6 +721,9 @@ test('reload during the first thread mount preserves the staged intent without a
 test('adoption recovery opens Details and tolerates a completed receipt', async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale: 'zh-TW', viewport: {width: 390, height: 844}});
   const page = await context.newPage(), f = demoFixture({locale: 'zh-TW', discussions: true}), checks: string[] = [];
+  // Count explicit recovery reads here. A restored form also schedules its own
+  // acknowledged-receipt read after 250 ms; wall time must not race these steps.
+  const at = Date.now(); await page.clock.install({time: at}); await page.clock.pauseAt(at);
   let op: any;
   await mountConversation(page, false, async input => {
     if (input.method === 'GET' && input.path.startsWith('/operations/')) checks.push(input.path);
