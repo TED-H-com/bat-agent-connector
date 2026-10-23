@@ -43731,6 +43731,9 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 		busy = true;
 		try {
 			alive();
+			if (verb === "resume" && selectedWork() === current.work_item_ids[0]) try {
+				sessionStorage.setItem(navigationKey(operation.operation_id), current.work_item_ids[0]);
+			} catch {}
 			for (const button of body.querySelectorAll("button")) button.disabled = true;
 			const value = await api("POST", `/operations/${operation.operation_id}/${verb}`, {});
 			if (!valid(own)) return;
