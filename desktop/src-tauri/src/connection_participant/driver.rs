@@ -70,22 +70,30 @@ impl<C: Fn() -> u64> Driver<C> {
     }
     pub(crate) async fn advance(
         &self,
-        transport: &impl ClaimTransport,
+        transport: &impl ReceiptTransport,
         reviews: &impl Reviews,
         store: &mut Store<impl Backend>,
         scope: &Scope,
         operation: &str,
     ) -> Outcome {
         match self.step(transport, reviews, store, scope, operation).await {
-            Ok((record, association, read_only)) => Outcome {
-                state: State::Claimed,
-                refusal: None,
-                invocation: Some(Invocation {
-                    record,
-                    association,
-                    read_only,
-                }),
-            },
+            Ok((record, association, read_only)) => {
+                if record.part(Part::Receipt(0)).is_some() {
+                    return Outcome::state(
+                        super::delivery::advance(transport, store, record.intent(), (self.clock)())
+                            .await,
+                    );
+                }
+                Outcome {
+                    state: State::Claimed,
+                    refusal: None,
+                    invocation: Some(Invocation {
+                        record,
+                        association,
+                        read_only,
+                    }),
+                }
+            }
             Err(error) => {
                 let mut outcome = Outcome::state(match error {
                     Error::Unavailable => State::Unavailable,
@@ -105,7 +113,7 @@ impl<C: Fn() -> u64> Driver<C> {
     // The existing discovery caller serializes advances; this driver adds no scheduler.
     async fn step(
         &self,
-        transport: &impl ClaimTransport,
+        transport: &impl ReceiptTransport,
         reviews: &impl Reviews,
         store: &mut Store<impl Backend>,
         scope: &Scope,
@@ -157,6 +165,12 @@ impl<C: Fn() -> u64> Driver<C> {
                 return Err(Error::Changed);
             }
         }
+        let record = match record {
+            Some(record) if record.part(Part::Receipt(0)).is_some() => {
+                return Ok((record, review.association().clone(), true));
+            }
+            record => record,
+        };
         if matches!(next, Next::RetryExhausted | Next::Done) {
             return Err(Error::Changed);
         }

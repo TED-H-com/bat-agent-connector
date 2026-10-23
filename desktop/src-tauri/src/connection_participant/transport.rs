@@ -63,6 +63,9 @@ pub(crate) trait ClaimTransport: Transport {
     ) -> Result<()>;
     async fn handoff(&self, intent: &Intent, body: &[u8]) -> PostResult;
 }
+pub(crate) trait ReceiptTransport: ClaimTransport {
+    async fn receipt(&self, intent: &Intent, body: &[u8]) -> PostResult;
+}
 pub(crate) struct NativeTransport<'a> {
     pub bridge: &'a Bridge,
     pub scope: NativeScope,
@@ -129,6 +132,17 @@ impl ClaimTransport for NativeTransport<'_> {
         }
         self.bridge
             .participant_exchange_attempt(&self.scope, "/connections/handoff".into(), Some(body))
+            .await
+    }
+}
+impl ReceiptTransport for NativeTransport<'_> {
+    async fn receipt(&self, intent: &Intent, body: &[u8]) -> PostResult {
+        self.check_original(intent.accepted())
+            .map_err(PostFailure::BeforeSender)?;
+        bat_fleet_core::connection_participant::request::stored_receipt(body)
+            .map_err(|_| PostFailure::BeforeSender(Error::Invalid))?;
+        self.bridge
+            .participant_exchange_attempt(&self.scope, "/connections/receipt".into(), Some(body))
             .await
     }
 }

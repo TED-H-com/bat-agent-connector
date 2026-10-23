@@ -396,3 +396,12 @@ async fn not_sent_can_replay_only_within_original_ttl_and_expiry_is_read_only() 
         );
     }
 }
+
+#[path = "delivery_tests.rs"]
+mod delivery_tests;
+
+impl ReceiptTransport for Peer {
+    async fn receipt(&self, _: &Intent, _: &[u8]) -> PostResult {
+        panic!("claim-only tests must not deliver")
+    }
+}
