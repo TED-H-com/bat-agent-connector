@@ -48,6 +48,27 @@ def render():
     lines += ["", "| Bound / 限制 | Value / 值 |", "| --- | --- |"]
     for key, value in contract["bounds"].items():
         lines.append(f"| `{key}` | {value} |")
+    v2 = contract["v2"]
+    lines += ["", f"Version **{v2['contract_version']}** / 版本二（codec only / 僅編解碼契約）:",
+              f"HMAC purpose: `{v2['hmac_purpose']}`; integer maximum: `{v2['integer_max']}`.",
+              "The same bounds above apply / 沿用上方大小與效期限制。"]
+    for kind, effect in v2["effect_kinds"].items():
+        auth = effect["authorization"]
+        lines += ["", f"Kind `{kind}`; action `{effect['action']}`; required scope `{auth['scope']}`;",
+                  "original bindings / 原始綁定: " + ", ".join(f"`{key}`" for key in auth["bindings"]) + ".",
+                  "", "| Role order / 角色順序 | Allowed after states / 允許的後置狀態 |", "| --- | --- |"]
+        for role in effect["roles"]:
+            lines.append(f"| `{role}` | " + ", ".join(f"`{s}`" for s in effect["after_states"][role]) + " |")
+        lines += ["", f"Absent after requires unchanged / absent 後置狀態須未變更: `{str(effect['absent_after_requires_unchanged']).lower()}`.",
+                  "", "| Outcome / 結果 | Phase / 階段 | Code / 代碼 |", "| --- | --- | --- |"]
+        for outcome, phases in effect["matrix"].items():
+            for phase, codes in phases.items():
+                values = ", ".join(f"`{code}`" if code is not None else "`null`" for code in codes)
+                lines.append(f"| `{outcome}` | `{phase}` | {values} |")
+    lines += ["", "Additional native codes / 新增本機代碼（其他 LOCAL_* 沿用上方理由）:",
+              "", "| Code | English / 繁體中文 |", "| --- | --- |"]
+    for code, value in v2["codes"].items():
+        lines.append(f"| `{code}` | {value['reason']} |")
     return "\n".join([*lines, "", END])
 
 
