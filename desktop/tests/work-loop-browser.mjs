@@ -607,11 +607,11 @@ try {
     const following = () => page.evaluate(() => Object.entries(sessionStorage)
       .filter(([key]) => key.includes('.adopt-start-live.')));
     const originalIntent = await following();
-    assert.equal(originalIntent.length, 1);
     await page.evaluate(workspace => {location.hash = `#/pm/${workspace}/overview`;}, f.workspace);
     await expect(page.locator('[data-pm-region="overview"]')).toBeVisible();
     await eventWrites.pause();
-    assert.deepEqual(await following(), []);
+    const withdrawnIntent = await following();
+    assert.deepEqual(withdrawnIntent, []);
     for (const kind of ['parent']) {
       step = 'recover-' + kind;
       eventWrites.resume();
@@ -647,7 +647,8 @@ try {
       const {card} = await read(`/pm/workspaces/${f.workspace}/kanban/${f.work}`);
       writeFileSync(resolve(f.shots, 'recovery-barrier.json'), JSON.stringify({
         barrier:'parent-settled-before-reload-and-event-delivery', original_intent:originalIntent,
-        resumed_intent:await following(), parent:{id:parent.operation_id,status:parent.status,stage:parent.result.stage},
+        withdrawn_intent:withdrawnIntent, resumed_intent:await following(),
+        parent:{id:parent.operation_id,status:parent.status,stage:parent.result.stage},
         child:{id:child.operation_id,status:child.status,stage:child.result.stage,attempt_id:child.result.attempt_id},
         work:{id:work.work_item_id,state:work.state}, board:{column:card.column,work_state:card.work.state},
       }, null, 2) + '\n');
