@@ -400,7 +400,8 @@ for (const locale of ['en-US', 'zh-TW']) {
     const fixture = conversationFixture(); let changed = false, bootstraps = 0;
     let release!: () => void; const held = new Promise<void>(resolve => {release = resolve;});
     let finishTicks!: () => void; const ticksFinished = new Promise<void>(resolve => {finishTicks = resolve;});
-    await page.clock.install({time: at}); await page.clock.pauseAt(at);
+    // pauseAt installs the clock too, without a running install-to-pause gap.
+    await page.clock.pauseAt(at);
     await mountConversation(page, false, async input => {
       const path = new URL(input.path, 'http://fixture').pathname;
       if (path === '/bootstrap') {
