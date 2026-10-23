@@ -4,6 +4,7 @@ pub mod bootstrap;
 pub mod bootstrap_policy;
 mod compare_replace;
 pub mod configuration;
+pub mod connection_catalog;
 pub mod connection_contract;
 pub mod connection_publish;
 pub mod connection_setup;
@@ -44,6 +45,8 @@ pub mod windows;
 #[cfg(windows)]
 pub mod windows_bootstrap;
 #[cfg(any(windows, test))]
+pub mod windows_creation;
+#[cfg(any(windows, test))]
 pub mod windows_detach;
 #[cfg(windows)]
 pub mod windows_launcher;
@@ -53,6 +56,8 @@ pub mod windows_migration;
 pub mod windows_monitor_launch;
 #[cfg(windows)]
 pub mod windows_profiles;
+#[cfg(windows)]
+mod windows_publication_guards;
 #[cfg(windows)]
 pub mod windows_startup;
 #[cfg(windows)]
