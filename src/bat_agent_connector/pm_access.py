@@ -109,7 +109,7 @@ def visible(db, principal, operation):
 
 
 def _visible(db, principal, operation):
-    if operation.get("action") in {"connection.reference.apply", "setup.connection.apply"}:
+    if operation.get("action") in {"connection.reference.apply", "setup.connection.apply", "connection.reference.detach"}:
         from .connection_handoff import visible as connection_visible
         if not connection_visible(db, principal, operation):
             return False

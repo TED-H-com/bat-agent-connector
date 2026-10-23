@@ -411,23 +411,23 @@ def _initial_attempt_turn_marker(db, attempt_id: str, fallback: str | None = Non
     if not _has_table(db, "work_attempts"):
         return None
     row = db.execute(
-        "SELECT start_operation_id, origin_id, execution_operation_id FROM work_attempts WHERE attempt_id=?",
+        "SELECT start_operation_id, origin_id FROM work_attempts WHERE attempt_id=?",
         (attempt_id,),
     ).fetchone()
     if row is None:
         return None
-    exec_op_id = row["execution_operation_id"]
-    if not exec_op_id:
-        start_op_id = row["start_operation_id"] or row["origin_id"]
-        if start_op_id and _has_table(db, "pm_work_start_children"):
-            child = db.execute(
-                "SELECT child_operation_id FROM pm_work_start_children WHERE start_operation_id=? AND phase='handoff'",
-                (start_op_id,),
-            ).fetchone()
-            if child is not None:
-                exec_op_id = child["child_operation_id"]
-    if not exec_op_id:
+    # work.start records its execution in the immutable handoff child relation;
+    # execution_operation_id is a read projection, not a work_attempts column.
+    start_op_id = row["start_operation_id"] or row["origin_id"]
+    if not start_op_id or not _has_table(db, "pm_work_start_children"):
         return None
+    child = db.execute(
+        "SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'",
+        (start_op_id,),
+    ).fetchone()
+    if child is None:
+        return None
+    exec_op_id = child["operation_id"]
     op_row = db.execute(
         "SELECT result FROM operations WHERE operation_id=?",
         (exec_op_id,),
@@ -452,7 +452,7 @@ def _initial_attempt_turn_marker(db, attempt_id: str, fallback: str | None = Non
                         return data["message_id"].strip()
                 except (TypeError, ValueError):
                     pass
-    return f"batc-{exec_op_id}"
+    return None
 
 
 def receipt_state(op: dict[str, Any], step: dict[str, Any] | str | None = None) -> ReceiptState:

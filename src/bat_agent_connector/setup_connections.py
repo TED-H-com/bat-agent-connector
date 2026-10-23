@@ -98,6 +98,8 @@ def _require_connection_available(ops, principal_id, target):
     from .connection_dependencies import open_connection_operation
     row = open_connection_operation(ops, principal_id, target)
     if row:
+        if ops.get(row["operation_id"], steps=False)["action"] == "connection.reference.detach":
+            raise OperationError("CONNECTION_OPERATION_RUNNING", "Finish the original connection operation first / 請先完成原連線操作", 409)
         raise OperationError("CONNECTION_BUSY", f"Connection operation {row['operation_id']} is still open; finish or cancel it first / "
             f"連線操作 {row['operation_id']} 尚未完成；請先完成或取消該操作", 409)
 
@@ -126,6 +128,9 @@ def _choices(ops, params, descriptor, config=None):
 
 
 def _plan(ops, principal, action, target, params, pre):
+    if action == "connection.reference.detach":
+        from .connection_detach import plan
+        return plan(ops, principal, target, params, pre)
     if not isinstance(action, str) or action not in handoff.ACTIONS or not principal.allows(
             "observe" if action == "connection.reference.apply" else "manage"):
         raise OperationError("FORBIDDEN", "Connection action requires its existing scope", 403)
@@ -266,8 +271,8 @@ def _authorize(ops, principal, operation, verb):
     if not handoff.visible(ops.db, principal, operation):
         raise OperationError("FORBIDDEN", "Connection belongs to the original effective principal", 403)
     _require_intent(operation)
-    if operation["action"] == "setup.connection.apply":
-        setup._installation(ops.context["daemon"], principal)
+    if operation["action"] in handoff.NATIVE_ACTIONS:
+        handoff._authorize_native(ops, principal, operation)
         if verb == "cancel" and operation["status"] not in TERMINAL:
             row = ops.db.execute("SELECT response FROM operation_steps WHERE operation_id=? AND name=?",
                 (operation["operation_id"], handoff.STEP)).fetchone()
@@ -361,6 +366,9 @@ def _source_guard(ctx):
 
 
 def _save(ctx):
+    if ctx.op["action"] == "connection.reference.detach":
+        from .connection_detach import save
+        return save(ctx)
     binding = ctx.admission_binding
     if binding["server_id"] != dashboard_sync._metadata(ctx.service.journal)["server_id"]:
         raise NeedsAttention("CONNECTION_IDENTITY_CHANGED", "Original journal identity is unavailable")
@@ -423,7 +431,7 @@ async def _native(ctx):
         raise Uncertain(handoff.STEP, "Native participant reported a third value; never resend automatically")
     if receipt["outcome"] in {"refused", "abandoned"}:
         ctx.service._step_status(ctx.operation_id, handoff.STEP, "failed")
-        raise OperationError(receipt["code"], CONTRACT["codes"][receipt["code"]]["reason"], 409)
+        raise OperationError(receipt["code"], {**CONTRACT["codes"], **CONTRACT["v2"]["codes"]}[receipt["code"]]["reason"], 409)
     if row["status"] != "succeeded":
         ctx.service._step_done(ctx.operation_id, handoff.STEP, {"receipts": history})
     return receipt
@@ -431,6 +439,7 @@ async def _native(ctx):
 
 async def _run(ctx):
     _require_intent(ctx.op)
+    configuration = None
     if ctx.op["action"] == "setup.connection.apply":
         setup._installation(ctx.service.context["daemon"])
         setup._require_setup_identity(ctx.service.context["daemon"], ctx.admission_binding)
@@ -438,7 +447,7 @@ async def _run(ctx):
         if configuration:
             await setup._run(ctx, action="setup.host", target=configuration["target"], params=configuration["params"],
                 source_guard=lambda: _source_guard(ctx))
-    if ctx.op["action"] == "setup.connection.apply":
+    if ctx.op["action"] in handoff.NATIVE_ACTIONS:
         try:
             if not configuration and "source" in ctx.params and not ctx.service.db.execute(
                     "SELECT 1 FROM operation_steps WHERE operation_id=? AND name=?", (ctx.operation_id, handoff.STEP)).fetchone():
@@ -448,7 +457,7 @@ async def _run(ctx):
             raise Uncertain(handoff.STEP, "Native receipt needs reconciliation under the original operation") from None
     # A successful operation and its projection become visible in the same commit.
     try:
-        if ctx.op["action"] == "setup.connection.apply":
+        if ctx.op["action"] in handoff.NATIVE_ACTIONS:
             # Keep proven local evidence linked even if the following projection transaction cannot commit.
             ctx.set_refs(connection_id=ctx.target.get("connection_id") or "conn_" + ctx.operation_id[3:],
                 receipt_refs=[item["receipt_ref"] for item in handoff.receipts(ctx.service.db.execute(
@@ -456,13 +465,13 @@ async def _run(ctx):
         with ctx.service.journal.tx():
             result = ctx.effect("connection_binding", lambda: _save(ctx), request={
                 "installation_ref": ctx.target["installation_ref"], "expected_revision": ctx.preconditions["expected_revision"]})
-            if ctx.op["action"] == "setup.connection.apply":
+            if ctx.op["action"] in handoff.NATIVE_ACTIONS:
                 result = {**result, "receipt_ref": receipt["receipt_ref"]}
             ctx.service._transition(ctx.operation_id, "succeeded", result=result)
     except (OSError, sqlite3.Error):
         raise Uncertain("connection_binding", "Projection and success receipt need the original transaction replay") from None
     except OperationError as error:
-        if ctx.op["action"] == "setup.connection.apply":
+        if ctx.op["action"] in handoff.NATIVE_ACTIONS:
             raise NeedsAttention("CONNECTION_COMPLETION_BLOCKED", f"Proven native receipt retained; completion requires attention ({error.code}) / "
                 "已保留確定的本機回執；完成原操作需要處理") from None
         raise
@@ -483,6 +492,8 @@ def list_connections(ops, principal, installation_ref, *, after=None, limit=50):
 
 
 def install(ops):
+    from .connection_detach import install as install_detach
+    install_detach(ops)
     for name, scope in (("connection.reference.apply", "observe"), ("setup.connection.apply", "manage")):
         if name not in ops.actions:
             ops.register(ActionDef(name, scope, "Save a principal-local connection association" if scope == "observe" else

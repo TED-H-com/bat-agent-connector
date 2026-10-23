@@ -95,3 +95,46 @@ def decode_native_json(raw, *, code):
     except (ValueError, TypeError):
         raise OperationError(code, reason, 422) from None
     return body
+
+
+def effect_v2(body, *, action, kind):
+    """The caller supplies the persisted action/kind; wire fields cannot dispatch."""
+    v2 = CONTRACT["v2"]
+    effect = v2["effect_kinds"].get(kind) if isinstance(kind, str) else None
+    if (not effect or effect["action"] != action or not isinstance(body, dict)
+            or type(body.get("contract_version")) is not int or body["contract_version"] != v2["contract_version"]
+            or body.get("kind") != kind):
+        raise OperationError("CONNECTION_CONTRACT_UNSUPPORTED",
+            "Unsupported connection effect contract / 不支援此連線效果契約", 409)
+    return effect
+
+
+def bounded_v2(value, limit):
+    try:
+        return len(canonical(value)) <= limit
+    except (ValueError, TypeError):
+        return False
+
+
+def valid_state(value):
+    return isinstance(value, dict) and (value == {"state": "absent"} or (
+        set(value) == {"state", "digest"} and value["state"] == "present" and valid_digest(value["digest"])))
+
+
+def validate_native_plan_v2(plan, *, action, kind):
+    effect = effect_v2(plan, action=action, kind=kind)
+    if (set(plan) != {"contract_version", "kind", "generator_version", "review_digest", "artifacts"}
+            or not bounded_v2(plan, BOUNDS["native_plan_bytes"])
+            or type(plan["generator_version"]) is not int
+            or plan["generator_version"] not in CONTRACT["v2"]["generator_versions"]
+            or not valid_digest(plan["review_digest"]) or not isinstance(plan["artifacts"], list)
+            or len(plan["artifacts"]) != len(effect["roles"])):
+        invalid_plan()
+    for name, role in zip(effect["roles"], plan["artifacts"], strict=True):
+        if (not isinstance(role, dict) or set(role) != {"role", "before", "after"} or role["role"] != name
+                or not valid_state(role["before"]) or not valid_state(role["after"])
+                or role["after"]["state"] not in effect["after_states"][name]
+                or role["after"]["state"] == "absent" and effect["absent_after_requires_unchanged"]
+                and role["before"] != role["after"]):
+            invalid_plan()
+    return plan

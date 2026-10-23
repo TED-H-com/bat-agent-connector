@@ -44,7 +44,7 @@ def open_connection_operation(ops, principal_id, target):
     if "connection_id" not in target:
         return None
     return ops.db.execute("""SELECT operation_id FROM operations
-        WHERE action IN ('setup.connection.apply','connection.reference.apply')
+        WHERE action IN ('setup.connection.apply','connection.reference.apply','connection.reference.detach')
         AND status NOT IN ('succeeded','failed','cancelled')
         AND json_extract(external_refs,'$.admission_binding.principal_id')=?
         AND json_extract(target,'$.installation_ref')=? AND json_extract(target,'$.connection_id')=?

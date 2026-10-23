@@ -369,6 +369,12 @@
         "allowed": false
       },
       {
+        "action": "connection.reference.detach",
+        "scope": "observe",
+        "summary": "Detach a principal-local connection reference / 中斷個人連線關聯",
+        "allowed": true
+      },
+      {
         "action": "connection.reference.apply",
         "scope": "observe",
         "summary": "Save a principal-local connection association",
@@ -957,6 +963,13 @@
       "cancelled"
     ],
     "connection_contract_version": 1,
+    "connection_effect_kinds": [
+      {
+        "kind": "reference_detach",
+        "contract_version": 2,
+        "action": "connection.reference.detach"
+      }
+    ],
     "cleanup": {
       "preview_ttl_s": 900,
       "max_items": 500,

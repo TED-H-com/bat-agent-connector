@@ -82,6 +82,32 @@ public static class DashboardWindows {
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
+    [DllImport("user32.dll", EntryPoint="SendMessageTimeoutW", SetLastError=true)]
+    private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr w, IntPtr l, uint flags, uint timeout, out UIntPtr result);
+    [DllImport("kernel32.dll")] private static extern void SetLastError(uint error);
+    public sealed class ResponseSample {
+        public string State;
+        public long ElapsedMilliseconds;
+        public int ErrorCode;
+    }
+    public static ResponseSample SampleResponse(IntPtr window, uint expected, uint timeout) {
+        if (timeout == 0 || timeout > 200) throw new ArgumentOutOfRangeException();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        uint owner;
+        var sample = new ResponseSample();
+        if (GetWindowThreadProcessId(window, out owner) == 0 || owner != expected) sample.State = "owner_changed";
+        else {
+            UIntPtr result;
+            SetLastError(0);
+            // WM_NULL, SMTO_BLOCK | SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT.
+            // No UIA call, HWND_BROADCAST or timeout extension for a live thread.
+            IntPtr sent = SendMessageTimeout(window, 0, UIntPtr.Zero, IntPtr.Zero, 0x23, timeout, out result);
+            sample.ErrorCode = sent == IntPtr.Zero ? Marshal.GetLastWin32Error() : 0;
+            sample.State = sent != IntPtr.Zero ? "responsive" : sample.ErrorCode == 1460 ? "hung" : "failed";
+        }
+        sample.ElapsedMilliseconds = clock.ElapsedMilliseconds;
+        return sample;
+    }
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
     public static IntPtr[] Find(uint process) {
         var found = new List<IntPtr>();
@@ -142,6 +168,8 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
             if ((Get-FixtureViewTimeout $Deadline) -eq 0) { return $false }
             $attempt = New-FixtureViewAttempt $diagnostics
             $observed.state = @{}
+            $attempt.window_response = Get-FixtureWindowResponse $Window $Process.Id $Deadline
+            if ((Get-FixtureViewTimeout $Deadline) -eq 0) { return $false }
             # The already compiled MTA client avoids PowerShell/STA startup and
             # retains process isolation if an accessibility provider stops responding.
             $info = [Diagnostics.ProcessStartInfo]::new($managedViewProbe)
@@ -150,6 +178,9 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
             $info.RedirectStandardOutput = $true
             $info.RedirectStandardError = $true
             foreach ($arg in @($Window.ToInt64().ToString(), $Process.Id.ToString())) { $info.ArgumentList.Add($arg) }
+            $info.ArgumentList.Add('--elapsed-origin')
+            $info.ArgumentList.Add([Diagnostics.Stopwatch]::GetTimestamp().ToString([Globalization.CultureInfo]::InvariantCulture))
+            $processClock = [Diagnostics.Stopwatch]::StartNew()
             $probe = [Diagnostics.Process]::Start($info)
             $attempt.phases.spawned = $true
             try {
@@ -171,7 +202,10 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
                 }
                 if ($ready -and $observed.state.roleChoice -ne $false) { throw 'Role chooser reappeared after selection' }
                 return $ready
-            } finally { $probe.Dispose() }
+            } finally {
+                $attempt.process_elapsed_ms = [Math]::Min(60000, $processClock.ElapsedMilliseconds)
+                $probe.Dispose()
+            }
         } 'Managed WebView did not render authenticated first-run configuration'
     } catch {
         # Preserve the real native surface before app cleanup, even when UIA stalls.

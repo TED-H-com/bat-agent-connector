@@ -90,6 +90,7 @@ test('demo operations keep the backend fields and a manual asking session', () =
 });
 
 test('action labels and reason codes stay out of the raw id', () => {
+  either(actionLabel('connection.reference.detach'), ['Detach connection reference', '中斷連線關聯']);
   const label = actionLabel('checkpoint.continue');
   either(label, ['Continue from checkpoint', '從檢查點繼續']);
   assert.notEqual(label, 'checkpoint.continue');
