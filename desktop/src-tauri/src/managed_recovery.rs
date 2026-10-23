@@ -25,10 +25,22 @@ impl Backoff {
         now.duration_since(since) >= Duration::from_secs(10)
             && self.retry_at.is_none_or(|next| now >= next)
     }
+    fn settled(&mut self) {
+        self.blocked = true;
+        self.retry_at = None;
+        self.attempts = 0;
+    }
     fn failed(&mut self, now: Instant, identity: bool) {
         self.blocked = identity;
         self.retry_at = Some(now + Duration::from_secs(15 * (1u64 << self.attempts.min(2))));
         self.attempts = self.attempts.saturating_add(1);
+    }
+}
+
+// Keep the loop's visible announcement independently testable.
+pub(super) fn announce(bridge: &Bridge, current: u64, managed: &Managed) {
+    if !managed.is_held() {
+        bridge.recovery_state(current, Some("MANAGED_RECOVERING".into()));
     }
 }
 
@@ -53,11 +65,15 @@ pub fn start(bridge: Arc<Bridge>, managed: Arc<Managed>) {
             if !backoff.due(Instant::now(), reachable) {
                 continue;
             }
-            bridge.recovery_state(current, Some("MANAGED_RECOVERING".into()));
+            announce(&bridge, current, &managed);
             let result = bridge.recover_managed(current, managed.clone()).await;
             match result {
                 Ok(()) => {
                     backoff = Backoff::default();
+                }
+                Err(error) if crate::managed::held(&error) => {
+                    backoff.settled();
+                    bridge.managed_hold(Some(current));
                 }
                 Err(error) => {
                     let identity = error == "MANAGED_RECOVERY_IDENTITY_CHANGED";
@@ -72,6 +88,16 @@ pub fn start(bridge: Arc<Bridge>, managed: Arc<Managed>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hold_settles_without_retries_or_backoff_growth() {
+        let mut policy = Backoff::default();
+        policy.settled();
+        for seconds in [0, 10, 60, 3600] {
+            assert!(!policy.due(Instant::now() + Duration::from_secs(seconds), false));
+        }
+        assert_eq!(policy.attempts, 0);
+        assert!(policy.retry_at.is_none());
+    }
     #[test]
     fn recovery_has_a_threshold_and_capped_backoff() {
         let now = Instant::now();

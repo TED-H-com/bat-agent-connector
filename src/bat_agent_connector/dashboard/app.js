@@ -19,6 +19,143 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
+//#region src/managed-service.js
+async function managedServiceControls(root, { h, t, managedControl, errorBox, guard, onStarted }) {
+	const box = h("section", { "data-managed-service": "" });
+	const facts = h("p", {
+		"data-managed-lifecycle": "",
+		role: "status"
+	});
+	const time = h("time");
+	const actions = h("div", { class: "actions" });
+	const preview = h("div", {
+		"data-managed-stop-preview": "",
+		hidden: true
+	});
+	const errors = h("div", { "aria-live": "polite" });
+	let status, busy = false;
+	const run = async (action) => {
+		if (busy) return;
+		busy = true;
+		paint();
+		try {
+			guard();
+			status = await managedControl({ action });
+			guard();
+			errors.replaceChildren();
+			preview.hidden = true;
+			if (action === "start" && status.mode === "managed") await onStarted?.();
+		} catch (error) {
+			try {
+				guard();
+			} catch {
+				return;
+			}
+			try {
+				status = await managedControl({ action: "status" });
+				guard();
+			} catch {}
+			const code = String(error?.message || error);
+			if (code.includes("SERVICE_STILL_STOPPING")) errors.replaceChildren(h("p", {}, t("managed_still_stopping")));
+			else if (code === "MANAGED_SERVICE_BUSY") errors.replaceChildren(h("p", {}, t("managed_action_busy")));
+			else if (code === "SERVICE_BUSY") errors.replaceChildren(h("p", {}, t("managed_busy")));
+			else if (code.includes("SERVICE_STOPPED")) errors.replaceChildren(h("p", {}, t(status?.lifecycle?.state === "stop_pending" ? "managed_stopping" : "managed_stopped")));
+			else errors.replaceChildren(errorBox(error, {
+				sourceRefresh: false,
+				within: errors
+			}));
+		} finally {
+			busy = false;
+			paint();
+		}
+	};
+	const stop = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			preview.hidden = false;
+		}
+	}, t("managed_stop"));
+	const start = h("button", {
+		type: "button",
+		class: "primary",
+		onclick: () => run("start")
+	}, t("managed_start"));
+	const open = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => run("open_browser")
+	}, t("managed_open_browser"));
+	const login = h("input", { type: "checkbox" });
+	login.addEventListener("change", async () => {
+		if (busy) return;
+		busy = true;
+		login.disabled = true;
+		try {
+			guard();
+			status = await managedControl({
+				action: "set_login",
+				enabled: login.checked
+			});
+			guard();
+			errors.replaceChildren();
+		} catch (error) {
+			try {
+				guard();
+				errors.replaceChildren(errorBox(error, { within: errors }));
+			} catch {
+				return;
+			}
+		} finally {
+			busy = false;
+			paint();
+		}
+	});
+	const confirm = h("button", {
+		type: "button",
+		class: "danger",
+		onclick: () => run("stop")
+	}, t("managed_stop_confirm"));
+	preview.append(h("p", {}, t("managed_stop_local")), h("p", {}, t("managed_stop_hold")), h("p", {}, t("managed_stop_busy")), h("p", {}, t("managed_stop_external")), h("div", { class: "actions" }, confirm, h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			preview.hidden = true;
+		}
+	}, t("cancel"))));
+	function paint() {
+		const lifecycle = status?.lifecycle;
+		const held = lifecycle?.state === "stopped" || lifecycle?.state === "stop_pending";
+		facts.textContent = t(lifecycle?.state === "stop_pending" ? "managed_stopping" : held ? "managed_stopped" : "managed_running");
+		const at = lifecycle?.stopped_at || lifecycle?.requested_at;
+		time.textContent = at ? new Date(at * 1e3).toLocaleString() : "";
+		if (at) time.dateTime = new Date(at * 1e3).toISOString();
+		stop.hidden = lifecycle?.state === "stopped";
+		start.hidden = !held;
+		open.disabled = busy || held;
+		for (const button of [
+			stop,
+			start,
+			confirm
+		]) button.disabled = busy;
+		login.disabled = busy;
+		login.checked = !!status?.login_enabled;
+	}
+	try {
+		status = await managedControl({ action: "status" });
+		guard();
+		if (!status.background || !status.lifecycle) return status;
+		actions.append(stop, start, open, h("label", {}, login, " ", t("managed_start_login")));
+		box.append(facts, time, actions, preview, errors);
+		paint();
+		root.append(box);
+	} catch (error) {
+		guard();
+		root.append(errorBox(error, { within: root }));
+	}
+	return status;
+}
+//#endregion
 //#region src/startup-role.js
 function startupRoleChoice({ h, t, errorBox, snapshot, select }) {
 	let busy = false;
@@ -10671,9 +10808,22 @@ var init_i18n = __esmMin((() => {
 			desktop_role_changed: "此安裝已變更。請重新開啟以讀取已儲存的用途。",
 			managed_join_existing: "加入既有的 Connector",
 			managed_join_help: "輸入另一個 Connector 的位址與預期帳號，在原生視窗確認後，再加入該 Connector 的憑證。此電腦原有的背景工作會繼續運作。",
-			managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
+			managed_background_help: "關閉這個畫面不會停止背景工作。可使用「停止背景服務」停止本機 Connector。",
 			managed_open_browser: "在瀏覽器開啟 Dashboard",
 			managed_start_login: "登入電腦時啟動",
+			managed_stop: "停止背景服務",
+			managed_start: "啟動背景服務",
+			managed_stop_confirm: "確認停止",
+			managed_running: "背景服務運作中",
+			managed_stopped: "背景服務已停止",
+			managed_stopping: "背景服務停止中",
+			managed_still_stopping: "背景服務仍在停止中。你可以等待，或再次選擇停止服務。",
+			managed_busy: "背景服務目前忙碌，請先完成或核對目前工作，再停止服務。",
+			managed_action_busy: "另一個背景服務操作仍在進行中，請等它完成後再試。",
+			managed_stop_local: "本機 Connector 會停止。",
+			managed_stop_hold: "在你選擇啟動之前，開啟程式、登入電腦、自動恢復或在瀏覽器開啟都不會重新啟動。",
+			managed_stop_busy: "尚未完成或核對的工作會阻擋停止。",
+			managed_stop_external: "外部連線不受影響。",
 			managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
 			delivery_list_prs: "瀏覽 Pull Requests",
 			delivery_no_prs: "找不到 PR。",
@@ -12422,9 +12572,22 @@ var init_i18n = __esmMin((() => {
 			desktop_role_changed: "This installation changed. Reopen to read its saved role.",
 			managed_join_existing: "Join another Connector",
 			managed_join_help: "Enter the address and expected account for another Connector, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
-			managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
+			managed_background_help: "Closing this view does not stop background work. Use Stop background service to stop the local Connector.",
 			managed_open_browser: "Open Dashboard in browser",
 			managed_start_login: "Start when I sign in",
+			managed_stop: "Stop background service",
+			managed_start: "Start background service",
+			managed_stop_confirm: "Confirm stop",
+			managed_running: "Background service running",
+			managed_stopped: "Background service stopped",
+			managed_stopping: "Background service stopping",
+			managed_still_stopping: "The background service is still stopping. You can wait or stop it again.",
+			managed_busy: "The background service is busy. Finish or reconcile current work before stopping.",
+			managed_action_busy: "Another background service action is still running. Try again when it finishes.",
+			managed_stop_local: "The local Connector will stop.",
+			managed_stop_hold: "App open, sign-in, recovery and Open in browser will not restart it until you choose Start.",
+			managed_stop_busy: "Unsettled work blocks stopping.",
+			managed_stop_external: "External connections are unaffected.",
 			managed_browser_help: "This browser uses your desktop identity. After signing out, reopen Dashboard from the desktop menu.",
 			workspace_navigation: "Projects and work",
 			workspace_search: "Search loaded projects and work",
@@ -74998,59 +75161,14 @@ async function viewManagedSettings(main) {
 	frame.show("fleet");
 	let disposeFleet, disposeTailscale;
 	if (nativeDesktop) {
-		const login = h("input", {
-			type: "checkbox",
-			disabled: true
-		});
-		const open = h("button", {
-			class: "secondary",
-			onclick: async () => {
-				open.disabled = true;
-				try {
-					guard();
-					await managedControl({ action: "open_browser" });
-					guard();
-					status.replaceChildren();
-				} catch (error) {
-					if (connection.generation === generation) status.replaceChildren(errorBox(error, {
-						sourceRefresh: false,
-						within: status
-					}));
-				} finally {
-					open.disabled = false;
-				}
-			}
-		}, t("managed_open_browser"));
-		local.append(h("div", { class: "actions" }, open, h("label", {}, login, " ", t("managed_start_login"))));
-		try {
-			const state = await managedControl({ action: "status" });
-			guard();
-			login.checked = !!state.login_enabled;
-			login.disabled = false;
-		} catch (error) {
-			status.replaceChildren(errorBox(error, { within: status }));
-		}
-		login.addEventListener("change", async () => {
-			const wanted = login.checked;
-			login.disabled = true;
-			try {
-				guard();
-				const result = await managedControl({
-					action: "set_login",
-					enabled: wanted
-				});
-				guard();
-				login.checked = !!result.login_enabled;
-			} catch (error) {
-				if (connection.generation === generation) {
-					login.checked = !wanted;
-					status.replaceChildren(errorBox(error, {
-						sourceRefresh: false,
-						within: status
-					}));
-				}
-			} finally {
-				login.disabled = false;
+		await managedServiceControls(local, {
+			h,
+			t,
+			managedControl,
+			errorBox,
+			guard,
+			onStarted: async () => {
+				await nativeTransition("connect");
 			}
 		});
 		try {
@@ -75272,7 +75390,28 @@ async function viewNativeSettings(main) {
 		const row = (label, value) => {
 			if (value) details.append(h("dt", {}, t(label)), h("dd", {}, value));
 		};
-		if (status.configuration_setup === true) {
+		const service = await managedServiceControls(frame.panel("connection"), {
+			h,
+			t,
+			managedControl,
+			errorBox,
+			guard: () => {
+				if (mine !== generation) throw new Error("VIEW_CHANGED");
+			},
+			onStarted: async () => {
+				await nativeTransition("connect");
+			}
+		});
+		if (mine !== generation) return;
+		const serviceHeld = status.configuration_source === "managed" && service?.lifecycle?.state !== "running" && !!service?.lifecycle;
+		if (serviceHeld) {
+			details.hidden = true;
+			actions.hidden = true;
+			platform.hidden = true;
+			introduction.hidden = true;
+			saved.hidden = true;
+		}
+		if (status.configuration_setup === true && !serviceHeld) {
 			firstConnection = true;
 			setup.hidden = false;
 			details.hidden = true;

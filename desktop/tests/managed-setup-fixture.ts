@@ -1,3 +1,4 @@
+import {managedStatusFixture} from './managed-status-fixture.ts';
 import {expect, type Page} from '@playwright/test';
 import {attentionFixture} from './attention-fixture.ts';
 import {readFileSync} from 'node:fs';
@@ -9,7 +10,8 @@ const hostGolden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed
 export async function managedSetupFixture(page: Page, native: boolean, locale: string | null = 'en',
   evidence?: {state: any, operation: any}) {
   const base = attentionFixture();
-  const state = {posts: [] as any[], previews: [] as any[], staged: [] as any[], discoveries: [] as any[], discoveryVersion: 1, configuredProfile:'default',
+  const state = {managed: managedStatusFixture(), managedCalls: [] as string[], stopBusy: false, stopBusyGeneric: false, stopPending: false, startStillStopping: false, startBusy: false,
+    posts: [] as any[], previews: [] as any[], staged: [] as any[], discoveries: [] as any[], discoveryVersion: 1, configuredProfile:'default',
     discoveryProfiles: null as any[] | null, discoveryWorkspaces: null as any[] | null, lost: false, refused: false, previewRefused: false,
     admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, connectionStatus: null as string | null, connected: true, extraHosts: [] as any[], repositories: [] as any[], reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profiles: null as any[] | null, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
   if (evidence) {state.saved = true; state.operation = evidence.operation; state.configuredHost = evidence.operation.target.host;}
@@ -80,12 +82,25 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
   }, evidence.operation);
   if (native) {
     await page.exposeFunction('setupConnector', dispatch);
+    await page.exposeFunction('setupManagedControl', (input: any) => {
+      state.managedCalls.push(input.action);
+      if (input.action === 'stop') {
+        if (state.stopBusyGeneric) throw Error('SERVICE_BUSY');
+        if (state.stopBusy) throw Error('SERVICE_BUSY: finish or reconcile current operations before stopping');
+        state.managed.lifecycle = {state: state.stopPending ? 'stop_pending' : 'stopped', requested_at: 1800000000,
+          stopped_at: state.stopPending ? null : 1800000001};
+      }
+      if (input.action === 'start' && state.startBusy) throw Error('MANAGED_SERVICE_BUSY');
+      if (input.action === 'start' && state.startStillStopping) throw Error('SERVICE_STILL_STOPPING');
+      if (input.action === 'start') state.managed.lifecycle = {state: 'running', requested_at: null, stopped_at: null};
+      return state.managed;
+    });
     await page.addInitScript(c => Object.assign(window,{isTauri:true,__TAURI_INTERNALS__:{
       invoke:async (command:string,args:any) => {
         if(command==='native_status') return {endpoint:'http://127.0.0.1:9870',credential_available:true};
         if(command==='connector_connect') return c;
         if(command==='connector_request') return (window as any).setupConnector(args.input);
-        if(command==='managed_control') return {mode:'managed',ready:true,background:true,login_enabled:false};
+        if(command==='managed_control') return (window as any).setupManagedControl(args.input);
         if(command==='connector_disconnect') return null;
         throw new Error('Fixture native feature unavailable');
       }}}),caps());

@@ -1,3 +1,4 @@
+import {managedStatusFixture} from './managed-status-fixture.ts';
 import type {Page} from '@playwright/test';
 
 export const caps = {actor: 'reader', scopes: ['observe', 'operate'], api_version: 1,
@@ -30,8 +31,9 @@ export function conversationFixture() {
 export async function mountConversation(page: Page, native: boolean, dispatch: (input: any) => Promise<any>) {
   if (native) {
     await page.exposeFunction('fixtureConnector', dispatch);
-    await page.addInitScript(() => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {
+    await page.addInitScript(managed => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {
       invoke: async (command: string, args: any) => {
+        if (command === 'managed_control' && args.input.action === 'status') return managed;
         if (command === 'native_status') return {endpoint: 'https://central.example/', credential_available: true};
         // The native connect receipt comes from the same Connector principal as
         // subsequent reads, including demos with a named human participant.
@@ -44,7 +46,7 @@ export async function mountConversation(page: Page, native: boolean, dispatch: (
         if (command === 'connector_request') return (window as any).fixtureConnector(args.input);
         throw new Error(`Unexpected native command ${command}`);
       }
-    }}));
+    }}), managedStatusFixture(false));
   } else await page.addInitScript(() => sessionStorage.setItem('batc.dashboard.token', 'fixture-token'));
   await page.route('**/api/v1/**', async route => {
     if (native) throw new Error('Native must use IPC');

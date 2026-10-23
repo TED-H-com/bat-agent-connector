@@ -1,3 +1,4 @@
+import {managedStatusFixture} from './managed-status-fixture.ts';
 import {test, expect, type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {discoverSetupProfiles, reviewSetupConnection} from './managed-setup-fixture.ts';
@@ -50,12 +51,13 @@ async function reviewFixture(page: Page, native: boolean, locale: string) {
   await page.addInitScript(locale => localStorage.setItem('batc.lang', locale), locale);
   if (native) {
     await page.exposeFunction('reviewConnector', dispatch);
+    await page.exposeFunction('reviewManagedStatus', () => managedStatusFixture());
     await page.addInitScript(c => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {
       invoke: async (command: string, args: any) => {
         if (command === 'native_status') return {endpoint: 'http://127.0.0.1:9870', credential_available: true};
         if (command === 'connector_connect') return c;
         if (command === 'connector_request') return (window as any).reviewConnector(args.input);
-        if (command === 'managed_control') return {mode: 'managed', ready: true, background: true};
+        if (command === 'managed_control') return (window as any).reviewManagedStatus();
         if (command === 'connector_disconnect') return null;
         throw Error('Unavailable native fixture command');
       }}}), caps());
