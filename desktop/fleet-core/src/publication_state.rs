@@ -57,7 +57,7 @@ pub(crate) fn create_directory(path: &Path) -> Result<()> {
 mod windows {
     mod protected;
     use super::*;
-    pub(super) use protected::{acl_file, new_directory, new_file, open_no_follow};
+    pub(super) use protected::{acl_file, new_directory, new_file, open_no_follow, role_acl_file};
     use std::{os::windows::ffi::OsStrExt, ptr};
     use windows_sys::Win32::{
         Foundation::{GetLastError, LocalFree, ERROR_ALREADY_EXISTS},
@@ -707,4 +707,73 @@ pub(crate) fn read_bounded(file: &std::fs::File, limit: usize) -> Result<Vec<u8>
         return Err(UNPROVEN);
     }
     Ok(bytes)
+}
+
+#[cfg(windows)]
+#[doc(hidden)]
+pub fn file_identity(file: &std::fs::File) -> Result<crate::creation_evidence::ObjectIdentity> {
+    use crate::creation_evidence::ObjectIdentity;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FileIdInfo, GetFileInformationByHandleEx, FILE_ID_INFO,
+    };
+    let mut info = FILE_ID_INFO::default();
+    if unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FileIdInfo,
+            (&mut info as *mut FILE_ID_INFO).cast(),
+            std::mem::size_of::<FILE_ID_INFO>() as u32,
+        )
+    } == 0
+    {
+        return Err(UNPROVEN);
+    }
+    Ok(ObjectIdentity {
+        volume: info.VolumeSerialNumber,
+        file_id: info
+            .FileId
+            .Identifier
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+    })
+}
+
+/// Existing startup identity: protected parent plus effective inherited leaf ACL.
+/// Holds the checked ancestor handles throughout the supplied synchronous read.
+#[cfg(windows)]
+pub fn with_startup_role_file<T>(
+    path: &Path,
+    read: impl FnOnce(&std::fs::File) -> Result<T>,
+) -> Result<T> {
+    let parent = path.parent().ok_or(UNPROVEN)?;
+    let mut retained = Default::default();
+    let leaf = walk_checked(path, &mut retained, UNPROVEN, |p, _| {
+        let m = metadata(p)?.ok_or(UNPROVEN)?;
+        let file = if p == path {
+            let file = windows::open_no_follow(p, true, FILE_SHARE_READ).map_err(|_| UNPROVEN)?;
+            if !file.metadata().map_err(|_| UNPROVEN)?.is_file() {
+                return Err(UNPROVEN);
+            }
+            windows::role_acl_file(&file)?;
+            file
+        } else {
+            checked_handle(p, p == parent, false)?
+        };
+        let identity = file_identity(&file)?;
+        Ok(Some(WalkObject::new(m, std::rc::Rc::new(file), identity)))
+    })?
+    .ok_or(UNPROVEN)?;
+    let result = read(&leaf.handle)?;
+    if file_identity(&checked_handle(parent, true, false)?)?
+        != retained.get(parent).ok_or(UNPROVEN)?.1
+    {
+        return Err(UNPROVEN);
+    }
+    Ok(result)
+}
+#[cfg(windows)]
+pub fn read_startup_role(path: &Path, limit: usize) -> Result<Vec<u8>> {
+    with_startup_role_file(path, |file| read_bounded(file, limit))
 }

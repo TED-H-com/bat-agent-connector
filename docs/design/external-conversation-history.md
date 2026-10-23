@@ -40,6 +40,75 @@ Neither a matching title nor a matching checkout proves identity or ownership.
 Host identity is the existing Connector server ID. Work/Attempt remain null,
 execution status remains unknown and ownership is `external_read_only`.
 
+## Current grants on each journal connection
+
+`HistoryCollector.config` activates the reader projection inside a journal
+transaction. Two TEMP tables hold the activation generation and the granted
+source/workspace/binding/actor pairs, with bounded display metadata. They contain
+no paths or transcript bodies and are not persisted with the journal. The
+constructor starts without an active generation, then installs the current config
+before the daemon creates its API. The existing managed config assignment uses
+this setter; it does not maintain a second reader grant list.
+
+The shared `current_grants` DB helper is used by both existing history reads and
+the internal fixed-reference resolver. It requires observe scope, current workspace
+membership and an explicit reader grant, then checks generation and membership
+again before returning. Positive grants are not cached across activation. An
+uninitialized connection, missing TEMP projection, inactive or mismatched generation
+refuses access, including for administrators. A second connection must activate its
+own current config; a persistent table with the same name cannot substitute.
+
+The generation is also compared with the collector's connection-local activation
+callback. A failed setter transaction retains the previous config and grants. If an
+outer transaction subsequently rolls back an activation, reads fail closed until a
+new activation succeeds. Withdrawing and regranting the same source still changes
+generation and invalidates an in-progress read. No new durable table, data step or
+`user_version` is allocated by this projection.
+
+The existing observation memo tracks writes to these two TEMP tables as well as
+its main tables. Grant changes invalidate its historical proofs. Unknown TEMP
+tables, or a grant table that shadows a main object, still disable memo reuse.
+
+## Fixed retained references
+
+`pm_external_history.preview` is an internal read-only resolver, without an HTTP,
+RPC/MCP route or UI action. It accepts a workspace, source ID, entry ID, expected
+retained content digest and one selection. `resolve` verifies a previously returned
+reference. Neither function collects, opens the original file, starts a session or
+writes a record. History entry reads now also expose their retained `content_digest`.
+
+The `external_history_ref/v1` object contains `schema`, `server_id`, `workspace_id`,
+`source_id`, `entry_id`, `source_digest`, `content_digest`, `selection` and
+`excerpt_digest`. Its three SHA-256 digests have distinct meanings:
+
+- `source_digest` covers the original JSONL line bytes, including the newline.
+- `content_digest` covers the retained decoded entry excluding `source_offset`.
+- `excerpt_digest` covers `{"ref": <reference without excerpt_digest>,
+  "content": <selected content>}`. Selected content contains `role`, `parts`,
+  `clipped` and `omitted_parts`.
+
+Both structured digests use UTF-8 JSON with sorted keys, no ASCII escaping, no NaN,
+and comma/colon separators without spaces. No trimming or Unicode normalization
+occurs. A whole-entry selection is exactly `{"kind":"entry"}`. A text selection
+has exactly `kind: "text"`, `part_index`, `start_codepoint` and `end_codepoint`.
+The range is half-open and counts Unicode codepoints, not UTF-16 units. Empty,
+negative, boolean, out-of-range and non-text selections are refused. Extra fields,
+surrogates and malformed references are refused as well.
+
+A reference covers at most one retained entry, 128 parts and 16,000 text codepoints.
+The entire preview must fit 128 KiB even with ASCII-escaped JSON. An oversized
+preview is refused, never shortened to fit. Existing collector clipping and omitted
+parts remain explicit; the resolver cannot restore omitted material. Its response
+always has `history_complete=false` and `execution_status="unknown"`. Tool markers
+remain markers, not proof of execution. Missing grants or unreadable/rebound sources
+refuse access; an authorized digest mismatch refuses the changed reference instead
+of retargeting it. Source paths and native session identifiers are not returned.
+
+Refusals are `PM_HISTORY_SOURCE_UNAVAILABLE` (404),
+`PM_HISTORY_REFERENCE_CHANGED` (409) and `PM_HISTORY_REFERENCE_INVALID` (422);
+a caller without observe scope receives `FORBIDDEN` (403). Unauthorized sources
+never receive a digest comparison that would disclose their contents.
+
 ## Narrow format profiles
 
 `codex-history-jsonl-v1` reads the SessionMeta/ResponseItem JSONL shapes inspected
@@ -116,6 +185,11 @@ owned Work/PM context, trusted aliases across adapters, broader tool-content
 readers and native full work routes remain E06–E08 work.
 
 ## Verification boundary
+
+Real disk journals and TEMP schemas also cover connection isolation, atomic grant
+activation, response-boundary withdrawal, fixed digests, Unicode selection and
+preview size refusals using synthetic Codex/Claude records. These internal readers
+add no linking, derivation or suggestion capability.
 
 Synthetic local transcripts cover grant withdrawal, config activation during
 collection, owner-lease loss, cursor replay, conflict/replace/truncate failures,

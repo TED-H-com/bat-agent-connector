@@ -36,6 +36,10 @@ pub trait Security {
     fn unpublished(&self, journal: &Path) -> Result<()>;
     fn validate_path(&self, path: &Path) -> Result<()>;
     fn login(&self) -> Result<LoginIdentity>;
+    /// Fresh native manifest/service/Bridge observation, under the caller's guards.
+    fn managed_identity(&self) -> Result<Option<ManagedIdentity>> {
+        Ok(None)
+    }
     fn held(&self) -> Result<()>;
     fn effect_held(&self) -> Result<()> {
         Err(UNSUPPORTED)
@@ -58,12 +62,61 @@ fn present(path: &Path) -> Result<bool> {
         Err(_) => Err(UNPROVEN),
     }
 }
+fn checked_walk<S: Security>(
+    security: &S,
+    path: &Path,
+    retained: &mut BTreeMap<PathBuf, (std::rc::Rc<File>, ObjectIdentity)>,
+    private: &impl Fn(&Path) -> Result<bool>,
+) -> Result<Option<std::rc::Rc<File>>> {
+    use crate::publication_state::{metadata, walk_checked, WalkObject};
+    security.validate_path(path)?;
+    let object = walk_checked(path, retained, UNPROVEN, |p, child| {
+        let Some(m) = metadata(p)? else {
+            return Ok(None);
+        };
+        let file = security.open(
+            p,
+            private(p)?,
+            child.is_some_and(|c| matches!(metadata(c), Ok(None))),
+        )?;
+        let metadata = file.metadata().map_err(|_| UNPROVEN)?;
+        if metadata.is_dir() != m.is_dir() {
+            return Err(UNPROVEN);
+        }
+        let identity = security.identity(&file)?;
+        Ok(Some(WalkObject::new(
+            metadata,
+            std::rc::Rc::new(file),
+            identity,
+        )))
+    })?;
+    Ok(object.map(|o| o.handle))
+}
+fn checked_read<S: Security>(
+    security: &S,
+    path: &Path,
+    limit: usize,
+    retained: &RefCell<BTreeMap<PathBuf, (std::rc::Rc<File>, ObjectIdentity)>>,
+    private: &impl Fn(&Path) -> Result<bool>,
+) -> Result<Option<Vec<u8>>> {
+    crate::publication_state::read_limit(limit).map_err(|_| UNPROVEN)?;
+    let Some(file) = checked_walk(security, path, &mut retained.borrow_mut(), private)? else {
+        return Ok(None);
+    };
+    let identity = security.identity(&file)?;
+    let bytes = crate::publication_state::read_bounded(&file, limit).map_err(|_| UNPROVEN)?;
+    let current =
+        checked_walk(security, path, &mut retained.borrow_mut(), private)?.ok_or(UNPROVEN)?;
+    if security.identity(&current)? != identity {
+        return Err(UNPROVEN);
+    }
+    Ok(Some(bytes))
+}
 impl<S: Security> Reader<S> {
     fn new(expected: ProvisioningReceipt, security: S) -> Result<Self> {
         Record::Provisioning(Box::new(expected.clone())).encode()?;
-        // Managed identity requires its native manifest/service attestation.
-        // The observation-only boundary cannot establish that binding yet.
-        if expected.managed_connector.is_some() {
+        // Existing observers provide no attestation and still refuse managed receipts.
+        if security.managed_identity()? != expected.managed_connector {
             return Err(UNSUPPORTED);
         }
         let login = security.login()?;
@@ -108,56 +161,30 @@ impl<S: Security> Reader<S> {
             || path.starts_with(role_parent))
     }
     fn walk(&self, path: &Path) -> Result<Option<std::rc::Rc<File>>> {
-        use crate::publication_state::{metadata, walk_checked, WalkObject};
-        self.security.validate_path(path)?;
-        let object = walk_checked(
+        checked_walk(
+            &self.security,
             path,
             &mut self.directories.borrow_mut(),
-            UNPROVEN,
-            |p, child| {
-                let Some(m) = metadata(p)? else {
-                    return Ok(None);
-                };
-                let file = self.security.open(
-                    p,
-                    self.private(p)?,
-                    child.is_some_and(|c| matches!(metadata(c), Ok(None))),
-                )?;
-                let metadata = file.metadata().map_err(|_| UNPROVEN)?;
-                if metadata.is_dir() != m.is_dir() {
-                    return Err(UNPROVEN);
-                }
-                let identity = self.security.identity(&file)?;
-                Ok(Some(WalkObject::new(
-                    metadata,
-                    std::rc::Rc::new(file),
-                    identity,
-                )))
-            },
-        )?;
-        Ok(object.map(|o| o.handle))
+            &|p| self.private(p),
+        )
     }
     fn identity(&self, path: &Path) -> Result<ObjectIdentity> {
         self.security
             .identity(self.walk(path)?.ok_or(UNPROVEN)?.as_ref())
     }
     fn read(&self, path: &Path, limit: usize) -> Result<Option<Vec<u8>>> {
-        crate::publication_state::read_limit(limit).map_err(|_| UNPROVEN)?;
-        let Some(file) = self.walk(path)? else {
-            return Ok(None);
-        };
-        let identity = self.security.identity(&file)?;
-        let bytes = crate::publication_state::read_bounded(&file, limit).map_err(|_| UNPROVEN)?;
-        if self.identity(path)? != identity {
-            return Err(UNPROVEN);
-        }
-        Ok(Some(bytes))
+        checked_read(&self.security, path, limit, &self.directories, &|p| {
+            self.private(p)
+        })
     }
     fn base(&self) -> Result<()> {
         if self.security.login()? != self.login {
             return Err("OTHER_LOGIN_OWNER");
         }
         let r = &self.expected;
+        if self.security.managed_identity()? != r.managed_connector {
+            return Err(UNPROVEN);
+        }
         if self.identity(&r.scope.state_root)? != r.scope.state_identity {
             return Err(UNPROVEN);
         }
@@ -428,12 +455,19 @@ impl<S: Security> Reader<S> {
     }
 }
 
+mod context;
 #[cfg(windows)]
 mod native;
 mod platform;
+#[doc(hidden)]
+pub use context::NativeInput;
+#[doc(hidden)]
+pub use platform::CreationPlatform;
+#[doc(hidden)]
+pub use writer::CreationWriter;
 mod writer;
 #[cfg(windows)]
-pub use native::{WindowsCreationPlatform, WindowsCreationWriter};
+pub use native::{WindowsCreationPlatform, WindowsCreationWriter, WindowsSecurity};
 
 #[cfg(test)]
 mod tests;
