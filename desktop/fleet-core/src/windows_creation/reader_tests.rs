@@ -342,10 +342,20 @@ fn reader_refuses_unreserved_present_intermediate_directory() {
 fn reader_refuses_a_held_directory_replaced_between_reads() {
     let f = Fixture::new();
     let path = f.reader.expected.scope.kit_root.join("client");
-    f.reader.identity(&path).unwrap();
-    std::fs::rename(&path, f.root.join("previous-client")).unwrap();
-    crate::publication_state::create_new_directory(&path).unwrap();
-    assert!(f.reader.identity(&path).is_err());
+    let original = f.reader.identity(&path).unwrap();
+    #[cfg(windows)]
+    {
+        let error = std::fs::rename(&path, f.root.join("previous-client")).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(f.reader.identity(&path).unwrap(), original);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = original;
+        std::fs::rename(&path, f.root.join("previous-client")).unwrap();
+        crate::publication_state::create_new_directory(&path).unwrap();
+        assert!(f.reader.identity(&path).is_err());
+    }
 }
 #[test]
 fn reader_refuses_over_bound_bytes_and_changed_file_identity() {
