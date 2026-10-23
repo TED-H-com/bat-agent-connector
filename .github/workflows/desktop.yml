@@ -664,6 +664,19 @@ jobs:
           cargo fmt --manifest-path fleet-core/Cargo.toml --check
           cargo clippy --locked --manifest-path fleet-core/Cargo.toml --all-targets -- -D warnings
           cargo test --locked --manifest-path fleet-core/Cargo.toml --no-fail-fast
+      - name: Rust request oracle and unchanged Python handoff requests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cargo build --locked --manifest-path fleet-core/Cargo.toml --example participant_request_oracle
+          export BATC_PARTICIPANT_REQUEST_ORACLE="$PWD/fleet-core/target/debug/examples/participant_request_oracle"
+          cd ..
+          mkdir -p "$HOME/agent-work/tmp/pytest"
+          request_temp=$(mktemp -d "$HOME/agent-work/tmp/pytest/participant-XXXXXX")
+          trap 'rm -rf -- "$request_temp"' EXIT
+          for version in 3.13 3.10; do
+            uv run --isolated --python "$version" --extra dev pytest -q desktop/tests/test_participant_delivery.py --basetemp="$request_temp/$version"
+          done
       - name: Native file adapter with actual central service
         if: runner.os == 'Linux'
         timeout-minutes: 10
