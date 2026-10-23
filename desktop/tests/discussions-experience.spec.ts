@@ -723,7 +723,7 @@ test('adoption recovery opens Details and tolerates a completed receipt', async 
   const page = await context.newPage(), f = demoFixture({locale: 'zh-TW', discussions: true}), checks: string[] = [];
   // Count explicit recovery reads here. A restored form also schedules its own
   // acknowledged-receipt read after 250 ms; wall time must not race these steps.
-  const at = Date.now(); await page.clock.install({time: at}); await page.clock.pauseAt(at);
+  const at = Date.now(); await page.clock.pauseAt(at);
   let op: any;
   await mountConversation(page, false, async input => {
     if (input.method === 'GET' && input.path.startsWith('/operations/')) checks.push(input.path);
