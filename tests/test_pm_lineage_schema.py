@@ -49,14 +49,24 @@ def fixed_selects():
                     and isinstance(node.args[0].value, str) and node.args[0].value.lstrip().upper().startswith("SELECT")):
                 statements.append((node.lineno, node.args[0].value))
         if statements:
-            result[".".join(path.relative_to(root).with_suffix("").parts)] = statements
+            result[".".join(path.relative_to(root).with_suffix("").parts)] = sorted(statements)
     return result
 
 
 FIXED_SELECTS = fixed_selects()
 # (module, unique SQL substring): (expected prepare error, reason).
 # Only legitimate non-daemon schemas belong here; stale matches must fail.
-EXCLUSIONS = {}
+EXCLUSIONS = {
+    ("browser_sessions", statement): (
+        "no such table: browser_handoffs",
+        "BrowserSessions.__init__ creates browser_handoffs lazily when the managed browser adapter starts.",
+    )
+    for statement in (
+        "SELECT filename FROM browser_handoffs WHERE expires_at<=?",
+        "SELECT COUNT(*) FROM browser_handoffs",
+        "SELECT * FROM browser_handoffs WHERE digest=?",
+    )
+}
 
 
 def test_fixed_select_exclusions_match_real_statements():
@@ -72,15 +82,24 @@ def test_fixed_selects_prepare_on_installed_schema(daemon, module_name):  # noqa
     for line, statement in FIXED_SELECTS[module_name]:
         exceptions = [value for (module, match), value in EXCLUSIONS.items()
                       if module == module_name and match in statement]
-        assert len(exceptions) <= 1, (module_name, line)
-        if exceptions:
-            expected_error, _ = exceptions[0]
-            # If the schema becomes installed, this exclusion must be removed.
-            with pytest.raises(sqlite3.OperationalError, match=expected_error):
-                daemon.ops.db.execute("EXPLAIN " + statement, (None,) * statement.count("?")).fetchall()
-            continue
+        if len(exceptions) > 1:
+            failures.append(f"{module_name}:{line}: overlapping exclusions: {statement}")
         try:
             daemon.ops.db.execute("EXPLAIN " + statement, (None,) * statement.count("?")).fetchall()
         except sqlite3.Error as error:
-            failures.append(f"{module_name}:{line}: {statement}: {error}")
+            if not (len(exceptions) == 1 and isinstance(error, sqlite3.OperationalError)
+                    and str(error) == exceptions[0][0]):
+                failures.append(f"{module_name}:{line}: {statement}: {error}")
+        else:
+            if exceptions:
+                failures.append(f"{module_name}:{line}: stale exclusion; statement now compiles: {statement}")
     assert not failures, "\n".join(failures)
+
+
+def test_lazy_browser_selects_prepare_after_the_real_constructor(daemon, tmp_path):  # noqa: F811
+    from bat_agent_connector.browser_sessions import BrowserSessions
+
+    BrowserSessions(daemon, tmp_path, "fixture-installation")
+    for module_name, statement in EXCLUSIONS:
+        assert module_name == "browser_sessions"
+        daemon.ops.db.execute("EXPLAIN " + statement, (None,) * statement.count("?")).fetchall()
