@@ -2334,6 +2334,11 @@ function reasonLabel(t, reason) {
 var statusVocabulary, phaseVocabulary, phaseStrings, uiStrings, reasonLabels;
 var init_ui_strings = __esmMin((() => {
 	statusVocabulary = Object.freeze({
+		todo: {
+			en: "To do",
+			"zh-TW": "待辦",
+			tone: "neutral"
+		},
 		not_started: {
 			en: "Not started",
 			"zh-TW": "未開始",
@@ -12015,7 +12020,7 @@ var init_i18n = __esmMin((() => {
 			pin: "固定在上方",
 			unpin: "取消固定",
 			wi_done_of: "完成 {done}/{total}",
-			wi_state_todo: "未開始",
+			wi_state_todo: uiStrings["zh-TW"].ui_status_todo,
 			wi_state_doing: "進行中",
 			wi_state_waiting: "等待中",
 			wi_state_done: "已完成",
@@ -13779,7 +13784,7 @@ var init_i18n = __esmMin((() => {
 			pin: "Pin to top",
 			unpin: "Unpin",
 			wi_done_of: "{done}/{total} done",
-			wi_state_todo: "to do",
+			wi_state_todo: uiStrings.en.ui_status_todo,
 			wi_state_doing: "in progress",
 			wi_state_waiting: "waiting",
 			wi_state_done: "done",
@@ -19432,7 +19437,7 @@ var WORK_STATUS = {
 	github_closed: "github_closed",
 	github_completed: "github_completed",
 	github_done: "github_done",
-	todo: "not_started",
+	todo: "todo",
 	doing: "in_progress",
 	waiting: "waiting",
 	done: "done",
@@ -22708,7 +22713,7 @@ function runtimeReceipt(t, attempt) {
 //#region src/pm-work-inspector.js
 init_ui_strings();
 var workStatus = (card) => ({
-	backlog: "not_started",
+	backlog: "todo",
 	in_progress: "in_progress",
 	waiting: "waiting",
 	review: "in_review",
