@@ -24,7 +24,8 @@ the creation receipt binds their original context to the observed nonempty ID.
 A reserved ID is not proof that a session exists. Canonical replay returns
 the original row without writing; a changed digest is a typed conflict.
 There are no fact updates, deletes, replacements or upserts. Readers rebuild
-state from facts; no stored status means an uncertain effect may be resent.
+state from facts. After a send fence, the outcome remains unknown until
+readback; nothing in this journal authorizes resending the effect.
 
 `LaunchIntent` and `CreatedSession` are internal typed producer boundaries,
 never request deserializers. The latter requires the committed original intent,
