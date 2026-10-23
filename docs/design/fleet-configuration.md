@@ -741,8 +741,10 @@ changed commitment returns `409 SETUP_REVIEW_CHANGED`; malformed manifests retur
 `422 INVALID_NATIVE_PLAN`, unsupported generators `409 CONNECTION_GENERATOR_UNSUPPORTED`.
 The server cannot regenerate native files or attest a truthful participant.
 
-Version 2 is defined, but no action uses it yet; neither the native participant nor detach exists.
-版本二已定義，但尚無 action 使用；native participant 與 detach 均尚未實作。
+Version 2 is used by the server reference-detach action described below. No native reference
+participant exists yet, so no client can complete a detach. The UI offers no detach flow.
+版本二供下述伺服器中斷連線關聯 action 使用；本機參與者尚未實作，因此目前沒有 client 能完成
+中斷連線關聯，UI 也不提供此流程。
 Its plan is exactly `{contract_version,kind,generator_version,review_digest,artifacts}`;
 each artifact is `{role,before,after}`. A state is `{"state":"absent"}` or
 `{"state":"present","digest":"<SHA-256>"}`. Absent never carries an empty-file digest.
@@ -1075,10 +1077,76 @@ runner 未退出時回 `CONNECTION_OPERATION_RUNNING`。確定回執不能被改
 server 無法驗證本機寫入時間，不能據此證明中央可達性或遠端擁有權。
 此證據不代表實機驗收完成。
 
+
+#### Connection reference detach
+
+`connection.reference.detach` requires `observe` and the binding's original effective
+principal (including scopes), installation and connection ID. It never stops a service or
+tunnel, revokes credentials, deletes a source/profile, merges history or reattaches a reference.
+No native reference participant exists yet: this server contract alone cannot complete a
+detach from any current client, and the UI has no detach button or flow.
+
+The request has exactly these fields (normal operation idempotency keys remain in the header):
+
+```json
+{"action":"connection.reference.detach",
+ "target":{"installation_ref":"desktop-a","connection_id":"conn_<32 hex>"},
+ "params":{"native_plan":"<v2 reference_detach plan object>"},
+ "preconditions":{"expected_revision":1,"dependency_digest":"<64 hex>","review_digest":"<64 hex>"}}
+```
+
+Use `POST /api/v1/connections/preview` with the same shape; initial digest placeholders may
+be 64 zeroes. It returns `{preview:{action,target,expected_revision,dependency_digest,
+review_digest,dependencies,native_plan}}`. `dependencies` is the bounded read model: impacts
+`{kind,ref,revision,disposition}`, per-domain coverage, `server_complete`, `complete`,
+`dependency_digest`, and `next_offset`. Native selection/resources always require a native
+review; their uncovered status is never interpreted as empty. The server checks every
+bounded page for blockers and commits the full checked set, including rows outside page one.
+Submit the returned revision and both digests with the same native plan. Admission repeats
+the read inside the connection busy transaction before creating the operation.
+
+| Refusal | Meaning |
+| --- | --- |
+| `NOT_FOUND` | No binding for this principal and installation; no other identity is disclosed. |
+| `CONNECTION_ALREADY_DETACHED` | The original reference is already detached. |
+| `NATIVE_REVIEW_REQUIRED` | No native review commitment was supplied. |
+| `CONNECTION_DEPENDENCIES_UNPROVEN` | Server coverage is incomplete, hidden, unknown or over its bound. |
+| `CONNECTION_DEPENDENCY_ACTIVE` | A checked server dependency or native resource is active. |
+| `CONNECTION_DETACH_WOULD_STOP_TUNNEL` | The native participant cannot prove detach leaves a live tunnel alone. |
+| `SETUP_REVIEW_CHANGED` | Revision, dependency digest or reviewed inputs changed. |
+| `CONNECTION_OPERATION_RUNNING` | Finish the original connection operation first. |
+
+The existing handoff and receipt routes select v1/v2 from the persisted action, never the
+incoming version. Detach uses v2's purpose-separated challenge, `reference_detach`, and
+ordered `local_catalog`/`selection` evidence. An accepted operation waits with its row
+still active. Applied/unchanged receipts atomically set `state=detached`, increment revision
+and append `receipt_<64 hex>` references to the server
+`connection_bindings` row together with operation success; every other column stays intact.
+These references never enter the native catalog, which records no receipt or operation IDs. Refused/abandoned receipts fail without changing the row. Uncertain
+evidence retains the active row and follows the existing bounded reconciliation retries to
+`needs_attention`; readback and cancellation preserve the original evidence and effect ID.
+Bootstrap `capabilities.connection_effect_kinds` lists `{kind,contract_version,action}` from
+the shared contract; it advertises server codec support only, not native readiness or a UI
+permission. `connection_contract_version` remains 1 for existing clients.
+
+繁體中文：此 action 使用 observe，並限原有效 principal、installation 與 connection 綁定。
+預覽與提交均使用上方完整欄位；預覽可先以 64 個零填摘要，再原樣提交回傳的 revision、
+dependency_digest、review_digest 與本機計畫。伺服器在 busy 交易內重讀完整相依集合；歷史僅供參考，
+未完整覆蓋回 CONNECTION_DEPENDENCIES_UNPROVEN，使用中相依回 CONNECTION_DEPENDENCY_ACTIVE，
+版本或摘要變更回 SETUP_REVIEW_CHANGED，其他身分回不洩漏資訊的 NOT_FOUND，已中斷則回
+CONNECTION_ALREADY_DETACHED。原操作未完成回 CONNECTION_OPERATION_RUNNING；缺本機檢閱回
+NATIVE_REVIEW_REQUIRED；若可能停止通道，本機回 CONNECTION_DETACH_WOULD_STOP_TUNNEL。
+收到 applied／unchanged 確定回執後才以同一交易在伺服器 `connection_bindings` row
+改為 detached、版本加一、附加 receipt refs 並完成操作；原生目錄不記錄回執或 operation ID。
+ID、來源、偏好、關聯與其他欄位全部保留。refused／abandoned 失敗而不改資料，uncertain 保持 active，
+沿用有限讀回重試後進入 needs_attention。中斷關聯不停止、不撤銷、不刪除任何服務、通道、憑證或來源。
+bootstrap 的新欄位僅宣告伺服器 codec 支援，舊版本欄位仍為 1；不代表本機已可執行，UI 不提供此操作。
+
 #### Native connection catalog format
 
 `fleet-core::connection_catalog` defines only a pure format and candidate transitions.
-Nothing reads, writes or advertises the catalog yet; detach is still not implemented.
+Nothing reads, writes or advertises the catalog yet. The server detach action is
+defined above; its native participant is still not implemented.
 Central configuration remains under `bridge::Config::validate`; the catalog stores
 only a configuration ID and SHA-256, without duplicating that validator.
 
@@ -1103,16 +1171,17 @@ is Present with `canonical:false`; reading never rewrites it. The sole canonical
 encoder emits compact UTF-8 JSON in declaration order without a newline, preserving
 entry order. A candidate's bytes depend only on the current document and `Change`.
 The catalog records no receipt or operation IDs, so a review can predict its bytes.
-Receipt history stays on the server and, once available, in the participant's
-per-operation records bound to the catalog's before and after digests.
+Detach receipt references are appended only to the server's `connection_bindings` row.
+Participant evidence will stay in separate per-operation records, once implemented,
+bound to the catalog's before and after digests.
 Changes advance revision exactly once and return bytes/SHA-256;
 unchanged returns no bytes. Overflow or excess bounds refuse without pruning.
 Detach clears selection when needed and retains all entries and configuration,
 even for the last attachment. Add accepts only attached entries; explicit reattach
 retains the ID and is the only transition returning a detached entry to attached.
 
-繁體中文：此模組僅定義純格式與候選轉換，尚無程式讀取、寫入或宣告支援目錄，
-移除連線關聯仍未實作。中央設定沿用 `bridge::Config::validate`；目錄只引用設定 ID 與
+繁體中文：此模組僅定義純格式與候選轉換，尚無程式讀取、寫入或宣告支援目錄。
+伺服器中斷連線關聯 action 如上所述，本機參與者仍未實作。中央設定沿用 `bridge::Config::validate`；目錄只引用設定 ID 與
 SHA-256，根層綁定啟動角色的固定 installation UUID，與 Fleet／managed runtime ID 分開。
 各項保留中央身分與 attached／detached 狀態；可選的 connection ID 沿用該中央身分及
 根層 installation，完整組合不可重複。僅有中央連線時使用 null，不虛構 BAT profile。
@@ -1125,5 +1194,6 @@ Absent 表示尚無目錄；Present 的 `selected:null` 表示未選取。重複
 revision 恰增一，無變更不回新 bytes。超限或溢位拒絕，不裁剪歷史。移除會清空必要
 選取，最後一項仍保留全部項目與設定。新增只接受 attached 項目；只有明確重新附加
 可將 detached 項目恢復為 attached，並沿用原 ID。候選 bytes 僅取決於目前文件與
-`Change`；目錄不記錄收據或 operation ID，讓檢閱能預先算出 bytes。收據歷史留在
-server，以及未來 participant 的逐操作紀錄，綁定目錄變更前後的 digest。
+`Change`；目錄不記錄收據或 operation ID，讓檢閱能預先算出 bytes。中斷關聯的 receipt refs
+只附加於伺服器 `connection_bindings` row；未來 participant 的證據另存逐操作紀錄，
+綁定目錄變更前後的 digest。
