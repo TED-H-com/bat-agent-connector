@@ -7,14 +7,11 @@ use crate::{
     windows_launcher::LauncherMutex,
     windows_publication_guards::WindowsPublicationGuards,
 };
-use std::{os::windows::io::AsRawHandle, rc::Rc};
-use windows_sys::Win32::Storage::FileSystem::{
-    FileIdInfo, GetFileInformationByHandleEx, FILE_ID_INFO,
-};
-
+use std::rc::Rc;
 pub struct WindowsSecurity {
     guards: WindowsPublicationGuards,
     discovery: DiscoveryConfig,
+    role_record: PathBuf,
     #[cfg(test)]
     pub(super) held_for_fixture: bool,
     #[cfg(test)]
@@ -79,7 +76,13 @@ impl Security for WindowsSecurity {
         self.guards.launcher().map(|_| ())
     }
     fn open(&self, path: &Path, private: bool, child_absent: bool) -> Result<File> {
-        let file = publication_state::checked_handle(path, private, child_absent)?;
+        let file = if path == self.role_record {
+            publication_state::with_startup_role_file(path, |file| {
+                file.try_clone().map_err(|_| UNPROVEN)
+            })?
+        } else {
+            publication_state::checked_handle(path, private, child_absent)?
+        };
         if canonical_local(path)? != path {
             return Err(UNPROVEN);
         }
@@ -100,34 +103,54 @@ impl Security for WindowsSecurity {
         file_identity(file)
     }
 }
-pub(super) fn file_identity(file: &File) -> Result<ObjectIdentity> {
-    let mut info = FILE_ID_INFO::default();
-    if unsafe {
-        GetFileInformationByHandleEx(
-            file.as_raw_handle(),
-            FileIdInfo,
-            (&mut info as *mut FILE_ID_INFO).cast(),
-            std::mem::size_of::<FILE_ID_INFO>() as u32,
-        )
-    } == 0
-    {
-        return Err(UNPROVEN);
-    }
-    Ok(ObjectIdentity {
-        volume: info.VolumeSerialNumber,
-        file_id: info
-            .FileId
-            .Identifier
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect(),
-    })
-}
+pub(super) use crate::publication_state::file_identity;
 
 /// Keep this platform and its guards on one synchronous native blocking thread.
 /// Context is native-discovered; no paths or ownership claims come from IPC.
 pub type WindowsCreationPlatform = super::platform::CreationPlatform<WindowsSecurity>;
 pub type WindowsCreationWriter<'a> = super::writer::CreationWriter<'a, WindowsSecurity>;
+impl WindowsSecurity {
+    fn for_input(
+        pointer: &Path,
+        kit: &Path,
+        role_record: PathBuf,
+        roaming: &Path,
+        executable: &Path,
+    ) -> Result<Self> {
+        let login = current_login()?;
+        let roaming = canonical_local(roaming)?;
+        let executable = canonical_local(executable)?;
+        if !roaming.is_dir() || !executable.is_file() {
+            return Err(UNPROVEN);
+        }
+        let text = |p: &Path| p.to_str().map(str::to_owned).ok_or(UNPROVEN);
+        let native = NativeIdentity::new(&text(&executable)?, &text(pointer)?)?;
+        let discovery = DiscoveryConfig::new(
+            &text(&kit.join("client"))?,
+            &text(&super::context::slot_path(
+                pointer,
+                kit,
+                Artifact::Inventory,
+            ))?,
+            &text(&super::context::slot_path(
+                pointer,
+                kit,
+                Artifact::ProfileIndex,
+            ))?,
+            &roaming,
+            Some(native),
+        )?;
+        Ok(Self {
+            guards: WindowsPublicationGuards::new(login),
+            discovery,
+            role_record,
+            #[cfg(test)]
+            held_for_fixture: false,
+            #[cfg(test)]
+            monitor_for_fixture: false,
+        })
+    }
+}
 impl WindowsCreationPlatform {
     pub fn new(
         expected: ProvisioningReceipt,
@@ -136,34 +159,28 @@ impl WindowsCreationPlatform {
         startup: &Path,
         user: &Path,
     ) -> Result<Self> {
-        let login = current_login()?;
-        let roaming = canonical_local(&roaming)?;
-        let executable = canonical_local(&executable)?;
-        if !roaming.is_dir() || !executable.is_file() {
-            return Err(UNPROVEN);
-        }
-        let text = |p: &Path| p.to_str().map(str::to_owned).ok_or(UNPROVEN);
-        let native = NativeIdentity::new(&text(&executable)?, &text(&expected.scope.pointer)?)?;
-        let discovery = DiscoveryConfig::new(
-            &text(&expected.scope.kit_root.join("client"))?,
-            &text(expected.path(Artifact::Inventory))?,
-            &text(expected.path(Artifact::ProfileIndex))?,
+        let security = WindowsSecurity::for_input(
+            &expected.scope.pointer,
+            &expected.scope.kit_root,
+            expected.scope.startup_role_record.clone(),
             &roaming,
-            Some(native),
+            &executable,
         )?;
-        Self::with_security(
-            expected,
-            roaming,
-            startup,
-            user,
-            WindowsSecurity {
-                guards: WindowsPublicationGuards::new(login),
-                discovery,
-                #[cfg(test)]
-                held_for_fixture: false,
-                #[cfg(test)]
-                monitor_for_fixture: false,
-            },
-        )
+        Self::with_security(expected, roaming, startup, user, security)
+    }
+    pub fn from_native(
+        input: NativeInput,
+        executable: &Path,
+        verify: &dyn Fn() -> Result<()>,
+        mint: &mut dyn FnMut() -> [String; 2],
+    ) -> Result<Self> {
+        let security = WindowsSecurity::for_input(
+            &input.pointer,
+            &input.kit_root,
+            input.role_record.clone(),
+            &input.roaming,
+            executable,
+        )?;
+        Self::from_native_input(input, security, verify, mint)
     }
 }

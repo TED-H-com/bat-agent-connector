@@ -10,6 +10,9 @@ mod files;
 mod fleet;
 mod fleet_bootstrap;
 mod fleet_control;
+// Native composition awaits the participant; no commands expose this module.
+#[allow(dead_code)]
+mod fleet_creation;
 mod fleet_lifecycle;
 #[cfg(windows)]
 mod fleet_native;

@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, OpenOptions},
-    io::{Read, Write},
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -96,10 +96,27 @@ fn check_parents(data: &Path) -> Result<(), String> {
             return Err(UNREADABLE.into());
         }
         check_private(&meta)?;
+        #[cfg(windows)]
+        bat_fleet_core::publication_state::verify_ancestors(
+            &data.join("startup-role"),
+            &data.join("startup-role"),
+        )
+        .map_err(|_| UNREADABLE)?;
     }
     Ok(())
 }
+pub(crate) struct Evidence {
+    pub snapshot: Snapshot,
+    pub record_sha256: String,
+    pub version: u8,
+}
+pub(crate) fn evidence(data: &Path) -> Result<Evidence, String> {
+    read_evidence(data)?.ok_or_else(|| UNREADABLE.into())
+}
 fn read(data: &Path) -> Result<Option<Snapshot>, String> {
+    Ok(read_evidence(data)?.map(|e| e.snapshot))
+}
+fn read_evidence(data: &Path) -> Result<Option<Evidence>, String> {
     check_parents(data)?;
     let path = record_path(data);
     let Some(meta) = metadata(&path)? else {
@@ -109,28 +126,32 @@ fn read(data: &Path) -> Result<Option<Snapshot>, String> {
         return Err(UNREADABLE.into());
     }
     check_private(&meta)?;
-    let mut options = OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    }
     #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        options.custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT
-    }
-    let file = options.open(&path).map_err(|_| UNREADABLE)?;
-    let meta = file.metadata().map_err(|_| UNREADABLE)?;
-    if !meta.is_file() || linked(&meta) || meta.len() > MAX_RECORD {
-        return Err(UNREADABLE.into());
-    }
-    check_private(&meta)?;
-    let mut bytes = vec![];
-    file.take(MAX_RECORD + 1)
-        .read_to_end(&mut bytes)
+    let bytes = bat_fleet_core::publication_state::read_startup_role(&path, MAX_RECORD as usize)
         .map_err(|_| UNREADABLE)?;
+    #[cfg(not(windows))]
+    let bytes = {
+        use std::io::Read;
+        let mut options = OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        }
+
+        let file = options.open(&path).map_err(|_| UNREADABLE)?;
+        let meta = file.metadata().map_err(|_| UNREADABLE)?;
+        if !meta.is_file() || linked(&meta) || meta.len() > MAX_RECORD {
+            return Err(UNREADABLE.into());
+        }
+        check_private(&meta)?;
+        let mut bytes = vec![];
+        file.take(MAX_RECORD + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| UNREADABLE)?;
+        bytes
+    };
     let record: Record = serde_json::from_value(
         bat_fleet_core::strict_json::parse(&bytes, MAX_RECORD as usize).map_err(|_| UNREADABLE)?,
     )
@@ -141,10 +162,14 @@ fn read(data: &Path) -> Result<Option<Snapshot>, String> {
     {
         return Err(UNREADABLE.into());
     }
-    Ok(Some(Snapshot {
-        role: Some(record.role),
-        generation: record.generation,
-        installation_ref: Some(record.installation_ref),
+    Ok(Some(Evidence {
+        snapshot: Snapshot {
+            role: Some(record.role),
+            generation: record.generation,
+            installation_ref: Some(record.installation_ref),
+        },
+        record_sha256: bat_fleet_core::digest(&bytes),
+        version: record.version,
     }))
 }
 

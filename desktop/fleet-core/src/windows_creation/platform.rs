@@ -5,6 +5,23 @@ use crate::{
     discovery::{Backend, MonitorIdentity},
     migration::{self, Owner},
 };
+pub(super) fn process_observation<S: Security>(
+    security: &S,
+    configured: bool,
+    pointer: &Path,
+    roaming: &Path,
+) -> Result<Option<MonitorIdentity>> {
+    Ok(if !configured {
+        security.unconfigured(pointer, roaming)?;
+        None
+    } else {
+        let owner = security.discover()?;
+        if owner.is_none() {
+            security.unpublished(&roaming.join("bat-fleet-monitor-launch.json"))?;
+        }
+        owner
+    })
+}
 pub struct CreationPlatform<S> {
     pub(super) reader: Reader<S>,
     pub(super) roaming: PathBuf,
@@ -14,7 +31,8 @@ pub struct CreationPlatform<S> {
     pub(super) directories_prepared: bool,
 }
 impl<S: Security> CreationPlatform<S> {
-    pub(super) fn with_security(
+    #[doc(hidden)]
+    pub fn with_security(
         expected: ProvisioningReceipt,
         roaming: PathBuf,
         startup: &Path,
@@ -32,6 +50,9 @@ impl<S: Security> CreationPlatform<S> {
             directories_prepared: false,
         })
     }
+    pub fn receipt(&self) -> &ProvisioningReceipt {
+        &self.reader.expected
+    }
     pub(super) fn observation(&self) -> Result<Option<MonitorIdentity>> {
         self.reader.security.held()?;
         self.reader.base()?;
@@ -46,21 +67,14 @@ impl<S: Security> CreationPlatform<S> {
         Ok(owner)
     }
     pub(super) fn process_observation(&self, configured: bool) -> Result<Option<MonitorIdentity>> {
-        Ok(if !configured {
-            self.reader
-                .security
-                .unconfigured(&self.reader.expected.scope.pointer, &self.roaming)?;
-            None
-        } else {
-            let owner = self.reader.security.discover()?;
-            if owner.is_none() {
-                self.reader
-                    .security
-                    .unpublished(&self.roaming.join("bat-fleet-monitor-launch.json"))?;
-            }
-            owner
-        })
+        process_observation(
+            &self.reader.security,
+            configured,
+            &self.reader.expected.scope.pointer,
+            &self.roaming,
+        )
     }
+
     pub(super) fn history(
         &self,
         reference: &publication::FrozenPlanRef,
