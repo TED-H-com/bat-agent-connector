@@ -154,9 +154,9 @@ def _connection_state(daemon, name, host):
     inventory = daemon.inventory
     observed_host = inventory.config.hosts.get(name)
     same_source = observed_host and (observed_host.url, observed_host.fingerprint, observed_host.profile_id) == (host.url, host.fingerprint, host.profile_id)
-    row = daemon.journal.db.execute("""SELECT h.reachable,h.last_attempt_at FROM hosts_observed h
-        JOIN discovery_latest d ON d.host=h.host AND d.profile_id=? AND d.binding=?
-        WHERE h.host=?""", (host.profile_id, inventory._binding(name), name)).fetchone() if same_source else None
+    row = (
+        inventory.current_source_evidence(name).observation if same_source else None
+    )
     checked = row["last_attempt_at"] if row else None
     recent = checked is not None and 0 <= time.time() - checked <= inventory.settings.stale_after_s
     status = ("connected" if row["reachable"] else "unreachable") if recent else "checking"

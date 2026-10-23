@@ -72,6 +72,13 @@ class InventorySettings:
     max_backoff_s: float = 600.0
 
 
+@dataclass(frozen=True)
+class CurrentSourceEvidence:
+    observation: dict | None
+    discovery_bodies: list[dict]
+    reason: str | None = None
+
+
 def _material(row: dict) -> dict:
     return {k: row.get(k) for k in MATERIAL}
 
@@ -269,6 +276,27 @@ class Inventory:
     def _binding(self, host):
         hc = self.config.host(host)
         return hashlib.sha256(dump([hc.url, hc.fingerprint, hc.profile_id]).encode()).hexdigest()
+
+    def current_source_evidence(self, host: str) -> CurrentSourceEvidence:
+        """Read only evidence bound to this host's configured profile and source.
+
+        hosts_observed has no source column; its discovery row supplies the binding.
+        A scope refusal retains the old binding, so it cannot verify the new source.
+        No refresh, probe, timestamp renewal or journal write happens here.
+        """
+        configured = self.config.hosts.get(host)
+        if configured is None:
+            return CurrentSourceEvidence(None, [])
+        row = self.db.execute("""SELECT h.*, d.body AS discovery_body
+            FROM discovery_latest d LEFT JOIN hosts_observed h ON h.host=d.host
+            WHERE d.host=? AND d.profile_id=? AND d.binding=?""",
+            (host, configured.profile_id, self._binding(host))).fetchone()
+        if row is None:
+            previous = self.db.execute("SELECT 1 FROM discovery_latest WHERE host=? LIMIT 1", (host,)).fetchone()
+            return CurrentSourceEvidence(None, [], "DISCOVERY_SCOPE_CHANGED" if previous else None)
+        observation = {key: row[key] for key in row.keys() if key != "discovery_body"} if row["host"] else None
+        discovery = body(row["discovery_body"])
+        return CurrentSourceEvidence(observation, [discovery] if discovery else [])
 
     def _context(self, host):
         scan = self._scans.get(host, {})
