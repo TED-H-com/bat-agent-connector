@@ -448,6 +448,14 @@ pub(super) fn resolve(
             bind_directory(&record.canonical_path, &record.identity)?;
         }
     }
+    let reviews: Vec<_> = c
+        .records
+        .values()
+        .filter_map(|s| match &s.record {
+            Record::Publication(link) => Some(link.frozen.review_digest.as_str()),
+            _ => None,
+        })
+        .collect();
     let mut used = BTreeSet::from([EvidenceKey::Provisioning]);
     for (key, stored) in &c.records {
         match &stored.record {
@@ -458,31 +466,11 @@ pub(super) fn resolve(
                         .and_then(|p| directory_identities.get(p))
                         == Some(&r.parent_identity),
                 )?;
-                let creation = c.receipt.scope.state_root.join("fleet-creation");
-                let internal = ["lineage", "closures", "directories", "migrations"]
-                    .iter()
-                    .any(|name| r.canonical_path == creation.join(name));
-                let decisions = c
-                    .receipt
-                    .scope
-                    .state_root
-                    .join("fleet-publication-decisions");
-                let decision_child = r.canonical_path.parent() == Some(decisions.as_path())
-                    && r.canonical_path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .is_some_and(|review| {
-                            records::hex(review, 64)
-                                && c.records.values().any(|s| {
-                                    matches!(&s.record, Record::Publication(link)
-                                    if link.frozen.review_digest == review)
-                                })
-                        });
-                let reserved = c.receipt.directories.iter().any(|d| {
-                    matches!(d, DirectoryReservation::ReservedAbsent { canonical_path }
-                        if canonical_path == &r.canonical_path)
-                });
-                ensure(internal || decision_child || reserved)?;
+                ensure(super::directory_reserved(
+                    &c.receipt,
+                    &r.canonical_path,
+                    &reviews,
+                ))?;
                 used.insert(key.clone());
             }
             Record::Managed(r) => {
