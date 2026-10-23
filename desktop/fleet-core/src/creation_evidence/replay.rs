@@ -12,6 +12,7 @@ pub struct Resolution {
     pub(super) terminal: Option<Terminal>,
     pub(super) settled: bool,
     pub(super) effect_session: Option<u32>,
+    effect_reference: Option<FrozenPlanRef>,
 }
 impl Resolution {
     pub fn ownership(
@@ -71,12 +72,17 @@ impl Resolution {
     }
     /// This is only the historical-session gate. Native review/lifecycle/expiry
     /// authorization and a fresh guarded capture are still required per effect.
-    pub fn require_effect_session(&self, login: &LoginIdentity) -> Result<()> {
+    pub fn require_effect_session(
+        &self,
+        login: &LoginIdentity,
+        frozen: &FrozenPlanRef,
+    ) -> Result<()> {
         ensure(
             login.valid()
                 && login == &self.captured_login
                 && login.owner_sid == self.owner.owner_sid
                 && self.effect_session == Some(login.session_id)
+                && self.effect_reference.as_ref() == Some(frozen)
                 && !self.settled,
         )
     }
@@ -212,36 +218,132 @@ fn apply_publication(
     Ok(None)
 }
 fn pointer_payload(bytes: &[u8], root: &Path, backend: crate::discovery::Backend) -> Result<()> {
-    // This checks the migration edge's semantic scope, not the Saved format.
-    // Its bytes and phase have already passed Store's original validator.
-    let value = crate::strict_json::parse(bytes, 16_384)?;
-    let object = value.as_object().ok_or(INVALID)?;
-    ensure(object.keys().all(|k| k == "kit_root" || k == "backend") && !object.is_empty())?;
-    ensure(object.get("kit_root").and_then(|v| v.as_str()) == root.to_str())?;
-    let actual = object
-        .get("backend")
-        .cloned()
-        .unwrap_or(serde_json::json!("powershell"));
-    ensure(actual == serde_json::to_value(backend).map_err(|_| INVALID)?)
+    crate::installation::validate_pointer(bytes, root, backend).map_err(|_| INVALID)
+}
+fn migration_history<'a>(
+    c: &CapturedEvidence,
+    id: &str,
+    startup: &Path,
+    migrations: &'a [crate::migration::MigrationHistory],
+) -> Result<&'a crate::migration::MigrationHistory> {
+    let mut matching = migrations.iter().filter(|s| s.id() == id);
+    let view = matching.next().ok_or(INVALID)?;
+    ensure(
+        matching.next().is_none()
+            && view.config_path() == c.receipt.scope.pointer
+            && view.startup_path() == startup,
+    )?;
+    Ok(view)
+}
+fn validate_saved_intent(
+    c: &CapturedEvidence,
+    intent: &MigrationIntent,
+    saved: &crate::migration::SavedHistory,
+) -> Result<()> {
+    ensure(
+        saved.config_path() == c.receipt.scope.pointer
+            && saved.startup_path() == intent.startup_path
+            && saved.login()
+                == (LoginIdentity {
+                    owner_sid: intent.binding.owner_sid.clone(),
+                    session_id: intent.binding.session_id,
+                })
+            && saved.review_fingerprint() == intent.review_fingerprint
+            && saved.restores() == intent.restores.as_deref()
+            && digest(&saved.config(false)?) == intent.before_sha256,
+    )?;
+    pointer_payload(
+        &saved.config(false)?,
+        &c.receipt.scope.kit_root,
+        saved.from(),
+    )?;
+    pointer_payload(&saved.config(true)?, &c.receipt.scope.kit_root, saved.to())
+}
+fn validate_termination(
+    c: &CapturedEvidence,
+    intent: &MigrationIntent,
+    termination: &MigrationTermination,
+    migrations: &[crate::migration::MigrationHistory],
+) -> Result<()> {
+    ensure(termination.binding == intent.binding)?;
+    let observed = migration_history(c, &intent.migration_id, &intent.startup_path, migrations)?;
+    match &termination.outcome {
+        MigrationOutcome::Refused => ensure(observed.saved().is_none()),
+        MigrationOutcome::Abandoned | MigrationOutcome::Restored { .. } => {
+            let saved = observed.saved().ok_or(INVALID)?;
+            ensure(
+                termination.saved_sha256.as_deref() == Some(saved.sha256())
+                    && saved.phase() != crate::migration::Phase::Complete,
+            )?;
+            validate_saved_intent(c, intent, saved)?;
+            if let MigrationOutcome::Restored {
+                migration_id,
+                saved_sha256,
+            } = &termination.outcome
+            {
+                ensure(migration_id != &intent.migration_id)?;
+                let restore = migration_history(c, migration_id, &intent.startup_path, migrations)?
+                    .saved()
+                    .ok_or(INVALID)?;
+                ensure(
+                    restore.sha256() == saved_sha256
+                        && restore.phase() == crate::migration::Phase::Complete
+                        && restore.login().owner_sid == intent.binding.owner_sid
+                        && restore.restores() == Some(intent.migration_id.as_str())
+                        && restore.config(true)? == saved.config(false)?
+                        && (restore.config(false)? == saved.config(true)?
+                            || restore.config(false)? == saved.config(false)?),
+                )?;
+                pointer_payload(
+                    &restore.config(false)?,
+                    &c.receipt.scope.kit_root,
+                    restore.from(),
+                )?;
+                pointer_payload(
+                    &restore.config(true)?,
+                    &c.receipt.scope.kit_root,
+                    restore.to(),
+                )?;
+                ensure(restore.to() == saved.from())?;
+            }
+            Ok(())
+        }
+    }
 }
 fn apply_migration(
     c: &CapturedEvidence,
     intent: &MigrationIntent,
     hash: &str,
-    migrations: &[SavedHistory],
+    migrations: &[crate::migration::MigrationHistory],
     versions: &mut Versions,
     used: &mut BTreeSet<EvidenceKey>,
-) -> Result<Terminal> {
+) -> Result<Option<Terminal>> {
     let slot = &mut versions[index(Artifact::Installation)];
     ensure(slot.as_slice() == [Some(intent.before_sha256.clone())])?;
     let key = EvidenceKey::MigrationCompletion(hash.into());
-    let stored = c.records.get(&key).ok_or(INVALID)?;
+    let Some(stored) = c.records.get(&key) else {
+        // Pending effects cannot confer the proposed pointer. Preserve the
+        // independently rooted evidence for the other three artifacts.
+        slot.clear();
+        return Ok(None);
+    };
+    if let Record::MigrationTermination(termination) = &stored.record {
+        validate_termination(c, intent, termination, migrations)?;
+        slot.clear();
+        used.insert(key);
+        return Ok(Some(Terminal {
+            journal_sha256: None,
+            decision_sha256: None,
+            closure_sha256: None,
+            migration_sha256: Some(digest(&stored.bytes)),
+        }));
+    }
     let Record::MigrationCompletion(completion) = &stored.record else {
         return Err(INVALID);
     };
     ensure(completion.binding == intent.binding)?;
     let mut matching = migrations.iter().filter(|s| s.id() == intent.migration_id);
-    let saved = matching.next().ok_or(INVALID)?;
+    let saved = matching.next().ok_or(INVALID)?.saved().ok_or(INVALID)?;
     ensure(
         matching.next().is_none()
             && saved.sha256() == completion.saved_sha256
@@ -280,24 +382,36 @@ fn apply_migration(
         let prior_saved = migrations
             .iter()
             .find(|s| s.id() == prior.migration_id)
+            .and_then(|s| s.saved())
             .ok_or(INVALID)?;
         ensure(prior_saved.config(true)? == before && prior_saved.config(false)? == after)?;
     }
     *slot = vec![Some(completion.after_sha256.clone())];
     used.insert(key);
-    Ok(Terminal {
+    Ok(Some(Terminal {
         journal_sha256: None,
         decision_sha256: None,
         closure_sha256: None,
         migration_sha256: Some(digest(&stored.bytes)),
-    })
+    }))
 }
 pub(super) fn resolve(
     c: &CapturedEvidence,
     publications: &[PublicationHistory],
-    migrations: &[SavedHistory],
+    migrations: &[crate::migration::MigrationHistory],
 ) -> Result<Resolution> {
     ensure(publications.len() <= HISTORY_LIMIT && migrations.len() <= HISTORY_LIMIT)?;
+    let mut migration_ids = BTreeSet::new();
+    ensure(
+        migrations
+            .iter()
+            .all(|view| migration_ids.insert(view.id())),
+    )?;
+    let mut intent_ids = BTreeSet::new();
+    ensure(c.records.values().all(|stored| match &stored.record {
+        Record::MigrationIntent(intent) => intent_ids.insert(&intent.migration_id),
+        _ => true,
+    }))?;
     let mut directory_identities = BTreeMap::new();
     let mut bind_directory = |path: &Path, identity: &ObjectIdentity| -> Result<()> {
         if let Some(previous) = directory_identities.insert(path.to_path_buf(), identity.clone()) {
@@ -378,6 +492,7 @@ pub(super) fn resolve(
     let mut versions: Versions = std::array::from_fn(|_| vec![None]);
     let mut settled = true;
     let mut effect_session = None;
+    let mut effect_reference = None;
     for count in 0..=HISTORY_LIMIT {
         let key = EvidenceKey::Lineage(head.clone());
         let Some(stored) = c.records.get(&key) else {
@@ -395,19 +510,14 @@ pub(super) fn resolve(
                 terminal = apply_publication(c, link, &hash, h, &mut versions, &mut used)?;
                 settled = terminal.is_some();
                 effect_session = (!settled).then_some(link.binding.session_id);
+                effect_reference = (!settled).then(|| link.frozen.clone());
             }
             Record::MigrationIntent(intent) => {
                 ensure(terminal.as_ref() == Some(&intent.predecessor_terminal))?;
-                terminal = Some(apply_migration(
-                    c,
-                    intent,
-                    &hash,
-                    migrations,
-                    &mut versions,
-                    &mut used,
-                )?);
-                settled = true;
+                terminal = apply_migration(c, intent, &hash, migrations, &mut versions, &mut used)?;
+                settled = terminal.is_some();
                 effect_session = None;
+                effect_reference = None;
             }
             _ => return Err(INVALID),
         }
@@ -426,6 +536,7 @@ pub(super) fn resolve(
         terminal,
         settled,
         effect_session,
+        effect_reference,
     })
 }
 fn candidate(c: &CapturedEvidence, record: &Record) -> Result<CapturedEvidence> {
@@ -467,7 +578,7 @@ pub(super) fn validate_append(
     c: &CapturedEvidence,
     record: &Record,
     publications: &[PublicationHistory],
-    migrations: &[SavedHistory],
+    migrations: &[crate::migration::MigrationHistory],
 ) -> Result<()> {
     if let Some(existing) = c.records.get(&record.key()) {
         ensure(existing.record == *record)?;
@@ -506,6 +617,10 @@ pub(super) fn validate_append(
     }
     if matches!(record, Record::MigrationCompletion(_)) {
         resolve(&candidate(c, record)?, publications, migrations)?.baseline()?;
+        return Ok(());
+    }
+    if matches!(record, Record::MigrationTermination(_)) {
+        resolve(&candidate(c, record)?, publications, migrations)?;
         return Ok(());
     }
     let current = resolve(c, publications, migrations)?;

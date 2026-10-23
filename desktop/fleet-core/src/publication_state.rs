@@ -296,7 +296,14 @@ pub fn verify_protected(path: &Path) -> Result<()> {
     #[cfg(windows)]
     let file = windows::open_no_follow(path, false).map_err(|_| UNPROVEN)?;
     #[cfg(unix)]
-    let file = std::fs::File::open(path).map_err(|_| UNPROVEN)?;
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(path)
+            .map_err(|_| UNPROVEN)?
+    };
     private_handle(&file)
 }
 fn private_handle(file: &std::fs::File) -> Result<()> {
@@ -469,7 +476,7 @@ pub fn read_private(path: &Path, limit: usize) -> Result<Option<Vec<u8>>> {
         use std::os::unix::fs::OpenOptionsExt;
         std::fs::OpenOptions::new()
             .read(true)
-            .custom_flags(libc::O_NOFOLLOW)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
             .open(path)
     };
     let file = match opened {

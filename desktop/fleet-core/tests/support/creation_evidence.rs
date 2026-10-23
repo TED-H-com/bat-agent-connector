@@ -9,13 +9,15 @@ use bat_fleet_core::{
     Result,
 };
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     io::Write,
     path::{Path, PathBuf},
     rc::Rc,
 };
 #[path = "connection_setup.rs"]
 pub mod generator;
+
+type RecordDrift = Rc<RefCell<Option<(EvidenceKey, Vec<u8>)>>>;
 
 pub struct Guard(Rc<Cell<bool>>);
 impl Drop for Guard {
@@ -31,6 +33,15 @@ pub struct Native {
     pub launcher: Rc<Cell<bool>>,
     pub monitor: Rc<Cell<bool>>,
     pub session: Rc<Cell<u32>>,
+    pub login_sid: Rc<RefCell<String>>,
+    pub running: Rc<RefCell<Option<MonitorIdentity>>>,
+    pub refused_record: Rc<RefCell<Option<EvidenceKey>>>,
+    pub record_drift: RecordDrift,
+    pub slot_drift_after: Rc<Cell<Option<usize>>>,
+    pub observations_seen: Rc<Cell<usize>>,
+    pub observed_limits: Rc<RefCell<Vec<(Artifact, usize)>>>,
+    expected_scope: Scope,
+    expected_startup: StartupBinding,
     pub context: Rc<Cell<bool>>,
     pub external: Rc<Cell<Option<Artifact>>>,
     pub unavailable: Rc<Cell<Option<Artifact>>>,
@@ -42,6 +53,12 @@ pub struct Native {
 impl Native {
     pub fn held(&self) {
         assert!(self.launcher.get() && self.monitor.get());
+    }
+    pub fn evidence_held(&self) {
+        assert!(self.launcher.get());
+    }
+    pub fn evidence_guard(&mut self) -> Guard {
+        migration::Platform::launcher_guard(self).unwrap()
     }
     pub fn guards(&mut self) -> (Guard, Guard) {
         (
@@ -71,7 +88,7 @@ impl Native {
         let bytes = std::fs::read(self.frozen_path(reference)).map_err(|_| "HISTORY_IO")?;
         let frozen = FrozenHistory::decode(reference, &bytes).map_err(|_| "HISTORY_INVALID")?;
         self.publisher()
-            .read_history(frozen, &mut self.clone())
+            .read_evidence_history(frozen, &self.clone())
             .map_err(|_| "HISTORY_INVALID")
     }
     pub fn history(&self, reference: &FrozenPlanRef) -> PublicationHistory {
@@ -84,7 +101,7 @@ impl Native {
             .iter()
             .filter_map(|key| {
                 let bytes = self.read_private(key, RECEIPT_LIMIT).unwrap().unwrap();
-                if let Record::Publication(link) = Record::decode(&bytes).unwrap() {
+                if let Record::Publication(link) = Record::decode(key, &bytes).unwrap() {
                     seen.insert((
                         link.frozen.review_digest.clone(),
                         link.frozen.sha256.clone(),
@@ -96,12 +113,48 @@ impl Native {
             })
             .collect()
     }
+    pub fn migrations(
+        &self,
+        candidate: Option<&Record>,
+    ) -> Result<Vec<migration::MigrationHistory>> {
+        let mut ids = std::collections::BTreeSet::new();
+        let mut collect = |record: &Record| match record {
+            Record::MigrationIntent(i) => {
+                ids.insert(i.migration_id.clone());
+            }
+            Record::MigrationTermination(t) => {
+                if let MigrationOutcome::Restored { migration_id, .. } = &t.outcome {
+                    ids.insert(migration_id.clone());
+                }
+            }
+            _ => (),
+        };
+        for key in self.entries()? {
+            collect(&Record::decode(
+                &key,
+                &self.read_private(&key, RECEIPT_LIMIT)?.ok_or("MISSING")?,
+            )?);
+        }
+        if let Some(record) = candidate {
+            collect(record);
+        }
+        let store = migration::Store::new(&self.receipt.scope.pointer, &self.root.join("Startup"))?;
+        ids.iter().map(|id| store.observe_history(id)).collect()
+    }
     pub fn resolution(&mut self) -> Result<Resolution> {
-        let _guards = self.guards();
-        capture(self, &self.owner)?.resolve(&self.histories(), &[])
+        let _launcher = self.evidence_guard();
+        capture(self, &self.owner)?.resolve(&self.histories(), &self.migrations(None)?)
     }
     pub fn append(&mut self, record: &Record) -> Result<String> {
-        let _guards = self.guards();
+        let _launcher = self.evidence_guard();
+        let _monitor = if matches!(
+            record,
+            Record::MigrationCompletion(_) | Record::MigrationTermination(_)
+        ) {
+            None
+        } else {
+            Some(migration::Platform::monitor_guard(self)?)
+        };
         let mut histories = self.histories();
         if let Record::Publication(link) = record {
             if !histories
@@ -111,12 +164,13 @@ impl Native {
                 histories.push(self.try_history(&link.frozen)?);
             }
         }
+        let migrations = self.migrations(Some(record))?;
         append(
             self,
             &self.owner.clone(),
             record,
             &histories,
-            &[],
+            &migrations,
             &mut || Ok(()),
         )
     }
@@ -132,6 +186,9 @@ impl migration::Platform for Native {
     }
     fn monitor_guard(&mut self) -> Result<Guard> {
         assert!(self.launcher.get());
+        if self.running.borrow().is_some() {
+            return Err("MONITOR_ALREADY_RUNNING");
+        }
         if self.monitor.replace(true) {
             return Err("BUSY");
         }
@@ -141,8 +198,17 @@ impl migration::Platform for Native {
         EvidenceIo::login(self)
     }
     fn discover(&mut self) -> Result<Option<MonitorIdentity>> {
-        self.held();
-        Ok(None)
+        self.evidence_held();
+        Ok(self.running.borrow().clone().map(|mut monitor| {
+            monitor.ownership = if monitor.process.login.owner_sid == *self.login_sid.borrow()
+                && monitor.process.login.session_id == self.session.get()
+            {
+                bat_fleet_core::discovery::Ownership::CurrentLogin
+            } else {
+                bat_fleet_core::discovery::Ownership::OtherLogin
+            };
+            monitor
+        }))
     }
     fn request_quit(&mut self, _: &Owner) -> Result<()> {
         panic!("no process effects")
@@ -174,13 +240,20 @@ impl connection_publish::Platform for Native {
         path: &Path,
         current: Option<&[u8]>,
     ) -> Result<FileOwnership> {
-        self.held();
+        self.evidence_held();
         Ok(
-            match capture(self, owner).and_then(|c| c.resolve(&self.histories(), &[])) {
+            match capture(self, owner)
+                .and_then(|c| c.resolve(&self.histories(), &self.migrations(None)?))
+            {
                 Ok(resolution) => resolution.ownership(owner, artifact, path, current),
                 Err(_) => self
                     .observe(
                         &self.receipt.slots[ARTIFACTS.iter().position(|a| *a == artifact).unwrap()],
+                        if artifact == Artifact::Installation {
+                            16_384
+                        } else {
+                            1_048_576
+                        },
                     )
                     .unwrap_or(ObservedSlot::Unavailable)
                     .unproven_ownership(),
@@ -188,7 +261,7 @@ impl connection_publish::Platform for Native {
         )
     }
     fn verify_private_state(&self, path: &Path, owner: &OwnerEvidence) -> Result<()> {
-        self.held();
+        self.evidence_held();
         if owner != &self.owner
             || !self.context.get()
             || !path.starts_with(self.root.join("native"))
@@ -210,17 +283,59 @@ fn no_links(path: &Path) -> Result<()> {
     }
     Ok(())
 }
+pub fn bounded_file(path: &Path, limit: usize) -> Result<Option<Vec<u8>>> {
+    use std::io::Read;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = match options.open(path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err("IO"),
+    };
+    let metadata = file.metadata().map_err(|_| "IO")?;
+    if !metadata.is_file() {
+        return Err("TYPE");
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err("LINK");
+        }
+    }
+    let mut bytes = Vec::new();
+    file.take(limit as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "IO")?;
+    if bytes.len() > limit {
+        return Err("BOUND");
+    }
+    Ok(Some(bytes))
+}
 impl EvidenceIo for Native {
     fn login(&self) -> Result<LoginIdentity> {
-        self.held();
+        self.evidence_held();
         Ok(LoginIdentity {
-            owner_sid: self.owner.owner_sid.clone(),
+            owner_sid: self.login_sid.borrow().clone(),
             session_id: self.session.get(),
         })
     }
     fn verify_context(&self, receipt: &ProvisioningReceipt) -> Result<()> {
-        self.held();
-        if !self.context.get() || receipt != &self.receipt {
+        self.evidence_held();
+        if !self.context.get()
+            || receipt.scope != self.expected_scope
+            || receipt.startup != self.expected_startup
+        {
             return Err("CONTEXT_CHANGED");
         }
         for s in &receipt.slots {
@@ -228,17 +343,30 @@ impl EvidenceIo for Native {
         }
         no_links(&self.evidence_path(&EvidenceKey::Provisioning))
     }
-    fn verify_record(&self, _: &Record) -> Result<()> {
+    fn verify_effect_context(&self) -> Result<()> {
         self.held();
+        if self.running.borrow().is_some() {
+            return Err("MONITOR_ALREADY_RUNNING");
+        }
+        Ok(())
+    }
+    fn verify_record(&self, record: &Record) -> Result<()> {
+        self.evidence_held();
+        if self.refused_record.borrow().as_ref() == Some(&record.key()) {
+            return Err("RECORD_UNPROVEN");
+        }
         Ok(())
     }
     fn entries(&self) -> Result<Vec<EvidenceKey>> {
-        self.held();
+        self.evidence_held();
         let root = self.root.join("native/fleet-creation");
         if !root.exists() {
             return Ok(Vec::new());
         }
-        if !root.join("provision.json").exists() && !self.creating_namespace.get() {
+        if !root.join("provision.json").exists()
+            && !self.creating_namespace.get()
+            && std::fs::read_dir(&root).unwrap().next().is_none()
+        {
             return Err("ORPHAN_NAMESPACE");
         }
         let mut out = Vec::new();
@@ -270,26 +398,17 @@ impl EvidenceIo for Native {
         Ok(out)
     }
     fn read_private(&self, key: &EvidenceKey, limit: usize) -> Result<Option<Vec<u8>>> {
-        self.held();
+        self.evidence_held();
         let p = self.evidence_path(key);
         no_links(&p)?;
-        use std::io::Read;
-        let file = match std::fs::File::open(p) {
-            Ok(f) => f,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(_) => return Err("IO"),
-        };
-        let mut bytes = Vec::new();
-        file.take(limit as u64 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| "IO")?;
-        if bytes.len() > limit {
-            return Err("BOUND");
-        }
-        Ok(Some(bytes))
+        bounded_file(&p, limit)
     }
-    fn observe(&self, slot: &SlotReservation) -> Result<ObservedSlot> {
-        self.held();
+
+    fn observe(&self, slot: &SlotReservation, limit: usize) -> Result<ObservedSlot> {
+        self.evidence_held();
+        self.observed_limits
+            .borrow_mut()
+            .push((slot.artifact, limit));
         no_links(&slot.canonical_path)?;
         if self.unavailable.get() == Some(slot.artifact) {
             return Err("READ_DENIED");
@@ -297,12 +416,30 @@ impl EvidenceIo for Native {
         if self.drift.replace(false) {
             std::fs::write(&slot.canonical_path, b"appeared during capture").unwrap();
         }
-        match std::fs::read(&slot.canonical_path) {
-            Ok(b) if self.external.get() == Some(slot.artifact) => Ok(ObservedSlot::External(b)),
-            Ok(b) => Ok(ObservedSlot::Bytes(b)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ObservedSlot::Absent),
+        let result = match bounded_file(&slot.canonical_path, limit) {
+            Ok(Some(b)) if self.external.get() == Some(slot.artifact) => {
+                Ok(ObservedSlot::External(b))
+            }
+            Ok(Some(b)) => Ok(ObservedSlot::Bytes(b)),
+            Ok(None) => Ok(ObservedSlot::Absent),
             Err(_) => Err("IO"),
+        };
+        let seen = self.observations_seen.get() + 1;
+        self.observations_seen.set(seen);
+        if self.slot_drift_after.get() == Some(seen) {
+            self.slot_drift_after.set(None);
+            std::fs::write(
+                self.receipt.path(Artifact::Inventory),
+                b"changed between observations",
+            )
+            .unwrap();
         }
+        if slot.artifact == Artifact::Installation {
+            if let Some((key, bytes)) = self.record_drift.borrow_mut().take() {
+                std::fs::write(self.evidence_path(&key), bytes).unwrap();
+            }
+        }
+        result
     }
     fn create_only(
         &mut self,
@@ -312,7 +449,7 @@ impl EvidenceIo for Native {
         fence: &WriteFence,
         authorize: &mut dyn FnMut() -> Result<()>,
     ) -> Result<()> {
-        self.held();
+        self.evidence_held();
         authorize()?;
         self.verify_context(receipt)?;
         if self.create_race.replace(false) {
@@ -320,7 +457,15 @@ impl EvidenceIo for Native {
         }
         if key == &EvidenceKey::Provisioning {
             for s in &receipt.slots {
-                if self.observe(s)? != ObservedSlot::Absent {
+                if self.observe(
+                    s,
+                    if s.artifact == Artifact::Installation {
+                        16_384
+                    } else {
+                        1_048_576
+                    },
+                )? != ObservedSlot::Absent
+                {
                     return Err("APPEARED");
                 }
             }
@@ -438,6 +583,15 @@ impl Fixture {
         input.owner = owner.clone();
         let native = Native {
             root: root.clone(),
+            expected_scope: receipt.scope.clone(),
+            expected_startup: receipt.startup.clone(),
+            login_sid: Rc::new(RefCell::new(owner.owner_sid.clone())),
+            running: Rc::new(RefCell::new(None)),
+            refused_record: Rc::new(RefCell::new(None)),
+            record_drift: Rc::new(RefCell::new(None)),
+            slot_drift_after: Rc::new(Cell::new(None)),
+            observations_seen: Rc::new(Cell::new(0)),
+            observed_limits: Rc::new(RefCell::new(Vec::new())),
             receipt,
             owner,
             launcher: Rc::new(Cell::new(false)),
@@ -474,6 +628,18 @@ impl Fixture {
     }
     pub fn plan(&self) -> PublicationPlan {
         connection_setup::build(&self.input).unwrap()
+    }
+    pub fn reference(&self, plan: &PublicationPlan) -> FrozenPlanRef {
+        FrozenPlanRef {
+            review_digest: plan.review_digest.clone(),
+            sha256: digest(
+                &std::fs::read(self.root.join(format!(
+                    "native/fleet-publication-plans/{}.json",
+                    plan.review_digest
+                )))
+                .unwrap(),
+            ),
+        }
     }
     pub fn prepare(&mut self, plan: &PublicationPlan) -> PublicationLink {
         let reference = self
@@ -517,7 +683,7 @@ impl Fixture {
     }
     pub fn ownership(&mut self, a: Artifact) -> FileOwnership {
         let current = std::fs::read(self.path(a)).ok();
-        let _guards = self.native.guards();
+        let _launcher = self.native.evidence_guard();
         connection_publish::Platform::ownership(
             &self.native,
             &self.native.owner,
@@ -545,9 +711,8 @@ impl Fixture {
     }
 }
 
-struct MigrationNative {
-    native: Native,
-    running: Option<MonitorIdentity>,
+pub struct MigrationNative {
+    pub native: Native,
 }
 impl migration::Platform for MigrationNative {
     type LauncherGuard = Guard;
@@ -561,19 +726,27 @@ impl migration::Platform for MigrationNative {
     fn login(&self) -> Result<LoginIdentity> {
         assert!(self.native.launcher.get());
         Ok(LoginIdentity {
-            owner_sid: self.native.owner.owner_sid.clone(),
-            session_id: 7,
+            owner_sid: self.native.login_sid.borrow().clone(),
+            session_id: self.native.session.get(),
         })
     }
     fn discover(&mut self) -> Result<Option<MonitorIdentity>> {
         assert!(self.native.launcher.get());
-        Ok(self.running.clone())
+        let login = self.login()?;
+        Ok(self.native.running.borrow().clone().map(|mut monitor| {
+            monitor.ownership = if monitor.process.login == login {
+                bat_fleet_core::discovery::Ownership::CurrentLogin
+            } else {
+                bat_fleet_core::discovery::Ownership::OtherLogin
+            };
+            monitor
+        }))
     }
     fn request_quit(&mut self, _: &Owner) -> Result<()> {
         panic!("no existing process")
     }
     fn launch(&mut self, backend: Backend) -> Result<()> {
-        self.running = Some(MonitorIdentity {
+        *self.native.running.borrow_mut() = Some(MonitorIdentity {
             backend,
             ownership: bat_fleet_core::discovery::Ownership::CurrentLogin,
             legacy: false,
@@ -625,7 +798,6 @@ pub fn migration_case() {
         migration::Store::new(&f.path(Artifact::Installation), &f.root.join("Startup")).unwrap();
     let mut producer = MigrationNative {
         native: f.native.clone(),
-        running: None,
     };
     let preview = store.preview(&mut producer, Backend::Rust).unwrap();
     let intent = MigrationIntent {
@@ -653,10 +825,6 @@ pub fn migration_case() {
             .unwrap(),
         intent_hash
     );
-    let publications = {
-        let _guards = f.native.guards();
-        f.native.histories()
-    };
     let after = serde_json::to_vec(&serde_json::json!({
         "kit_root": f.native.receipt.scope.kit_root,
         "backend": Backend::Powershell,
@@ -679,13 +847,17 @@ pub fn migration_case() {
     let saved = store.read_history(&intent.migration_id).unwrap();
     assert_eq!(saved.phase(), migration::Phase::LaunchRequested);
     {
-        let _guards = f.native.guards();
+        let _launcher = f.native.evidence_guard();
         let c = capture(&f.native, &f.native.owner).unwrap();
-        assert!(f
-            .native
-            .try_history(publications[0].frozen().reference())
-            .is_err());
-        assert!(c.resolve(&publications, &[saved]).is_err());
+        let fresh = f.native.histories();
+        let pending = c
+            .resolve(
+                &fresh,
+                &[store.observe_history(&intent.migration_id).unwrap()],
+            )
+            .unwrap();
+        assert!(pending.baseline().is_err());
+        assert!(!pending.settled());
     }
     assert_eq!(
         store.advance(&mut producer, &intent.migration_id),
@@ -701,7 +873,7 @@ pub fn migration_case() {
         after_sha256: digest(&after),
     };
     {
-        let _guards = f.native.guards();
+        let _launcher = f.native.evidence_guard();
         let histories = f.native.histories();
         let intent_path = f
             .native
@@ -712,7 +884,7 @@ pub fn migration_case() {
             .unwrap()
             .resolve(
                 &histories,
-                &[store.read_history(&intent.migration_id).unwrap()],
+                &[store.observe_history(&intent.migration_id).unwrap()],
             )
             .unwrap();
         for artifact in ARTIFACTS {
@@ -757,7 +929,7 @@ pub fn migration_case() {
                     .unwrap()
                     .resolve(
                         &histories,
-                        &[store.read_history(&intent.migration_id).unwrap()]
+                        &[store.observe_history(&intent.migration_id).unwrap()]
                     )
                     .is_err(),
                 "{field}"
@@ -773,7 +945,7 @@ pub fn migration_case() {
             &f.input.owner,
             &Record::MigrationCompletion(wrong),
             &histories,
-            &[store.read_history(&intent.migration_id).unwrap()],
+            &[store.observe_history(&intent.migration_id).unwrap()],
             &mut || Ok(())
         )
         .is_err());
@@ -782,7 +954,7 @@ pub fn migration_case() {
             &f.input.owner,
             &Record::MigrationCompletion(completion),
             &histories,
-            &[saved],
+            &[store.observe_history(&intent.migration_id).unwrap()],
             &mut || Ok(()),
         )
         .unwrap();
@@ -790,7 +962,7 @@ pub fn migration_case() {
         let resolution = c
             .resolve(
                 &histories,
-                &[store.read_history(&intent.migration_id).unwrap()],
+                &[store.observe_history(&intent.migration_id).unwrap()],
             )
             .unwrap();
         for a in ARTIFACTS {
@@ -809,5 +981,111 @@ pub fn migration_case() {
             ),
             FileOwnership::Unknown
         );
+    }
+}
+
+pub struct MigrationCase {
+    pub fixture: Fixture,
+    pub store: migration::Store,
+    pub producer: MigrationNative,
+    pub intent: MigrationIntent,
+    pub intent_hash: String,
+    pub preview: migration::Preview,
+    pub after: Vec<u8>,
+}
+impl MigrationCase {
+    pub fn new() -> Self {
+        let mut fixture = Fixture::new();
+        let plan = fixture.plan();
+        fixture.admit(&plan);
+        fixture.publish(&plan);
+        let resolution = fixture.native.resolution().unwrap();
+        let store = migration::Store::new(
+            &fixture.path(Artifact::Installation),
+            &fixture.root.join("Startup"),
+        )
+        .unwrap();
+        let mut producer = MigrationNative {
+            native: fixture.native.clone(),
+        };
+        let preview = store.preview(&mut producer, Backend::Rust).unwrap();
+        let intent = MigrationIntent {
+            binding: fixture
+                .native
+                .receipt
+                .binding(parse_owner_reference(&fixture.native.owner).unwrap(), 7)
+                .unwrap(),
+            predecessor_sha256: resolution.head().into(),
+            predecessor_terminal: resolution.terminal().unwrap().clone(),
+            migration_id: "9".repeat(32),
+            startup_path: fixture.root.join("Startup/Open BAT.lnk"),
+            review_fingerprint: preview.fingerprint().into(),
+            before_sha256: digest(&std::fs::read(fixture.path(Artifact::Installation)).unwrap()),
+            restores: None,
+            acceptance_reference: "native-migration-review".into(),
+        };
+        let intent_hash = fixture
+            .native
+            .append(&Record::MigrationIntent(intent.clone()))
+            .unwrap();
+        let after = serde_json::to_vec(
+            &serde_json::json!({"kit_root": fixture.input.root, "backend": Backend::Powershell}),
+        )
+        .unwrap();
+        Self {
+            fixture,
+            store,
+            producer,
+            intent,
+            intent_hash,
+            preview,
+            after,
+        }
+    }
+    pub fn begin(&mut self) {
+        self.store
+            .begin(
+                &mut self.producer,
+                &self.intent.migration_id,
+                &self.preview,
+                Backend::Powershell,
+                &self.after,
+                false,
+            )
+            .unwrap();
+    }
+    pub fn complete(&mut self) -> MigrationCompletion {
+        self.begin();
+        assert_eq!(
+            self.store
+                .advance(&mut self.producer, &self.intent.migration_id),
+            Ok(migration::Progress::WaitingLaunch)
+        );
+        assert_eq!(
+            self.store
+                .advance(&mut self.producer, &self.intent.migration_id),
+            Ok(migration::Progress::Complete)
+        );
+        MigrationCompletion {
+            binding: self.intent.binding.clone(),
+            intent_sha256: self.intent_hash.clone(),
+            saved_sha256: self
+                .store
+                .read_history(&self.intent.migration_id)
+                .unwrap()
+                .sha256()
+                .into(),
+            after_sha256: digest(&self.after),
+        }
+    }
+    pub fn assert_only_installation_unknown(&mut self) {
+        for a in ARTIFACTS {
+            let ownership = self.fixture.ownership(a);
+            if a == Artifact::Installation {
+                assert_eq!(ownership, FileOwnership::Unknown);
+            } else {
+                assert!(matches!(ownership, FileOwnership::Owned { .. }), "{a:?}");
+            }
+        }
     }
 }

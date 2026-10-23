@@ -88,30 +88,42 @@ fn provisioning_receipt_is_bounded_strict_and_versioned() {
     for field in ["version", "minimum_reader_version"] {
         let mut v = doc.clone();
         v[field] = 2.into();
-        assert!(Record::decode(&serde_json::to_vec(&v).unwrap()).is_err());
+        assert!(
+            Record::decode(&EvidenceKey::Provisioning, &serde_json::to_vec(&v).unwrap()).is_err()
+        );
     }
     let mut missing = doc.clone();
     missing["record"]["body"]
         .as_object_mut()
         .unwrap()
         .remove("managed_connector");
-    assert!(Record::decode(&serde_json::to_vec(&missing).unwrap()).is_err());
+    assert!(Record::decode(
+        &EvidenceKey::Provisioning,
+        &serde_json::to_vec(&missing).unwrap()
+    )
+    .is_err());
     let mut missing = doc.clone();
     missing["record"]["body"]["slots"][0]
         .as_object_mut()
         .unwrap()
         .remove("before_sha256");
-    assert!(Record::decode(&serde_json::to_vec(&missing).unwrap()).is_err());
+    assert!(Record::decode(
+        &EvidenceKey::Provisioning,
+        &serde_json::to_vec(&missing).unwrap()
+    )
+    .is_err());
     let mut v = doc.clone();
     v["unknown"] = true.into();
-    assert!(Record::decode(&serde_json::to_vec(&v).unwrap()).is_err());
+    assert!(Record::decode(&EvidenceKey::Provisioning, &serde_json::to_vec(&v).unwrap()).is_err());
     let duplicate = String::from_utf8(bytes.clone()).unwrap().replacen(
         "\"version\":1",
         "\"version\":1,\"VERSION\":1",
         1,
     );
-    assert!(Record::decode(duplicate.as_bytes()).is_err());
-    assert!(Record::decode(&vec![b' '; RECEIPT_LIMIT + 1]).is_err());
+    assert!(Record::decode(&EvidenceKey::Provisioning, duplicate.as_bytes()).is_err());
+    let mut over = bytes.clone();
+    over.resize(RECEIPT_LIMIT + 1, b' ');
+    assert!(Record::decode(&EvidenceKey::Provisioning, &over).is_err());
     let mut r = f.native.receipt.clone();
     r.slots.swap(0, 1);
     assert!(Record::Provisioning(Box::new(r)).encode().is_err());
@@ -136,11 +148,13 @@ fn provisioning_receipt_is_bounded_strict_and_versioned() {
     let mut owner = f.native.owner.clone();
     owner.creation_receipt.push('/');
     assert!(parse_owner_reference(&owner).is_err());
+    // No valid typed document exceeds eight containers. This malformed shape
+    // is also rejected by Document deserialization; it is not independent depth coverage.
     let deep = format!("{}0{}", "[".repeat(9), "]".repeat(9));
-    assert!(Record::decode(deep.as_bytes()).is_err());
+    assert!(Record::decode(&EvidenceKey::Provisioning, deep.as_bytes()).is_err());
     let mut padded = bytes;
     padded.extend(vec![b' '; RECEIPT_LIMIT - padded.len()]);
-    assert!(Record::decode(&padded).is_ok());
+    assert!(Record::decode(&EvidenceKey::Provisioning, &padded).is_ok());
 }
 #[test]
 fn provisioning_create_only_race_and_crash_keep_original_identity() {
@@ -374,10 +388,13 @@ fn resolver_abandonment_preserves_prefix_and_requires_fresh_review() {
     let resolution = f.native.resolution().unwrap();
     assert!(resolution.settled());
     assert!(resolution
-        .require_effect_session(&LoginIdentity {
-            owner_sid: f.native.owner.owner_sid.clone(),
-            session_id: 7
-        })
+        .require_effect_session(
+            &LoginIdentity {
+                owner_sid: f.native.owner.owner_sid.clone(),
+                session_id: 7
+            },
+            &f.reference(&plan)
+        )
         .is_err());
     f.refresh();
     f.input.label = "Fresh review".into();
@@ -523,12 +540,16 @@ fn session_change_allows_new_review_but_not_old_effect() {
         owner_sid: f.native.owner.owner_sid.clone(),
         session_id: 8,
     };
-    assert!(resolution.require_effect_session(&login).is_err());
+    assert!(resolution
+        .require_effect_session(&login, &f.reference(&plan))
+        .is_err());
     let old_login = LoginIdentity {
         owner_sid: f.native.owner.owner_sid.clone(),
         session_id: 7,
     };
-    assert!(resolution.require_effect_session(&old_login).is_err());
+    assert!(resolution
+        .require_effect_session(&old_login, &f.reference(&plan))
+        .is_err());
     f.native.session.set(7);
     f.publish(&plan);
     f.native.session.set(8);
@@ -540,7 +561,7 @@ fn session_change_allows_new_review_but_not_old_effect() {
         .native
         .resolution()
         .unwrap()
-        .require_effect_session(&login)
+        .require_effect_session(&login, &f.reference(&next))
         .is_ok());
 }
 #[test]
@@ -609,10 +630,13 @@ fn authorization_expiry_never_completes_remaining_artifacts() {
         .native
         .resolution()
         .unwrap()
-        .require_effect_session(&LoginIdentity {
-            owner_sid: f.native.owner.owner_sid.clone(),
-            session_id: 7
-        })
+        .require_effect_session(
+            &LoginIdentity {
+                owner_sid: f.native.owner.owner_sid.clone(),
+                session_id: 7
+            },
+            &f.reference(&plan)
+        )
         .is_err());
     let mut f = Fixture::unreserved();
     let receipt = f.native.receipt.clone();
@@ -779,11 +803,14 @@ fn history_views_use_original_validators_without_writes() {
     }
     assert_eq!(snapshot(&f.root), before);
     let frozen = std::fs::read(f.native.frozen_path(&link.frozen)).unwrap();
-    assert!(FrozenHistory::decode(
-        &link.frozen,
-        &vec![b' '; bat_fleet_core::connection_publish::FROZEN_PLAN_LIMIT + 1]
-    )
-    .is_err());
+    let mut oversized = frozen.clone();
+    oversized.resize(
+        bat_fleet_core::connection_publish::FROZEN_PLAN_LIMIT + 1,
+        b' ',
+    );
+    let mut oversized_reference = link.frozen.clone();
+    oversized_reference.sha256 = digest(&oversized);
+    assert!(FrozenHistory::decode(&oversized_reference, &oversized).is_err());
     let mut invalid: serde_json::Value = serde_json::from_slice(&frozen).unwrap();
     invalid["version"] = 2.into();
     let bytes = serde_json::to_vec(&invalid).unwrap();
@@ -881,19 +908,214 @@ fn auxiliary_records_are_strict_bounded_and_cannot_rebind_ids() {
     ];
     for record in records {
         let bytes = record.encode().unwrap();
-        assert_eq!(Record::decode(&bytes).unwrap(), record);
+        assert_eq!(Record::decode(&record.key(), &bytes).unwrap(), record);
         let mut over = bytes.clone();
         over.resize(RECORD_LIMIT + 1, b' ');
-        assert!(Record::decode(&over).is_err());
+        assert!(Record::decode(&record.key(), &over).is_err());
         let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         value["record"]["body"]["unknown"] = true.into();
-        assert!(Record::decode(&serde_json::to_vec(&value).unwrap()).is_err());
+        assert!(Record::decode(&record.key(), &serde_json::to_vec(&value).unwrap()).is_err());
         let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         value["record"]["body"]["binding"]["fleet_creation_id"] = "a".repeat(32).into();
-        let foreign = Record::decode(&serde_json::to_vec(&value).unwrap()).unwrap();
+        let foreign = Record::decode(&record.key(), &serde_json::to_vec(&value).unwrap()).unwrap();
         assert!(f.native.append(&foreign).is_err());
     }
     let mut over = link;
     over.acceptance_reference = "a".repeat(257);
     assert!(Record::Publication(over).encode().is_err());
 }
+
+#[test]
+fn migration_completion_survives_session_change_with_launched_monitor() {
+    use bat_fleet_core::{
+        discovery::Backend,
+        migration::{self, Platform},
+    };
+    let mut f = Fixture::new();
+    let plan = f.plan();
+    let (link, _) = f.admit(&plan);
+    f.publish(&plan);
+    let resolution = f.native.resolution().unwrap();
+    let before = std::fs::read(f.path(Artifact::Installation)).unwrap();
+    let store =
+        migration::Store::new(&f.path(Artifact::Installation), &f.root.join("Startup")).unwrap();
+    let mut producer = support::MigrationNative {
+        native: f.native.clone(),
+    };
+    let preview = store.preview(&mut producer, Backend::Rust).unwrap();
+    let intent = MigrationIntent {
+        binding: f
+            .native
+            .receipt
+            .binding(parse_owner_reference(&f.native.owner).unwrap(), 7)
+            .unwrap(),
+        predecessor_sha256: resolution.head().into(),
+        predecessor_terminal: resolution.terminal().unwrap().clone(),
+        migration_id: "9".repeat(32),
+        startup_path: f.root.join("Startup/Open BAT.lnk"),
+        review_fingerprint: preview.fingerprint().into(),
+        before_sha256: digest(&before),
+        restores: None,
+        acceptance_reference: "native-migration-review".into(),
+    };
+    let intent_sha256 = f
+        .native
+        .append(&Record::MigrationIntent(intent.clone()))
+        .unwrap();
+    let after = serde_json::to_vec(
+        &serde_json::json!({"kit_root": f.input.root, "backend": Backend::Powershell}),
+    )
+    .unwrap();
+    store
+        .begin(
+            &mut producer,
+            &intent.migration_id,
+            &preview,
+            Backend::Powershell,
+            &after,
+            false,
+        )
+        .unwrap();
+    assert_eq!(
+        store.advance(&mut producer, &intent.migration_id),
+        Ok(migration::Progress::WaitingLaunch)
+    );
+    assert_eq!(
+        store.advance(&mut producer, &intent.migration_id),
+        Ok(migration::Progress::Complete)
+    );
+    let completion = Record::MigrationCompletion(MigrationCompletion {
+        binding: intent.binding,
+        intent_sha256,
+        saved_sha256: store
+            .read_history(&intent.migration_id)
+            .unwrap()
+            .sha256()
+            .into(),
+        after_sha256: digest(&after),
+    });
+    f.native.session.set(8);
+    let _launcher = migration::Platform::launcher_guard(&mut f.native).unwrap();
+    assert!(producer.discover().unwrap().is_some());
+    let history = f
+        .native
+        .try_history(&link.frozen)
+        .expect("historical views while Monitor runs");
+    append(
+        &mut f.native,
+        &f.input.owner,
+        &completion,
+        &[history],
+        &[store.observe_history(&intent.migration_id).unwrap()],
+        &mut || Ok(()),
+    )
+    .unwrap();
+}
+
+fn terminate_migration(case: &mut support::MigrationCase, outcome: MigrationOutcome) {
+    let saved = case
+        .store
+        .observe_history(&case.intent.migration_id)
+        .unwrap();
+    let termination = Record::MigrationTermination(MigrationTermination {
+        binding: case.intent.binding.clone(),
+        intent_sha256: case.intent_hash.clone(),
+        saved_sha256: saved.saved().map(|s| s.sha256().to_owned()),
+        outcome,
+        decision_reference: "native-abandon-migration".into(),
+    });
+    case.fixture.native.session.set(8);
+    case.fixture.native.append(&termination).unwrap();
+    case.assert_only_installation_unknown();
+    assert!(case.fixture.native.resolution().unwrap().settled());
+    assert!(case
+        .fixture
+        .native
+        .resolution()
+        .unwrap()
+        .baseline()
+        .is_err());
+}
+#[test]
+fn migration_refused_begin_has_a_terminal_without_saved_bytes() {
+    use bat_fleet_core::discovery::Backend;
+    let mut case = support::MigrationCase::new();
+    case.fixture.native.session.set(8);
+    assert!(case
+        .store
+        .begin(
+            &mut case.producer,
+            &case.intent.migration_id,
+            &case.preview,
+            Backend::Powershell,
+            &case.after,
+            false
+        )
+        .is_err());
+    assert!(case
+        .store
+        .observe_history(&case.intent.migration_id)
+        .unwrap()
+        .saved()
+        .is_none());
+    terminate_migration(&mut case, MigrationOutcome::Refused);
+}
+#[test]
+fn migration_abandoned_before_effect_has_an_exact_saved_terminal() {
+    let mut case = support::MigrationCase::new();
+    case.begin();
+    terminate_migration(&mut case, MigrationOutcome::Abandoned);
+}
+#[test]
+fn migration_unconfirmed_launch_has_an_exact_saved_terminal() {
+    use bat_fleet_core::migration;
+    let mut case = support::MigrationCase::new();
+    case.begin();
+    assert_eq!(
+        case.store
+            .advance(&mut case.producer, &case.intent.migration_id),
+        Ok(migration::Progress::WaitingLaunch)
+    );
+    *case.fixture.native.running.borrow_mut() = None;
+    assert_eq!(
+        case.store
+            .advance(&mut case.producer, &case.intent.migration_id),
+        Err("MIGRATION_LAUNCH_UNKNOWN")
+    );
+    terminate_migration(&mut case, MigrationOutcome::Abandoned);
+}
+#[test]
+fn migration_restored_before_complete_has_a_terminal_bound_to_reverse_bytes() {
+    use bat_fleet_core::migration;
+    let mut case = support::MigrationCase::new();
+    case.begin();
+    assert_eq!(
+        case.store
+            .advance(&mut case.producer, &case.intent.migration_id),
+        Ok(migration::Progress::WaitingLaunch)
+    );
+    *case.fixture.native.running.borrow_mut() = None;
+    let id = "8".repeat(32);
+    case.store
+        .restore(&mut case.producer, &case.intent.migration_id, &id)
+        .unwrap();
+    assert_eq!(
+        case.store.advance(&mut case.producer, &id),
+        Ok(migration::Progress::WaitingLaunch)
+    );
+    assert_eq!(
+        case.store.advance(&mut case.producer, &id),
+        Ok(migration::Progress::Complete)
+    );
+    let saved_sha256 = case.store.read_history(&id).unwrap().sha256().into();
+    terminate_migration(
+        &mut case,
+        MigrationOutcome::Restored {
+            migration_id: id,
+            saved_sha256,
+        },
+    );
+}
+
+#[path = "creation_evidence/negative.rs"]
+mod negative;

@@ -206,6 +206,28 @@ pub struct MigrationCompletion {
     pub saved_sha256: String,
     pub after_sha256: String,
 }
+/// Ending a never-completed migration grants no pointer version, even when a
+/// validated restore put old bytes back. Refused requires proven Saved absence.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "reason", rename_all = "snake_case", deny_unknown_fields)]
+pub enum MigrationOutcome {
+    Refused,
+    Abandoned,
+    Restored {
+        migration_id: String,
+        saved_sha256: String,
+    },
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MigrationTermination {
+    pub binding: Binding,
+    pub intent_sha256: String,
+    #[serde(deserialize_with = "required_option")]
+    pub saved_sha256: Option<String>,
+    pub outcome: MigrationOutcome,
+    pub decision_reference: String,
+}
 /// Structural records are data, not capabilities. Only guarded create/readback
 /// through EvidenceIo can produce a CapturedEvidence authority.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -225,6 +247,8 @@ pub enum Record {
     MigrationIntent(MigrationIntent),
     #[serde(rename = "fleet-migration-completion")]
     MigrationCompletion(MigrationCompletion),
+    #[serde(rename = "fleet-migration-termination")]
+    MigrationTermination(MigrationTermination),
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -267,11 +291,19 @@ impl Record {
             record: self.clone(),
         })
         .map_err(|_| INVALID)?;
-        Self::decode(&bytes)?;
+        Self::decode(&self.key(), &bytes)?;
         Ok(bytes)
     }
-    pub fn decode(bytes: &[u8]) -> Result<Self> {
-        let value = crate::strict_json::parse(bytes, RECEIPT_LIMIT).map_err(|_| INVALID)?;
+    /// The native storage key selects the byte bound before JSON parsing. The
+    /// decoded kind and derived key must then agree with that exact location.
+    pub fn decode(key: &EvidenceKey, bytes: &[u8]) -> Result<Self> {
+        key.relative_path()?;
+        let bound = if *key == EvidenceKey::Provisioning {
+            RECEIPT_LIMIT
+        } else {
+            RECORD_LIMIT
+        };
+        let value = crate::strict_json::parse(bytes, bound).map_err(|_| INVALID)?;
         fn depth(v: &serde_json::Value) -> usize {
             match v {
                 serde_json::Value::Object(m) => 1 + m.values().map(depth).max().unwrap_or(0),
@@ -282,7 +314,7 @@ impl Record {
         ensure(depth(&value) <= 8)?;
         let doc: Document = serde_json::from_value(value).map_err(|_| INVALID)?;
         ensure(doc.version == 1 && doc.minimum_reader_version == 1)?;
-        ensure(matches!(doc.record, Self::Provisioning(_)) || bytes.len() <= RECORD_LIMIT)?;
+        ensure(doc.record.key() == *key)?;
         doc.record.validate()?;
         Ok(doc.record)
     }
@@ -292,11 +324,19 @@ impl Record {
             Self::Publication(r) => EvidenceKey::Lineage(r.predecessor_sha256.clone()),
             Self::Closure(r) => EvidenceKey::Closure(r.link_sha256.clone()),
             Self::Directory(r) => {
-                EvidenceKey::Directory(digest(r.canonical_path.to_string_lossy().as_bytes()))
+                let normalized: PathBuf = r.canonical_path.components().collect();
+                #[cfg(windows)]
+                let normalized = normalized.to_string_lossy().to_ascii_lowercase();
+                #[cfg(not(windows))]
+                let normalized = normalized.to_string_lossy();
+                EvidenceKey::Directory(digest(normalized.as_bytes()))
             }
             Self::Managed(_) => EvidenceKey::Managed,
             Self::MigrationIntent(r) => EvidenceKey::Lineage(r.predecessor_sha256.clone()),
             Self::MigrationCompletion(r) => {
+                EvidenceKey::MigrationCompletion(r.intent_sha256.clone())
+            }
+            Self::MigrationTermination(r) => {
                 EvidenceKey::MigrationCompletion(r.intent_sha256.clone())
             }
         }
@@ -310,6 +350,7 @@ impl Record {
             Self::Managed(r) => Some(&r.binding),
             Self::MigrationIntent(r) => Some(&r.binding),
             Self::MigrationCompletion(r) => Some(&r.binding),
+            Self::MigrationTermination(r) => Some(&r.binding),
         }
     }
     fn validate(&self) -> Result<()> {
@@ -361,6 +402,23 @@ impl Record {
             Self::MigrationCompletion(r) => ensure(
                 hex(&r.intent_sha256, 64) && hex(&r.saved_sha256, 64) && hex(&r.after_sha256, 64),
             ),
+            Self::MigrationTermination(r) => {
+                ensure(hex(&r.intent_sha256, 64) && opaque(&r.decision_reference))?;
+                match &r.outcome {
+                    MigrationOutcome::Refused => ensure(r.saved_sha256.is_none()),
+                    MigrationOutcome::Abandoned | MigrationOutcome::Restored { .. } => {
+                        ensure(r.saved_sha256.as_ref().is_some_and(|h| hex(h, 64)))?;
+                        if let MigrationOutcome::Restored {
+                            migration_id,
+                            saved_sha256,
+                        } = &r.outcome
+                        {
+                            ensure(hex(migration_id, 32) && hex(saved_sha256, 64))?;
+                        }
+                        Ok(())
+                    }
+                }
+            }
         }
     }
 }
@@ -426,7 +484,10 @@ impl Terminal {
 }
 impl ProvisioningReceipt {
     pub fn owner(&self, exact_bytes: &[u8]) -> Result<OwnerEvidence> {
-        ensure(Record::decode(exact_bytes)? == Record::Provisioning(Box::new(self.clone())))?;
+        ensure(
+            Record::decode(&EvidenceKey::Provisioning, exact_bytes)?
+                == Record::Provisioning(Box::new(self.clone())),
+        )?;
         Ok(OwnerEvidence {
             installation_id: self.fleet_creation_id.clone(),
             owner_sid: self.creator.owner_sid.clone(),

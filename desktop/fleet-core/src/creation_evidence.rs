@@ -1,11 +1,12 @@
 //! Rooted native creation evidence. Parsers and digests never confer ownership.
-//! The synchronous IO boundary must hold Launcher then Monitor on one thread;
+//! The synchronous IO boundary holds Launcher on one thread; new reservations
+//! and admissions additionally require Monitor absence under its guard;
 //! there is deliberately no production OS adapter or configuration writer here.
 use crate::{
     connection_publish::{FrozenPlanRef, PublicationHistory},
     connection_setup::{Artifact, FileOwnership, OwnerEvidence},
     digest,
-    migration::SavedHistory,
+    migration::MigrationHistory,
     process_adapter::LoginIdentity,
     Result,
 };
@@ -64,7 +65,10 @@ impl ObservedSlot {
     }
 }
 /// Trusted native boundary, never implemented by WebView input. Each method
-/// requires both guards on the calling thread. Reads reject links, unsafe ACLs,
+/// requires Launcher on the calling thread. New reservations/admissions also
+/// require verify_effect_context (Launcher then Monitor, positive absence).
+/// Historical captures and migration outcomes need no Monitor absence; they
+/// publish no artifact and do not authorize a later effect. Reads reject links, unsafe ACLs,
 /// aliases and changed object identities; only genuine NotFound is absence.
 /// `verify_context` checks the exact startup record, current token SID, native
 /// roots, all protected ancestors, parent identities and independent directory
@@ -82,12 +86,17 @@ impl ObservedSlot {
 pub trait EvidenceIo {
     fn login(&self) -> Result<LoginIdentity>;
     fn verify_context(&self, receipt: &ProvisioningReceipt) -> Result<()>;
+    /// New reservation/admission gate, repeated by the final write fence. Hold
+    /// Launcher then Monitor and positively prove absence; never stop a Monitor.
+    fn verify_effect_context(&self) -> Result<()>;
     /// Native-only auxiliary attestations: directory creation handle/identity,
     /// managed manifest identity, or the original authorized migration intent.
     fn verify_record(&self, record: &Record) -> Result<()>;
     fn entries(&self) -> Result<Vec<EvidenceKey>>;
     fn read_private(&self, key: &EvidenceKey, limit: usize) -> Result<Option<Vec<u8>>>;
-    fn observe(&self, slot: &SlotReservation) -> Result<ObservedSlot>;
+    /// Enforce the supplied artifact bound before allocating or reading bytes.
+    /// No-follow open and handle type/identity checks precede a limit+1 read.
+    fn observe(&self, slot: &SlotReservation, limit: usize) -> Result<ObservedSlot>;
     fn create_only(
         &mut self,
         receipt: &ProvisioningReceipt,
@@ -105,9 +114,13 @@ pub struct WriteFence {
     login: LoginIdentity,
     record_hashes: BTreeMap<EvidenceKey, String>,
     observed: [ObservedSlot; 4],
+    effect_context: bool,
 }
 impl WriteFence {
     pub fn verify(&self, io: &impl EvidenceIo, receipt: &ProvisioningReceipt) -> Result<()> {
+        if self.effect_context {
+            io.verify_effect_context()?;
+        }
         io.verify_context(receipt)?;
         ensure(io.login()? == self.login)?;
         let records = load_records(io)?;
@@ -119,6 +132,9 @@ impl WriteFence {
         )?;
         ensure(observations(io, receipt)? == self.observed)?;
         io.verify_context(receipt)?;
+        if self.effect_context {
+            io.verify_effect_context()?;
+        }
         ensure(io.login()? == self.login)
     }
 }
@@ -147,7 +163,7 @@ impl CapturedEvidence {
     pub fn resolve(
         &self,
         publications: &[PublicationHistory],
-        migrations: &[SavedHistory],
+        migrations: &[MigrationHistory],
     ) -> Result<Resolution> {
         replay::resolve(self, publications, migrations)
     }
@@ -155,12 +171,8 @@ impl CapturedEvidence {
 fn observations(io: &impl EvidenceIo, receipt: &ProvisioningReceipt) -> Result<[ObservedSlot; 4]> {
     let mut out = Vec::new();
     for slot in &receipt.slots {
-        let value = io.observe(slot).unwrap_or(ObservedSlot::Unavailable);
-        let bound = if slot.artifact == Artifact::Installation {
-            16_384
-        } else {
-            1_048_576
-        };
+        let bound = crate::connection_publish::limit(slot.artifact);
+        let value = io.observe(slot, bound).unwrap_or(ObservedSlot::Unavailable);
         out.push(if value.bytes().is_some_and(|b| b.len() > bound) {
             ObservedSlot::Unavailable
         } else {
@@ -182,7 +194,7 @@ fn load_records(io: &impl EvidenceIo) -> Result<BTreeMap<EvidenceKey, Stored>> {
         };
         let bytes = io.read_private(&key, bound)?.ok_or(INVALID)?;
         ensure(bytes.len() <= bound)?;
-        let record = Record::decode(&bytes)?;
+        let record = Record::decode(&key, &bytes)?;
         ensure(record.key() == key)?;
         ensure(records.insert(key, Stored { record, bytes }).is_none())?;
     }
@@ -228,6 +240,8 @@ pub fn capture(io: &impl EvidenceIo, owner: &OwnerEvidence) -> Result<CapturedEv
 }
 /// Reserve all four absent slots before generator use. Retry may reopen exactly
 /// the original bytes/IDs; it never replaces a receipt or adopts namespace residue.
+/// A retry re-captures the root, but does not require slots still absent: the
+/// generator may already have run. It grants no new reservation or effect.
 pub fn reserve(
     io: &mut impl EvidenceIo,
     receipt: &ProvisioningReceipt,
@@ -236,6 +250,7 @@ pub fn reserve(
     let record = Record::Provisioning(Box::new(receipt.clone()));
     let bytes = record.encode()?;
     let owner = receipt.owner(&bytes)?;
+    io.verify_effect_context()?;
     io.verify_context(receipt)?;
     ensure(
         io.login()?
@@ -262,6 +277,7 @@ pub fn reserve(
         login: io.login()?,
         record_hashes: BTreeMap::new(),
         observed: std::array::from_fn(|_| ObservedSlot::Absent),
+        effect_context: true,
     };
     fence.verify(io, receipt)?;
     io.create_only(
@@ -288,16 +304,23 @@ pub fn append(
     owner: &OwnerEvidence,
     record: &Record,
     publications: &[PublicationHistory],
-    migrations: &[SavedHistory],
+    migrations: &[MigrationHistory],
     authorize: &mut dyn FnMut() -> Result<()>,
 ) -> Result<String> {
     ensure(!matches!(record, Record::Provisioning(_)))?;
     let bytes = record.encode()?;
+    let historical = matches!(
+        record,
+        Record::MigrationCompletion(_) | Record::MigrationTermination(_)
+    );
+    if !historical {
+        io.verify_effect_context()?;
+    }
     let captured = capture(io, owner)?;
     let binding = record.binding().ok_or(INVALID)?;
     ensure(
         binding.matches(&captured.receipt, &captured.receipt_sha256)
-            && binding.session_id == captured.login.session_id,
+            && (historical || binding.session_id == captured.login.session_id),
     )?;
     io.verify_record(record)?;
     replay::validate_append(&captured, record, publications, migrations)?;
@@ -315,6 +338,7 @@ pub fn append(
             .map(|(k, s)| (k.clone(), digest(&s.bytes)))
             .collect(),
         observed: captured.observed.clone(),
+        effect_context: !historical,
     };
     fence.verify(io, &captured.receipt)?;
     io.create_only(&captured.receipt, &key, &bytes, &fence, authorize)?;

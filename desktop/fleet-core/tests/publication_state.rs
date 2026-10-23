@@ -428,3 +428,44 @@ mod windows_cases {
         set_acl(&path, &private(), true, false);
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn private_storage_fifo_is_refused_without_waiting_for_a_writer() {
+    use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
+    let temp = Temp::new();
+    let directory = temp.0.join("private");
+    publication_state::create_new_directory(&directory).unwrap();
+    let fifo = directory.join("receipt");
+    let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+    for read in [true, false] {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let path = fifo.clone();
+        let worker = std::thread::spawn(move || {
+            let result = if read {
+                publication_state::read_private(&path, 32).map(|_| ())
+            } else {
+                publication_state::verify_protected(&path)
+            };
+            tx.send(result).unwrap();
+        });
+        let result = rx.recv_timeout(std::time::Duration::from_secs(2));
+        // Even a failing implementation must release its thread and fixture.
+        if result.is_err() {
+            let unblock = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open(&fifo)
+                .unwrap();
+            assert!(rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap()
+                .is_err());
+            drop(unblock);
+        }
+        worker.join().unwrap();
+        assert_eq!(result.unwrap(), Err("PUBLICATION_STATE_UNPROVEN"));
+    }
+}

@@ -204,6 +204,28 @@ pub struct SavedHistory {
     saved: Saved,
     sha256: String,
 }
+/// Guarded observation of one fixed migration id. None is a genuine missing
+/// Saved file, never a parse/permission error. Re-read across effects or guards.
+pub struct MigrationHistory {
+    id: String,
+    config_path: PathBuf,
+    startup_path: PathBuf,
+    saved: Option<SavedHistory>,
+}
+impl MigrationHistory {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    pub fn config_path(&self) -> &Path {
+        &self.config_path
+    }
+    pub fn startup_path(&self) -> &Path {
+        &self.startup_path
+    }
+    pub fn saved(&self) -> Option<&SavedHistory> {
+        self.saved.as_ref()
+    }
+}
 impl SavedHistory {
     pub fn sha256(&self) -> &str {
         &self.sha256
@@ -250,6 +272,21 @@ impl Store {
         Ok(SavedHistory {
             saved,
             sha256: crate::digest(&bytes),
+        })
+    }
+    /// Read-only absence or the original bounded Saved validator. The caller
+    /// proves private storage provenance and holds its guards. No begin/advance.
+    pub fn observe_history(&self, id: &str) -> Result<MigrationHistory> {
+        let saved = match self.read_history(id) {
+            Ok(saved) => Some(saved),
+            Err("MIGRATION_NOT_FOUND") => None,
+            Err(error) => return Err(error),
+        };
+        Ok(MigrationHistory {
+            id: id.into(),
+            config_path: self.config.clone(),
+            startup_path: self.startup.clone(),
+            saved,
         })
     }
     pub fn new(config: &Path, startup_directory: &Path) -> Result<Self> {

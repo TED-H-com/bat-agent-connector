@@ -160,7 +160,7 @@ fn steps_valid(steps: &[PublicationStep]) -> bool {
                     .is_none_or(|b| hash_valid(b) && b != &s.after_digest)
         })
 }
-fn limit(a: Artifact) -> usize {
+pub(crate) fn limit(a: Artifact) -> usize {
     if a == Artifact::Installation {
         16384
     } else {
@@ -291,6 +291,14 @@ impl Publisher {
         Ok(())
     }
     fn read_journal(&self, p: &mut impl Platform, path: &Path) -> Result<(Journal, Vec<u8>)> {
+        let (journal, bytes) = self.journal_record(path)?;
+        let owner = &journal.steps[0].owner;
+        self.gates(p, owner)?;
+        self.private(p, &self.directory, owner)?;
+        self.private(p, path, owner)?;
+        Ok((journal, bytes))
+    }
+    fn journal_record(&self, path: &Path) -> Result<(Journal, Vec<u8>)> {
         let bytes = read(path, JOURNAL_LIMIT)?.ok_or(Error::ReceiptConflict)?;
         let journal: Journal = serde_json::from_value(strict_json::parse(&bytes, JOURNAL_LIMIT)?)
             .map_err(|_| Error::ReceiptConflict)?;
@@ -302,10 +310,6 @@ impl Publisher {
         {
             return Err(Error::ReceiptConflict);
         }
-        let owner = &journal.steps[0].owner;
-        self.gates(p, owner)?;
-        self.private(p, &self.directory, owner)?;
-        self.private(p, path, owner)?;
         Ok((journal, bytes))
     }
     fn journals(

@@ -149,6 +149,7 @@ impl Publisher {
     /// Caller holds Launcher then Monitor on this thread. This accessor acquires
     /// no nested guards, writes nothing, and never calls ownership(). The original
     /// journal/decision validators retain their 32 KiB and 1024-entry bounds.
+    /// Inherits MIGRATION_PENDING and MONITOR_ALREADY_RUNNING effect gates.
     pub fn read_history(
         &self,
         frozen: FrozenHistory,
@@ -156,6 +157,32 @@ impl Publisher {
     ) -> Result<PublicationHistory> {
         self.validate_plan(&frozen.plan)?;
         let original = self.original_journal(&frozen.plan, p)?;
+        self.history_view(frozen, p, original)
+    }
+    /// Historical evidence only: caller holds Launcher and verifies
+    /// native storage provenance. Unlike read_history this does not require
+    /// migration/Monitor absence. It checks current SID, exact plan and the same
+    /// original journal/decision validators; it never authorizes publication.
+    pub fn read_evidence_history(
+        &self,
+        frozen: FrozenHistory,
+        p: &impl Platform,
+    ) -> Result<PublicationHistory> {
+        self.validate_plan(&frozen.plan)?;
+        let login = p.login()?;
+        let owner = frozen::owner(&frozen.plan);
+        if !login.valid() || login.owner_sid != owner.owner_sid {
+            return Err(Error::Gate("OTHER_LOGIN_OWNER"));
+        }
+        let original = self.evidence_journal(&frozen.plan, p)?;
+        self.history_view(frozen, p, original)
+    }
+    fn history_view(
+        &self,
+        frozen: FrozenHistory,
+        p: &impl Platform,
+        original: Option<(Journal, Vec<u8>)>,
+    ) -> Result<PublicationHistory> {
         let mut history = PublicationHistory {
             frozen,
             pointer: self.pointer.clone(),
@@ -244,6 +271,26 @@ impl Publisher {
             return Ok(None);
         }
         let (journal, bytes) = self.read_journal(p, &path)?;
+        if journal.steps != plan.steps || journal.generator_version != plan.generator_version {
+            return Err(Error::ReceiptConflict);
+        }
+        Ok(Some((journal, bytes)))
+    }
+    fn evidence_journal(
+        &self,
+        plan: &PublicationPlan,
+        p: &impl Platform,
+    ) -> Result<Option<(Journal, Vec<u8>)>> {
+        let owner = frozen::owner(plan);
+        self.private(p, &self.directory, owner)?;
+        let path = self.directory.join(format!("{}.json", plan.review_digest));
+        self.private(p, &path, owner)?;
+        if read(&path, JOURNAL_LIMIT)?.is_none() {
+            return Ok(None);
+        }
+        let (journal, bytes) = self.journal_record(&path)?;
+        self.private(p, &self.directory, owner)?;
+        self.private(p, &path, owner)?;
         if journal.steps != plan.steps || journal.generator_version != plan.generator_version {
             return Err(Error::ReceiptConflict);
         }
