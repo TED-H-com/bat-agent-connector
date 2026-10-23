@@ -112,6 +112,7 @@ async def test_projection_schema_activation_is_atomic_and_idempotent(collected):
     d, wid, source = collected
     db = d.journal.db
     version = db.execute('PRAGMA user_version').fetchone()[0]
+    schema_before = list(db.execute('SELECT type,name,sql FROM main.sqlite_schema ORDER BY type,name'))
     original = read(d, wid, source)
     config = d.history_collector.config
     generation = db.execute('SELECT generation FROM temp.session_history_grant_state').fetchone()[0]
@@ -130,8 +131,10 @@ async def test_projection_schema_activation_is_atomic_and_idempotent(collected):
     assert read(d, wid, source) == original
     assert db.execute('PRAGMA user_version').fetchone()[0] == version
     names = {row[0] for row in db.execute("SELECT name FROM main.sqlite_schema WHERE type='table'")}
-    assert not names & {'session_history_current_grants', 'session_history_grant_state', 'pm_external_excerpts',
-        'pm_external_links', 'pm_external_link_events'}
+    assert not names & {'session_history_current_grants', 'session_history_grant_state'}
+    # Explicit relationship tables now belong to the installed link actions;
+    # activating read grants must neither create nor alter durable schema.
+    assert list(db.execute('SELECT type,name,sql FROM main.sqlite_schema ORDER BY type,name')) == schema_before
     assert str(source.path) not in '\n'.join(db.iterdump())
 
 
