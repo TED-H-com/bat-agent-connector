@@ -972,12 +972,15 @@ try {
   }
   }
 } catch (error) {
+  // Preserve the failing assertion even if the page cannot provide diagnostics.
+  console.error(error);
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));
   if (page && !page.isClosed()) {
-    console.error(await page.locator('body').innerText());
+    await page.locator('body').innerText({timeout: 2000})
+      .then(text => console.error(text))
+      .catch(diagnostic => console.error('Body diagnostic unavailable:', diagnostic.message));
     await shot('failure').catch(() => {});
   }
-  console.error(error);
   process.exitCode = 1;
 } finally {
   writeFileSync(resolve(f.shots, 'browser-requests.json'), JSON.stringify(allRequests, null, 2) + '\n');
