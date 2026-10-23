@@ -136,6 +136,10 @@ pub struct FleetBridge {
 }
 
 impl FleetBridge {
+    #[cfg(windows)]
+    pub(crate) fn creation_pointer(&self) -> PathBuf {
+        self.config.clone()
+    }
     #[cfg(all(test, windows))]
     pub fn load(config_dir: &Path) -> Self {
         Self::load_path(config_dir.join("fleet.json"))

@@ -10,6 +10,12 @@ mod files;
 mod fleet;
 mod fleet_bootstrap;
 mod fleet_control;
+// Native composition awaits the participant; no commands expose this module.
+#[allow(dead_code)]
+mod fleet_creation;
+#[cfg(any(windows, test))]
+#[path = "fleet_native/guarded.rs"]
+mod fleet_guarded;
 mod fleet_lifecycle;
 #[cfg(windows)]
 mod fleet_native;

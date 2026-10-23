@@ -6,6 +6,8 @@ use crate::{
     migration::{self, Platform as _},
 };
 use std::{cell::Cell, io::Write, rc::Rc};
+#[path = "context_tests.rs"]
+mod context_tests;
 #[path = "writer_tests.rs"]
 mod writer_tests;
 type OpenHook = Rc<RefCell<Option<Box<dyn FnMut(&Path)>>>>;
