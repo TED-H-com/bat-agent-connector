@@ -97,7 +97,8 @@ by installation), checks `migration::Store::pending()`, current login and monito
 absence, and requires fresh `FileOwnership::Owned` evidence before each effect.
 An absent file still needs independent creation authority. The mandatory native
 adapter must re-read creation evidence and prove protected state ancestors; this
-core supplies no path-based ownership adapter or enrollment flow.
+core delegates native ownership to the [Windows adapter](../../desktop/fleet-core/src/windows_creation/platform.rs#L148)
+and supplies no enrollment flow. 原生 ownership 由獨立 Windows adapter 提供；此核心不提供 enrollment 流程。
 
 Publication refuses a symlinked or reparse-point ancestor of any kit, pointer,
 startup or user path, checking all ancestors up to the filesystem root, with
@@ -130,14 +131,25 @@ The `fleet-publications` directory permits at most 1024 entries; beyond that,
 publication refuses with `ReceiptConflict`. Completed journals remain available;
 their retention policy is follow-up work. The shared `compare_replace` primitive also
 serves profile, migration and supervisor writes, preserving their error codes,
-read policies and creation/deletion behavior. Each replacement is durable on its
-own; neither a cross-file transaction nor a filesystem compare-and-swap against a
+read policies and creation/deletion behavior. Each replacement is independent;
+neither a cross-file transaction nor a filesystem compare-and-swap against a
 non-cooperating editor is claimed.
+On Windows, [compare_replace.rs:115](../../desktop/fleet-core/src/compare_replace.rs#L115)
+makes directory sync a no-op, so [Fleet publication](../../desktop/fleet-core/src/connection_publish.rs#L209)
+and [migration](../../desktop/fleet-core/src/migration_io.rs#L86) are tested for recovery
+after a process kill, but the published name is not flushed against power loss.
+Windows 的 directory sync 是 no-op，因此 Fleet publication 與 migration 已測試程序
+被終止後的 recovery，但發布名稱未針對斷電執行 flush。
 
 This module has no Tauri/IPC, UI, Python, durable-operation participant, enrollment,
-startup, tunnel or monitor-launch wiring. The [read-only Windows ownership adapter](../../desktop/fleet-core/src/windows_creation/platform.rs#L131)
-is implemented; guarded creation writes, native Apply integration and live
-acceptance remain open. Linux fixtures run real generator/loaders and
+startup, tunnel or monitor-launch wiring. The [Windows ownership adapter](../../desktop/fleet-core/src/windows_creation/platform.rs#L148),
+[guarded creation writer](../../desktop/fleet-core/src/windows_creation/writer.rs#L13)
+and [first-reservation bootstrap](../../desktop/fleet-core/src/windows_creation/writer.rs#L404)
+are implemented; they have no production caller, native route, IPC or public Apply
+entrypoint. Native Apply integration and live acceptance remain open.
+Windows ownership adapter、受 guard 保護的 creation writer 與首次 reservation bootstrap
+已實作；尚無 production caller、native route、IPC 或公開 Apply 入口，native Apply
+接線與實機驗收仍未完成。 Linux fixtures run real generator/loaders and
 filesystem IO with synthetic native ownership/lock authorities. Windows CI's
 **Fleet contracts and owned Windows fixtures** additionally exercises real DACL,
 owner/reparse and replacement behavior; Linux tests do not prove those semantics.
@@ -714,9 +726,14 @@ remote ownership. Native participant wiring remains unavailable; generator and p
 The shipped `src/bat_agent_connector/connection_contract.json` is the sole authority
 for wire version, ordered roles, outcomes, phases, observations, closed codes,
 compatibility matrix and size bounds. Python loads it; fleet-core embeds that exact
-file. The generator, publisher and read-only Windows ownership adapter cores exist,
-but the native creation writer, participant, Bridge allowlist/IPC and UI integration
-are **not available**. Capability
+file. The generator, publisher, [Windows ownership adapter](../../desktop/fleet-core/src/windows_creation/native.rs#L129),
+[creation writer](../../desktop/fleet-core/src/windows_creation/writer.rs#L293) and
+[reservation bootstrap](../../desktop/fleet-core/src/windows_creation/writer.rs#L139) cores exist,
+with no production caller, native route, IPC or public Apply entrypoint for these
+creation APIs; participant, Bridge allowlist/IPC and UI integration are **not available**.
+產生器、publisher、Windows ownership adapter、creation writer 與 reservation bootstrap
+核心已實作；creation API 尚無 production caller、native route、IPC 或公開 Apply 入口，
+participant、Bridge allowlist/IPC 與 UI 接線仍不可用。Capability
 `connection_contract_version` reports server protocol support, never native readiness.
 Native publication targets **Windows only**; macOS publication is unsupported.
 
