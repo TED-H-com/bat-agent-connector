@@ -96,7 +96,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
   let discovery = null, discovering = false, discoverySerial = 0, secretTimer;
   const renewedObservations = new Map();
-  let observationRead = false;
+  let observationRead = false, fullReadSerial = 0;
   try { saved = JSON.parse(localStorage.getItem(key) || "{}"); } catch { /* fresh draft */ }
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) saved = {};
   // Old clients stored these codes as refusals without retaining admission proof.
@@ -534,6 +534,15 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         ? error.message : t('error_generic');
     message.replaceChildren(errorBox(error, {summary, ...options, within:message})); update();
   }}
+  function paintAutomaticStatus() {
+    const status = setupStatusLine({busy, operation, hosts: snapshot?.hosts || [], readReady});
+    const reviewStatus = !saved.intent && (snapshot && snapshot.preview_contract_version !== 1 ? 'setup_review_unsupported'
+      : reviewing ? 'setup_reviewing_connection' : reviewChanged ? 'setup_review_changed' : null);
+    automaticStatus.replaceChildren(reviewStatus ? t(reviewStatus) : busy && saved.intent?.request.action === 'setup.host' ? t('setup_applying_connection') : status.key === 'setup_verified_saved'
+      ? timeLabel(t, status.key, {host: operation.target.host, time: timeStamp(status.verifiedAt)})
+      : status.key ? t(status.key) : '');
+    automaticStatus.hidden = !automaticStatus.textContent;
+  }
   function update() {
     if (!alive()) return;
     const locked = busy || !snapshot || !readReady || !!saved.intent || snapshot.busy;
@@ -565,13 +574,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     connectionChoice.disabled = !!locked || !allowed('host');
     simple.hidden = !!snapshot?.hosts?.length;
     connectionStatus.hidden = !readReady;
-    const status = setupStatusLine({busy, operation, hosts: snapshot?.hosts || [], readReady});
-    const reviewStatus = !saved.intent && (!supported && snapshot ? 'setup_review_unsupported'
-      : reviewing ? 'setup_reviewing_connection' : reviewChanged ? 'setup_review_changed' : null);
-    automaticStatus.replaceChildren(reviewStatus ? t(reviewStatus) : busy && saved.intent?.request.action === 'setup.host' ? t('setup_applying_connection') : status.key === 'setup_verified_saved'
-      ? timeLabel(t, status.key, {host: operation.target.host, time: timeStamp(status.verifiedAt)})
-      : status.key ? t(status.key) : '');
-    automaticStatus.hidden = !automaticStatus.textContent;
+    paintAutomaticStatus();
     const base = saved.verification_base;
     const stale = base && base.revision !== snapshot?.revision;
     verificationNotice.hidden = !stale;
@@ -636,6 +639,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         preconditions: {...review.request.preconditions, review_digest: review.digest}}};
       try {persist();} catch (error) {delete saved.intent; throw error;}
       review = null;
+      paintAutomaticStatus();
       await sendOriginal(); sourceRefresh = true; await refresh();
     } catch (error) {handleSubmissionError(error, 'host', {sourceRefresh});}
     finally {busy = false; if (alive()) update();}
@@ -771,6 +775,11 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   const observationKey = (row, fact) => JSON.stringify([row.connection_observation?.version,
     fact.source?.host, fact.source?.profile_id, fact.source?.binding_version, fact.source?.kind, fact.valid_until]);
+  const observationBindings = state => (state.hosts || []).map(row => [row.name, row.profile_id,
+    connectionFacets.map(name => {
+      const source = row.connection_observation?.facets?.[name]?.source;
+      return [source?.host, source?.profile_id, source?.binding_version];
+    })]).sort(([a], [b]) => String(a).localeCompare(String(b)));
   function paintObservations() {
     if (!alive() || document.hidden || !snapshot) return;
     for (const row of snapshot.hosts || []) {
@@ -785,10 +794,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         }
       }
     }
-    // The receipt time is always the operation's completion time.
-    const status = setupStatusLine({busy, operation, hosts: snapshot.hosts || [], readReady});
-    if (!review && !reviewing) automaticStatus.replaceChildren(status.key === 'setup_verified_saved'
-      ? timeLabel(t, status.key, {host: operation.target.host, time: timeStamp(status.verifiedAt)}) : status.key ? t(status.key) : '');
+    paintAutomaticStatus();
   }
   function renderObservations() {
     patch(connectionStatus, h('div', {'data-setup-host-status': '', hidden: connectionStatus.hidden}, ...(snapshot.hosts || []).map(row => {
@@ -828,11 +834,15 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   document.addEventListener('health-display-tick', renewObservations);
   document.addEventListener('visibilitychange', renewObservations);
   async function refresh({observationOnly = false} = {}) {
-    const serial = ++readSerial;
+    // Deadline claims are already spent. A renewal neither starts behind a
+    // full read nor supersedes it; a later full read invalidates this reply.
+    if (observationOnly && fullReadSerial) return;
+    const serial = observationOnly ? readSerial : ++readSerial;
+    if (!observationOnly) fullReadSerial = serial;
     let result;
     try {result = await api("GET", "/managed/setup"); guard();}
     catch (error) {
-      if (observationOnly) throw error;
+      if (observationOnly) {if (!disposed && serial === readSerial) throw error; return;}
       if (alive() && serial === readSerial) {
         invalidateReview();
         readReady = false;
@@ -843,11 +853,16 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         update();
       }
       throw error;
+    } finally {
+      if (!observationOnly && fullReadSerial === serial) fullReadSerial = 0;
     }
     if (disposed || serial !== readSerial) return;
-    if (observationOnly) {
-      // Patch only readout data. Mounted fields, drafts, review and receipt keep
-      // their nodes and state; configuration changes still use normal reload.
+    const configurationChanged = snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) ||
+      snapshot.preview_contract_version !== result.preview_contract_version || snapshot.discovery_contract_version !== result.discovery_contract_version ||
+      !equal(observationBindings(snapshot), observationBindings(result)));
+    if (observationOnly && snapshot && !configurationChanged) {
+      // Only the same configuration can patch readouts while retaining review,
+      // draft and receipt nodes. Changed sources use the normal path below.
       snapshot = {...snapshot, hosts: result.hosts || []};
       renderObservations();
       return;
@@ -859,7 +874,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       }
       result.verification = {commands: {}, timeout_s: 600};
     }
-    if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1 || snapshot.discovery_contract_version !== result.discovery_contract_version)) invalidateDiscovery();
+    if (configurationChanged || snapshot && result.preview_contract_version !== 1) invalidateDiscovery();
     snapshot = result; readReady = true;
     if (!hostDisclosureReady) {hostDisclosure.open = !result.hosts?.length; hostDisclosureReady = true;}
     suggestLocal();

@@ -57255,7 +57255,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
 	let discovery = null, discovering = false, discoverySerial = 0, secretTimer;
 	const renewedObservations = new Map();
-	let observationRead = false;
+	let observationRead = false, fullReadSerial = 0;
 	try {
 		saved = JSON.parse(localStorage.getItem(key) || "{}");
 	} catch {}
@@ -58043,6 +58043,20 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			update();
 		}
 	}
+	function paintAutomaticStatus() {
+		const status = setupStatusLine({
+			busy,
+			operation,
+			hosts: snapshot?.hosts || [],
+			readReady
+		});
+		const reviewStatus = !saved.intent && (snapshot && snapshot.preview_contract_version !== 1 ? "setup_review_unsupported" : reviewing ? "setup_reviewing_connection" : reviewChanged ? "setup_review_changed" : null);
+		automaticStatus.replaceChildren(reviewStatus ? t(reviewStatus) : busy && saved.intent?.request.action === "setup.host" ? t("setup_applying_connection") : status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
+			host: operation.target.host,
+			time: timeStamp(status.verifiedAt)
+		}) : status.key ? t(status.key) : "");
+		automaticStatus.hidden = !automaticStatus.textContent;
+	}
 	function update() {
 		if (!alive()) return;
 		const locked = busy || !snapshot || !readReady || !!saved.intent || snapshot.busy;
@@ -58086,18 +58100,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		connectionChoice.disabled = !!locked || !allowed("host");
 		simple.hidden = !!snapshot?.hosts?.length;
 		connectionStatus.hidden = !readReady;
-		const status = setupStatusLine({
-			busy,
-			operation,
-			hosts: snapshot?.hosts || [],
-			readReady
-		});
-		const reviewStatus = !saved.intent && (!supported && snapshot ? "setup_review_unsupported" : reviewing ? "setup_reviewing_connection" : reviewChanged ? "setup_review_changed" : null);
-		automaticStatus.replaceChildren(reviewStatus ? t(reviewStatus) : busy && saved.intent?.request.action === "setup.host" ? t("setup_applying_connection") : status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
-			host: operation.target.host,
-			time: timeStamp(status.verifiedAt)
-		}) : status.key ? t(status.key) : "");
-		automaticStatus.hidden = !automaticStatus.textContent;
+		paintAutomaticStatus();
 		const base = saved.verification_base;
 		const stale = base && base.revision !== snapshot?.revision;
 		verificationNotice.hidden = !stale;
@@ -58207,6 +58210,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				throw error;
 			}
 			review = null;
+			paintAutomaticStatus();
 			await sendOriginal();
 			sourceRefresh = true;
 			await refresh();
@@ -58436,6 +58440,18 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		fact.source?.kind,
 		fact.valid_until
 	]);
+	const observationBindings = (state) => (state.hosts || []).map((row) => [
+		row.name,
+		row.profile_id,
+		connectionFacets.map((name) => {
+			const source = row.connection_observation?.facets?.[name]?.source;
+			return [
+				source?.host,
+				source?.profile_id,
+				source?.binding_version
+			];
+		})
+	]).sort(([a], [b]) => String(a).localeCompare(String(b)));
 	function paintObservations() {
 		if (!alive() || document.hidden || !snapshot) return;
 		for (const row of snapshot.hosts || []) {
@@ -58450,16 +58466,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				}
 			}
 		}
-		const status = setupStatusLine({
-			busy,
-			operation,
-			hosts: snapshot.hosts || [],
-			readReady
-		});
-		if (!review && !reviewing) automaticStatus.replaceChildren(status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
-			host: operation.target.host,
-			time: timeStamp(status.verifiedAt)
-		}) : status.key ? t(status.key) : "");
+		paintAutomaticStatus();
 	}
 	function renderObservations() {
 		patch(connectionStatus, h("div", {
@@ -58509,13 +58516,18 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	document.addEventListener("health-display-tick", renewObservations);
 	document.addEventListener("visibilitychange", renewObservations);
 	async function refresh({ observationOnly = false } = {}) {
-		const serial = ++readSerial;
+		if (observationOnly && fullReadSerial) return;
+		const serial = observationOnly ? readSerial : ++readSerial;
+		if (!observationOnly) fullReadSerial = serial;
 		let result;
 		try {
 			result = await api("GET", "/managed/setup");
 			guard();
 		} catch (error) {
-			if (observationOnly) throw error;
+			if (observationOnly) {
+				if (!disposed && serial === readSerial) throw error;
+				return;
+			}
 			if (alive() && serial === readSerial) {
 				invalidateReview();
 				readReady = false;
@@ -58531,9 +58543,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				update();
 			}
 			throw error;
+		} finally {
+			if (!observationOnly && fullReadSerial === serial) fullReadSerial = 0;
 		}
 		if (disposed || serial !== readSerial) return;
-		if (observationOnly) {
+		const configurationChanged = snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || snapshot.preview_contract_version !== result.preview_contract_version || snapshot.discovery_contract_version !== result.discovery_contract_version || !equal(observationBindings(snapshot), observationBindings(result)));
+		if (observationOnly && snapshot && !configurationChanged) {
 			snapshot = {
 				...snapshot,
 				hosts: result.hosts || []
@@ -58552,7 +58567,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				timeout_s: 600
 			};
 		}
-		if (snapshot && (snapshot.revision !== result.revision || !equal(snapshot.profiles, result.profiles) || result.preview_contract_version !== 1 || snapshot.discovery_contract_version !== result.discovery_contract_version)) invalidateDiscovery();
+		if (configurationChanged || snapshot && result.preview_contract_version !== 1) invalidateDiscovery();
 		snapshot = result;
 		readReady = true;
 		if (!hostDisclosureReady) {

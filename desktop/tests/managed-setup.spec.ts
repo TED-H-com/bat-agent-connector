@@ -142,8 +142,8 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       const host = panel.locator('[data-setup-facet="connection"]');
       await expect(host.locator('[data-setup-fact-value]')).toHaveText(condition === 'connected'
         ? locale === 'en' ? 'Ready' : '已就緒'
-        : locale === 'en' ? `Unavailable · Last attempt: ${condition === 'checking' ? '15 min ago' : 'Less than a minute ago'}; host unreachable, last successful observation is stale`
-        : `不可用 · 上次嘗試：${condition === 'checking' ? '15 分鐘前' : '不到一分鐘前'}；無法連至主機，上次成功觀察已過期`);
+        : locale === 'en' ? `Unavailable · Last attempt: ${condition === 'checking' ? '15 min ago' : 'just now'}; host unreachable, last successful observation is stale`
+        : `不可用 · 上次嘗試：${condition === 'checking' ? '15 分鐘前' : '剛剛'}；無法連至主機，上次成功觀察已過期`);
       if (condition === 'connected') await expect(progress).toHaveText(copy('setup_ready'));
       else {
         // Assert the original contradiction first, before checking new evidence copy.

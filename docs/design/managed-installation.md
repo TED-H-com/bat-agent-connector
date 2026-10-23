@@ -67,9 +67,17 @@ awaiting one GET; failures and unchanged deadlines never retry. A normal read wi
 a new deadline permits renewal. One setup GET covers every configured host, so all
 due source/deadline pairs are claimed together before that read. Pending reads keep
 Checking; only completed failures or unchanged responses show an unrenewed result.
-Renewal patches only observations, keeping mounted
-draft controls, focus, review and receipt. Read failures retain aged facts and show
-the failure through the shared formatter. These display clocks admit no actions.
+Full reads take priority: a deadline is still spent when its observation-only
+read is skipped behind an in-flight full read, and a later full read supersedes
+any pending observation reply. No discarded or skipped read retries that deadline.
+For an unchanged configuration revision, host-name set and source bindings,
+renewal patches only observations, keeping mounted draft controls, focus, review
+and receipt. A changed revision or source identity applies the reply through the
+normal refresh path, including review invalidation. It needs no extra GET.
+Normal updates and clock paints share one automatic-status computation: review
+support, reviewing and changed-review messages, then applying an existing intent,
+then the observation/receipt status. Read failures retain aged facts and show the
+failure through the shared formatter. These display clocks admit no actions.
 
 A succeeded `setup.host` receipt records verification and saved configuration at
 its `updated_at` completion time. `setup_verified_saved` always uses that time,
