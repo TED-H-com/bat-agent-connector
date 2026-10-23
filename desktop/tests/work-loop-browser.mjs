@@ -601,19 +601,46 @@ try {
     await shot('00-unconfirmed-start');
     send({stage: 'unknown-shown'});
     assert.equal((await receive()).readback_restored, true);
+    // Leaving the landing correctly withdraws the original submission's tab
+    // intent. Returning to Resume is a new explicit request to follow this Work.
+    await eventWrites.pause();
+    const following = () => page.evaluate(() => Object.entries(sessionStorage)
+      .filter(([key]) => key.includes('.adopt-start-live.')));
+    assert.equal((await following()).length, 1);
+    await page.evaluate(workspace => {location.hash = `#/pm/${workspace}/overview`;}, f.workspace);
+    await expect(page.locator('[data-pm-region="overview"]')).toBeVisible();
+    await eventWrites.pause();
+    assert.deepEqual(await following(), []);
     for (const kind of ['parent']) {
       step = 'recover-' + kind;
+      eventWrites.resume();
       await page.goto(boardUrl);
       await expect(landing.getByRole('button', {name: 'Resume', exact: true})).toBeVisible();
+      // Hold the landing's post-Resume read as well as event delivery. The
+      // server handshake settles the real parent before either can observe it.
+      const receipt = deferred(), releaseReceipt = deferred();
+      const receiptRoute = async route => {
+        receipt.release(); await releaseReceipt.promise;
+        await route.fallback().catch(() => {});
+      };
+      await eventWrites.pause();
+      await page.route(`**/api/v1/operations/${recovery[kind]}`, receiptRoute);
       const [resumed] = await Promise.all([
         page.waitForResponse(response => response.request().method() === 'POST'
           && new URL(response.url()).pathname === `/api/v1/operations/${recovery[kind]}/resume`),
-        eventWrites.post(page.getByRole('button', {name: 'Resume', exact: true})),
+        eventWrites.post(page.getByRole('button', {name: 'Resume', exact: true}), {resume:false}),
       ]);
       assert.ok([200, 202].includes(resumed.status()), await resumed.text());
       assert.equal((await resumed.json()).operation.operation_id, recovery[kind]);
       send({stage: 'resumed-' + kind, operation_id: recovery[kind]});
       assert.equal((await receive()).settled, true);
+      await receipt.promise;
+      // Reload with the settled receipt still unread: the new view must make
+      // its decision from state, without seeing a completion event transition.
+      await page.reload({waitUntil:'domcontentloaded'});
+      await page.unroute(`**/api/v1/operations/${recovery[kind]}`, receiptRoute);
+      releaseReceipt.release();
+      eventWrites.resume();
     }
     active = await receive();
   }

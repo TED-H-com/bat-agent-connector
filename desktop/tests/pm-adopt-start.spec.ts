@@ -227,6 +227,33 @@ test('another tab or connection navigation hint cannot open a completed adoption
   await expect(page).toHaveURL(new RegExp('board\\?select='+work));expect(state.writes).toEqual([]);
 });
 
+for(const locale of ['en','zh-TW'])for(const destination of ['same-work','other-work','other-page'])
+test(`Resume follows its own recovered Work after the original tab intent was withdrawn: ${destination} ${locale}`,async({page})=>{
+  const {state,id}=await landing(page,{locale,status:'needs_attention'});
+  await followLanding(page,state,id,{ready:false});
+  state.parent.result.stage='start_unknown';state.parent.result.works[0].stage='start_unknown';
+  await page.evaluate(()=>(window as any).landingRefresh());
+  // The real board withdraws its landing on a view switch. The original
+  // submission must not follow in the background or on a later passive visit.
+  await page.evaluate(()=>{location.hash='#/settings';(window as any).landingWithdraw();});
+  expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.includes('adopt-start-live')))).toEqual([]);
+  await page.evaluate(({workspaceId,work})=>{location.hash=`#/pm/${workspaceId}/board?select=${work}`;return (window as any).landingRefresh();},{workspaceId,work});
+  let release!:()=>void;state.writeHold=new Promise<void>(resolve=>{release=resolve;});
+  await page.locator('[data-adopt-start-landing]').getByRole('button',{name:locale==='en'?'Resume':'恢復',exact:true}).click();
+  // The POST is held, so this count is stable until the fixture releases it.
+  await expect.poll(()=>state.writes.length).toBe(1);
+  if(destination!=='same-work')await page.evaluate(({workspaceId,second,destination})=>{
+    location.hash=destination==='other-work'?`#/pm/${workspaceId}/board?select=${second}`:'#/settings';
+  },{workspaceId,second,destination});
+  state.parent.status='succeeded';state.parent.result.stage='started';state.parent.result.works[0].stage='started';release();
+  await expect(page.locator('[data-adopt-live]')).toHaveAttribute('href',new RegExp(`work=${work}&attempt=att_9{32}$`));
+  await expect(page).toHaveURL(destination==='same-work'?new RegExp(`/session/host-a/session-a\\?from=board&workspace=${workspaceId}&work=${work}&attempt=att_9{32}$`)
+    :destination==='other-work'?new RegExp('board\\?select='+second):/#\/settings$/);
+  expect(state.writes.map((row:any)=>({method:row.method,path:row.path,body:row.body})))
+    .toEqual([{method:'POST',path:`/operations/${id}/resume`,body:{}}]);
+  expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.includes('adopt-start-live')))).toEqual([]);
+});
+
 for(const stop of ['partial','unknown','withdrawn','foreign','child-mismatch'])test(`automatic live navigation retains the ${stop} recovery view`,async({page})=>{
   const {state,id}=await landing(page,{unknown:stop==='unknown',denied:stop==='withdrawn',status:stop==='unknown'?'needs_attention':'failed'});
   await followLanding(page,state,id,{ready:!['partial','unknown'].includes(stop)});
