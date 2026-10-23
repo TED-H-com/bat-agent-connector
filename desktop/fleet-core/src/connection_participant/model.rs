@@ -63,7 +63,7 @@ pub(super) fn typed<T: for<'a> Deserialize<'a> + Serialize>(value: Value) -> Res
     Ok(result)
 }
 /// Classify dispatch before decoding today's fields: future variants are not corruption.
-pub(super) fn validate_variant(value: &Value) -> Result<()> {
+pub fn validate_variant(value: &Value) -> Result<()> {
     if value["format_version"] != 1
         || value["accepted"]["action"] != "setup.connection.apply"
         || value["accepted"]["contract_version"] != contract::vocabulary()["contract_version"]
