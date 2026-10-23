@@ -496,3 +496,6 @@ fn bounded_handle_read_validates_limits_type_and_overflow() {
         assert!(crate::publication_state::read_bounded(&file, 4).is_err());
     }
 }
+
+#[path = "outer_limit_tests.rs"]
+mod outer_limit_tests;
