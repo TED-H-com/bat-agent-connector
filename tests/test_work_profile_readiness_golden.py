@@ -13,6 +13,7 @@ import pytest
 
 from bat_agent_connector import (
     inventory,
+    managed_setup,
     platform_files,
     pm_native_runtime,
     pm_work_profiles,
@@ -170,6 +171,29 @@ async def test_unchanged_source_readiness_keeps_evidence_and_deadline(source_rea
         assert initial["states"][name]["value"] == "ready"
         assert later["states"][name] == initial["states"][name]
     assert later["states"]["discovered"]["evidence_ref"]["scan_id"] == scope["scan_id"]
+
+
+@pytest.mark.parametrize("field", ["url", "fingerprint", "profile_id"])
+async def test_setup_and_work_reject_previous_source_evidence(source_readiness, mock, field):
+    daemon, read, _, _ = source_readiness
+    original = daemon.fleet.config.hosts["h1"]
+    assert not daemon.fleet._clients  # Setup must use Inventory, not a live writer.
+    before = (list(mock.frames), daemon.journal.db.total_changes)
+    connection = managed_setup._connection_state(daemon, "h1", original)
+    assert connection["connected"] is True and connection["connection_status"] == "connected"
+    assert connection["connection_checked_at"] is not None
+    initial = await read()
+    for name in ("discovered", "can_observe"):
+        assert initial["states"][name]["value"] == "ready"
+
+    changed = _changed_source(original, field)
+    _configure_source(daemon, changed)
+    connection = managed_setup._connection_state(daemon, "h1", changed)
+    assert connection == {"connected": None, "connection_status": "checking", "connection_checked_at": None}
+    result = await read()
+    for name in ("discovered", "can_observe"):
+        _assert_scope_unknown(result, name)
+    assert before == (list(mock.frames), daemon.journal.db.total_changes)
 
 
 async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_path, monkeypatch):

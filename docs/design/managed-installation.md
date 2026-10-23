@@ -22,6 +22,15 @@ Setup previously read `daemon.fleet._clients[name].connected`, the write-capable
 
 Setup now uses an authenticated active write connection or existing inventory evidence matching the current endpoint, certificate pin and profile binding within the inventory freshness window. Current success is **Connected / 已連線**. A recent failure is **Can’t reach this connection / 目前無法連線**, with one suggestion to check BAT and refresh. Missing, expired or mismatched evidence is **Checking… / 確認連線中…**, suggesting a refresh shortly. Legacy `connected: false` alone also means checking. Refresh reads observation evidence; it does not launch probes or change observer backoff.
 
+Setup and Work share `Inventory.current_source_evidence(name)`. Setup reads its
+`observation` instead of maintaining a separate source-binding SQL join. This
+refactor preserves behavior: the accessor starts from discovery and left-joins
+the observation, while Setup's former inner join started from the observation.
+If either row is missing, neither supplies observation evidence to Setup. The
+`same_source` comparison between Setup's host and Inventory's configured host
+remains, as do the live-client shortcut, `stale_after_s` recency rule and all three
+connection-state mappings.
+
 `GET /managed/setup` adds per-host `connection_status` and `connection_checked_at`. `connected` is `null` for unknown reachability. No schema, migration, permission or token-handling changes are introduced. Status is a recent observation, not a continuous network guarantee. Configured installs retain IDs, history, non-secret drafts and original operation keys and never automatically repeat setup.
 
 A succeeded `setup.host` receipt is evidence of that operation's verification and saved configuration at its `updated_at` completion time. When its target host's current row is checking, unreachable or absent, Setup shows that past evidence and time instead of the ready message. Each host row supplies its own current state, observation time when available, and next step. The existing ready copy remains when the receipt's target host is currently connected; without a host receipt, every displayed host must be connected to show it. An unrelated connected host cannot override the configured host's state. This readout makes no additional claim about starting Work and never resubmits setup.
