@@ -118,6 +118,12 @@ an explicit source grant and the current Work binding/version. An optional Attem
 must pass its existing reader and belong to that Work. Administrators have no
 source or membership override. Admission and the local effect recheck access.
 
+Link targets exactly `workspace_id` and `work_item_id`; params contain `fixed_ref`
+and optionally `attempt_id`. Preconditions are `expected_work_version` and
+`expected_binding_id`. Unlink adds `link_id` to the same target, takes no params,
+and requires `expected_link_version`. Replace adds `replaces_link_id` and
+`expected_old_link_version` to the link params; both Works must be in that workspace.
+
 Excerpts store only the canonical reference, digests and original source binding.
 Links have an immutable purpose, an active-tuple uniqueness constraint and CAS
 versions. Append-only events and the local receipt commit with the relationship
