@@ -4,6 +4,9 @@ Config file (default ``~/.config/bat-agent-connector/hosts.toml``)::
 
     [client]
     label = "BAT Agent Connector"      # shown on the host's remote-client list
+    connect_timeout_s = 30             # each key also accepts per-host overrides; finite 1–600 s
+    invoke_timeout_s = 60              # minimum default, preserves longer channel deadlines
+    reconnect_grace_s = 120            # subscriptions survive transient recovery failures
 
     [safety]
     audit_preview_chars = 0            # 0 = log only sha256 prefix + length of prompts
@@ -116,6 +119,19 @@ def git_transport(value: object) -> str:
     return value
 
 
+CLIENT_TIMEOUTS = {"connect_timeout_s": 30.0, "invoke_timeout_s": 60.0, "reconnect_grace_s": 120.0}
+
+
+def client_timeouts(values: dict) -> dict[str, float]:
+    result = {}
+    for key, default in CLIENT_TIMEOUTS.items():
+        value = values.get(key, default)
+        if type(value) not in (int, float) or not 1 <= value <= 600:
+            raise ConfigError(f"{key} must be a finite number between 1 and 600 seconds")
+        result[key] = float(value)
+    return result
+
+
 @dataclass
 class HostConfig:
     name: str
@@ -135,10 +151,14 @@ class HostConfig:
     managed_roots: tuple[str, ...] = ()
     shared_clone_worktrees: bool = True
     confinement: dict = field(default_factory=dict)
+    connect_timeout_s: float = 30.0
+    invoke_timeout_s: float = 60.0
+    reconnect_grace_s: float = 120.0
     git: str = "ssh"
 
     def __post_init__(self) -> None:
         git_transport(self.git)
+        client_timeouts({key: getattr(self, key) for key in CLIENT_TIMEOUTS})
 
     def __repr__(self) -> str:  # never include token material
         return f"HostConfig(name={self.name!r}, url={self.url!r}, writes={self.writes}, orchestrate={self.orchestrate})"
@@ -615,6 +635,10 @@ class Config:
 
 
 def parse_config(data: dict, path: Path | None = None) -> Config:
+    client_options = data.get("client") or {}
+    if not isinstance(client_options, dict):
+        raise ConfigError("[client] must be a table")
+    defaults = client_timeouts(client_options)
     bat = data.get("bat") or {}
     pdir = str(bat.get("profiles_dir") or "")
     hosts: dict[str, HostConfig] = {}
@@ -706,6 +730,7 @@ def parse_config(data: dict, path: Path | None = None) -> Config:
             shared_clone_worktrees=shared,
             confinement=confinement,
             git=git_transport(h.get("git", "ssh")),
+            **client_timeouts({**defaults, **{key: h[key] for key in CLIENT_TIMEOUTS if key in h}}),
         )
     s = data.get("safety") or {}
     safety = SafetyConfig(

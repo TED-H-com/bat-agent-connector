@@ -346,3 +346,191 @@ async def test_git_location_is_rechecked_after_connect_before_bat_write(mock, cl
         release.set()
         await client.close()
         await ops.drain()
+
+
+def test_reconnect_backoff_growth_cap_jitter_and_stable_reset():
+    from bat_agent_connector.client import ReconnectBackoff
+
+    now = [0.0]
+    bounds = []
+
+    def rng(low, high):
+        bounds.append((low, high))
+        return high / 2
+
+    backoff = ReconnectBackoff(rng=rng, clock=lambda: now[0])
+    assert [backoff.next_delay() for _ in range(9)] == [0.5, 1, 2, 4, 8, 16, 30, 30, 30]
+    assert all(low == 0 and 0 <= high <= 60 for low, high in bounds)
+    backoff.connected()
+    now[0] += 59
+    assert backoff.next_delay() == 30  # a flapping connection retains its exponent
+    backoff.connected()
+    now[0] += 60
+    assert backoff.next_delay() == 0.5
+    backoff.connected()
+    now[0] += 1
+    backoff.disconnected()
+    now[0] += 120  # time spent offline is not stable connection time
+    assert backoff.next_delay() == 1
+    for sample in [0.0, 1.0]:
+        backoff = ReconnectBackoff(rng=lambda low, high: low + sample * (high - low))
+        for _ in range(20):
+            assert 0 <= backoff.next_delay() <= 60
+
+
+@pytest.mark.parametrize('key', ['connect_timeout_s', 'invoke_timeout_s', 'reconnect_grace_s'])
+@pytest.mark.parametrize('value', [0, -1, 601, True, '60', None, float('nan'), float('inf')])
+def test_client_timeout_validation(mock, key, value):
+    from bat_agent_connector.errors import ConfigError
+
+    with pytest.raises(ConfigError, match=key):
+        make_config(mock, **{key: value})
+
+
+def test_client_timeout_global_defaults_and_host_precedence(mock):
+    from bat_agent_connector.config import parse_config
+
+    host = {'url': mock.url, 'fingerprint': mock.fingerprint, 'token_ref': 'env:BATC_TEST_TOKEN'}
+    config = parse_config({'client': {'connect_timeout_s': 45, 'invoke_timeout_s': 90,
+                                     'reconnect_grace_s': 180},
+                           'hosts': {'h1': host, 'h2': {**host, 'invoke_timeout_s': 120}}})
+    assert config.hosts['h1'].connect_timeout_s == 45
+    assert config.hosts['h1'].invoke_timeout_s == 90
+    assert config.hosts['h2'].invoke_timeout_s == 120
+    assert config.hosts['h2'].reconnect_grace_s == 180
+    from bat_agent_connector.errors import ConfigError
+
+    with pytest.raises(ConfigError, match='connect_timeout_s'):
+        parse_config({'client': {'connect_timeout_s': True}})
+
+
+async def test_subscription_survives_transient_reconnect_failure(mock, monkeypatch):
+    from bat_agent_connector.errors import ConnectionLost
+
+    client = client_for(mock)
+    await client.connect()
+    sub = client.subscribe()
+    replay = {"channel": "fixture", "params": {"eventId": "replay-1"}}
+    sub.offer(replay)
+    assert await sub.get(timeout=1) == replay
+    original = client._connect_locked
+    attempts = []
+    pauses = []
+
+    async def flaky_connect():
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise ConnectionLost('transient attach/auth transport failure')
+        await original()
+
+    async def pause(delay):
+        pauses.append(delay)
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(client, '_connect_locked', flaky_connect)
+    monkeypatch.setattr('bat_agent_connector.client._retry_pause', pause)
+    try:
+        await mock.drop_all()
+        for _ in range(200):
+            await asyncio.sleep(0.01)
+            if len(attempts) >= 2 and client.connected:
+                break
+        assert client.connected and len(attempts) == 2
+        assert sub in client._subs and sub._closed is None
+        assert len(pauses) == 2 and all(0 <= delay <= 2 for delay in pauses)
+        sub.offer(replay)
+        assert not sub.queue
+        sub.offer({'channel': 'fixture'})
+        assert await sub.get(timeout=1) == {'channel': 'fixture'}
+        assert await client.invoke('app:get-version') == '9.9.9'
+    finally:
+        await client.close()
+
+
+async def test_reconnect_grace_expiration_closes_subscription(mock, monkeypatch):
+    from bat_agent_connector.errors import ConnectionLost
+
+    client = client_for(mock)
+    sub = client.subscribe()
+    now = [1000.0]
+    client._clock = lambda: now[0]
+    client._disconnected_at = now[0]
+    now[0] += client.host.reconnect_grace_s
+
+    async def pause(delay):
+        pass
+
+    monkeypatch.setattr('bat_agent_connector.client._retry_pause', pause)
+    try:
+        await client._recover_subscriptions(ConnectionLost('outage'))
+        with pytest.raises(ConnectionLost, match='outage'):
+            await sub.get(timeout=1)
+        assert not mock.auth_frames  # never open a socket after this outage's deadline
+        await client.connect()  # an explicit later attempt gets a new recovery window
+        assert client.connected and sub._closed is None
+    finally:
+        await client.close()
+
+
+async def test_explicit_close_cancels_subscription_recovery(mock, monkeypatch):
+    client = client_for(mock)
+    await client.connect()
+    sub = client.subscribe()
+    entered = asyncio.Event()
+
+    async def blocked_connect():
+        entered.set()
+        await asyncio.Event().wait()
+
+    async def pause(delay):
+        pass
+
+    monkeypatch.setattr(client, '_connect_locked', blocked_connect)
+    monkeypatch.setattr('bat_agent_connector.client._retry_pause', pause)
+    try:
+        await mock.drop_all()
+        await asyncio.wait_for(entered.wait(), 2)
+        recovery = client._recovery
+        await client.close()
+        assert recovery.done()
+        assert not client.connected and sub._closed is not None
+        assert len(mock.auth_frames) == 1
+    finally:
+        await client.close()
+
+
+def test_subscription_replay_lru():
+    from bat_agent_connector.client import EventSubscription
+
+    sub = EventSubscription(dedupe_limit=2)
+    def event(mid, channel='agent:message', session='session-a'):
+        return {'type': 'event', 'channel': channel,
+                'params': {'sessionId': session, 'messageId': mid}}
+    sub.offer(event('a'))
+    sub.reopen()
+    sub.offer(event('a'))
+    assert len(sub.queue) == 1
+    sub.offer(event('b'))
+    sub.offer(event('a'))
+    sub.offer(event('c'))
+    sub.offer(event('b'))
+    assert len(sub.queue) == 4
+    assert len(sub.recent_ids) == 2
+    sub.offer(event('b', channel='agent:result'))
+    sub.offer(event('b', session='session-b'))
+    sub.offer({'type': 'event'})
+    sub.offer({'type': 'event'})
+    assert len(sub.queue) == 8
+
+
+def test_client_error_logging_keeps_details(caplog):
+    from bat_agent_connector.client import BatClient
+    from bat_agent_connector.config import HostConfig
+
+    client = BatClient(HostConfig(name='home-example', url='wss://example.invalid',
+                                 fingerprint='AA', token_ref='env:EXAMPLE_TOKEN'), device_id='example-device')
+    client._log_failure('resume', {'type': 'RemoteError', 'code': 'RESUME_FAILED',
+                                   'message': 'example failure'})
+    assert all(part in caplog.text for part in
+               ('home-example', 'RemoteError', 'RESUME_FAILED', 'example failure'))
+    assert '[object Object]' not in caplog.text

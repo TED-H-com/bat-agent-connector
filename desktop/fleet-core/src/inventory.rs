@@ -264,8 +264,9 @@ impl Inventory {
                     "workspace_bindings",
                     "connector_endpoint",
                 ],
-                &[],
+                &["allow_tailscale_relay", "direct_probe_ms"],
             )?;
+            route_options(host)?;
             let name = identifier(&host["name"], 64, b"_.-")?;
             let profile = identifier(&host["profile"], 64, b"_.-")?;
             if name.eq_ignore_ascii_case("connector") || profile.eq_ignore_ascii_case("default") {
@@ -284,7 +285,17 @@ impl Inventory {
             let mut last = None;
             let mut kinds = HashSet::new();
             for route in array(&host["routes"], true)? {
-                fields(route, &["kind", "alias"], &["probe", "access_host"])?;
+                fields(
+                    route,
+                    &["kind", "alias"],
+                    &[
+                        "probe",
+                        "access_host",
+                        "allow_tailscale_relay",
+                        "direct_probe_ms",
+                    ],
+                )?;
+                route_options(route)?;
                 let kind = text(&route["kind"])?;
                 let tier = ["direct", "lan", "cf"]
                     .iter()
@@ -588,4 +599,17 @@ pub fn configuration_issues(
         });
     }
     issues
+}
+
+fn route_options(value: &Value) -> Result<()> {
+    if value
+        .get("allow_tailscale_relay")
+        .is_some_and(|v| !v.is_boolean())
+        || value
+            .get("direct_probe_ms")
+            .is_some_and(|v| !v.as_u64().is_some_and(|n| (1..=5000).contains(&n)))
+    {
+        return Err(INVALID);
+    }
+    Ok(())
 }

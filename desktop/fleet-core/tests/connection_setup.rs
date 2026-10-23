@@ -624,6 +624,10 @@ fn existing_routes_connector_metadata_and_compatibility_policy_are_preserved() {
     let mut inv = document(&plan, Artifact::Inventory);
     inv["fleet_version"] = json!("3.2.6");
     inv["direct_probe_ms"] = json!(700);
+    inv["hosts"][0]["direct_probe_ms"] = json!(1500);
+    inv["hosts"][0]["allow_tailscale_relay"] = json!(true);
+    inv["hosts"][0]["routes"][0]["direct_probe_ms"] = json!(600);
+    inv["hosts"][0]["routes"][0]["allow_tailscale_relay"] = json!(false);
     inv["hosts"][0]["bat"]["min_version"] = json!("3.2.6");
     inv["hosts"][0]["probe"] = json!("100.64.0.2:22");
     inv["hosts"][0]["routes"].as_array_mut().unwrap().insert(
@@ -650,6 +654,14 @@ fn existing_routes_connector_metadata_and_compatibility_policy_are_preserved() {
     assert_eq!(after["hosts"][0]["bat"], inv["hosts"][0]["bat"]);
     assert_eq!(after["fleet_version"], inv["fleet_version"]);
     assert_eq!(after["direct_probe_ms"], inv["direct_probe_ms"]);
+    assert_eq!(
+        after["hosts"][0]["direct_probe_ms"],
+        inv["hosts"][0]["direct_probe_ms"]
+    );
+    assert_eq!(
+        after["hosts"][0]["allow_tailscale_relay"],
+        inv["hosts"][0]["allow_tailscale_relay"]
+    );
 }
 
 #[test]
