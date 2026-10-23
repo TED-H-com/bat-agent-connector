@@ -6,6 +6,10 @@ IPC, configuration writer, or public Apply entrypoint. Native integration must
 supply `EvidenceIo` on one blocking thread. Launcher serializes all evidence
 operations. New reservations and admissions additionally hold Monitor and prove
 absence through `verify_effect_context`; the write fence repeats that check.
+Migration-intent admission additionally requires `verify_no_pending_migration`
+before authorization and in the append fence. This hook re-reads the scoped
+Store under those guards and requires `pending()` to return None; errors refuse.
+Its default returns `MIGRATION_PENDING`, keeping read-only adapters read-only.
 Historical capture and migration completion/termination need only Launcher, so a
 running Monitor does not prevent recording past effects. They publish no artifact.
 The adapter must not try to reacquire the running Monitor's mutex for those reads. An
@@ -101,8 +105,26 @@ a pathname. Production account SIDs come from the actual token.
    Every termination clears only Installation's allowed versions, including a
    successful restore: old bytes are never re-adopted. The other three artifacts
    retain their proof, but all-four admission remains blocked. An adapter must
-   retire the ended intent and never resume its effects or reuse its ID. Evidence
-   is immutable; later changed Saved bytes conflict with the exact historical seal.
+   never start effects for the terminated ID or reuse it itself. Terminate only
+   from the intent's own session, or once that session has ended; session-liveness
+   validation is an adapter precondition, not a hook provided by this library.
+   Existing user-facing Store controls remain unchanged. If those controls later
+   begin, reactivate or advance that ID, the termination still settles its intent
+   and confines the conflict to Installation. The other three slots retain exactly
+   their previous answers, and no completion, intent or all-four admission revives.
+
+   New termination admission strictly validates every seal above. During replay
+   of a durable termination, only these mismatches are Store progress: Saved
+   appearing after Refused, a source Saved hash/non-Complete-phase mismatch, or a
+   restore Saved hash/Complete-phase mismatch. Replay still requires the scoped
+   original-reader views, required Saved presence, exact intent binding,
+   Saved-vs-intent checks, restore lineage/SID/before/after bytes and backend checks.
+   Missing or invalid views, other content mismatches, duplicate/unused records
+   and conflicting outcomes still fail the entire resolution. No changed seal can
+   grant any Owned version. Identical re-append is idempotent after permitted Store
+   changes; a different outcome cannot replace the create-only record. Replay
+   relies on the protected append-only record's admission provenance; it cannot
+   reconstruct historical Saved bytes that the Store has overwritten.
    No completion/termination repairs, replaces, removes or rolls back artifacts.
    The resolver never begins, advances, restores or launches a migration.
 7. `Resolution::ownership` also compares the caller's actual bytes to the captured
@@ -159,7 +181,7 @@ control characters. SID validation reuses the existing 184-byte bound.
 | `Record` | Closed union of the eight document kinds (provisioning boxed); auxiliary documents at most 32,768 bytes. Deserialization alone is not authority. |
 | `EvidenceKey` | Fixed provision/lineage/closure/directory/managed/migration namespaces; variable filename components are 64-hex hashes. |
 | `ObservedSlot` | Absent, bounded Bytes/External, or Unavailable. The publisher's shared artifact limit is passed to observe: Installation 16 KiB, each other slot 1 MiB. The adapter must bound allocation/read, not just truncate afterward. |
-| `EvidenceIo` | Trusted synchronous platform boundary; eight methods listed below. No production implementation is supplied. |
+| `EvidenceIo` | Trusted synchronous platform boundary; methods listed below. No production implementation is supplied. |
 | `WriteFence` | Opaque pre-write login, at most 4096 record hashes and four bounded observations. |
 | `CapturedEvidence` | Opaque guarded receipt/record/observation capture; no deserializer or public constructor. |
 | `Resolution` | Opaque replay result, at most two admissible versions per slot for active Intended recovery. |
@@ -186,6 +208,7 @@ serialized authority records.
 | `reserve`, `capture`, `append` | Guarded create/readback, twice-read capture, and validated immutable append; all document/count/slot bounds above apply. Caller supplies the original runtime authorizer. |
 | `EvidenceIo::{login, verify_context, verify_record}` | Launcher-held real token/login, native scope/ancestor/directory proof, and native directory/managed/migration attestations. No browser claims. |
 | `EvidenceIo::verify_effect_context` | New reservations and all non-outcome appends require Launcher then Monitor and positive absence; repeated before final effects. Historical migration outcomes have no such absence requirement. |
+| `EvidenceIo::verify_no_pending_migration` | Migration-intent admission/fence only; scoped Store pending must be absent under the guards, before authorization and effects. Default refuses with MIGRATION_PENDING. No Store mutation or session-liveness inference. |
 | `EvidenceIo::{entries, read_private, observe}` | Enumerate all fixed authority entries within 4096; bounded private no-follow reads; independently read each slot with its supplied limit, no-follow open and handle type checks before a limit+1 read. Errors are not absence. |
 | `EvidenceIo::create_only` | Receives the exact bounded bytes and opaque fence; must authorize/revalidate each effect and call fence verification immediately before final create-new publication. |
 | `WriteFence::verify` | Re-read exact record hashes, all slots, native context and login; rejects drift. |

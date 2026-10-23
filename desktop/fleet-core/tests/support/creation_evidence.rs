@@ -357,6 +357,14 @@ impl EvidenceIo for Native {
         }
         Ok(())
     }
+    fn verify_no_pending_migration(&self) -> Result<()> {
+        self.held();
+        let store = migration::Store::new(&self.receipt.scope.pointer, &self.root.join("Startup"))?;
+        if store.pending()?.is_some() {
+            return Err("MIGRATION_PENDING");
+        }
+        Ok(())
+    }
     fn entries(&self) -> Result<Vec<EvidenceKey>> {
         self.evidence_held();
         let root = self.root.join("native/fleet-creation");
@@ -999,6 +1007,17 @@ pub struct MigrationCase {
 }
 impl MigrationCase {
     pub fn new() -> Self {
+        let mut case = Self::unadmitted();
+        assert_eq!(
+            case.fixture
+                .native
+                .append(&Record::MigrationIntent(case.intent.clone()))
+                .unwrap(),
+            case.intent_hash
+        );
+        case
+    }
+    pub fn unadmitted() -> Self {
         let mut fixture = Fixture::new();
         let plan = fixture.plan();
         fixture.admit(&plan);
@@ -1028,10 +1047,7 @@ impl MigrationCase {
             restores: None,
             acceptance_reference: "native-migration-review".into(),
         };
-        let intent_hash = fixture
-            .native
-            .append(&Record::MigrationIntent(intent.clone()))
-            .unwrap();
+        let intent_hash = digest(&Record::MigrationIntent(intent.clone()).encode().unwrap());
         let after = serde_json::to_vec(
             &serde_json::json!({"kit_root": fixture.input.root, "backend": Backend::Powershell}),
         )
