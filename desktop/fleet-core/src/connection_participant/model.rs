@@ -130,16 +130,23 @@ impl Accepted {
 }
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct FleetIntent {
+struct FleetIntent {
     format_version: u32,
     accepted: Accepted,
     frozen: crate::connection_publish::FrozenPlanRef,
     native_plan: Value,
     role_mapping: Vec<(String, Artifact)>,
 }
-/// Additional variants can be introduced without changing Fleet's stored bytes.
+/// Private dispatch can grow without changing Fleet's stored bytes.
+/// Construction must go through the validated codecs.
+/// ```compile_fail
+/// use bat_fleet_core::connection_participant::Intent;
+/// let forged = Intent::Fleet(serde_json::from_str("{}").unwrap());
+/// ```
 #[derive(Clone, PartialEq, Eq)]
-pub enum Intent {
+pub struct Intent(Dispatch);
+#[derive(Clone, PartialEq, Eq)]
+enum Dispatch {
     Fleet(FleetIntent),
 }
 impl Intent {
@@ -150,7 +157,7 @@ impl Intent {
         )
         .map_err(|_| Error::Invalid)?;
         ensure(encode(&native_plan)?.len() <= bound("native_plan_bytes"))?;
-        Ok(Self::Fleet(FleetIntent {
+        Ok(Self(Dispatch::Fleet(FleetIntent {
             format_version: 1,
             accepted,
             frozen: frozen.reference().clone(),
@@ -161,12 +168,12 @@ impl Intent {
                 .iter()
                 .map(|o| (contract::artifact_role(o.artifact).into(), o.artifact))
                 .collect(),
-        }))
+        })))
     }
     pub fn decode(bytes: &[u8], scope: &Scope, frozen: &FrozenHistory) -> Result<Self> {
         let stored = Self::stored(bytes, scope)?;
         let expected = Self::fleet(stored.accepted.clone(), frozen)?;
-        ensure(Self::Fleet(stored) == expected)?;
+        ensure(Self(Dispatch::Fleet(stored)) == expected)?;
         Ok(expected)
     }
     pub(super) fn reference(
@@ -211,8 +218,8 @@ impl Intent {
         bound("native_plan_bytes") + bound("receipt_bytes")
     }
     fn fleet_record(&self) -> &FleetIntent {
-        match self {
-            Self::Fleet(value) => value,
+        match &self.0 {
+            Dispatch::Fleet(value) => value,
         }
     }
 }
