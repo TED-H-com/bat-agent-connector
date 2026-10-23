@@ -20,6 +20,17 @@ impl<S: Security> CreationPlatform<S> {
     }
 }
 impl<S: Security> CreationWriter<'_, S> {
+    pub fn baseline(&self, owner: &OwnerEvidence) -> Result<[Baseline; 4]> {
+        let resolved = evidence::capture(self, owner)?.resolve(&self.platform.histories()?, &[])?;
+        // Preparing a new review must preserve any unfinished original review.
+        if !resolved.settled() {
+            return Err(UNPROVEN);
+        }
+        resolved.baseline()
+    }
+    pub fn receipt(&self) -> &ProvisioningReceipt {
+        self.platform.receipt()
+    }
     /// Prepare only a fixed artifact parent, one recorded level at a time.
     pub fn prepare_parents(
         &mut self,

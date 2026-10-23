@@ -309,13 +309,28 @@ async fn native_transport_refuses_changed_scope_token_and_stopped_local_service(
                 changed.managed_hold(None);
             }
         }));
-        assert_eq!(
+        assert!(matches!(
             bridge
-                .participant_operation(&scope, "op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                .participant_exchange_attempt(
+                    &scope,
+                    "/operations/op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
+                    None
+                )
                 .await
                 .err(),
-            Some(Error::Changed)
-        );
+            Some(PostFailure::PossiblySent(Error::Changed))
+        ));
+        assert!(matches!(
+            bridge
+                .participant_exchange_attempt(
+                    &scope,
+                    "/operations/op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
+                    None
+                )
+                .await
+                .err(),
+            Some(PostFailure::BeforeSender(_))
+        ));
         assert_eq!(peer.requests.lock().unwrap().len(), 1);
         if change == "stop" {
             assert_eq!(

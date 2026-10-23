@@ -37,6 +37,8 @@ uuid = { version = "1", features = ["v4"] }
 flate2 = "=1.1.10"
 
 [dev-dependencies]
+bat-fleet-core = { path = "../fleet-core", features = ["creation-test-support"] }
+rand = "=0.10.3"
 tauri = { version = "=2.12.1", features = ["test"] }
 minisign = "=0.10.0"
 tempfile = "=3.27.0"

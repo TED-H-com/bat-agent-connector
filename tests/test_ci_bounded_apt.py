@@ -30,11 +30,15 @@ def test_all_workflow_apt_steps_use_shared_setup():
                 sites.append((path.name, job_name))
                 assert index and steps[index - 1].get('uses') == ACTION, (path.name, job_name, step)
                 inputs = steps[index - 1]['with']
-                expected_set = {'browser-ui': 'playwright-chromium-fonts', 'build': 'native-linux'}.get(
+                expected_set = {'native-isolation': 'native-isolation', 'browser-ui': 'playwright-chromium-fonts', 'build': 'native-linux'}.get(
                     job_name, 'playwright-chromium')
                 assert inputs['package-set'] == expected_set
                 # The lock pins Playwright's list; native libraries and extra fonts live in the workflow.
-                assert "hashFiles('desktop/package-lock.json'" in inputs['package-set-hash']
+                if job_name == 'native-isolation':
+                    assert inputs['package-set-hash'] == "${{ hashFiles('.github/workflows/ci.yml') }}"
+                    assert re.findall(r'apt-get install -y ([^\n]+)', command) == ['bubblewrap e2fsprogs']
+                else:
+                    assert "hashFiles('desktop/package-lock.json'" in inputs['package-set-hash']
                 if job_name in ('browser-ui', 'build'):
                     assert "'.github/workflows/desktop.yml'" in inputs['package-set-hash']
                 if job_name == 'build':
@@ -42,10 +46,10 @@ def test_all_workflow_apt_steps_use_shared_setup():
                 assert steps[index - 1].get('if') == step.get('if')
                 assert any(s.get('uses', '').startswith('actions/checkout@') for s in steps[:index - 1])
     assert set(sites) == {
-        ('desktop.yml', 'browser-ui'), ('desktop.yml', 'central-ui'),
+        ('ci.yml', 'native-isolation'), ('desktop.yml', 'browser-ui'), ('desktop.yml', 'central-ui'),
         ('desktop.yml', 'work-loop'), ('desktop.yml', 'build'), ('pages.yml', 'validate'),
     }
-    assert len(sites) == 6
+    assert len(sites) == 7
     assert len(native_inputs) == 2 and native_inputs[0] == native_inputs[1]
 
 

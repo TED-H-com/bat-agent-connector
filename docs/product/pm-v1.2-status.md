@@ -1,11 +1,11 @@
 # PM v1.2 開發狀態
 
-2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `fea4a1c0` 的 33 個新增合併 PR，
+2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `5f49e712` 的 55 個新增合併 PR，
 並列出 Fleet Apply 與本機參與者尚缺的能力。沒有新發布；預覽版仍為 Connector 0.2.13／desktop 0.1.9
 （`437ee6a7`），穩定版仍為 0.2.12／0.1.8。新增合併均未發布、安裝或實機驗收；下方保留歷史紀錄。
 
-October 23: the [latest main progress](progress-2026-10-23.md) records 33 additional merged PRs through
-`fea4a1c0` and the remaining Fleet Apply and native-participant capabilities. There is no new release:
+October 23: the [latest main progress](progress-2026-10-23.md) records 55 additional merged PRs through
+`5f49e712` and the remaining Fleet Apply and native-participant capabilities. There is no new release:
 preview remains Connector 0.2.13 / desktop 0.1.9 (`437ee6a7`), stable 0.2.12 / 0.1.8.
 The additional merges are unreleased, uninstalled and not live-tested; the entries below remain historical.
 
@@ -143,8 +143,8 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 | W14 | P1 | Kanban | 主線：工作／執行狀態、WIP、固定品質投影及依賴證據；M4 補原 runtime 完成；完整 WIP 政策待做。 |
 | W15 | P1 | Sprint artifacts 與時間 | 主線：Sprint 承諾、固定 DoD／接受條件及原成果品質；完整 Scrum 事件與引導待做。 |
 | W16 | P1 | Planning Review Retro | 主線：Planning／Review／Retro 的固定討論、結果與改善追蹤；Daily Scrum／LLM 會議主持待做。 |
-| W17 | P1 | 風險、變更與決策 | 主線：風險、變更、決策、固定來源、明確根因去重與責任。#132 已合併登記讀取投影（`pm_register_list`／`pm_register_get`）的列、完整可見掃描合計與明確連結時間線。#134 已合併採用後問題結案引導；#133 已合併篩選表與時間線及 #139 的具名發現；結案不代表需求驗收，自動跨快照追蹤／提醒仍待做。 |
-| W18 | P1 | GitHub issue mapping | 主線：明確選取公開內容、穩定 Issue 關聯、追加版本及原操作查回；完整外部同步、多對多、明確重開待做。 |
+| W17 | P1 | 風險、變更與決策 | 主線：風險、變更、決策、固定來源、明確根因去重與責任。#132 已合併登記讀取投影（`pm_register_list`／`pm_register_get`）的列、完整可見掃描合計與明確連結時間線。#134 已合併採用後問題結案引導；#133 已合併篩選表與時間線及 #139 的具名發現；明確選取前次 Follow-up 的跨快照差異比較、已達檢閱時間的議程及登記表到期欄位已實作。結案不代表需求驗收，自動跨快照追蹤／提醒仍待做。 |
+| W18 | P1 | GitHub issue mapping | 主線：明確選取公開內容、穩定 Issue 關聯、追加版本及原操作查回；#322 已合併單向 GitHub→Board 匯入、設定與同步，以 GitHub 原生 repository／node ID 識別來源，保留人工指定的管理欄位，並記錄來源缺失觀察。來源關閉、issue 完成與 PR 合併只是觀察，不代表人的完成聲明或驗收。向 GitHub 寫回、完整同步、更豐富的多對多映射，以及明確本機或遠端重開仍待做，見 [同步契約](../design/board-github-sync.md)。 |
 | W19 | P1 | Orchestrator readiness 與派工 | 主線：固定 package 經既有交接派工；原接受證據可滿足明確依賴；保留最後來源與權限檢查。 |
 | W20 | P1 | 現有 integration 與 merge 接入 | 主線：integration preview／apply／conflict handoff／PR merge 接原 package 與 lineage；merge receipt 不代替需求驗收。 |
 | W21 | P1 | 現有 deploy 與 receipt 接入 | 主線：deploy／rollback／merge-and-deploy、固定 release receipt 與交付投影；未宣稱 owner 實際部署。 |
@@ -165,8 +165,8 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 | W36 | P1 | OpenSpec read adapter | 主線：原 carrier commit 的 OpenSpec 文件唯讀來源；其他 commit、自訂 schema 與 CLI JSON 契約待做。 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 主線：PM 自有 Git append-only 規格、immutable artifact、穩定 task ID 及刪除歷史；不宣稱 OpenSpec CLI 相容。 |
 | W38 | P1 | 有界批次與工作包交接 | 主線：1–16 筆固定 handoff、有界並行／期限與 proven-unsent retry；M4 #116 已補原完成及容量觀察。 |
-| W39 | P1 | DocumentSnapshot 與五視圖 SVG | 主線：DocumentSnapshot 與 Brief 分頁 SVG；其餘四視圖仍在未完成草稿，不得直接合入。 |
-| W40 | P1 | 專案文件與簡報 | 主線：同一固定 Brief 的 Markdown／HTML／SVG 及雙語存檔；其他文件、可編輯簡報／播放／下載待做。 |
+| W39 | P1 | DocumentSnapshot 與五視圖 SVG | 主線：DocumentSnapshot 與 Brief 分頁 SVG；其餘四個快照匯出視圖在主線尚無 renderer。 |
+| W40 | P1 | 專案文件與簡報 | 主線：同一固定 Brief 與其維護 Review 區段已有 Markdown／HTML／SVG 雙語匯出、原生存檔及瀏覽器下載；其他具名文件範本，以及可編輯簡報、播放與簡報檔下載仍待做。 |
 | W41 | P1 | Actor 決策責任與 follow-up | 主線：决策責任、改善追蹤、固定前次結果與有來源 Follow-up；完整主動主持及判斷品質待驗證。 |
 | W42 | P1 | Idea 到 Review 真實驗收 | M4 755f126：真實磁碟 Git／驗證器及 mock providers 的會員案例，兩個 Python 版本完整 joined 通過；真人驗收另列。 |
 | W43 | P0 | ProjectLifecycle 與 Idea 長期停留 | 主線：生命周期及有固定政策／基準／完整新鮮工作量證據的 Maintain gate；階段名稱不授權效果。 |

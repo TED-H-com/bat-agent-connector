@@ -100,3 +100,81 @@ impl<T: migration::Platform> migration::Platform for Guarded<'_, T> {
         self.inner.shortcut(backend)
     }
 }
+
+// The writer's context/fence reads must observe the original lifecycle ticket,
+// including the callback between staging and final create-only publication.
+impl<T: bat_fleet_core::windows_creation::Security> bat_fleet_core::windows_creation::Security
+    for Guarded<'_, T>
+{
+    fn managed_identity(
+        &self,
+    ) -> Result<Option<bat_fleet_core::creation_evidence::ManagedIdentity>> {
+        self.ticket.verify()?;
+        let identity = self.inner.managed_identity()?;
+        self.ticket.verify()?;
+        Ok(identity)
+    }
+    type LauncherGuard = T::LauncherGuard;
+    type MonitorGuard = T::MonitorGuard;
+    fn launcher_guard(&self, check: &dyn Fn() -> Result<()>) -> Result<Self::LauncherGuard> {
+        self.ticket.verify()?;
+        self.ticket.acquire(|| {
+            self.inner.launcher_guard(&|| {
+                self.ticket.verify()?;
+                check()
+            })
+        })
+    }
+    fn monitor_guard(&self, check: &dyn Fn() -> Result<()>) -> Result<Self::MonitorGuard> {
+        self.ticket.acquire(|| {
+            self.inner.monitor_guard(&|| {
+                self.ticket.verify()?;
+                check()
+            })
+        })
+    }
+    fn unconfigured(&self, pointer: &std::path::Path, roaming: &std::path::Path) -> Result<()> {
+        self.ticket.verify()?;
+        self.inner.unconfigured(pointer, roaming)
+    }
+    fn discover(&self) -> Result<Option<MonitorIdentity>> {
+        self.ticket.verify()?;
+        self.inner.discover()
+    }
+    fn unpublished(&self, path: &std::path::Path) -> Result<()> {
+        self.ticket.verify()?;
+        self.inner.unpublished(path)
+    }
+    fn validate_path(&self, path: &std::path::Path) -> Result<()> {
+        self.ticket.verify()?;
+        self.inner.validate_path(path)
+    }
+    fn login(&self) -> Result<LoginIdentity> {
+        self.ticket.verify()?;
+        self.inner.login()
+    }
+    fn held(&self) -> Result<()> {
+        self.ticket.verify()?;
+        self.inner.held()
+    }
+    fn effect_held(&self) -> Result<()> {
+        self.ticket.verify()?;
+        self.inner.effect_held()
+    }
+    fn open(
+        &self,
+        path: &std::path::Path,
+        private: bool,
+        child_absent: bool,
+    ) -> Result<std::fs::File> {
+        self.ticket.verify()?;
+        self.inner.open(path, private, child_absent)
+    }
+    fn identity(
+        &self,
+        file: &std::fs::File,
+    ) -> Result<bat_fleet_core::creation_evidence::ObjectIdentity> {
+        self.ticket.verify()?;
+        self.inner.identity(file)
+    }
+}

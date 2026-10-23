@@ -16,6 +16,9 @@ use std::{
     path::{Component, PathBuf},
 };
 
+pub mod association;
+#[cfg(test)]
+mod association_tests;
 pub(crate) mod frozen;
 
 pub const GENERATOR_VERSION: u32 = 1;

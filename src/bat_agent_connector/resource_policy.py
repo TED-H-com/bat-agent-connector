@@ -839,6 +839,98 @@ class AhpGrant:
     actions: frozenset[str]
 
 
+@dataclass(frozen=True, eq=False)
+class AhpCreateGrant:
+    resource_id: str
+    operation_id: str
+    binding_json: str
+    controller_incarnation: str
+    credential_id: str
+    frame_digest: str
+    intent_digest: str
+    connection: str
+    carrier_reference_json: str
+    method: str = 'createSession'
+
+
+_AHP_CREATE_GRANTS = WeakKeyDictionary()
+
+
+def _ahp_create_signature(grant):
+    return tuple(getattr(grant, key) for key in AhpCreateGrant.__dataclass_fields__)
+
+
+async def mint_ahp_create_grant(ctx, resource_id, principal, frame, *, carrier, current):
+    """Internal creation authority; never ownership or a registered route."""
+    import json
+
+    from . import ahp_owned_resources as ahp
+    from .native_carrier import CarrierReceipt
+    intent = ahp._intent(ctx.service.journal, resource_id)
+    if type(carrier) is not CarrierReceipt or 'creation' not in intent:
+        ahp.refuse('AHP_CREATE_INTENT_UNPROVEN')
+    value = AhpCreateGrant(resource_id, ctx.operation_id, json.dumps(intent['binding'], sort_keys=True),
+        intent['intent_controller_incarnation'], principal.credential_id, ahp.digest(frame), ahp.digest(intent),
+        intent['creation']['absence']['connection'], json.dumps(carrier.reference(), sort_keys=True))
+    _AHP_CREATE_GRANTS[value] = (_ahp_create_signature(value), carrier)
+    try:
+        check_ahp_grant(value, ctx, frame, current=current)
+        await refresh_ahp_carrier(value, ctx, frame, current=current)
+    except BaseException:
+        del _AHP_CREATE_GRANTS[value]
+        raise
+    return value
+
+
+async def refresh_ahp_carrier(grant, ctx, frame, *, current):
+    """Read the original physical carrier, with current authority at the SSH fence."""
+    from . import native_carrier
+    async def check():
+        check_ahp_grant(grant, ctx, frame, current=current)
+    await check()
+    await native_carrier.readback(ctx, _AHP_CREATE_GRANTS[grant][1], check=check)
+    check_ahp_grant(grant, ctx, frame, current=current)
+
+
+def _check_ahp_create(grant, ctx, frame, live):
+    import json
+
+    from . import ahp_owned_resources as ahp
+    from . import pm_work_start
+    saved = _AHP_CREATE_GRANTS.get(grant)
+    if saved is None or saved[0] != _ahp_create_signature(grant):
+        ahp.refuse('AHP_GRANT_REQUIRED')
+    b = json.loads(grant.binding_json)
+    intent = ahp._intent(ctx.service.journal, grant.resource_id)
+    if ahp.get(ctx.service.journal, grant.resource_id, 'create_sent') is not None:
+        ahp.refuse('AHP_SENT_UNKNOWN')
+    if (ctx.operation_id != grant.operation_id or frame.get('method') != grant.method
+            or ahp.digest(frame) != grant.frame_digest):
+        ahp.refuse('AHP_GRANT_MISMATCH')
+    create = intent.get('creation', {})
+    if (ahp.digest(intent) != grant.intent_digest or intent['intent_controller_incarnation'] != grant.controller_incarnation
+            or frame != create.get('request') or create.get('operation_id') != ctx.operation_id
+            or ahp.get(ctx.service.journal, grant.resource_id, 'created') is not None):
+        ahp.refuse('AHP_CREATE_INTENT_UNPROVEN')
+    ahp.validate_creation(b, create, fresh=False)
+    ahp.require_absence(b, live.get('absence'))
+    if live['absence']['connection'] != grant.connection:
+        ahp.refuse('AHP_ABSENCE_UNPROVEN')
+    parent = pm_work_start.require_child(ctx.service, ctx.operation_id)
+    link = ctx.service.get(ctx.operation_id, steps=False)['external_refs'].get(pm_work_start.LINK)
+    if (parent is None or link != {'operation_id': create['parent_id'], 'slot': 'handoff'}
+            or parent['operation_id'] != create['parent_id'] or parent['cancel_requested']
+            or parent['status'] in pm_work_start.OP_TERMINAL
+            or parent['target'] != {'workspace_id': b['workspace_id'], 'work_item_id': b['work_id']}
+            or b['attempt_id'] != 'att_' + parent['operation_id'][3:]
+            or b['source_digest'] != ahp.digest(pm_work_start._intent(parent)['code_source'])):
+        ahp.refuse('AHP_HANDOFF_REQUIRED')
+    reference = json.loads(grant.carrier_reference_json)
+    if (saved[1].reference() != reference or reference != create['carrier']
+            or reference['source_sha'] != pm_work_start._intent(parent)['code_source']['source_sha']):
+        ahp.refuse('AHP_MANAGED_DIRECTORY_CHANGED')
+
+
 # Object identity prevents construction, copying or dataclass replacement from
 # minting a capability. The stored digest also detects mutation of a minted one.
 _AHP_GRANTS = WeakKeyDictionary()
@@ -856,6 +948,8 @@ def mint_ahp_grant(ctx, resource_id, principal, frame, *, current):
     from . import ahp_owned_resources as ahp
     live = current()
     receipt = ahp.owned(ctx.service.journal, resource_id, live)
+    if frame.get('method') != 'dispatchAction' or not frame.get('params', {}).get('action', {}).get('turnId'):
+        ahp.refuse('AHP_GRANT_MISMATCH')
     value = AhpGrant(resource_id, ctx.operation_id, json.dumps(receipt['binding'], sort_keys=True),
         receipt['controller_incarnation'], principal.credential_id, ahp.digest(frame),
         frame['params']['action']['turnId'], frozenset({'dispatchAction'}), frozenset({'chat/turnStarted'}))
@@ -874,36 +968,59 @@ def check_ahp_grant(grant, ctx, frame, *, current):
     import time
 
     from . import ahp_owned_resources as ahp
-    from . import pm_lifecycle_gates, task_control
-    if type(grant) is not AhpGrant or _AHP_GRANTS.get(grant) != _ahp_signature(grant):
+    from . import pm_lifecycle_gates, pm_work_start, task_control
+    creating = type(grant) is AhpCreateGrant
+    if not creating and (type(grant) is not AhpGrant or _AHP_GRANTS.get(grant) != _ahp_signature(grant)):
         ahp.refuse('AHP_GRANT_REQUIRED')
+    if creating:
+        live = current()
+        _check_ahp_create(grant, ctx, frame, live)
     b = json.loads(grant.binding_json)
     params = frame.get('params', {})
-    if (ctx.operation_id != grant.operation_id or frame.get('method') not in grant.methods
+    if not creating and (ctx.operation_id != grant.operation_id or frame.get('method') not in grant.methods
             or params.get('action', {}).get('type') not in grant.actions
             or params.get('channel') != b['chat_uri'] or params.get('action', {}).get('turnId') != grant.turn_id
             or ahp.digest(frame) != grant.frame_digest):
         ahp.refuse('AHP_GRANT_MISMATCH')
     ctx.require_controller()
-    live = current()
+    if not creating:
+        live = current()
     if not 0 <= time.time() - live['binding']['work_started_at'] < 1800:
         ahp.refuse('AHP_BUDGET_EXPIRED')
-    receipt = ahp.owned(ctx.service.journal, grant.resource_id, live)
-    controller_authority.require_entry(receipt, expected_incarnation=grant.controller_incarnation)
+    if not creating:
+        receipt = ahp.owned(ctx.service.journal, grant.resource_id, live)
+        controller_authority.require_entry(receipt, expected_incarnation=grant.controller_incarnation)
     if live['binding'] != b:
         ahp.refuse('AHP_BINDING_CHANGED')
     principal = ctx.service.db.execute('SELECT actor,scopes,expires_at,revoked_at FROM api_principals WHERE token_hash=?',
                                        (grant.credential_id,)).fetchone()
     actual = controller_authority.require()
+    scopes = pm_work_start.REQUIRED_SCOPES if creating else {'observe', 'operate'}
     if (principal is None or principal['actor'] != actual['actor'] or principal['revoked_at'] is not None
             or principal['expires_at'] is not None and principal['expires_at'] <= time.time()
-            or not {'observe', 'operate'} <= set(json.loads(principal['scopes']))
-            or not {'observe', 'operate'} <= set(actual['scopes'])):
+            or not scopes <= set(json.loads(principal['scopes']))
+            or not scopes <= set(actual['scopes'])):
         ahp.refuse('AHP_SCOPE_CHANGED')
     task_control.check_binding(ctx)
     pm_lifecycle_gates.require_local(ctx.service.db, ctx.operation_id)
     pm_lifecycle_gates._require(pm_lifecycle_gates.head(ctx.service.db, b['workspace_id']), b['lifecycle_epoch'])
     ctx.check_cancel()
+    if not creating:
+        _check_ahp_directory(ctx, b)
+    if live['cancelled'] is not False:
+        ahp.refuse('AHP_CANCELLED')
+    if live['permission_allowed'] is not True:
+        ahp.refuse('AHP_PERMISSION_REQUIRED')
+    if live['busy'] is not False:
+        ahp.refuse('AHP_BUSY')
+    if ahp.pending(ctx.service.journal, grant.resource_id):
+        ahp.refuse('AHP_SENT_UNKNOWN')
+
+
+def _check_ahp_directory(ctx, b):
+    import json
+
+    from . import ahp_owned_resources as ahp
     row = ctx.service.db.execute('''SELECT response FROM operation_steps
         WHERE operation_id=? AND name=? AND status='succeeded' ''',
         (b['managed_operation_id'], b['managed_step'])).fetchone()
@@ -914,11 +1031,3 @@ def check_ahp_grant(grant, ctx, frame, *, current):
     directory = json.loads(row['response'])
     if directory.get('host') != b['host'] or directory.get('path') != b['workdir'] or not directory.get('creation_ref'):
         ahp.refuse('AHP_MANAGED_DIRECTORY_CHANGED')
-    if live['cancelled'] is not False:
-        ahp.refuse('AHP_CANCELLED')
-    if live['permission_allowed'] is not True:
-        ahp.refuse('AHP_PERMISSION_REQUIRED')
-    if live['busy'] is not False:
-        ahp.refuse('AHP_BUSY')
-    if ahp.pending(ctx.service.journal, grant.resource_id):
-        ahp.refuse('AHP_SENT_UNKNOWN')
