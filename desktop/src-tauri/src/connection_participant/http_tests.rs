@@ -55,6 +55,9 @@ impl HttpPeer {
                     }
                     Err(e) => panic!("fixture accept failed: {e}"),
                 };
+                // Accepted sockets inherit nonblocking mode on macOS and Windows.
+                // Only accept is polled; the bounded HTTP read below is blocking.
+                socket.set_nonblocking(false).unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
                     .unwrap();
