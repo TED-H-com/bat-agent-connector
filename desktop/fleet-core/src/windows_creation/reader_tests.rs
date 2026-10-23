@@ -178,8 +178,30 @@ fn reader_rejects_unknown_child_names_without_waiting_for_parse() {
     crate::publication_state::create_new_directory(&path).unwrap();
     std::fs::write(path.join("invalid.json"), b"").unwrap();
     assert!(f.reader.entries().is_err());
+    f.reader.directories.borrow_mut().clear();
     std::fs::remove_dir_all(f.reader.root()).unwrap();
     assert!(f.reader.entries().unwrap().is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn inaccessible_metadata_is_never_absence() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new();
+    let directory = f.root.join("inaccessible");
+    std::fs::create_dir(&directory).unwrap();
+    let child = directory.join("child");
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0)).unwrap();
+    let native = child.symlink_metadata();
+    let adapter = present(&child);
+    let storage = crate::publication_state::metadata(&child);
+    std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(
+        matches!(native,Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied),
+        "required inaccessible metadata fixture"
+    );
+    assert!(adapter.is_err());
+    assert!(storage.is_err());
 }
 #[test]
 fn reader_private_policy_and_absent_child_acl_checks_are_explicit() {

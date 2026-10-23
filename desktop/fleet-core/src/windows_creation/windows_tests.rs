@@ -109,6 +109,7 @@ fn windows_creation_adapter_refuses_junction_ancestor_without_following_target()
     let target = f.root.join("junction-target");
     crate::publication_state::create_new_directory(&target).unwrap();
     write_private(&target.join("preserved"), b"original target");
+    f.reader.directories.borrow_mut().clear();
     std::fs::remove_dir_all(&client).unwrap();
     assert!(
         std::process::Command::new("cmd.exe")
@@ -150,6 +151,7 @@ fn windows_creation_adapter_refuses_reserved_directory_replaced_between_reads() 
         .verify_private_state(&f.reader.root(), &f.owner)
         .unwrap();
     let before = identity(&f.reader.security.open(&client, true, false).unwrap()).unwrap();
+    f.reader.directories.borrow_mut().clear();
     std::fs::rename(&client, f.root.join("previous-client")).unwrap();
     crate::publication_state::create_new_directory(&client).unwrap();
     crate::publication_state::create_new_directory(&client.join("bat-profiles")).unwrap();

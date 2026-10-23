@@ -216,6 +216,10 @@ fn platform_ownership_uses_real_history_and_resolver_and_requires_receipt() {
             .unwrap(),
         FileOwnership::Unknown
     );
+    p.reader.security.held.set(false);
+    assert!(p
+        .ownership(&f.owner, Artifact::Inventory, path, None)
+        .is_err());
 }
 #[test]
 fn platform_refuses_receipt_drift_between_captures() {
@@ -277,7 +281,7 @@ fn platform_refuses_history_signature_drift_between_reads() {
 }
 #[test]
 fn platform_private_state_checks_membership_scope_owner_and_directory_creation() {
-    for case in 0..5 {
+    for case in 0..6 {
         let f = Fixture::new();
         let p = f.platform();
         let root = p.reader.root();
@@ -304,7 +308,23 @@ fn platform_private_state_checks_membership_scope_owner_and_directory_creation()
                         unreachable!()
                     };
                     d.identity.file_id = "0".repeat(32);
-                    write_private(&file, &Record::Directory(d).encode().unwrap());
+                    let bytes = Record::Directory(d).encode().unwrap();
+                    if case == 4 {
+                        write_private(&file, &bytes);
+                    } else {
+                        let receipt = p.reader.key_path(&EvidenceKey::Provisioning).unwrap();
+                        let count = Cell::new(0);
+                        *p.reader.security.on_open.borrow_mut() = Some(Box::new(move |path| {
+                            // Context readback opens the receipt twice; corrupt
+                            // the directory record only after that proof.
+                            if path == receipt {
+                                count.set(count.get() + 1);
+                                if count.get() == 3 {
+                                    write_private(&file, &bytes);
+                                }
+                            }
+                        }));
+                    }
                 }
                 root.clone()
             }
@@ -367,6 +387,8 @@ fn platform_observation_guards_and_unsupported_effects_use_only_their_seams() {
     assert_eq!(p.shortcut(Backend::Rust), Err(UNSUPPORTED));
     assert!(p.reader.security.trace.borrow().is_empty());
     drop(launcher);
+    assert!(p.observation().is_err());
+    std::fs::remove_file(&p.reader.expected.scope.pointer).unwrap();
     assert!(p.observation().is_err());
     assert!(p.histories().is_err());
     assert!(p.verify_private_state(&p.reader.root(), &f.owner).is_err());
