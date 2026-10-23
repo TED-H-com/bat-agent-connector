@@ -1074,3 +1074,56 @@ runner 未退出時回 `CONNECTION_OPERATION_RUNNING`。確定回執不能被改
 兩種人工決定都不重送、不清空 locks，也不撤銷已知設定。native 收據只提供本機證據，
 server 無法驗證本機寫入時間，不能據此證明中央可達性或遠端擁有權。
 此證據不代表實機驗收完成。
+
+#### Native connection catalog format
+
+`fleet-core::connection_catalog` defines only a pure format and candidate transitions.
+Nothing reads, writes or advertises the catalog yet; detach is still not implemented.
+Central configuration remains under `bridge::Config::validate`; the catalog stores
+only a configuration ID and SHA-256, without duplicating that validator.
+
+Version 1 requires `format_version:1`, `minimum_reader_version:1`, revision starting
+at 1, the exact lowercase hyphenated startup-role installation UUID, `entries` and
+nullable `selected`. Creation evidence binds that UUID, distinct from Fleet creation
+and managed-runtime IDs. Each entry has an immutable ID, verified central
+`server_id`/`principal_id` (opaque, 1–256 UTF-8 bytes, no surrounding whitespace or
+control characters), configuration reference and `attached`/`detached` state.
+Entry/configuration/connection IDs use
+`entry_`/`config_`/`conn_` plus 32 lowercase hex digits; hashes use 64 lowercase hex
+digits. Nullable `connection_id` inherits the entry's central identity and root
+installation; that full tuple is unique. Central-only entries invent no BAT profile
+or connection ID. Multiple attached entries need not be selected.
+
+Documents are limited to 1 MiB and 1,000 entries. Duplicate keys, unknown fields,
+invalid syntax and unknown/detached selections fail closed. Absent means no document;
+Present with `selected:null` means none selected. Version checks follow duplicate-key
+checks and precede other decoding, so future fields still yield Unsupported.
+Unsupported and Invalid must never permit legacy fallback. Valid noncanonical input
+is Present with `canonical:false`; reading never rewrites it. The sole canonical
+encoder emits compact UTF-8 JSON in declaration order without a newline, preserving
+entry order. A candidate's bytes depend only on the current document and `Change`.
+The catalog records no receipt or operation IDs, so a review can predict its bytes.
+Receipt history stays on the server and, once available, in the participant's
+per-operation records bound to the catalog's before and after digests.
+Changes advance revision exactly once and return bytes/SHA-256;
+unchanged returns no bytes. Overflow or excess bounds refuse without pruning.
+Detach clears selection when needed and retains all entries and configuration,
+even for the last attachment. Add accepts only attached entries; explicit reattach
+retains the ID and is the only transition returning a detached entry to attached.
+
+繁體中文：此模組僅定義純格式與候選轉換，尚無程式讀取、寫入或宣告支援目錄，
+移除連線關聯仍未實作。中央設定沿用 `bridge::Config::validate`；目錄只引用設定 ID 與
+SHA-256，根層綁定啟動角色的固定 installation UUID，與 Fleet／managed runtime ID 分開。
+各項保留中央身分與 attached／detached 狀態；可選的 connection ID 沿用該中央身分及
+根層 installation，完整組合不可重複。僅有中央連線時使用 null，不虛構 BAT profile。
+ID 為上述前綴加 32 位小寫十六進位，雜湊為 64 位；中央身分限 1–256 UTF-8 bytes，
+無前後空白或控制字元。整份最多 1 MiB、1,000 項。
+Absent 表示尚無目錄；Present 的 `selected:null` 表示未選取。重複鍵、未知欄位、無效
+語法與不存在／已移除的選取均拒絕；版本先於其餘欄位解碼，不支援版本與 Invalid
+均不得回退舊設定。有效但非標準編碼仍回 Present 及 `canonical:false`，讀取不改寫。
+標準編碼是無換行的緊湊 UTF-8 JSON，保留欄位及歷史順序；變更才回 bytes／SHA-256，
+revision 恰增一，無變更不回新 bytes。超限或溢位拒絕，不裁剪歷史。移除會清空必要
+選取，最後一項仍保留全部項目與設定。新增只接受 attached 項目；只有明確重新附加
+可將 detached 項目恢復為 attached，並沿用原 ID。候選 bytes 僅取決於目前文件與
+`Change`；目錄不記錄收據或 operation ID，讓檢閱能預先算出 bytes。收據歷史留在
+server，以及未來 participant 的逐操作紀錄，綁定目錄變更前後的 digest。
