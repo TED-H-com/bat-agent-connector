@@ -890,6 +890,16 @@ async def connection_evidence(installed, mock, monkeypatch):
     daemon.fleet._clients.clear()
     await daemon.inventory._refresh_scheduled("fixture")
     capture("connected")
+    # A second configured alias is observed by the actual Inventory producer at
+    # the same clock. One setup GET reads both sources, including their deadline.
+    daemon.fleet.config.hosts["fixture-second"] = replace(original, name="fixture-second")
+    try:
+        await daemon.inventory._refresh_scheduled("fixture-second")
+        before = (list(mock.frames), daemon.journal.db.total_changes)
+        cases["connected"]["multiple_hosts"] = setup.state(daemon, principal)
+        assert before == (list(mock.frames), daemon.journal.db.total_changes)
+    finally:
+        del daemon.fleet.config.hosts["fixture-second"]
     clock["now"] += daemon.inventory.settings.stale_after_s - 1
     capture("before_expiry")
     clock["now"] += 1
@@ -989,6 +999,10 @@ async def test_connection_envelope_is_inventory_evidence_and_preserves_receipt(c
             for axis in ("service", "trust_sign_in", "connection"):
                 assert envelope["facets"][axis]["value"] == "unknown"
                 assert envelope["facets"][axis]["observed_at"] is None
+        if name == "connected":
+            hosts = case["multiple_hosts"]["hosts"]
+            assert len(hosts) == 2
+            assert {row["connection_observation"]["facets"]["connection"]["valid_until"] for row in hosts} == {fact["valid_until"]}
         if name == "expired":
             assert fact["value"] == "unavailable" and fact["reason"] == "host_not_refreshed"
             assert host["connected"] is True  # The legacy window remains inclusive.

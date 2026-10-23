@@ -64,7 +64,10 @@ All four facets use shared `displayFact` / `healthLabel`. Expiry is inclusive
 shell `health-display-tick` repaints ages and expiry; no second timer is added.
 Settings and Work share `claimObservationRenewal`: record a deadline before
 awaiting one GET; failures and unchanged deadlines never retry. A normal read with
-a new deadline permits renewal. Renewal patches only observations, keeping mounted
+a new deadline permits renewal. One setup GET covers every configured host, so all
+due source/deadline pairs are claimed together before that read. Pending reads keep
+Checking; only completed failures or unchanged responses show an unrenewed result.
+Renewal patches only observations, keeping mounted
 draft controls, focus, review and receipt. Read failures retain aged facts and show
 the failure through the shared formatter. These display clocks admit no actions.
 

@@ -37,6 +37,25 @@ const labels: Record<string, Record<string, string>> = {
   },
 };
 const setupEvidence = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url), 'utf8'));
+for(const locale of ['en','zh-TW'])for(const width of [390,1440])for(const outcome of ['unchanged','503'])
+  test(`${locale} multiple hosts share one ${outcome} deadline GET at ${width}px`,async({page})=>{
+    await page.setViewportSize({width,height:900});
+    await page.clock.install({time:new Date(1800000600000)});await page.clock.pauseAt(1800000600000);
+    const body=setupEvidence.observations.connected.multiple_hosts;
+    const f=await mountSetupObservation(page,body,setupEvidence.operation,locale,async(route,n)=>{
+      await route.fulfill(n<=2||outcome==='unchanged'?{status:200,json:body}:{status:503,json:{}});
+    });
+    const count=()=>f.reads.filter(path=>path.endsWith('/managed/setup')).length;
+    expect(count()).toBe(2);
+    await page.clock.runFor(180000);await expect.poll(count).toBe(3);
+    const expected=locale==='en'?`Ready · 3 min ago · Could not confirm (${outcome==='503'?'503':'OBSERVATION_NOT_RENEWED'})`:
+      `已就緒 · 3 分鐘前 · 無法確認（${outcome==='503'?'503':'OBSERVATION_NOT_RENEWED'}）`;
+    for(const name of ['fixture','fixture-second'])await expect(f.panel.locator(`[data-host="${name}"][data-setup-facet="connection"] [data-setup-fact-value]`)).toHaveText(expected);
+    await page.clock.runFor(1000);expect(count()).toBe(3);
+    await page.clock.fastForward(3600000);expect(count()).toBe(3);
+    expect(f.posts).toEqual([]);
+  });
+
 for (const locale of ['en', 'zh-TW']) for (const width of [390,1440])
   for (const outcome of ['renewed','unchanged','503','refused']) test(`${locale} Settings ${outcome} observation renewal at ${width}px`, async ({page}) => {
     await page.setViewportSize({width,height:900});
@@ -61,6 +80,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390,1440])
     try {
       await page.clock.runFor(179999); expect(count()).toBe(2);
       await page.clock.runFor(1); await expect.poll(count).toBe(3);
+      await expect(f.fact('connection')).toHaveText(locale==='en'?'Ready · 3 min ago · Checking':'已就緒 · 3 分鐘前 · 檢查中');
+      await page.clock.runFor(1000);expect(count()).toBe(3);
       await expect(f.fact('connection')).toHaveText(locale==='en'?'Ready · 3 min ago · Checking':'已就緒 · 3 分鐘前 · 檢查中');
       await expect(link).toBeFocused();
       const source=f.panel.locator('[data-setup-facet="connection"] details summary');

@@ -868,6 +868,195 @@
         "observed_at": 1800000600.0,
         "valid_until": "2027-01-15T08:13:00Z"
       },
+      "multiple_hosts": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "preview_contract_version": 1,
+        "discovery_contract_version": 1,
+        "connection_contract_version": 1,
+        "hosts": [
+          {
+            "name": "fixture",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": true,
+              "reason": null,
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": 1800000600.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "transport": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "service": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": "fixture-bat"
+          },
+          {
+            "name": "fixture-second",
+            "url": "wss://bat.example:9876",
+            "fingerprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "git": "ssh",
+            "git_status": {
+              "available": false,
+              "reason": "host_unknown",
+              "details": {}
+            },
+            "profile_id": "default",
+            "writes": true,
+            "orchestrate": true,
+            "shared_clone_worktrees": false,
+            "managed_roots": [
+              "/srv/owned"
+            ],
+            "connected": true,
+            "connection_status": "connected",
+            "connection_checked_at": 1800000600.0,
+            "connection_observation": {
+              "version": 1,
+              "facets": {
+                "connection": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture-second",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture-second"
+                  }
+                },
+                "transport": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture-second",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture-second"
+                  }
+                },
+                "service": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture-second",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture-second"
+                  }
+                },
+                "trust_sign_in": {
+                  "value": "ready",
+                  "observed_at": 1800000600.0,
+                  "valid_until": "2027-01-15T08:13:00Z",
+                  "reason": null,
+                  "source": {
+                    "host": "fixture-second",
+                    "profile_id": "default",
+                    "binding_version": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "kind": "hosts_observed",
+                    "ref": "hosts_observed:fixture-second"
+                  }
+                }
+              }
+            },
+            "token_available": true,
+            "ssh_alias": null
+          }
+        ],
+        "repositories": [
+          {
+            "repository": "acme/widget",
+            "bindings": [
+              {
+                "host": "fixture",
+                "workspace_id": "ws-1"
+              }
+            ],
+            "allow_merge": true,
+            "allow_pr_update": false,
+            "allow_integrate": false
+          }
+        ],
+        "profiles": [],
+        "verification": {
+          "commands": {},
+          "timeout_s": 600
+        },
+        "profiles_error": "No complete remote BAT profiles were found",
+        "busy": false
+      },
       "read_refusal": {
         "status": 403,
         "body": {

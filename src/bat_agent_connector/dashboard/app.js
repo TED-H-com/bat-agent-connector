@@ -58019,8 +58019,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		for (const row of snapshot.hosts || []) {
 			const facts = setupConnectionFacts(row);
 			for (const name of connectionFacets) {
-				const fact = facts[name];
-				const shown = setupConnectionFacts(row, { error: renewedObservations.get(observationKey(row, fact))?.error })[name];
+				const fact = facts[name], attempt = renewedObservations.get(observationKey(row, fact));
+				const shown = setupConnectionFacts(row, { error: attempt?.pending ? null : attempt?.error })[name];
 				const node = [...connectionStatus.querySelectorAll("[data-setup-facet]")].find((node) => node.dataset.host === row.name && node.dataset.setupFacet === name);
 				if (node) {
 					node.dataset.freshness = shown.freshness;
@@ -58064,20 +58064,24 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	async function renewObservations() {
 		paintObservations();
 		if (!alive() || document.hidden || observationRead || !snapshot) return;
-		for (const row of snapshot.hosts || []) for (const fact of Object.values(setupConnectionFacts(row))) {
+		const attempts = [], now = Date.now();
+		for (const row of snapshot.hosts || []) for (const fact of Object.values(setupConnectionFacts(row, { now }))) {
 			const at = fact.valid_until, key = observationKey(row, fact);
-			const attempt = claimObservationRenewal(renewedObservations, key, at);
+			const attempt = claimObservationRenewal(renewedObservations, key, at, now);
 			if (!attempt) continue;
-			observationRead = true;
-			try {
-				await refresh({ observationOnly: true });
-			} catch (error) {
-				attempt.error = { code: error.code || error.status || "READ_FAILED" };
-			} finally {
-				observationRead = false;
-				paintObservations();
-			}
-			return;
+			attempt.pending = true;
+			attempts.push(attempt);
+		}
+		if (!attempts.length) return;
+		observationRead = true;
+		try {
+			await refresh({ observationOnly: true });
+		} catch (error) {
+			for (const attempt of attempts) attempt.error = { code: error.code || error.status || "READ_FAILED" };
+		} finally {
+			for (const attempt of attempts) attempt.pending = false;
+			observationRead = false;
+			paintObservations();
 		}
 	}
 	document.addEventListener("health-display-tick", renewObservations);
