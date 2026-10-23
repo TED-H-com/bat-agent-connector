@@ -1,10 +1,13 @@
 //! Native installation role, separate from Connector identity and Fleet login preferences.
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{self, OpenOptions},
+    fs,
     io::Write,
     path::{Path, PathBuf},
 };
+
+#[cfg(not(windows))]
+use std::fs::OpenOptions;
 
 pub const UNREADABLE: &str = "MANAGED_CONFIGURATION_UNREADABLE";
 const MAX_RECORD: u64 = 4096;
@@ -96,6 +99,12 @@ fn check_parents(data: &Path) -> Result<(), String> {
             return Err(UNREADABLE.into());
         }
         check_private(&meta)?;
+        // Windows requires a protected current-SID owner here, plus safe
+        // environmental ancestors and a private effective leaf ACL on read.
+        // New objects use the shared primitives' explicit owner; the released
+        // DACL-only writer's inherited leaf remains readable when its actual
+        // owner matches. Other legacy objects return UNREADABLE (surfaced in
+        // managed status), never ACL repair or a fallback to unchecked reads.
         #[cfg(windows)]
         bat_fleet_core::publication_state::verify_ancestors(
             &data.join("startup-role"),
@@ -233,7 +242,10 @@ fn publish(data: &Path, role: Role) -> Result<Snapshot, String> {
         }
     }
     #[cfg(windows)]
-    create_windows_directory(&directory)?;
+    if metadata(&directory)?.is_none() {
+        bat_fleet_core::publication_state::create_new_directory(&directory)
+            .map_err(|_| UNREADABLE)?;
+    }
     check_parents(data)?;
     let temporary = directory.join(format!(".role-{}", uuid::Uuid::new_v4()));
     let result = (|| {
@@ -244,14 +256,20 @@ fn publish(data: &Path, role: Role) -> Result<Snapshot, String> {
             role,
         };
         let bytes = serde_json::to_vec(&record).map_err(|_| UNREADABLE)?;
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let mut file = options.open(&temporary).map_err(|_| UNREADABLE)?;
+        #[cfg(windows)]
+        let mut file = bat_fleet_core::publication_state::create_new_file(&temporary)
+            .map_err(|_| UNREADABLE)?;
+        #[cfg(not(windows))]
+        let mut file = {
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            options.open(&temporary).map_err(|_| UNREADABLE)?
+        };
         file.write_all(&bytes)
             .and_then(|_| file.sync_all())
             .map_err(|_| UNREADABLE)?;
@@ -266,51 +284,6 @@ fn publish(data: &Path, role: Role) -> Result<Snapshot, String> {
     })();
     let _ = fs::remove_file(temporary);
     result
-}
-
-#[cfg(windows)]
-fn create_windows_directory(path: &Path) -> Result<(), String> {
-    use std::{os::windows::ffi::OsStrExt, ptr};
-    use windows_sys::Win32::{
-        Foundation::{GetLastError, LocalFree, ERROR_ALREADY_EXISTS},
-        Security::{
-            Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW,
-            SECURITY_ATTRIBUTES,
-        },
-        Storage::FileSystem::CreateDirectoryW,
-    };
-    // Protected DACL, full control for the owner and SYSTEM; children inherit it.
-    let sddl: Vec<u16> = "D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)"
-        .encode_utf16()
-        .chain(Some(0))
-        .collect();
-    let mut descriptor = ptr::null_mut();
-    if unsafe {
-        ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            sddl.as_ptr(),
-            1,
-            &mut descriptor,
-            ptr::null_mut(),
-        )
-    } == 0
-    {
-        return Err(UNREADABLE.into());
-    }
-    let attrs = SECURITY_ATTRIBUTES {
-        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
-        lpSecurityDescriptor: descriptor,
-        bInheritHandle: 0,
-    };
-    let name: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    let created = unsafe { CreateDirectoryW(name.as_ptr(), &attrs) };
-    let error = unsafe { GetLastError() };
-    unsafe {
-        LocalFree(descriptor);
-    }
-    if created == 0 && error != ERROR_ALREADY_EXISTS {
-        return Err(UNREADABLE.into());
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -473,3 +446,7 @@ mod tests {
         assert_eq!(load_or_infer(root.path(), &config).unwrap_err(), UNREADABLE);
     }
 }
+
+#[cfg(all(test, windows))]
+#[path = "startup_role/windows_tests.rs"]
+mod windows_tests;
