@@ -52,7 +52,7 @@ These checks concern shared-browser layout, not native or live acceptance.
 
 To repeat the capture:
 
-1. Use an isolated checkout of `437ee6a7143a82e32eae1d6a008203b2df072aaf` and copy the current `scripts/capture_site.mjs` into it. Keep the pinned frontend, demo and browser assets unchanged. Use Node 24 and the locked `desktop/` dependencies (`npm ci`), with Playwright Chromium installed.
+1. Use an isolated checkout of `437ee6a7143a82e32eae1d6a008203b2df072aaf` and copy the current `scripts/capture_site.mjs` into it. Keep the pinned frontend, demo, conversation fixture and browser assets unchanged. Use Node 24 and the locked `desktop/` dependencies (`npm ci`), with Playwright Chromium installed.
 2. Run `npm run check:browser` from `desktop/` to check the committed shared assets.
 3. From the repository root, choose a disk-backed temporary directory and run:
 
@@ -64,12 +64,23 @@ To repeat the capture:
 4. Inspect all sixteen public images, the 48 responsive previews and 18 additional review captures in `CAPTURE_REVIEW_DIR`.
    Review the regenerated manifest before committing.
 
-重製時請使用 `437ee6a7` 的獨立 checkout，放入目前的擷取腳本，保留該來源的前端、demo 與瀏覽器資產。
+重製時請使用 `437ee6a7` 的獨立 checkout，放入目前的擷取腳本，保留該來源的前端、demo、對話 fixture 與瀏覽器資產。
 腳本透過「更多專案工具」開啟收合的管理頁，不改 DOM 或樣式。
 檢查十六張公開圖片、48 張不同寬度的預覽及 18 張補充畫面，再連同 manifest 更新圖庫。
 
 The script owns its ephemeral loopback server and Chromium, and closes both on exit.
-A source-byte check refuses frontend or demo changes against the pinned commit.
+The script's source-byte guard refuses frontend, demo and dashboard asset drift
+against the pinned commit before capturing.
+The [checker](../../scripts/check_product_site.py) verifies every recorded capture
+input against that commit, including the conversation fixture, except
+`scripts/capture_site.mjs` and `desktop/package-lock.json`. Those two inputs are
+verified against the checkout, with only the lockfile's root version excluded.
+
+腳本的來源位元組檢查會在擷取前拒絕前端、demo 與 Dashboard 資產偏離固定 commit。
+[校驗程式](../../scripts/check_product_site.py)會對照固定 commit 驗證所有記錄的擷取輸入，
+包括對話 fixture；只有 `scripts/capture_site.mjs` 與 `desktop/package-lock.json`
+改以工作樹內容校驗，且僅排除 lockfile 的根套件版本。
+
 To refresh, deliberately update the pin, review fixture compatibility and regenerate
 all scenes. Rendering may vary with browser and system fonts; the manifest
 identifies the files actually produced.
