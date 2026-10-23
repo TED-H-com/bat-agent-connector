@@ -6,6 +6,7 @@ mod compare_replace;
 pub mod configuration;
 pub mod connection_catalog;
 pub mod connection_contract;
+pub mod connection_participant;
 pub mod connection_publish;
 pub mod connection_setup;
 pub mod creation_evidence;

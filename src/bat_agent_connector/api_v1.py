@@ -39,6 +39,7 @@ from . import (
 )
 from .build_identity import build_identity
 from .connection_contract import BOUNDS as CONNECTION_BOUNDS
+from .connection_contract import CONTRACT as CONNECTION_CONTRACT
 from .connection_contract import VERSION as CONNECTION_VERSION
 from .connection_contract import decode_native_json
 from .errors import BatError, ResourceReadOnly
@@ -407,8 +408,8 @@ class ApiV1:
             ("GET", r"/api/v1/policy", self.policy, "observe"),
             ("GET", r"/api/v1/connections", self.connections, "observe"),
             ("POST", r"/api/v1/connections/preview", self.connections_preview, None),
-            ("POST", r"/api/v1/connections/receipt", self.connections_receipt, "manage"),
-            ("POST", r"/api/v1/connections/handoff", self.connections_handoff, "manage"),
+            ("POST", r"/api/v1/connections/receipt", self.connections_receipt, None),
+            ("POST", r"/api/v1/connections/handoff", self.connections_handoff, None),
             ("GET", r"/api/v1/operations", self.operations, "observe"),
             ("POST", r"/api/v1/operations", self.create_operation, None),
             ("GET", r"/api/v1/operations/(?P<op>op_[0-9a-f]{32})", self.operation, "observe"),
@@ -711,7 +712,7 @@ class ApiV1:
         code = {"/api/v1/connections/handoff": "INVALID_CONNECTION_HANDOFF",
             "/api/v1/connections/receipt": "INVALID_CONNECTION_RECEIPT",
             "/api/v1/connections/preview": "INVALID_PARAMS"}.get(path)
-        if path in {"/api/v1/operations", "/api/v1/connections/preview"} and body.get("action") == "setup.connection.apply":
+        if path in {"/api/v1/operations", "/api/v1/connections/preview"} and body.get("action") in {"setup.connection.apply", "connection.reference.detach"}:
             code = "INVALID_NATIVE_PLAN"
         return decode_native_json(raw, code=code) if code else body
 
@@ -1312,6 +1313,8 @@ class ApiV1:
                                               "readiness": self.daemon.ops.context["artifact_host"].readiness.get(h)} for h in fleet.config.hosts]},
                      "identity": dashboard_sync.identity(self.daemon.journal, principal),
                      "actions": actions, "operation_statuses": list(STATES), "connection_contract_version": CONNECTION_VERSION,
+                     "connection_effect_kinds": [{"kind": kind, "contract_version": CONNECTION_CONTRACT["v2"]["contract_version"],
+                         "action": effect["action"]} for kind, effect in CONNECTION_CONTRACT["v2"]["effect_kinds"].items()],
                      "cleanup": {"preview_ttl_s": cleanup.TTL_S, "max_items": cleanup.MAX_ITEMS, "restore": False,
                                  "scopes": ["cleanup", "cleanup_discard"], "retention": vars(fleet.config.cleanup),
                                  "read_deadline_s": cleanup.READ_DEADLINE_S, "serialize_previews": True,
@@ -1666,7 +1669,7 @@ class ApiV1:
             if (not str(action or "").startswith("pm.")
                     and action not in {
                         "setup.host", "setup.repository", "setup.verification", "setup.connection.apply",
-                        "connection.reference.apply", "work.start", "work.adopt_and_start",
+                        "connection.reference.apply", "connection.reference.detach", "work.start", "work.adopt_and_start",
                         "github.pr.publish",
                     } and not is_work_send):
                 raise
