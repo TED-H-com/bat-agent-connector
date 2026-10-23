@@ -10,6 +10,7 @@ use crate::{
     windows::{current_login, MonitorMutex, WindowsMonitorObservation, WindowsProcess},
     windows_launcher::LauncherMutex,
     windows_monitor_launch::WindowsLaunch,
+    windows_publication_guards::WindowsPublicationGuards,
     windows_startup::Codec,
     Result,
 };
@@ -17,7 +18,7 @@ use std::{
     os::windows::process::CommandExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    rc::{Rc, Weak},
+    rc::Rc,
     time::Instant,
 };
 use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
@@ -58,8 +59,7 @@ pub struct WindowsMigration {
     launch_journal: PathBuf,
     quit_file: PathBuf,
     login: LoginIdentity,
-    launcher: Weak<LauncherMutex>,
-    monitor: Weak<MonitorMutex>,
+    guards: WindowsPublicationGuards,
 }
 impl WindowsMigration {
     /// `paths` must be built for installation.client_root() by trusted native
@@ -115,19 +115,14 @@ impl WindowsMigration {
             legacy,
             launch_journal: roaming.join("bat-fleet-monitor-launch.json"),
             quit_file,
+            guards: WindowsPublicationGuards::new(login.clone()),
             login,
-            launcher: Weak::new(),
-            monitor: Weak::new(),
         };
         out.current_installation()?;
         Ok(out)
     }
     fn launcher(&self) -> Result<Rc<LauncherMutex>> {
-        let guard = self.launcher.upgrade().ok_or("LAUNCHER_REQUIRED")?;
-        if guard.login() != &self.login || current_login()? != self.login {
-            return Err("OTHER_LOGIN_OWNER");
-        }
-        Ok(guard)
+        self.guards.launcher()
     }
     /// Reload intended config bytes; the old snapshot still binds the installation
     /// layout, while the migration Store checks original/proposed exact payloads.
@@ -178,7 +173,8 @@ impl WindowsMigration {
         if self.owner()?.is_some() {
             return Err("MIGRATION_OWNER_CHANGED");
         }
-        monitor_launch::verify_absence(&self.launch_journal, &WindowsMonitorObservation)
+        WindowsPublicationGuards::observed(None, &self.launch_journal, &WindowsMonitorObservation)
+            .map(|_| ())
     }
     fn launch_rust(&self, current: &Snapshot, launcher: &LauncherMutex) -> Result<()> {
         let mut launch = WindowsLaunch::new(
@@ -282,31 +278,14 @@ impl Platform for WindowsMigration {
     type LauncherGuard = Rc<LauncherMutex>;
     type MonitorGuard = Rc<MonitorMutex>;
     fn launcher_guard(&mut self) -> Result<Self::LauncherGuard> {
-        if self.launcher.upgrade().is_some() {
-            return Err("LAUNCHER_BUSY");
-        }
-        self.current_installation()?;
-        let guard = Rc::new(LauncherMutex::try_acquire()?.ok_or("LAUNCHER_BUSY")?);
-        if guard.login() != &self.login {
-            return Err("OTHER_LOGIN_OWNER");
-        }
-        self.launcher = Rc::downgrade(&guard);
-        self.current_installation()?;
-        Ok(guard)
+        self.guards
+            .launcher_guard(|| self.current_installation().map(|_| ()))
     }
     fn monitor_guard(&mut self) -> Result<Self::MonitorGuard> {
-        self.launcher()?;
-        if self.monitor.upgrade().is_some() {
-            return Err("MONITOR_ALREADY_RUNNING");
-        }
-        let guard = Rc::new(MonitorMutex::try_acquire()?.ok_or("MONITOR_ALREADY_RUNNING")?);
-        if guard.login() != &self.login {
-            return Err("OTHER_LOGIN_OWNER");
-        }
-        self.current_installation()?;
-        self.absence()?;
-        self.monitor = Rc::downgrade(&guard);
-        Ok(guard)
+        self.guards.monitor_guard(|| {
+            self.current_installation()?;
+            self.absence()
+        })
     }
     fn login(&self) -> Result<LoginIdentity> {
         self.launcher()?;
@@ -315,10 +294,11 @@ impl Platform for WindowsMigration {
     fn discover(&mut self) -> Result<Option<MonitorIdentity>> {
         self.launcher()?;
         self.current_installation()?;
-        let owner = self.owner()?;
-        if owner.is_none() {
-            monitor_launch::verify_absence(&self.launch_journal, &WindowsMonitorObservation)?;
-        }
+        let owner = WindowsPublicationGuards::observed(
+            self.owner()?,
+            &self.launch_journal,
+            &WindowsMonitorObservation,
+        )?;
         self.current_installation()?;
         Ok(owner)
     }
@@ -339,7 +319,7 @@ impl Platform for WindowsMigration {
     }
     fn launch(&mut self, backend: Backend) -> Result<()> {
         let launcher = self.launcher()?;
-        if self.monitor.upgrade().is_some() {
+        if self.guards.monitor_held() {
             return Err("MONITOR_STILL_HELD");
         }
         let current = self.current_installation()?;
