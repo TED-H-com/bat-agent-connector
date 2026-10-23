@@ -365,6 +365,36 @@ fn stored_future_variants_are_unsupported_without_writes_at_every_entry_point() 
 }
 
 #[test]
+fn beginning_a_different_intent_conflicts_without_changing_stored_bytes() {
+    let f = Fixture::new();
+    let mut store = f.store();
+    store.begin(&f.intent).unwrap();
+    let namespace = f.intent.namespace();
+    let mut disk = Disk {
+        root: f.root.clone(),
+        fail: None,
+    };
+    let original = disk.snapshot(&namespace);
+    assert_eq!(original, vec![(Part::Intent, f.intent.bytes().unwrap())]);
+    let mut accepted = f.intent.accepted().clone();
+    accepted.operation_key = "different-operation-key".into();
+    let other = Intent::fleet(accepted, &f.frozen).unwrap();
+    assert_eq!(namespace.relative_path(), other.namespace().relative_path());
+    assert_eq!(store.begin(&other).err(), Some(Error::Conflict));
+    assert_eq!(disk.snapshot(&namespace), original);
+    assert_eq!(
+        store.begin(&f.intent).unwrap().recover(NOW),
+        Ok(Next::Claim)
+    );
+    assert_eq!(disk.snapshot(&namespace), original);
+
+    fs::write(disk.path(&namespace, Part::Intent), b"not json").unwrap();
+    let corrupt = disk.snapshot(&namespace);
+    assert_eq!(store.begin(&f.intent).err(), Some(Error::Invalid));
+    assert_eq!(disk.snapshot(&namespace), corrupt);
+}
+
+#[test]
 fn installation_reference_uses_the_shared_character_bound() {
     let f = Fixture::new();
     let mut accepted = f.intent.accepted().clone();

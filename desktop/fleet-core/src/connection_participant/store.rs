@@ -372,7 +372,9 @@ impl<B: Backend> Store<B> {
             .ok_or(Error::Invalid)?;
         let dispatch = parse(&stored, Intent::limit())?;
         validate_variant(&dispatch)?;
-        ensure(stored == intent.bytes()?)?;
+        if stored != intent.bytes()? {
+            return Err(Error::Conflict);
+        }
         parts.sort_by_key(|p| p.order().unwrap_or(u8::MAX));
         ensure(parts.windows(2).all(|p| p[0] != p[1]))?;
         let mut record = Record {
