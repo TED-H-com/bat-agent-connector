@@ -95,15 +95,8 @@ def _decode(row):
 
 
 def _require_connection_available(ops, principal_id, target):
-    if "connection_id" not in target:
-        return  # Creates mint independent IDs from their accepted operations.
-    row = ops.db.execute("""SELECT operation_id FROM operations
-        WHERE action IN ('setup.connection.apply','connection.reference.apply')
-        AND status NOT IN ('succeeded','failed','cancelled')
-        AND json_extract(external_refs,'$.admission_binding.principal_id')=?
-        AND json_extract(target,'$.installation_ref')=? AND json_extract(target,'$.connection_id')=?
-        ORDER BY created_at,operation_id LIMIT 1""",
-        (principal_id, target["installation_ref"], target["connection_id"])).fetchone()
+    from .connection_dependencies import open_connection_operation
+    row = open_connection_operation(ops, principal_id, target)
     if row:
         raise OperationError("CONNECTION_BUSY", f"Connection operation {row['operation_id']} is still open; finish or cancel it first / "
             f"連線操作 {row['operation_id']} 尚未完成；請先完成或取消該操作", 409)
