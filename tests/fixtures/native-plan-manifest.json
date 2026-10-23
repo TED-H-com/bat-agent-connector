@@ -1,0 +1,83 @@
+{
+  "create": {
+    "artifacts": [
+      {
+        "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+        "before_digest": null,
+        "role": "inventory"
+      },
+      {
+        "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+        "before_digest": null,
+        "role": "profile_index"
+      },
+      {
+        "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+        "before_digest": null,
+        "role": "ssh_reference"
+      },
+      {
+        "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+        "before_digest": null,
+        "role": "installation"
+      }
+    ],
+    "contract_version": 1,
+    "generator_version": 1,
+    "review_digest": "19858b69f46e249c6f223454a419abfa94824e0ec414a766aa940d7735cc72d0"
+  },
+  "empty_file": {
+    "artifacts": [
+      {
+        "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+        "before_digest": null,
+        "role": "inventory"
+      },
+      {
+        "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+        "before_digest": null,
+        "role": "profile_index"
+      },
+      {
+        "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+        "before_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "role": "ssh_reference"
+      },
+      {
+        "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+        "before_digest": null,
+        "role": "installation"
+      }
+    ],
+    "contract_version": 1,
+    "generator_version": 1,
+    "review_digest": "33cae38b4010b8fc6ca601082691bb8c27f66d816ceae679afdffc264ebb317c"
+  },
+  "unchanged": {
+    "artifacts": [
+      {
+        "after_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+        "before_digest": "45af1918d35261a3be82bdf0c76784a801ba3f7308a0ef601a3b089bd6e7f112",
+        "role": "inventory"
+      },
+      {
+        "after_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+        "before_digest": "7442e5065fd44a469ff6ed1007e18920a9a0bb7da416456ec9b36ed80b404164",
+        "role": "profile_index"
+      },
+      {
+        "after_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+        "before_digest": "076f75ccca8cf9aaf3c6d9809a2ea1eb732582a854868e2d80c9d7bf75ee0909",
+        "role": "ssh_reference"
+      },
+      {
+        "after_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+        "before_digest": "2269d2ad0106acaa5c2ad1c1e29d985031179cfa0aaa999cbe3907975b35c0e4",
+        "role": "installation"
+      }
+    ],
+    "contract_version": 1,
+    "generator_version": 1,
+    "review_digest": "c44318f1ed89d68d32560c1d56adbaa6c002cac63ae10c0232cdfc6bee99ac3f"
+  }
+}

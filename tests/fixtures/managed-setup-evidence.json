@@ -46,6 +46,7 @@
       "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "preview_contract_version": 1,
       "discovery_contract_version": 1,
+      "connection_contract_version": 1,
       "hosts": [
         {
           "name": "fixture",
@@ -84,6 +85,7 @@
       "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "preview_contract_version": 1,
       "discovery_contract_version": 1,
+      "connection_contract_version": 1,
       "hosts": [
         {
           "name": "fixture",
@@ -122,6 +124,7 @@
       "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "preview_contract_version": 1,
       "discovery_contract_version": 1,
+      "connection_contract_version": 1,
       "hosts": [
         {
           "name": "fixture",

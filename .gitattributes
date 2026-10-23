@@ -4,3 +4,7 @@ desktop/** text=auto eol=lf
 desktop/vendor/glib-0.18.5/** -text
 desktop/vendor/glib-0.18.5/LICENSE whitespace=-blank-at-eof
 src/bat_agent_connector/dashboard/** text eol=lf
+# The native plan golden pins the generator's canonical bytes.
+tests/fixtures/native-plan-manifest.json text eol=lf
+# Python packaging and Rust embedding share the same contract bytes.
+src/bat_agent_connector/connection_contract.json text eol=lf
