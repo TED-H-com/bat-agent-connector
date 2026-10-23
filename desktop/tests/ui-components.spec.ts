@@ -50,8 +50,8 @@ test('disclosure remembers open state; table rows navigate and expand; unknown d
 });
 for (const locale of ['en', 'zh-TW']) test(`canonical vocabulary ${locale} and text-only content`, async ({browser}) => {
   const context = await browser.newContext({locale}); const page = await context.newPage(); await mount(page);
-  const expected = locale === 'en' ? ['Not started','In progress','Waiting','In review','Accepted','Blocked','Done','Merged','Deployed','Rolled back','Closed (not completed)','Completed · GitHub','Done · GitHub','Unconfirmed','Unknown','Not assessed','Partial','Stale','Read-only','Running','Failed','Needs you','Asking you','Stopped','Draft','Adopted','Historical']
-    : ['未開始','進行中','等待中','審閱中','已驗收','受阻','完成','已合併','已部署','已回復','已關閉（未完成）','完成議題 · GitHub','完成 · GitHub','待確認','未知','未評估','部分','過期','唯讀','執行中','失敗','需要你','正在詢問','已停止','草稿','已採用','歷史'];
+  const expected = locale === 'en' ? ['To do','Not started','In progress','Waiting','In review','Accepted','Blocked','Done','Merged','Deployed','Rolled back','Closed (not completed)','Completed · GitHub','Done · GitHub','Unconfirmed','Unknown','Not assessed','Partial','Stale','Read-only','Running','Failed','Needs you','Asking you','Stopped','Draft','Adopted','Historical']
+    : ['待辦','未開始','進行中','等待中','審閱中','已驗收','受阻','完成','已合併','已部署','已回復','已關閉（未完成）','完成議題 · GitHub','完成 · GitHub','待確認','未知','未評估','部分','過期','唯讀','執行中','失敗','需要你','正在詢問','已停止','草稿','已採用','歷史'];
   await expect(page.locator('#fixture > [data-status]')).toHaveText(expected);
   await page.evaluate(async () => {const {button} = await import('/src/ui/components.js'); document.body.append(button({label: '<img src=x onerror=alert(1)>'}));});
   await expect(page.locator('img')).toHaveCount(0); await expect(page.locator('[style]')).toHaveCount(0); await context.close();

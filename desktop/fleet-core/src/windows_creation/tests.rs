@@ -6,6 +6,8 @@ use crate::{
     migration::{self, Platform as _},
 };
 use std::{cell::Cell, io::Write, rc::Rc};
+#[path = "writer_tests.rs"]
+mod writer_tests;
 type OpenHook = Rc<RefCell<Option<Box<dyn FnMut(&Path)>>>>;
 mod generator {
     use crate as bat_fleet_core;
@@ -148,6 +150,13 @@ impl Security for SecurityFixture {
         } else {
             Err("LAUNCHER_REQUIRED")
         }
+    }
+    fn effect_held(&self) -> Result<()> {
+        self.held()?;
+        if !self.monitor.get() {
+            return Err("MONITOR_GUARD_REQUIRED");
+        }
+        Ok(())
     }
     fn identity(&self, file: &File) -> Result<ObjectIdentity> {
         self.touch("identity");
@@ -317,12 +326,18 @@ impl Fixture {
             &reader.key_path(&EvidenceKey::Provisioning).unwrap(),
             &bytes,
         );
-        for d in &reader.expected.directories {
+        for path in reader
+            .expected
+            .directories
+            .iter()
+            .map(|d| d.path().to_path_buf())
+            .chain([reader.directory_container().unwrap()])
+        {
             let record = Record::Directory(DirectoryCreated {
                 binding: reader.expected.binding(&digest(&bytes), 7).unwrap(),
-                canonical_path: d.path().into(),
-                parent_identity: reader.identity(d.path().parent().unwrap()).unwrap(),
-                identity: reader.identity(d.path()).unwrap(),
+                parent_identity: reader.identity(path.parent().unwrap()).unwrap(),
+                identity: reader.identity(&path).unwrap(),
+                canonical_path: path,
             });
             write_private(
                 &reader.key_path(&record.key()).unwrap(),

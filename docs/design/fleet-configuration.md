@@ -97,7 +97,8 @@ by installation), checks `migration::Store::pending()`, current login and monito
 absence, and requires fresh `FileOwnership::Owned` evidence before each effect.
 An absent file still needs independent creation authority. The mandatory native
 adapter must re-read creation evidence and prove protected state ancestors; this
-core supplies no path-based ownership adapter or enrollment flow.
+core delegates native ownership to the [Windows adapter](../../desktop/fleet-core/src/windows_creation/platform.rs#L148)
+and supplies no enrollment flow. 原生 ownership 由獨立 Windows adapter 提供；此核心不提供 enrollment 流程。
 
 Publication refuses a symlinked or reparse-point ancestor of any kit, pointer,
 startup or user path, checking all ancestors up to the filesystem root, with
@@ -130,13 +131,25 @@ The `fleet-publications` directory permits at most 1024 entries; beyond that,
 publication refuses with `ReceiptConflict`. Completed journals remain available;
 their retention policy is follow-up work. The shared `compare_replace` primitive also
 serves profile, migration and supervisor writes, preserving their error codes,
-read policies and creation/deletion behavior. Each replacement is durable on its
-own; neither a cross-file transaction nor a filesystem compare-and-swap against a
+read policies and creation/deletion behavior. Each replacement is independent;
+neither a cross-file transaction nor a filesystem compare-and-swap against a
 non-cooperating editor is claimed.
+On Windows, [compare_replace.rs:115](../../desktop/fleet-core/src/compare_replace.rs#L115)
+makes directory sync a no-op, so [Fleet publication](../../desktop/fleet-core/src/connection_publish.rs#L209)
+and [migration](../../desktop/fleet-core/src/migration_io.rs#L86) are tested for recovery
+after a process kill, but the published name is not flushed against power loss.
+Windows 的 directory sync 是 no-op，因此 Fleet publication 與 migration 已測試程序
+被終止後的 recovery，但發布名稱未針對斷電執行 flush。
 
 This module has no Tauri/IPC, UI, Python, durable-operation participant, enrollment,
-startup, tunnel or monitor-launch wiring. The native ownership adapter and live
-acceptance remain follow-up work. Linux fixtures run real generator/loaders and
+startup, tunnel or monitor-launch wiring. The [Windows ownership adapter](../../desktop/fleet-core/src/windows_creation/platform.rs#L148),
+[guarded creation writer](../../desktop/fleet-core/src/windows_creation/writer.rs#L13)
+and [first-reservation bootstrap](../../desktop/fleet-core/src/windows_creation/writer.rs#L139)
+are implemented; they have no production caller, native route, IPC or public Apply
+entrypoint. Native Apply integration and live acceptance remain open.
+Windows ownership adapter、受 guard 保護的 creation writer 與首次 reservation bootstrap
+已實作；尚無 production caller、native route、IPC 或公開 Apply 入口，native Apply
+接線與實機驗收仍未完成。 Linux fixtures run real generator/loaders and
 filesystem IO with synthetic native ownership/lock authorities. Windows CI's
 **Fleet contracts and owned Windows fixtures** additionally exercises real DACL,
 owner/reparse and replacement behavior; Linux tests do not prove those semantics.
@@ -371,7 +384,9 @@ Dashboard 不需要先設定 Fleet。
 
 新桌面安裝已實作在準備本機 Connector 前選擇用途；下方用途表與 D1 列記錄此邊界。
 完整共用精靈仍尚未實作；已實作的 managed setup 連線預覽子集見下表，D3 來源政策見決策表與可信來源表。
-解除連線、停止自有服務、共用設定 writer 與實機驗收仍未完成。
+本機自有背景服務的獨立停止／啟動已實作；連線協調與中斷關聯已有伺服器契約，
+但本機參與者、Fleet Apply 與中斷關聯的 UI 及實機驗收仍未完成。
+見[服務控制](../../desktop/src/managed-service.js#L30)及[連線操作註冊](../../src/bat_agent_connector/setup_connections.py#L494)。
 `file:line` 引用依合併後程式核對。「現況」表示程式可證實；
 「規範」表示後續驗收要求；2026-10-22 經 owner 授權由整合者決定 D1＝A、D6＝A、D8＝A，
 D2／D4／D5／D7 的整合者技術預設維持原文；D3 僅下列來源讀取部分已實作，不代表 enrollment 或實機驗收完成。
@@ -487,7 +502,7 @@ digest，沒有逐欄比較所有 metadata。[supervisor_probe.rs:103](../../des
 | 只查看與操作既有服務 | 新原生安裝先選「使用既有服務」，再進「加入既有的 Connector」的原生設定與憑證 enrollment；不解包 runtime、不 ensure、不建 Python journal／身分／專案 | 已實作；權限仍由所選 Connector 的 principal 決定，純 client 不額外要求 manage。瀏覽器入口不顯示原生用途選擇。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs)、[main.rs](../../desktop/src-tauri/src/main.rs) |
 | 本機提供 workspace 執行能力 | 新安裝明確選「提供本機工作區」後，先保存用途，再由原 managed ensure owner 準備一個服務；不因安裝取得 BAT 寫權限 | 已實作用途與啟動邊界；bootstrap 驗證後才將 launch 裝入同一 Bridge，沿用既有 workspace 設定。可開工仍須其完整能力檢查。[managed.rs](../../desktop/src-tauri/src/managed.rs)、[bridge.rs](../../desktop/src-tauri/src/bridge.rs) |
 | 兩者兼有 | 先保存「兩者兼有」並準備本機服務；就緒後沿用設定中的「加入既有的 Connector」，各服務保留自己的 principal、workspace、草稿與原 key | 已實作既有兩種模式的接線；沒有新增來源切換或工作搬移。外部中央選取仍優先，原本機服務只由已有用途／安裝證據恢復。[managed.rs](../../desktop/src-tauri/src/managed.rs)、[bridge.rs](../../desktop/src-tauri/src/bridge.rs) |
-| 已設定安裝 | 無用途紀錄時，只依既有檔案推定一次：managed manifest＝provider、只有 central.json＝client、兩者都有＝both；保留 ID、history、credential refs 及原 key | 已實作並保留空白安裝的原服務。重開不改用途；外部失敗不轉為 provisioning。紀錄不可讀／符號連結會拒絕，絕不 fallback 建服務。解除連線與獨立安全停止仍待實作。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs) |
+| 已設定安裝 | 無用途紀錄時，只依既有檔案推定一次：managed manifest＝provider、只有 central.json＝client、兩者都有＝both；保留 ID、history、credential refs 及原 key | 已實作並保留空白安裝的原服務。重開不改用途；外部失敗不轉為 provisioning。紀錄不可讀／符號連結會拒絕，絕不 fallback 建服務。獨立停止已接入設定頁並保存停止意圖；中斷連線關聯仍缺本機參與者與 UI。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs)、[managed_runtime.py:296](../../src/bat_agent_connector/managed_runtime.py#L296) |
 
 原生用途紀錄位於 `app_local_data_dir/startup-role/role.json`，格式為
 `{version: 1, installation_ref: <UUID>, generation: 1, role: client|provider|both}`。
@@ -522,8 +537,9 @@ stateDiagram-v2
 
 ### 預覽 → 套用 → 讀回
 
-以下為**邏輯狀態**，不是新增 API enum。後續 endpoint／schema／權限與 central operation
-到 native 收據的引用形式須先經 D2 審查；不可假裝現有 `setup.host` 已支援四檔交易。
+以下為**邏輯狀態**，不是新增 API enum。endpoint／schema／權限與 central operation
+到 native 收據的伺服器契約已實作，見[持久連線操作](#durable-connection-operations)；
+本機參與者仍待接入，不可假裝現有 `setup.host` 已支援四檔交易。
 現有 setup 是單一 `managed_configuration` step；Fleet migration 只處理 backend／startup，
 不會代寫 inventory。[managed_setup.py:737](../../src/bat_agent_connector/managed_setup.py#L737)、[migration.rs:113](../../desktop/fleet-core/src/migration.rs#L113)
 
@@ -551,7 +567,7 @@ stateDiagram-v2
 | 變更情境 | 必須成立（規範） | 現況依據／待決 |
 | --- | --- | --- |
 | 修改標籤、workspace、偏好／權限 | 同 ID 新預覽，顯示受影響引用；自動連線、BAT 視窗、Dashboard、登入啟動各自選，不暗中啟用 managed writes | selection 有三種獨立選擇；有效連線會補視窗依賴，不能只讀 saved connections 推算。[selection.rs:9](../../desktop/fleet-core/src/selection.rs#L9)、[selection.rs:163](../../desktop/fleet-core/src/selection.rs#L163) |
-| 刪除連線 | 依 D6 只解除所選本機連線引用；先預覽 Work／repo／workspace／視窗依賴及未結操作。保留歷史、收據與憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態；不刪遠端服務、BAT profile、SSH key／known_hosts 或共用 credential。busy／未知效果先查回，無法安全解除則拒絕 | 現有 setup actions 沒有 remove；D6 已定契約尚未實作，停止或撤銷仍由各資源正式管理入口處理。[managed_setup.py:749](../../src/bat_agent_connector/managed_setup.py#L749) |
+| 刪除連線 | 依 D6 只解除所選本機連線引用；先預覽 Work／repo／workspace／視窗依賴及未結操作。保留歷史、收據與憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態；不刪遠端服務、BAT profile、SSH key／known_hosts 或共用 credential。busy／未知效果先查回，無法安全解除則拒絕 | 已註冊伺服器 `connection.reference.detach`，重驗相依性並等待本機回執；缺少本機參與者與 UI，仍無法完成中斷。停止或撤銷仍由各資源正式管理入口處理。[connection_detach.py:34](../../src/bat_agent_connector/connection_detach.py#L34)、[connection_detach.py:100](../../src/bat_agent_connector/connection_detach.py#L100) |
 | 同身分更新 credential | 透過同來源 credential 邊界更新，重驗後才發布引用，保留原 principal 隔離及原操作；不把新 token 本文寫進 journal | 現有 setup 可 stage secret 並存 ref，但原 actor／principal 必須相符。[managed_setup.py:232](../../src/bat_agent_connector/managed_setup.py#L232)、[managed_setup.py:329](../../src/bat_agent_connector/managed_setup.py#L329)、[managed_setup.py:500](../../src/bat_agent_connector/managed_setup.py#L500) |
 | 換 endpoint／pin／remote profile／principal／Git transport | v1 不重綁（D4 預設），改變即拒絕並新增連線；不能為保草稿放鬆信任。不同身分使用分離範圍 | 現在 `setup.host` 對既有 host 的 Git transport 模式改變，以及 endpoint／pin／profile 改變，均拒絕 `HOST_IDENTITY_CHANGED`；principal 另受原安裝 personal identity 的授權限制。[managed_setup.py:308](../../src/bat_agent_connector/managed_setup.py#L308)、[managed_setup.py:333](../../src/bat_agent_connector/managed_setup.py#L333)、[managed_setup.py:54](../../src/bat_agent_connector/managed_setup.py#L54) |
 | 已有手寫設定、第三方檔案或套用中被編輯 | 先辨識及比較；不能證明 owned 的檔案只引用，不寫入／刪除；不改其餘 profiles／SSH directives | 現有 snapshot 能偵測 drift，profile replace 會重核 expected bytes；沒有跨檔原子交易保證。[configuration.rs:123](../../desktop/fleet-core/src/configuration.rs#L123)、[profile_files.rs:67](../../desktop/fleet-core/src/profile_files.rs#L67) |
@@ -573,7 +589,7 @@ stateDiagram-v2
 | --- | --- | --- |
 | transport、服務、信任／登入、workspace | Fleet entry 有 selected／level／blocking／code／observed_at／stale／layers；外層有 monitor、revision、readiness freshness。[supervisor_status.rs:60](../../desktop/fleet-core/src/supervisor_status.rs#L60)、[fleet_native.rs:162](../../desktop/src-tauri/src/fleet_native.rs#L162) | 逐層顯示，不由 TCP、tunnel=true 或登入成功推定 workspace／managed start 就緒。 |
 | 網路路徑品質／政策 | route 來源只含已配置的 direct／lan／cf；Tailscale parser 對指定 peer 回傳路徑證據，與 BAT／Connector probe 分開。[route.rs:44](../../desktop/fleet-core/src/route.rs#L44)、[route.rs:124](../../desktop/fleet-core/src/route.rs#L124)、[probe.rs:50](../../desktop/fleet-core/src/probe.rs#L50) | 直連／中繼品質不等於 app readiness。若採 direct-only 政策，明示「路徑政策阻擋」，不說全部服務離線；僅使用已授權路線，不自動新增替代路線。 |
-| 設定頁的 BAT 連線 | setup 的 connection_status 只有 connected／checking／unreachable；與 Work 共用 `Inventory.current_source_evidence`，近期證據須匹配 endpoint／pin／profile／binding，GET 不開第二個 probe。[managed_setup.py:145](../../src/bat_agent_connector/managed_setup.py#L145) | 保留原時間與來源；`connected:null`／沒有 observation 不轉成離線，也不推導全部能力。 |
+| 設定頁的 BAT 連線 | setup 已提供版本化 `connection_observation`，分 transport／service／trust_sign_in／connection，帶來源、原因、觀察時間與期限；與 Work 共用 `Inventory.current_source_evidence`，GET 不開第二個 probe；舊 connection_status 僅保留相容性。[managed_setup.py:168](../../src/bat_agent_connector/managed_setup.py#L168) | 保留原時間與來源；沒有支援的 observation 顯示未知，不轉成離線；已認證 socket 只證明 transport，不推導全部能力。 |
 | 歷史讀取、開始自有工作、第二輪、Git／驗證／PR、PM 分析 | Work readiness 有 states、smallest_gap、work_follow_up、pm_analysis 等獨立項；不是 Fleet level 的別名。[pm_work_profiles.py:40](../../src/bat_agent_connector/pm_work_profiles.py#L40)、[pm_work_profiles.py:550](../../src/bat_agent_connector/pm_work_profiles.py#L550) | 逐項使用 server allowed actions／readiness；已加入／可閱讀不代表可開工；PM 能力不由 coding route 猜測。 |
 | 標頭的 Connector 連線 | 目前由 `healthDisplay(state)` 提供 key／tone／connection／recoveryKey，標頭加上 Connector 範圍，沒有涵蓋所有 BAT host。[app.js:1032](../../desktop/src/app.js#L1032)、[app.js:1045](../../desktop/src/app.js#L1045) | 標頭必須寫「Connector：…」（en：`Connector: …`），沿用共用 UI 命名規則。[connector-copy.test.ts:8](../../desktop/tests/connector-copy.test.ts#L8) 機器列寫「host-a 的 BAT：…」。Connector 未登入、BAT 已連線可同時成立；同來源同 principal 同觀察版本不許矛盾。 |
 
@@ -623,21 +639,21 @@ client 與非正式環境 Linux BAT host 的指派由整合者私下保存，不
 
 | 決策／適用範圍 | 已採用選項與契約（2026-10-22） | 採用理由 | 實作／驗收前的限制 |
 | --- | --- | --- | --- |
-| D1 新安裝與既有本機安裝 | 已決定 A；已實作新桌面安裝先選「使用既有服務／提供本機工作區／兩者兼有」，再進各既有流程。用途先持久化，client 不準備本機 Connector；舊安裝依既有檔案推定一次，保留原角色及服務。 | 純 client 不建立第二份 Python journal／身分／專案；provider／both 在 Managed.serial 下 ensure，以 generation guard 安裝到既有 Bridge；中斷後重開沿原安裝恢復。 | 尚未實作解除連線、獨立停止自有且閒置服務的安全預覽及設定 writer；Windows／macOS 原生保護與同候選實機驗收仍待完成，fixture 不等於接受。[startup_role.rs](../../desktop/src-tauri/src/startup_role.rs)、[managed.rs](../../desktop/src-tauri/src/managed.rs)、[bridge.rs](../../desktop/src-tauri/src/bridge.rs) |
-| D6 移除機器連線的保留範圍 | 已決定 A：只解除本機連線引用；保留歷史、收據及憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態（已停止的仍停止）。後果：遠端與其他 client 不受影響，需另處管理憑證。 | 解除連線的效果最清楚，停止或撤銷留給各資源正式管理入口。 | 依共用變更表只解除引用；不刪歷史、BAT profile、SSH key／known_hosts，不撤銷外部共用憑證、不停止非 owned 服務。現有 setup registry 沒有 remove action，尚未實作本契約。[managed_setup.py:749](../../src/bat_agent_connector/managed_setup.py#L749) |
+| D1 新安裝與既有本機安裝 | 已決定 A；已實作新桌面安裝先選「使用既有服務／提供本機工作區／兩者兼有」，再進各既有流程。用途先持久化，client 不準備本機 Connector；舊安裝依既有檔案推定一次，保留原角色及服務。 | 純 client 不建立第二份 Python journal／身分／專案；provider／both 在 Managed.serial 下 ensure，以 generation guard 安裝到既有 Bridge；中斷後重開沿原安裝恢復。 | 自有閒置服務的停止預覽、停止意圖與明確啟動已實作；設定產生器與逐檔發布核心也已實作，但 Fleet Apply 與中斷關聯仍缺本機參與者及 UI。Windows／macOS 原生行為只有 CI 證據，同候選實機驗收未完成。[managed-service.js:30](../../desktop/src/managed-service.js#L30)、[managed_runtime.py:296](../../src/bat_agent_connector/managed_runtime.py#L296)、[connection_publish.rs](../../desktop/fleet-core/src/connection_publish.rs) |
+| D6 移除機器連線的保留範圍 | 已決定 A：只解除本機連線引用；保留歷史、收據及憑證引用的追溯紀錄，不撤銷憑證、不改服務狀態（已停止的仍停止）。後果：遠端與其他 client 不受影響，需另處管理憑證。 | 解除連線的效果最清楚，停止或撤銷留給各資源正式管理入口。 | 伺服器已註冊中斷關聯操作，確定本機回執才更新 detached 並保留其他欄位及收據；不刪來源、不撤銷憑證或停止服務。本機參與者與 UI 尚未實作，無 client 能完成中斷。[connection_detach.py:82](../../src/bat_agent_connector/connection_detach.py#L82)、[connection_detach.py:100](../../src/bat_agent_connector/connection_detach.py#L100) |
 | D8 整合者、設備與五事件承諾 | 已決定 A：指定一位具名整合者與一組設備（公開示例 `integrator-a`／`client-a`／`host-a`），同候選完成五事件驗收後才承諾：關視窗／鎖屏繼續背景工作；登出／重開機中斷後於支援的正常登入方式恢復原 queue／Work，不重播已送效果；主動停止只停本安裝自有資源且確認退出。後果：完整背景承諾須等五格及平台政策都通過。 | 由同一人負責同一候選的完整證據，避免不同安裝或政策的結果拼成通過。真實指派由整合者私下保存；公開只用示例名稱。 | 五事件逐格記正式安裝／登入方式、OS 政策及原操作讀回；停機期間不承諾運算。未完成五事件實測前只交 fixture 證據、不作平台承諾。程式能證明 lease／owned 邊界，不能證明各 OS 生存性。[managed_runtime.py:257](../../src/bat_agent_connector/managed_runtime.py#L257)、[windows_tunnel.rs:113](../../desktop/fleet-core/src/windows_tunnel.rs#L113) |
 
 ### 整合者技術決定（預設建議）
 
 除非 owner 反對，後續整合採下列預設；整合者須先把接線／schema 與失敗讀回方式
-寫成可審查實作，再依上方驗收切片驗證。本輪尚未實作，不將預設當成現行 API。
+寫成可審查實作，再依上方驗收切片驗證。各列已實作部分如下，未接入的部分仍屬規範。
 
 | 決策 | 預設做法及理由（規範） | 現況依據 | 決定前的限制 |
 | --- | --- | --- | --- |
-| D2 設定協調與收據 | 延伸既有 Python operation／journal 作唯一業務意圖權威，沿既有 action／scope 審查接線；native 只做受限 owned 子步驟並回傳可引用收據。每步綁 expected bytes／revision，未知 SSH 檔只引用。理由：同一原 key 可查回，不增加第二份 journal 或任意寫檔 IPC。 | setup registry 只有 host／repository／verification；migration Saved 只管 backend config／startup，不能當一般 Fleet writer。[managed_setup.py:749](../../src/bat_agent_connector/managed_setup.py#L749)、[migration.rs:113](../../desktop/fleet-core/src/migration.rs#L113) | 未完成 action／scope、native 收據引用及斷線查回設計前，不實作四檔寫入；不假裝跨檔原子交易。 |
-| D3 BAT 來源、token 與 enrollment | 在獲授權帳號中選定資料來源；明確 `profiles_dir` 優先，Windows 未指定時每次依新目錄→舊目錄選擇，僅不存在才試下一個；macOS app support 與 Linux 原預設由同一模組處理。新 admission 限 `enc:false`、JSON 字串 `data`、完全相符且無歧義的 token key。 | 已實作 `BAT_SOURCE_POLICY = 1`：setup 清單及新 profile 選擇用 admission；既存主機的 `token_available()` 與 token 引用解析共用同一 legacy runtime 路徑；Rust 未綁 policy 的引用保留 legacy Fleet runtime，`source_policy:1` 用 native admission，bounded catalog 供本機清單讀取。三者差異及目錄規則由同一份 Python 產生期望值／Rust 驗證的向量記錄。[共用政策](../../src/bat_agent_connector/connection_sources.py)、[共享向量](../../tests/fixtures/bat-source-policy-v1.json)、[native admission／catalog](bat-source-catalog.md) | 來源探索、固定 descriptor 與既有 setup picker 已接入（`discovery_contract_version:1`）；native catalog 的 picker、IPC 與設定產生器仍待接入；legacy Python 相容模式尚未退休。新增 BAT profile 交 BAT 自有流程；未驗 enrollment 不宣稱 Fleet 完成。不繞加密、不掃其他帳號、不寫 BAT store。無共同可讀來源就保留缺口，不猜 fallback。 |
+| D2 設定協調與收據 | 延伸既有 Python operation／journal 作唯一業務意圖權威，沿既有 action／scope 審查接線；native 只做受限 owned 子步驟並回傳可引用收據。每步綁 expected bytes／revision，未知 SSH 檔只引用。理由：同一原 key 可查回，不增加第二份 journal 或任意寫檔 IPC。 | 連線 registry 已註冊 `connection.reference.apply`、`setup.connection.apply` 及 `connection.reference.detach`，沿既有 operation／journal 協調；native claim、回執及查回已有伺服器契約。[setup_connections.py:494](../../src/bat_agent_connector/setup_connections.py#L494)、[connection_handoff.py](../../src/bat_agent_connector/connection_handoff.py) | 本機參與者與 UI 尚未接入，不能由伺服器契約推定可套用；發布核心逐檔落回執，不保證跨檔原子交易。 |
+| D3 BAT 來源、token 與 enrollment | 在獲授權帳號中選定資料來源；明確 `profiles_dir` 優先，Windows 未指定時每次依新目錄→舊目錄選擇，僅不存在才試下一個；macOS app support 與 Linux 原預設由同一模組處理。新 admission 限 `enc:false`、JSON 字串 `data`、完全相符且無歧義的 token key。 | 已實作 `BAT_SOURCE_POLICY = 1`：setup 清單及新 profile 選擇用 admission；既存主機的 `token_available()` 與 token 引用解析共用同一 legacy runtime 路徑；Rust 未綁 policy 的引用保留 legacy Fleet runtime，`source_policy:1` 用 native admission，bounded catalog 供本機清單讀取。三者差異及目錄規則由同一份 Python 產生期望值／Rust 驗證的向量記錄。[共用政策](../../src/bat_agent_connector/connection_sources.py)、[共享向量](../../tests/fixtures/bat-source-policy-v1.json)、[native admission／catalog](bat-source-catalog.md) | 來源探索、固定 descriptor 與既有 setup picker 已接入（`discovery_contract_version:1`）；純產生器已使用 native catalog 的來源引用，但其 picker／IPC 與 Apply 流程仍待接入。[connection_setup.rs:835](../../desktop/fleet-core/src/connection_setup.rs#L835) legacy Python 相容模式尚未退休。新增 BAT profile 交 BAT 自有流程；未驗 enrollment 不宣稱 Fleet 完成。不繞加密、不掃其他帳號、不寫 BAT store。無共同可讀來源就保留缺口，不猜 fallback。 |
 | D4 v1 不重綁 | endpoint、pin、principal、remote profile 或 Git transport 改變時保留拒絕，要求新增一條連線；不合併舊草稿、歷史、checkpoint 或原 key。理由：v1 不新增可驗證信任遷移，先維持來源隔離；相同 server_id 字串不授權重綁。 | 既有 setup 的拒絕及 principal 邊界見上方共用變更表；中央身分仍須 native 認證／bootstrap。[bridge.rs:1221](../../desktop/src-tauri/src/bridge.rs#L1221) | 不提供換址／pin rotation／principal 遷移；不以保留草稿為由降低信任。不同連線保留各自引用與原操作查回。 |
-| D5 自動配置與 schema | v1 保留必要 schema 及 connector_endpoint，不退役欄位；只從明確可信的既有關聯產生引用，版本常數由整合者版本化。新 loopback 分配須在 native owned 邊界內檢查衝突；沒有已審分配器或 target／route 映射就停在需要資料，不要求使用者手填技術 ID。理由：不把 BAT 連結中沒有的資料補成事實，也避免升級破壞既有設定。 | 連結 parser 只有 endpoint／token／pin；inventory 另外驗 fleet_version、loopback、target 及 routes。[managed-setup.js:10](../../desktop/src/managed-setup.js#L10)、[inventory.rs:189](../../desktop/fleet-core/src/inventory.rs#L189)、[inventory.rs:277](../../desktop/fleet-core/src/inventory.rs#L277) | 未審來源／分配及衝突規則前不配置新映射、不發明 allocator 或 fallback；既有值無變更則保持。 |
+| D5 自動配置與 schema | v1 保留必要 schema 及 connector_endpoint，不退役欄位；只從明確可信的既有關聯產生引用，版本常數由整合者版本化。新 loopback 分配須在 native owned 邊界內檢查衝突；沒有已審分配器或 target／route 映射就停在需要資料，不要求使用者手填技術 ID。理由：不把 BAT 連結中沒有的資料補成事實，也避免升級破壞既有設定。 | 純產生器已驗證來源關聯、占用及現有設定，提供有界 loopback 候選分配；版本政策讀自公開範例，輸出仍須通過原 loader。[connection_setup.rs:373](../../desktop/fleet-core/src/connection_setup.rs#L373)、[connection_setup.rs:835](../../desktop/fleet-core/src/connection_setup.rs#L835) | 候選位址不同於已證實的 forward 時仍拒絕，不能自改 SSH 映射；native owned 發布與 UI 尚未接入，手動設定流程仍保留。 |
 | D7 共用健康投影 | 四畫面共用唯讀投影／formatter，以服務、principal、workspace 與 revision 區分；保留原生 IPC／HTTP producer schema，缺失 metadata 顯示未知。標頭只呈 Connector 範圍，reason 對照與版本規則集中維護。理由：共用語意而不創造第二本 health 帳或讓替身發明欄位。 | producer、來源差異及標頭判準只維護於上方責任表與健康投影表；正式 IPC sanitizer 是資料形狀邊界。[fleet.rs:597](../../desktop/src-tauri/src/fleet.rs#L597) | metadata／envelope 接線未完成前不宣稱已有完整共同 payload；golden 取正式 producer 的去識別輸出，不補 native-only 欄位到 HTTP。 |
 
 ### D3 source descriptor v1（固定契約）
@@ -710,8 +726,14 @@ remote ownership. Native participant wiring remains unavailable; generator and p
 The shipped `src/bat_agent_connector/connection_contract.json` is the sole authority
 for wire version, ordered roles, outcomes, phases, observations, closed codes,
 compatibility matrix and size bounds. Python loads it; fleet-core embeds that exact
-file. The generator and publisher core exist, but the native participant, ownership
-adapter, Bridge allowlist/IPC and UI integration are **not available**. Capability
+file. The generator, publisher, [Windows ownership adapter](../../desktop/fleet-core/src/windows_creation/native.rs#L129),
+[creation writer](../../desktop/fleet-core/src/windows_creation/writer.rs#L293) and
+[reservation bootstrap](../../desktop/fleet-core/src/windows_creation/writer.rs#L139) cores exist,
+with no production caller, native route, IPC or public Apply entrypoint for these
+creation APIs; participant, Bridge allowlist/IPC and UI integration are **not available**.
+產生器、publisher、Windows ownership adapter、creation writer 與 reservation bootstrap
+核心已實作；creation API 尚無 production caller、native route、IPC 或公開 Apply 入口，
+participant、Bridge allowlist/IPC 與 UI 接線仍不可用。Capability
 `connection_contract_version` reports server protocol support, never native readiness.
 Native publication targets **Windows only**; macOS publication is unsupported.
 

@@ -124,7 +124,7 @@ impl publication::Platform for Writer<'_> {
         self.0.verify_private_state(p, o)
     }
 }
-fn admitted(
+pub(super) fn admitted(
     f: &Fixture,
 ) -> (
     CreationPlatform<SecurityFixture>,
