@@ -32,15 +32,6 @@ fn startup(data: &Path) -> Result<StartupBinding> {
         return Err("MANAGED_CONFIGURATION_UNREADABLE");
     }
     let snapshot = evidence.snapshot;
-    // Managed creation needs a positive native binding; never fall back to null.
-    if snapshot.role != Some(startup_role::Role::Client) {
-        return Err("CREATION_OPERATION_UNSUPPORTED");
-    }
-    match data.join("managed-central").symlink_metadata() {
-        Ok(_) => return Err("CREATION_OPERATION_UNSUPPORTED"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
-        Err(_) => return Err("MANAGED_CONFIGURATION_UNREADABLE"),
-    }
     Ok(StartupBinding {
         installation_ref: snapshot
             .installation_ref
@@ -142,8 +133,21 @@ pub(crate) async fn reserve<R: tauri::Runtime>(
                     user,
                 };
                 let executable = std::env::current_exe().map_err(|_| "INSTALLATION_UNAVAILABLE")?;
+                let managed = app
+                    .try_state::<std::sync::Arc<crate::managed::Managed>>()
+                    .ok_or("CREATION_EVIDENCE_UNPROVEN")?;
+                let bridge = app
+                    .try_state::<std::sync::Arc<crate::bridge::Bridge>>()
+                    .ok_or("CREATION_EVIDENCE_UNPROVEN")?;
                 let security = crate::fleet_guarded::Guarded {
-                    inner: WindowsSecurity::for_context(&input, &executable)?,
+                    inner: binding::Attested {
+                        inner: WindowsSecurity::for_context(&input, &executable)?,
+                        binding: binding::Binding {
+                            managed: &managed,
+                            bridge: &bridge,
+                            original: Default::default(),
+                        },
+                    },
                     ticket: &ticket,
                 };
                 let mut platform = CreationPlatform::from_native_input(

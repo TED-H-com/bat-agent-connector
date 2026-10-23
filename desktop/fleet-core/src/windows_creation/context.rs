@@ -153,6 +153,10 @@ impl<S: Security> CreationPlatform<S> {
                         .collect::<Result<_>>()?,
                 });
             }
+            let managed_connector = security.managed_identity()?;
+            if input.startup.role != StartupRole::Client && managed_connector.is_none() {
+                return Err(UNSUPPORTED);
+            }
             let [fleet_creation_id, reservation_id] = mint();
             let mut receipt = ProvisioningReceipt {
                 startup: input.startup,
@@ -165,7 +169,7 @@ impl<S: Security> CreationPlatform<S> {
                 scope,
                 slots: slots.try_into().map_err(|_| UNPROVEN)?,
                 directories: vec![],
-                managed_connector: None,
+                managed_connector,
             };
             receipt.directories = receipt
                 .allowed_directories()

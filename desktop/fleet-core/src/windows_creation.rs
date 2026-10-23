@@ -115,9 +115,10 @@ fn checked_read<S: Security>(
 impl<S: Security> Reader<S> {
     fn new(expected: ProvisioningReceipt, security: S) -> Result<Self> {
         Record::Provisioning(Box::new(expected.clone())).encode()?;
-        // Managed identity requires its native manifest/service attestation.
-        // The observation-only boundary cannot establish that binding yet.
-        if expected.managed_connector.is_some() {
+        // Existing observers provide no attestation and still refuse managed receipts.
+        if expected.managed_connector.is_some()
+            && security.managed_identity()? != expected.managed_connector
+        {
             return Err(UNSUPPORTED);
         }
         let login = security.login()?;
@@ -183,6 +184,9 @@ impl<S: Security> Reader<S> {
             return Err("OTHER_LOGIN_OWNER");
         }
         let r = &self.expected;
+        if self.security.managed_identity()? != r.managed_connector {
+            return Err(UNPROVEN);
+        }
         if self.identity(&r.scope.state_root)? != r.scope.state_identity {
             return Err(UNPROVEN);
         }

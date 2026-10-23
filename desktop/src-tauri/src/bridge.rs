@@ -598,7 +598,26 @@ fn get(path: &str) -> ConnectorRequest {
 impl Bridge {
     #[allow(dead_code)]
     pub(crate) fn creation_scope(&self) -> bat_fleet_core::Result<CreationScope> {
-        Err("CREATION_OPERATION_UNSUPPORTED")
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "CREATION_EVIDENCE_UNPROVEN")?;
+        let active = state.active.as_ref().ok_or("CREATION_EVIDENCE_UNPROVEN")?;
+        if state.startup_pending
+            || state.recovery_error.is_some()
+            || state.config.as_ref().map(binding).ok().as_ref() != Some(&active.record.binding)
+            || binding(&active.config) != active.record.binding
+            || (state.managed
+                && state.environment_identity.as_ref() != Some(&active.record.identity))
+        {
+            return Err("CREATION_EVIDENCE_UNPROVEN");
+        }
+        Ok(CreationScope {
+            generation: state.generation,
+            managed: state.managed,
+            actor: active.config.expected_actor.clone(),
+            identity: active.record.identity.clone(),
+        })
     }
     #[cfg(test)]
     pub(crate) fn creation_fixture(launch: &crate::managed::Launch) -> Self {
