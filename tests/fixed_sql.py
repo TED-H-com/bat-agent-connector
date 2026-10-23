@@ -7,7 +7,28 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 KINDS = {"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE", "WITH"}
-SQL_START = re.compile(r"\s*(?:(?:--[^\n]*(?:\n|$)|/\*.*?\*/)\s*)*([a-zA-Z]+)\b", re.DOTALL)
+SQL_KEYWORD = re.compile(r"[a-zA-Z]+\b")
+
+
+def first_keyword(sql):
+    """Skip each leading character once; SQLite block comments do not nest."""
+    offset = 0
+    while True:
+        while offset < len(sql) and sql[offset].isspace():
+            offset += 1
+        if sql.startswith("--", offset):
+            end = sql.find("\n", offset + 2)
+            if end == -1:
+                return ""
+            offset = end + 1
+        elif sql.startswith("/*", offset):
+            end = sql.find("*/", offset + 2)
+            if end == -1:
+                return ""
+            offset = end + 2
+        else:
+            keyword = SQL_KEYWORD.match(sql, offset)
+            return keyword[0].upper() if keyword else ""
 
 
 @dataclass(frozen=True)
@@ -197,8 +218,7 @@ def discover(source):
             continue
         # Implicit concatenation and parenthesized literals are ast.Constants;
         # f-strings, +, %, .format and other expressions are never evaluated.
-        start = SQL_START.match(sql)
-        kind = start[1].upper() if start else ""
+        kind = first_keyword(sql)
         if kind in KINDS:
             statements.append(Statement(call.lineno, sql, kind,
                 "inline" if isinstance(argument, ast.Constant) else "named", call.func.attr))
