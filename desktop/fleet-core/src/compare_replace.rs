@@ -21,8 +21,22 @@ pub(crate) fn replace<E: Clone>(
     expected: Option<&[u8]>,
     next: Option<&[u8]>,
     policy: Policy<E>,
+    read: impl FnMut() -> Result<Option<Vec<u8>>, E>,
+    verify: Option<&mut dyn FnMut() -> Result<(), E>>,
+) -> Result<(), E> {
+    replace_observed(path, expected, next, policy, read, verify, &mut |_| {})
+}
+
+/// Report the exact staging name to a guarded namespace reader. Only this live
+/// staging file may be excluded from its immutable-record snapshot.
+pub(crate) fn replace_observed<E: Clone>(
+    path: &Path,
+    expected: Option<&[u8]>,
+    next: Option<&[u8]>,
+    policy: Policy<E>,
     mut read: impl FnMut() -> Result<Option<Vec<u8>>, E>,
     mut verify: Option<&mut dyn FnMut() -> Result<(), E>>,
+    staging: &mut dyn FnMut(&Path),
 ) -> Result<(), E> {
     if next.is_some_and(|bytes| bytes.len() > policy.limit) {
         return Err(policy.too_large);
@@ -46,6 +60,7 @@ pub(crate) fn replace<E: Clone>(
         policy.prefix,
         rand::random::<u128>()
     ));
+    staging(&temporary);
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]

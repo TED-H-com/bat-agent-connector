@@ -9,6 +9,7 @@ pub struct CreationPlatform<S> {
     pub(super) reader: Reader<S>,
     pub(super) roaming: PathBuf,
     pub(super) publisher: Publisher,
+    pub(super) migrations: migration::Store,
 }
 impl<S: Security> CreationPlatform<S> {
     pub(super) fn with_security(
@@ -20,23 +21,34 @@ impl<S: Security> CreationPlatform<S> {
     ) -> Result<Self> {
         let publisher =
             Publisher::new(&expected.scope.pointer, startup, user).map_err(|_| UNPROVEN)?;
+        let migrations = migration::Store::new(&expected.scope.pointer, startup)?;
         Ok(Self {
             reader: Reader::new(expected, security)?,
             roaming,
             publisher,
+            migrations,
         })
     }
     pub(super) fn observation(&self) -> Result<Option<MonitorIdentity>> {
         self.reader.security.held()?;
         self.reader.base()?;
-        let pointer = &self.reader.expected.scope.pointer;
-        let owner = if !present(pointer)? {
-            self.reader.security.unconfigured(pointer, &self.roaming)?;
-            None
-        } else {
+        let configured = present(&self.reader.expected.scope.pointer)?;
+        if configured {
             // Raw recovery inspection needs intact authority scope, not a
             // parseable pointer or an obsolete whole-Configuration snapshot.
             self.reader.verify_context(&self.reader.expected)?;
+        }
+        let owner = self.process_observation(configured)?;
+        self.reader.base()?;
+        Ok(owner)
+    }
+    pub(super) fn process_observation(&self, configured: bool) -> Result<Option<MonitorIdentity>> {
+        Ok(if !configured {
+            self.reader
+                .security
+                .unconfigured(&self.reader.expected.scope.pointer, &self.roaming)?;
+            None
+        } else {
             let owner = self.reader.security.discover()?;
             if owner.is_none() {
                 self.reader
@@ -44,9 +56,7 @@ impl<S: Security> CreationPlatform<S> {
                     .unpublished(&self.roaming.join("bat-fleet-monitor-launch.json"))?;
             }
             owner
-        };
-        self.reader.base()?;
-        Ok(owner)
+        })
     }
     pub(super) fn histories(&self) -> Result<Vec<publication::PublicationHistory>> {
         let mut histories = Vec::new();
