@@ -19,6 +19,20 @@ pub(super) fn slot_path(pointer: &Path, kit: &Path, artifact: Artifact) -> PathB
     }
 }
 impl<S: Security> CreationPlatform<S> {
+    /// Bounded native auxiliary read using the same retained no-follow checks.
+    #[doc(hidden)]
+    pub fn read_private_attestation(security: &S, path: &Path, limit: usize) -> Result<Vec<u8>> {
+        security.held()?;
+        let root = path.parent().ok_or(UNPROVEN)?;
+        let retained = RefCell::default();
+        let private = |p: &Path| Ok(p.starts_with(root));
+        let bytes = checked_read(security, path, limit, &retained, &private)?.ok_or(UNPROVEN)?;
+        if checked_read(security, path, limit, &retained, &private)?.as_ref() != Some(&bytes) {
+            return Err(UNPROVEN);
+        }
+        Ok(bytes)
+    }
+
     /// Construct and prove native context synchronously; no guard is returned.
     #[doc(hidden)]
     pub fn from_native_input(

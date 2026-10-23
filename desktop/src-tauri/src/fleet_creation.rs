@@ -12,6 +12,8 @@ use bat_fleet_core::{
     windows_creation::{CreationPlatform, Security},
 };
 use std::path::Path;
+#[cfg(any(windows, test))]
+mod binding;
 
 // Deliberately neither Debug nor Serialize: authority stays in native code.
 pub(crate) struct Prepared {
