@@ -271,6 +271,66 @@ version string. Editor socket/named-pipe transport,
 headless configuration, credentials and real provider behavior remain outside the
 current explicitly configured TCP fixture acceptance.
 
+## Owned-work wire pin (disabled)
+
+[`ahp_protocol.py`](../../src/bat_agent_connector/ahp_protocol.py) adds two offline
+decoders for the same fixed commits above: upstream **1.0.0** and VS Code **0.10.0**.
+The selected wire version is exact; a distribution version or `serverInfo` cannot
+select a decoder, and unknown versions refuse. Canonical `ahp-session:` identities
+remain distinct from the stable distribution's provider-scheme identities.
+The module has no production caller, transport, registered action or enable switch.
+`require_owned_write()` always refuses. The existing observer still permits only
+`initialize`, `reconnect`, `listSessions` and `subscribe`; its bounds and capability
+projection are unchanged. All manual and foreign sessions remain read-only.
+
+| Pinned subset | Wire shape and refusal boundary |
+| --- | --- |
+| Create | `createSession` and `createChat` are RPC requests with numeric IDs and `null` success results. A null result proves neither native identity nor completion. |
+| Turn | `dispatchAction` is a notification with `channel`, `clientSeq`, and `chat/turnStarted` (`turnId`, `startedAt`, `message.text`, `message.origin.kind`). Client messages must have origin `user`. |
+| Cancel | `chat/turnCancelled` is dispatched as a notification with `turnId` and producer-supplied `duration`; no `cancelTurn` RPC is introduced. |
+| Echo / terminal events | Server `action` carries `channel`, `serverSeq`, `action`, optional `origin` (`clientId`, `clientSeq`) and `rejectionReason`. `chat/turnComplete`, `chat/turnCancelled`, and `chat/error` carry producer duration. No timestamp subtraction or success inference occurs. |
+| Readback | `fetchTurns` accepts a chat channel and optional cursor and returns `{}`; the host loads history through `chat/turnsLoaded`. This module does not decode history or a Result envelope. |
+| Busy | `SessionStatus` is a bitset: Idle=1, Error=2, InProgress=8, InputNeeded=24, IsRead=32, IsArchived=64. InputNeeded is busy; metadata bits do not erase Idle. Busy wins if both Idle and InProgress are present. |
+| Refusal | Standard JSON-RPC and pinned AHP errors retain their original code/message/data; version refusal requires `supportedVersions`, authentication refusal requires `resources`. No authentication, permission request or retry follows. Initialization error envelopes can be decoded, but successful initialization remains outside this subset. |
+
+These fields come from the two pins' `common/messages.ts`, `common/commands.ts`,
+`common/actions.ts`, `common/errors.ts`, `channels-session/{commands,state}.ts`, and
+`channels-chat/{commands,actions,state}.ts`. The upstream paths begin with `types/`;
+the VS Code paths begin with `src/vs/platform/agentHost/common/state/protocol/`.
+See [notification routing](https://github.com/microsoft/agent-host-protocol/blob/5f16d81bb7045b66d7bc768d244feab75002d943/types/common/messages.ts),
+[turn actions](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/channels-chat/actions.ts),
+and [busy bits](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/channels-session/state.ts).
+The conservative subset supports text messages and empty active-client tools;
+attachments, model/agent selections, contributed tools, customizations, forks and
+side chats refuse. Provider config and metadata objects remain opaque. Shape decoding
+does not validate provider policy, correlate replies to durable operations, establish
+creation evidence, or replace controller admission and the final frame guard.
+
+[`pins.json`](../../tests/fixtures/ahp-owned/pins.json) records the upstream repository,
+commit and paths. Every row in [`protocol-shapes.jsonl`](../../tests/fixtures/ahp-owned/protocol-shapes.jsonl)
+is labeled **synthetic** and includes its source repository, commit and file path.
+These are hand-written offline protocol examples, never de-identified real traces.
+Golden byte comparisons use LF on every platform. They prove no installed host or
+provider behavior; `tested_host_versions` stays empty.
+
+Two current blockers keep owned writes unavailable. First,
+[`host_git.py`](../../src/bat_agent_connector/host_git.py) disables local Git. A
+local-only profile cannot create owned work unless it has an explicitly bound SSH
+Git route to the same host; an editor endpoint does not establish that binding.
+Second, neither pin provides an atomic conditional-turn RPC. Observing Idle and the
+existence of `TurnInProgress` (-32004) do not prove the host refuses a concurrent turn.
+A write cell stays off until a real trace proves that profile's busy refusal.
+There is no invented result, busy-query or conditional-turn RPC. This is an E07
+contract increment, not R3/E11 real-device acceptance or completion of A12/A21/A22/A26.
+
+繁體中文：本增量只加入兩個固定版本的離線 wire decoder，未接上正式執行路徑，
+所有自有工作寫入仍停用；既有 observer 的四個唯讀方法、限制及人工 session 保護不變。
+建立成功回覆是 `null`；turn／cancel 是 notification，不可當成有 result 的 RPC。
+busy 必須按 bit 判讀，InputNeeded 仍算忙碌；idle 或回覆成功都不是完成或寫入許可。
+fixtures 每筆標示 synthetic 並附公開來源，沒有真實 editor trace，也不代表 R3／E11 驗收。
+目前本機 Git 停用，local-only profile 除非明確綁定同主機 SSH Git 路線，否則不能建立自有工作。
+pin 沒有原子條件式 turn；在真實 trace 證明該 profile 的 busy refusal 前，寫入能力保持關閉。
+
 ## Remaining M5 work
 
 W22-B must use fixed checkpoint continuation into newly created managed resources
