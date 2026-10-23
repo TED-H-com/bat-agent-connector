@@ -17,9 +17,15 @@ PREFIX = "/bat-agent-connector/"
 REPO = "https://github.com/TED-H-com/bat-agent-connector/blob/main/"
 LOCKFILE = "desktop/package-lock.json"
 LOCKFILE_DIGEST = "without_root_version"
-# capture_site.mjs requires these paths to equal the pinned commit and reads its tooling from the checkout.
-# Hash frontend sources at the merged pin, so later documentation commits can check the gallery.
-PINNED_PATHS = ("desktop/src/", "desktop/tests/demo/", "src/bat_agent_connector/dashboard/")
+# This checker is authoritative for pinned capture inputs; only tooling comes from the checkout.
+# The recorded capture script's early guard covers a subset until the next recapture.
+PINNED_PATHS = (
+    "desktop/src/",
+    "desktop/tests/demo/",
+    "desktop/tests/conversation-fixture.ts",
+    "src/bat_agent_connector/dashboard/",
+)
+WORKING_TREE_INPUTS = ("scripts/capture_site.mjs", LOCKFILE)
 
 
 def lockfile_digest(data: bytes | str) -> str:
@@ -190,6 +196,43 @@ def screenshot_errors(manifest, directory):
     return errors
 
 
+def capture_source_errors(manifest, root: Path, commit: str) -> list[str]:
+    """Verify capture sources without depending on the caller's checkout."""
+    errors: list[str] = []
+    git = shutil.which("git")
+    if git is None:
+        raise SystemExit("Git is required to check screenshot capture sources.")
+
+    def pinned(spec, text=False):
+        # Resolved executable and fixed read-only verbs.
+        result = subprocess.run([git, "-C", str(root), *spec], capture_output=True, text=text)  # noqa: S603
+        return result.stdout if result.returncode == 0 else None
+
+    if pinned(["cat-file", "-e", f"{commit}^{{commit}}"]) is None:
+        errors.append(f"Pinned frontend commit is unavailable; fetch {commit} before checking capture sources.")
+    else:
+        if (pinned(["rev-parse", f"{commit}:desktop/src"], text=True) or "").strip() != manifest.get("frontend_source_tree"):
+            errors.append("Screenshot manifest tree does not match its pinned commit.")
+        for entry in manifest["source_files"]:
+            file = entry["file"]
+            if any(file.startswith(path) if path.endswith("/") else file == path for path in PINNED_PATHS):
+                data = pinned(["cat-file", "blob", f"{commit}:{entry['file']}"])
+            elif file in WORKING_TREE_INPUTS:
+                path = root / file
+                data = path.read_bytes() if path.is_file() else None
+            else:
+                errors.append(f"Capture source is neither pinned nor an allowed working-tree input: {file}")
+                continue
+            try:
+                expected_entry = source_entry(entry["file"], data) if data is not None else None
+            except ValueError as exc:
+                errors.append(f"Capture source is invalid ({entry['file']}): {exc}")
+                continue
+            if expected_entry != entry:
+                errors.append(f"Capture source does not match its manifest: {entry['file']}")
+    return errors
+
+
 def main() -> None:
     errors: list[str] = []
     links = 0
@@ -224,37 +267,10 @@ def main() -> None:
             check_link(path, value, errors)
             links += 1
     manifest = read_screenshot_manifest(SITE / "images/manifest.json")
-    if manifest.get("frontend_source_commit") != "14c62830240148b14a4d28a9c428f7f8b5ba8bf3":
-        errors.append("Public screenshots must pin merged release source at 14c62830.")
+    if manifest.get("frontend_source_commit") != "437ee6a7143a82e32eae1d6a008203b2df072aaf":
+        errors.append("Public screenshots must pin published preview source at 437ee6a7.")
     errors.extend(screenshot_errors(manifest, SITE / "images"))
-    git = shutil.which("git")
-    if git is None:
-        raise SystemExit("Git is required to check screenshot capture sources.")
-
-    def pinned(spec, text=False):
-        # Resolved executable and fixed read-only verbs.
-        result = subprocess.run([git, "-C", str(ROOT), *spec], capture_output=True, text=text)  # noqa: S603
-        return result.stdout if result.returncode == 0 else None
-
-    commit = manifest.get("frontend_source_commit", "")
-    if pinned(["cat-file", "-e", f"{commit}^{{commit}}"]) is None:
-        errors.append(f"Pinned frontend commit is unavailable; fetch {commit} before checking capture sources.")
-    else:
-        if (pinned(["rev-parse", f"{commit}:desktop/src"], text=True) or "").strip() != manifest.get("frontend_source_tree"):
-            errors.append("Screenshot manifest tree does not match its pinned commit.")
-        for entry in manifest["source_files"]:
-            if entry["file"].startswith(PINNED_PATHS):
-                data = pinned(["cat-file", "blob", f"{commit}:{entry['file']}"])
-            else:
-                path = ROOT / entry["file"]
-                data = path.read_bytes() if path.is_file() else None
-            try:
-                expected_entry = source_entry(entry["file"], data) if data is not None else None
-            except ValueError as exc:
-                errors.append(f"Capture source is invalid ({entry['file']}): {exc}")
-                continue
-            if expected_entry != entry:
-                errors.append(f"Capture source does not match its manifest: {entry['file']}")
+    errors.extend(capture_source_errors(manifest, ROOT, manifest.get("frontend_source_commit", "")))
     if errors:
         raise SystemExit("\n".join(errors))
     print(f"Checked {links} links and static assets; no missing local targets, fragments or duplicate IDs.")

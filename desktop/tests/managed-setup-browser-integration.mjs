@@ -298,9 +298,17 @@ assert.equal(executableBytes.length, metadata.size);
 const executable = join(temporary, process.platform === "win32" ? "runtime.exe" : "runtime");
 await writeFile(executable, executableBytes, {mode: 0o700});
 await chmod(executable, 0o700);
-function runtime(command) {
+const stoppedGolden = JSON.parse(await readFile(new URL('../../tests/fixtures/managed-stop-hold.json', import.meta.url), 'utf8'));
+function runtime(command, {stopped} = {}) {
   const result = spawnSync(executable, [command, "--data-dir", directory], {encoding: "utf8", timeout: 60000,
     env: {...process.env, PATH: "", PYTHONPATH: "", PYTHONHOME: ""}});
+  if (stopped) {
+    assert.equal(result.status, stoppedGolden.exit);
+    const reply = JSON.parse(result.stdout);
+    assert.deepEqual(reply, {...stoppedGolden.reply, lifecycle: {...stoppedGolden.reply.lifecycle,
+      requested_at: stopped.requested_at, stopped_at: stopped.stopped_at}});
+    return reply;
+  }
   let failure = {};
   if (result.status !== 0) {try {failure = JSON.parse(result.stdout);} catch { /* no unsafe output */ }}
   assert.equal(result.status, 0, `packaged managed ${command} failed (${result.error?.name || result.status}; ${failure.error || ""}; ${failure.message || ""})`);
@@ -406,9 +414,12 @@ try {
   await expect.poll(async () => (await call("GET", operationPath)).body.operation.status, {timeout: 20000}).toBe("succeeded");
   const finalRevision = (await call("GET", operationPath)).body.operation.result.revision;
   await context.close();
-  runtime("stop"); active = false;
-  active = true;
-  const second = runtime("ensure");
+  const stopped = runtime("stop").lifecycle;
+  // Keep cleanup armed: a refused command or partial resume must never leave a
+  // service or its stop hold behind when this owned directory is removed.
+  runtime("ensure", {stopped});
+  runtime("browser", {stopped});
+  const second = runtime("resume");
   assert.equal(second.server_id, first.server_id); assert.equal(second.principal_id, first.principal_id);
   const reopened = await browser.newContext({locale: "en-US"});
   const secondPage = await reopened.newPage();

@@ -23,11 +23,17 @@ try {
     const copy = STRINGS[locale], events = await httpEventDelivery(page), posts = [];
     page.on('request', request => {if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/v1/')) posts.push(request);});
     await page.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
+    const firstEventPage = page.waitForResponse(response => response.ok()
+      && new URL(response.url()).pathname === '/api/v1/events');
     await page.goto(origin + '/dashboard/#/session/h1/' + fixture.session_id);
     const box = page.locator('[data-capture]');
     await box.locator('summary').click();
     await box.locator('input').nth(1).fill('notes.txt');
     const preview = box.getByRole('button', {name: copy.capture_preview, exact: true});
+    // Observe a successful page before holding the next poll. That next request
+    // proves the reader applied the page and settled its listeners, so pageshow
+    // exercises a connected view rather than the initial connection check.
+    await firstEventPage;
     await events.pause();
     const draft = await box.locator('input').evaluateAll(nodes => nodes.map(node => node.value));
     const stored = () => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.capture.')));

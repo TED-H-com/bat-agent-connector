@@ -730,6 +730,92 @@ impl Bridge {
         Ok(())
     }
 
+    pub fn managed_hold(&self, expected_generation: Option<u64>) {
+        let mut state = self.state.lock().unwrap();
+        // Both-role external connections retain their binding and credential.
+        if state.managed
+            && expected_generation.is_none_or(|generation| generation == state.generation)
+        {
+            state.active = None;
+            state.environment = None;
+            state.config = Err("SERVICE_STOPPED".into());
+            state.recovery_enabled = false;
+            state.recovery_error = None;
+            state.generation += 1;
+        }
+    }
+
+    pub async fn managed_lifecycle(
+        &self,
+        managed: Arc<crate::managed::Managed>,
+        start: bool,
+    ) -> Result<crate::managed::Status, String> {
+        let _guard = self
+            .connecting
+            .try_lock()
+            .map_err(|_| "MANAGED_SERVICE_BUSY")?;
+        let owner = managed.clone();
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            let _serial = owner
+                .serial
+                .try_lock()
+                .map_err(|_| "MANAGED_SERVICE_BUSY")?;
+            if start {
+                owner.start().map(Some)
+            } else {
+                owner.stop().map(|_| None)
+            }
+        })
+        .await
+        .map_err(|_| "MANAGED_SERVICE_UNAVAILABLE")?;
+        let launch = result?;
+        if let Some(launch) = launch {
+            let (local, generation, expected) = {
+                let state = self.state.lock().unwrap();
+                (
+                    state.managed,
+                    state.generation,
+                    state.environment_identity.clone(),
+                )
+            };
+            if local {
+                if expected
+                    .as_ref()
+                    .is_some_and(|identity| identity != &launch.identity())
+                {
+                    return Err("MANAGED_RECOVERY_IDENTITY_CHANGED".into());
+                }
+                let config = normalize(launch.config())?;
+                let (_, identity) = self
+                    .verify(&config, &launch.token, Some(&launch.identity()), generation)
+                    .await?;
+                let mut state = self.state.lock().unwrap();
+                if state.generation != generation {
+                    return Err("MANAGED_RECOVERY_CANCELLED".into());
+                }
+                state.config = Ok(config.clone());
+                state.environment = Some(launch.token.clone());
+                state.environment_identity = Some(identity.clone());
+                state.active = Some(Active {
+                    config: config.clone(),
+                    record: Record {
+                        version: 1,
+                        binding: binding(&config),
+                        identity,
+                        token: launch.token,
+                    },
+                });
+                state.recovery_enabled = true;
+                state.recovery_error = None;
+                state.generation += 1;
+                state.managed_rebind += 1;
+            }
+        } else {
+            self.managed_hold(None);
+        }
+        Ok(managed.status())
+    }
+
     pub fn managed_failure(config_dir: &Path, error: String) -> Self {
         let mut bridge = Self::new(Err(error), Zeroizing::new(String::new()));
         bridge.configuration_file = Some(config_dir.join("central.json"));
@@ -793,6 +879,7 @@ impl Bridge {
                 .config
                 .as_ref()
                 .err()
+                .filter(|error| !crate::managed::held(error))
                 .cloned()
                 .or(if env { None } else { store_error }),
             credential_available: env || saved,
@@ -4783,6 +4870,32 @@ mod tests {
         );
         assert!(!bridge.status().connected);
         handle.join().unwrap();
+    }
+    #[test]
+    fn stale_recovery_hold_cannot_clear_a_new_binding() {
+        let bridge = recovery_bridge();
+        bridge.state.lock().unwrap().generation = 1;
+        let before = serde_json::to_value(bridge.status()).unwrap();
+        bridge.managed_hold(Some(0));
+        assert_eq!(serde_json::to_value(bridge.status()).unwrap(), before);
+        assert!(bridge.state.lock().unwrap().recovery_enabled);
+    }
+    #[test]
+    fn holding_the_local_service_preserves_both_role_external_binding() {
+        let external = Bridge::new(
+            Ok(config("http://127.0.0.1:9/")),
+            Zeroizing::new("fixture-token".into()),
+        );
+        let before = serde_json::to_value(external.status()).unwrap();
+        external.managed_hold(None);
+        assert_eq!(serde_json::to_value(external.status()).unwrap(), before);
+        let local = recovery_bridge();
+        local.managed_hold(None);
+        let status = local.status();
+        assert!(!status.connected);
+        assert!(status.error.is_none());
+        assert!(status.managed_recovery.is_none());
+        assert!(!local.state.lock().unwrap().recovery_enabled);
     }
     #[tokio::test]
     async fn external_mode_and_explicit_disconnect_never_probe_or_rebind() {

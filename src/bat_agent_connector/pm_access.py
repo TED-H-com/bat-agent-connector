@@ -109,6 +109,10 @@ def visible(db, principal, operation):
 
 
 def _visible(db, principal, operation):
+    if operation.get("action") in {"connection.reference.apply", "setup.connection.apply"}:
+        from .connection_handoff import visible as connection_visible
+        if not connection_visible(db, principal, operation):
+            return False
     from .pm_source_lineage import visible as source_visible
     if not source_visible(db, principal, "operation", operation.get("operation_id")):
         return False

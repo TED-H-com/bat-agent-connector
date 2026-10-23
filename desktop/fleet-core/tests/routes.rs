@@ -14,6 +14,18 @@ fn generation() -> ProbeGeneration {
         generation: 1,
     }
 }
+#[test]
+fn route_requirement_wire_codes_reject_non_strings() {
+    for value in [
+        json!({"DIRECT_PEER_UNKNOWN": null}),
+        json!(["DIRECT_PEER_UNKNOWN"]),
+        Value::Null,
+        json!(false),
+        json!("UNKNOWN_REQUIREMENT"),
+    ] {
+        assert!(serde_json::from_value::<RouteRequirement>(value).is_err());
+    }
+}
 fn routes(kinds: &[&str]) -> Routes {
     let mut doc: Value = serde_json::from_slice(include_bytes!("fixtures/inventory.json")).unwrap();
     doc["hosts"][0]["routes"] =
@@ -31,6 +43,7 @@ fn routes(kinds: &[&str]) -> Routes {
 }
 struct Mock {
     direct: bool,
+    peer: Option<TailscalePeer>,
     direct_tcp: bool,
     lan: bool,
     calls: Mutex<Vec<&'static str>>,
@@ -40,6 +53,7 @@ impl Mock {
     fn new(direct: bool, direct_tcp: bool, lan: bool) -> Self {
         Self {
             direct,
+            peer: None,
             direct_tcp,
             lan,
             calls: Mutex::new(Vec::new()),
@@ -48,6 +62,18 @@ impl Mock {
     }
 }
 impl RouteProbe for Mock {
+    fn tailscale_peer<'a>(&'a self, ip: &'a str, deadline: Instant) -> PeerFuture<'a> {
+        Box::pin(async move {
+            if let Some(peer) = self.peer {
+                self.calls.lock().unwrap().push("tailscale");
+                peer
+            } else if self.tailscale_direct(ip, deadline).await {
+                TailscalePeer::Direct
+            } else {
+                TailscalePeer::Unknown
+            }
+        })
+    }
     fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
         Box::pin(async move {
             self.calls.lock().unwrap().push("tailscale");
@@ -179,6 +205,74 @@ async fn direct_only_and_no_cf_have_no_legacy_unproven_default() {
             .kind(),
         RouteKind::Lan
     );
+}
+#[tokio::test]
+async fn direct_requirement_explains_unknown_evidence_without_extra_attempts() {
+    let routes = routes(&["direct"]);
+    let policy = HostPolicy::new(&routes, generation());
+    let probe = Mock::new(false, true, true);
+    let failure = SelectionRequest::new(&routes, &policy, generation(), 1000)
+        .unwrap()
+        .run(&probe, Duration::from_secs(1))
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(*probe.calls.lock().unwrap(), vec!["tailscale"]);
+    assert_eq!(
+        serde_json::to_value(failure).unwrap(),
+        json!({
+            "code": "ROUTE_UNAVAILABLE", "route_requirement": "DIRECT_PEER_UNKNOWN"
+        })
+    );
+}
+#[tokio::test]
+async fn route_requirements_keep_missing_idle_unknown_tcp_and_exhaustion_distinct() {
+    for (peer, kinds, expected, code, calls) in [
+        (
+            TailscalePeer::Unknown,
+            vec!["direct"],
+            "DIRECT_PEER_UNKNOWN",
+            "ROUTE_UNAVAILABLE",
+            vec!["tailscale"],
+        ),
+        (
+            TailscalePeer::Idle,
+            vec!["direct"],
+            "DIRECT_NOT_CONFIRMED",
+            "TAILSCALE_WAKING",
+            vec!["tailscale"],
+        ),
+        (
+            TailscalePeer::Direct,
+            vec!["direct"],
+            "DIRECT_TCP_UNREACHABLE",
+            "ROUTE_UNAVAILABLE",
+            vec!["tailscale", "direct_tcp"],
+        ),
+        (
+            TailscalePeer::Unknown,
+            vec!["direct", "lan"],
+            "CONFIGURED_ROUTES_EXHAUSTED",
+            "ROUTE_UNAVAILABLE",
+            vec!["tailscale", "lan_tcp"],
+        ),
+    ] {
+        let routes = routes(&kinds);
+        let policy = HostPolicy::new(&routes, generation());
+        let mut probe = Mock::new(false, false, false);
+        probe.peer = Some(peer);
+        let failure = SelectionRequest::new(&routes, &policy, generation(), 1000)
+            .unwrap()
+            .run(&probe, Duration::from_secs(1))
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(failure).unwrap(),
+            json!({"code":code,"route_requirement":expected})
+        );
+        assert_eq!(*probe.calls.lock().unwrap(), calls);
+    }
 }
 async fn fail(
     routes: &Routes,
@@ -791,7 +885,10 @@ async fn generation_change_cancels_owned_wake_and_rejects_stale_selection_intent
     assert!(!policy.waking());
     assert_eq!(probe.active.load(std::sync::atomic::Ordering::SeqCst), 0);
     assert!(matches!(
-        stale.run(probe.as_ref(), Duration::from_secs(2)).await,
+        stale
+            .run(probe.as_ref(), Duration::from_secs(2))
+            .await
+            .map_err(|failure| failure.code),
         Err("ROUTE_UNAVAILABLE")
     ));
     assert!(select(

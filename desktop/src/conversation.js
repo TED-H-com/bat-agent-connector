@@ -124,9 +124,14 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
       if (alive()) indicator();
     }
   };
-  const onScroll = () => {
+  const observePosition = () => {
+    // A hidden perspective has no scroll geometry; zero is not reader movement.
+    if (!viewport.clientHeight) return;
     if (initialized && !resizing && viewport.scrollTop !== scrollPosition) pinned = atBottom();
     scrollPosition = viewport.scrollTop;
+  };
+  const onScroll = () => {
+    observePosition();
     indicator();
   };
   viewport.addEventListener("scroll", onScroll, {passive: true});
@@ -170,6 +175,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     : more ? t("message_window_latest", {count}) : t("message_window_count", {count});
   const update = (messages, state = null) => {
     if (!alive()) return;
+    // Scroll events arrive asynchronously. Capture a reader's movement before
+    // changing message geometry, even if its scroll event is still queued.
+    observePosition();
     last = {messages, state};
     const top = viewport.getBoundingClientRect().top;
     const anchor = [...rows.entries()].find(([, row]) => row.node.getBoundingClientRect().bottom > top);

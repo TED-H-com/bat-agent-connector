@@ -69,7 +69,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,1440])for(const na
         if(command==='desktop_update')return {current_version:'0.1.1',available:false,phase:'idle',candidate:null,
           code:'UPDATE_SIGNING_NOT_CONFIGURED',installation:null};
         if(command==='managed_control')return {mode:'managed',ready:true,background:true,runtime_version:runtime.runtime_version,
-          server_id:runtime.server_id,principal_id:runtime.principal_id,error:null,login_enabled:false,
+          server_id:runtime.server_id,principal_id:runtime.principal_id,error:null,login_enabled:false,lifecycle:{state:'running',requested_at:null,stopped_at:null},
           bundled_runtime:runtime.bundled_runtime,running_runtime:runtime.running_runtime,runtime_difference:runtime.runtime_difference};
         if(command==='fleet_availability')return {configured:false,platform_supported:false};
         return invoke(command,args);

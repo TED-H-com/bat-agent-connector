@@ -595,6 +595,172 @@ async fn uncertain_stop_is_not_resent_and_is_cleaned_only_after_positive_death()
     assert_eq!(r.shutdown(1400).await.unwrap().lifecycle, "stopped");
     assert_eq!(s.lock().unwrap().stops.len(), attempts);
 }
+
+async fn unresolved_stop_fixture(deselect: bool) -> serde_json::Value {
+    let (f, s, mut r) = fixture();
+    advance(&mut r, 1000).await;
+    let dir = f.0.join("BetterAgentTerminal");
+    let receipt_path = dir.join("fleet-tunnel-owners/node-1.json");
+    let receipt = std::fs::read(&receipt_path).unwrap();
+    let monitor = std::fs::read(dir.join("fleet-monitor.json")).unwrap();
+    let launches = s.lock().unwrap().launches.clone();
+    s.lock().unwrap().unknown_stop = true;
+    if deselect {
+        let path = dir.join("fleet-client.json");
+        let mut selection: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        selection["connections"] = json!(["connector"]);
+        std::fs::write(path, serde_json::to_vec(&selection).unwrap()).unwrap();
+        assert_eq!(r.tick(1200).await.unwrap().lifecycle, "selection_pending");
+    } else {
+        assert_eq!(
+            r.shutdown(1200).await.unwrap().lifecycle,
+            "stop_unconfirmed"
+        );
+    }
+    let stops = s.lock().unwrap().stops.clone();
+    assert!(!stops.is_empty());
+    let stop_receipt_path = dir.join("fleet-tunnel-stop-intents/node-1.json");
+    let stop_receipt = std::fs::read(&stop_receipt_path).unwrap();
+    let bytes = std::fs::read(dir.join("fleet-desktop-status.json")).unwrap();
+    let now = if deselect { 1300 } else { 62001 };
+    let parsed = Status::parse(&bytes, &f.load(), r.epoch(), now).unwrap();
+    let disk_reread = Status::parse(
+        &std::fs::read(dir.join("fleet-desktop-status.json")).unwrap(),
+        &f.load(),
+        r.epoch(),
+        now,
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&parsed).unwrap(),
+        serde_json::to_value(&disk_reread).unwrap()
+    );
+    let reread = Status::parse(
+        &serde_json::to_vec(&parsed).unwrap(),
+        &f.load(),
+        r.epoch(),
+        now,
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&parsed).unwrap(),
+        serde_json::to_value(&reread).unwrap()
+    );
+    if deselect {
+        r.tick(1300).await.unwrap();
+    } else {
+        r.shutdown(now + 1).await.unwrap();
+    }
+    assert_eq!(s.lock().unwrap().launches, launches);
+    assert_eq!(s.lock().unwrap().stops, stops);
+    assert_eq!(std::fs::read(receipt_path).unwrap(), receipt);
+    assert_eq!(std::fs::read(stop_receipt_path).unwrap(), stop_receipt);
+    assert_eq!(
+        std::fs::read(dir.join("fleet-monitor.json")).unwrap(),
+        monitor
+    );
+    let selection_bytes = std::fs::read(dir.join("fleet-client.json")).unwrap();
+    assert_eq!(
+        parsed.applied_selection_revision != bat_fleet_core::digest(&selection_bytes),
+        deselect
+    );
+    let selection: serde_json::Value = serde_json::from_slice(&selection_bytes).unwrap();
+    let mut snapshot = serde_json::to_value(parsed).unwrap();
+    // Only nondeterministic/native binding metadata is de-identified. Rows are
+    // the actual file producer -> parse -> re-read result, never invented states.
+    snapshot["monitor_epoch"] = json!("a".repeat(32));
+    snapshot["configuration_binding"] = json!("c".repeat(64));
+    snapshot["applied_selection_revision"] = json!("d".repeat(64));
+    json!({"now":now, "snapshot":snapshot, "connections":selection["connections"], "selection_revision":
+        if deselect { "e".repeat(64) } else { "d".repeat(64) }})
+}
+#[tokio::test]
+async fn unresolved_stop_survives_age() {
+    assert_unresolved_stop(false).await;
+}
+#[tokio::test]
+async fn unresolved_stop_survives_deselection() {
+    assert_unresolved_stop(true).await;
+}
+async fn assert_unresolved_stop(deselect: bool) {
+    {
+        let case = unresolved_stop_fixture(deselect).await;
+        let row = case["snapshot"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["name"] == "node-1")
+            .unwrap();
+        assert_eq!(row["code"], "STOP_UNCONFIRMED", "deselect={deselect}");
+        assert_eq!(row["level"], "down");
+        assert_eq!(row["selected"], !deselect);
+        assert_eq!(row["layers"]["tunnel"], false);
+        if !deselect {
+            assert_eq!(row["stale"], true);
+        }
+    }
+}
+#[tokio::test]
+async fn unresolved_stop_rows_match_native_fixture() {
+    let expected: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/fleet-stop.json")).unwrap();
+    assert_eq!(
+        json!({"aged":unresolved_stop_fixture(false).await, "deselected":unresolved_stop_fixture(true).await}),
+        expected
+    );
+}
+#[tokio::test]
+async fn deselected_stop_evidence_clears_only_after_positive_death() {
+    let (f, s, mut r) = fixture();
+    advance(&mut r, 1000).await;
+    s.lock().unwrap().unknown_stop = true;
+    let dir = f.0.join("BetterAgentTerminal");
+    let receipt = dir.join("fleet-tunnel-owners/node-1.json");
+    let owned = TunnelRecord::parse(&std::fs::read(&receipt).unwrap(), None).unwrap();
+    let selection = dir.join("fleet-client.json");
+    let mut doc: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&selection).unwrap()).unwrap();
+    doc["connections"] = json!(["connector"]);
+    std::fs::write(selection, serde_json::to_vec(&doc).unwrap()).unwrap();
+    let pending = r.tick(1200).await.unwrap();
+    assert_eq!(
+        pending
+            .entries
+            .iter()
+            .find(|e| e.name == "node-1")
+            .unwrap()
+            .code
+            .as_deref(),
+        Some("STOP_UNCONFIRMED")
+    );
+    let stops = s.lock().unwrap().stops.clone();
+    let launches = s.lock().unwrap().launches.clone();
+    s.lock().unwrap().processes.remove(&owned.process.pid);
+    let reconciled = r.tick(1300).await.unwrap();
+    let row = reconciled
+        .entries
+        .iter()
+        .find(|e| e.name == "node-1")
+        .unwrap();
+    assert_eq!(row.level, "off");
+    assert_eq!(row.code, None);
+    assert!(!receipt.exists());
+    assert!(!dir.join("fleet-tunnel-stop-intents/node-1.json").exists());
+    assert_eq!(s.lock().unwrap().stops, stops);
+    assert_eq!(s.lock().unwrap().launches, launches);
+}
+#[tokio::test]
+#[ignore = "explicit fixture regeneration only"]
+async fn generate_unresolved_stop_fixture() {
+    println!(
+        "FLEET_STOP={}",
+        json!({
+            "aged": unresolved_stop_fixture(false).await,
+            "deselected": unresolved_stop_fixture(true).await,
+        })
+    );
+}
 #[tokio::test]
 async fn unrelated_quit_and_replaced_monitor_record_are_preserved() {
     let (f, s, mut r) = fixture();
@@ -1579,4 +1745,405 @@ async fn unknown_ownership_keeps_route_age_despite_fresh_probe_and_snapshot_read
         "1970-01-01T00:05:02Z"
     );
     runtime.shutdown(303_000).await.unwrap();
+}
+
+use std::sync::atomic::{AtomicBool, Ordering};
+struct RequirementRoutes {
+    peer: bat_fleet_core::route::TailscalePeer,
+    calls: Mutex<Vec<String>>,
+    hold: AtomicBool,
+    healthy: AtomicBool,
+}
+impl RouteProbe for RequirementRoutes {
+    fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
+        Box::pin(async { false })
+    }
+    fn tailscale_peer<'a>(
+        &'a self,
+        ip: &'a str,
+        _: Instant,
+    ) -> bat_fleet_core::route::PeerFuture<'a> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(ip.into());
+            if ip == "100.64.0.1" && self.hold.load(Ordering::Relaxed) {
+                return std::future::pending().await;
+            }
+            if ip == "100.64.0.1" && self.healthy.load(Ordering::Relaxed) {
+                bat_fleet_core::route::TailscalePeer::Direct
+            } else {
+                self.peer
+            }
+        })
+    }
+    fn tcp<'a>(
+        &'a self,
+        endpoint: &'a bat_fleet_core::inventory::Endpoint,
+        _: Instant,
+    ) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("tcp:{}", endpoint.address));
+            endpoint.address == "100.64.0.1" && self.healthy.load(Ordering::Relaxed)
+        })
+    }
+    fn tailscale_wake<'a>(&'a self, ip: &'a str, _: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(format!("wake:{ip}"));
+            std::future::pending().await
+        })
+    }
+}
+struct RequirementFixture {
+    files: Fixture,
+    state: Shared,
+    runtime: Supervisor<FakeEffects, FakeProbes, RequirementRoutes>,
+    probe: Arc<RequirementRoutes>,
+    expected: bat_fleet_core::route::RouteRequirement,
+}
+fn requirement_fixture(
+    peer: bat_fleet_core::route::TailscalePeer,
+    exhausted: bool,
+) -> RequirementFixture {
+    use bat_fleet_core::route::{RouteRequirement, TailscalePeer};
+    let probe = Arc::new(RequirementRoutes {
+        peer,
+        calls: Mutex::new(Vec::new()),
+        hold: AtomicBool::new(false),
+        healthy: AtomicBool::new(false),
+    });
+    let (files, state, runtime) = fixture_with_routes(probe.clone());
+    let path = files.0.join("kit/fleet-inventory.json");
+    let mut inventory: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    inventory["hosts"][0]["routes"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|route| route["kind"] == "direct");
+    inventory["hosts"][0]["provision_route"] = "direct".into();
+    if exhausted {
+        inventory["hosts"][0]["routes"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"kind":"lan","alias":"fixture-lan","probe":"192.0.2.10:22"}));
+        let ssh = files.0.join("kit/ssh-config");
+        let mut text = std::fs::read_to_string(&ssh).unwrap();
+        text.push_str("\nHost fixture-lan\n HostName example.invalid\n");
+        std::fs::write(ssh, text).unwrap();
+    }
+    std::fs::write(path, serde_json::to_vec(&inventory).unwrap()).unwrap();
+    let expected = if exhausted {
+        RouteRequirement::ConfiguredRoutesExhausted
+    } else {
+        match peer {
+            TailscalePeer::Unknown => RouteRequirement::DirectPeerUnknown,
+            TailscalePeer::Idle => RouteRequirement::DirectNotConfirmed,
+            TailscalePeer::Direct => RouteRequirement::DirectTcpUnreachable,
+        }
+    };
+    RequirementFixture {
+        files,
+        state,
+        runtime,
+        probe,
+        expected,
+    }
+}
+fn requirement_row(status: &Status) -> &bat_fleet_core::supervisor_status::Entry {
+    status
+        .entries
+        .iter()
+        .find(|row| row.name == "node-1")
+        .unwrap()
+}
+impl RequirementFixture {
+    async fn settle(&mut self, now: u64) {
+        let mut saw_failure = false;
+        for _ in 0..20 {
+            let published = self.runtime.tick(now).await.unwrap();
+            let row = requirement_row(&published);
+            if matches!(
+                row.code.as_deref(),
+                Some("ROUTE_UNAVAILABLE" | "TAILSCALE_WAKING")
+            ) && row.route_requirement.is_some()
+            {
+                assert_eq!(row.route_requirement, Some(self.expected));
+                saw_failure = true;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert!(saw_failure);
+    }
+    fn bytes(&self) -> Vec<u8> {
+        std::fs::read(
+            self.files
+                .0
+                .join("BetterAgentTerminal/fleet-desktop-status.json"),
+        )
+        .unwrap()
+    }
+    fn parse(&self, now: u64) -> Status {
+        Status::parse(&self.bytes(), &self.files.load(), self.runtime.epoch(), now).unwrap()
+    }
+    fn assert_effects(
+        &self,
+        status: &Status,
+        peer_attempts: usize,
+        tcp_attempts: usize,
+        lan_attempts: usize,
+        wakes: usize,
+    ) {
+        assert_eq!(
+            status
+                .entries
+                .iter()
+                .find(|row| row.name == "connector")
+                .unwrap()
+                .level,
+            "ready"
+        );
+        let state = self.state.lock().unwrap();
+        assert!(!state.launches.iter().any(|name| name == "node-1"));
+        assert!(state.stops.is_empty());
+        let calls = self.probe.calls.lock().unwrap();
+        for (call, expected) in [
+            ("100.64.0.1", peer_attempts),
+            ("tcp:100.64.0.1", tcp_attempts),
+            ("tcp:192.0.2.10", lan_attempts),
+            ("wake:100.64.0.1", wakes),
+        ] {
+            assert_eq!(
+                calls.iter().filter(|actual| *actual == call).count(),
+                expected,
+                "{call}"
+            );
+        }
+    }
+}
+#[tokio::test]
+async fn direct_requirement_survives_between_and_during_route_attempts() {
+    use bat_fleet_core::route::TailscalePeer;
+    for (peer, exhausted) in [
+        (TailscalePeer::Unknown, false),
+        (TailscalePeer::Direct, false),
+        (TailscalePeer::Unknown, true),
+        (TailscalePeer::Idle, false),
+    ] {
+        let mut f = requirement_fixture(peer, exhausted);
+        f.settle(1000).await;
+        let tcp = usize::from(peer == TailscalePeer::Direct);
+        let lan = usize::from(exhausted);
+        let wakes = usize::from(peer == TailscalePeer::Idle);
+        for now in [1001, 1200, 5000, 15999] {
+            let status = f.runtime.tick(now).await.unwrap();
+            assert_eq!(
+                serde_json::to_value(&status).unwrap(),
+                serde_json::to_value(f.parse(now)).unwrap()
+            );
+            let row = requirement_row(&status);
+            assert_eq!(
+                row.code.as_deref(),
+                Some(if wakes == 1 {
+                    "TAILSCALE_WAKING"
+                } else {
+                    "PROBE_PENDING"
+                })
+            );
+            assert_eq!(
+                row.route_requirement,
+                Some(f.expected),
+                "peer={peer:?}, exhausted={exhausted}, now={now}"
+            );
+            assert!(row.route.is_none());
+            assert!(row.observed_at.is_none());
+            f.assert_effects(&status, 1, tcp, lan, wakes);
+        }
+        if wakes == 0 {
+            f.probe.hold.store(true, Ordering::Relaxed);
+            f.runtime.tick(16000).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            let status = f.runtime.tick(16001).await.unwrap();
+            let row = requirement_row(&status);
+            assert_eq!(row.code.as_deref(), Some("PROBE_PENDING"));
+            assert_eq!(row.route_requirement, Some(f.expected));
+            // LAN probes run alongside the held second direct probe.
+            f.assert_effects(&status, 2, tcp, lan * 2, wakes);
+        }
+        f.runtime.shutdown(16002).await.unwrap();
+    }
+}
+#[tokio::test]
+async fn route_requirement_clears_on_success_before_a_probe_arrives() {
+    let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Unknown, false);
+    f.settle(1000).await;
+    f.probe.healthy.store(true, Ordering::Relaxed);
+    let mut saw_chosen = false;
+    for _ in 0..20 {
+        let status = f.runtime.tick(16000).await.unwrap();
+        let row = requirement_row(&status);
+        if row.route.is_some() {
+            if !saw_chosen {
+                assert!(row.observed_at.is_none());
+                assert_eq!(row.code.as_deref(), Some("PROBE_PENDING"));
+            }
+            assert!(row.route_requirement.is_none());
+            saw_chosen = true;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    assert!(saw_chosen);
+    let status = f.runtime.tick(16001).await.unwrap();
+    assert_eq!(requirement_row(&status).level, "ready");
+    assert!(requirement_row(&status).route_requirement.is_none());
+    {
+        let state = f.state.lock().unwrap();
+        assert_eq!(
+            state
+                .launches
+                .iter()
+                .filter(|name| *name == "node-1")
+                .count(),
+            1
+        );
+        assert!(state.stops.is_empty());
+    }
+    f.runtime.shutdown(16002).await.unwrap();
+}
+#[tokio::test]
+async fn route_requirement_clears_on_selection_invalidation() {
+    let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Unknown, false);
+    f.settle(1000).await;
+    f.probe.hold.store(true, Ordering::Relaxed);
+    let path = f.files.0.join("BetterAgentTerminal/fleet-client.json");
+    let original = std::fs::read(&path).unwrap();
+    let mut selection: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    selection["connections"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|v| v != "node-1");
+    std::fs::write(&path, serde_json::to_vec(&selection).unwrap()).unwrap();
+    let off = f.runtime.tick(1200).await.unwrap();
+    assert!(!requirement_row(&off).selected);
+    assert!(requirement_row(&off).route_requirement.is_none());
+    std::fs::write(path, original).unwrap();
+    let pending = f.runtime.tick(1300).await.unwrap();
+    assert_eq!(
+        requirement_row(&pending).code.as_deref(),
+        Some("PROBE_PENDING")
+    );
+    assert!(requirement_row(&pending).route_requirement.is_none());
+    assert!(f.state.lock().unwrap().stops.is_empty());
+    assert!(!f
+        .state
+        .lock()
+        .unwrap()
+        .launches
+        .iter()
+        .any(|name| name == "node-1"));
+    f.runtime.shutdown(1400).await.unwrap();
+}
+#[tokio::test]
+async fn route_requirement_clears_on_credential_generation_change() {
+    let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Unknown, false);
+    f.settle(1000).await;
+    f.probe.hold.store(true, Ordering::Relaxed);
+    f.state
+        .lock()
+        .unwrap()
+        .tokens
+        .insert("node-1".into(), "rotated-synthetic-token".into());
+    let status = f.runtime.tick(1200).await.unwrap();
+    assert_eq!(
+        requirement_row(&status).code.as_deref(),
+        Some("PROBE_PENDING")
+    );
+    assert!(requirement_row(&status).route_requirement.is_none());
+    assert!(f.state.lock().unwrap().stops.is_empty());
+    assert!(!f
+        .state
+        .lock()
+        .unwrap()
+        .launches
+        .iter()
+        .any(|name| name == "node-1"));
+    f.runtime.shutdown(1300).await.unwrap();
+}
+#[tokio::test]
+async fn route_requirement_withholds_credential_errors() {
+    let mut f = requirement_fixture(bat_fleet_core::route::TailscalePeer::Unknown, false);
+    f.settle(1000).await;
+    f.probe.hold.store(true, Ordering::Relaxed);
+    f.state
+        .lock()
+        .unwrap()
+        .missing_credentials
+        .insert("node-1".into());
+    let status = f.runtime.tick(1200).await.unwrap();
+    assert_eq!(
+        requirement_row(&status).code.as_deref(),
+        Some("CREDENTIAL_MISSING")
+    );
+    assert!(requirement_row(&status).route_requirement.is_none());
+    assert!(f.state.lock().unwrap().stops.is_empty());
+    assert!(!f
+        .state
+        .lock()
+        .unwrap()
+        .launches
+        .iter()
+        .any(|name| name == "node-1"));
+    f.runtime.shutdown(1300).await.unwrap();
+}
+fn pending_native_case(
+    mut snapshot: Status,
+    now: u64,
+    selection: &serde_json::Value,
+) -> serde_json::Value {
+    snapshot.monitor_epoch = "a".repeat(32);
+    snapshot.configuration_binding = "c".repeat(64);
+    snapshot.applied_selection_revision = "d".repeat(64);
+    json!({"snapshot":snapshot,"now":now,"connections":selection["connections"],"selection_revision":"d".repeat(64)})
+}
+async fn pending_requirement_fixture() -> serde_json::Value {
+    use bat_fleet_core::route::TailscalePeer;
+    let mut cases = json!({});
+    let anchor = 1_791_460_800_000;
+    for (name, peer, exhausted) in [
+        ("unknown", TailscalePeer::Unknown, false),
+        ("tcp", TailscalePeer::Direct, false),
+        ("exhausted", TailscalePeer::Unknown, true),
+    ] {
+        let mut f = requirement_fixture(peer, exhausted);
+        f.settle(anchor).await;
+        let now = anchor + 200;
+        f.runtime.tick(now).await.unwrap();
+        let pending = f.parse(now);
+        let aged = f.parse(now + 60_001);
+        f.assert_effects(
+            &pending,
+            1,
+            usize::from(peer == TailscalePeer::Direct),
+            usize::from(exhausted),
+            0,
+        );
+        let selection: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(f.files.0.join("BetterAgentTerminal/fleet-client.json")).unwrap(),
+        )
+        .unwrap();
+        cases[name] = json!({"pending":pending_native_case(pending,now,&selection),"aged":pending_native_case(aged,now+60_001,&selection)});
+        f.runtime.shutdown(now + 1).await.unwrap();
+    }
+    cases
+}
+#[tokio::test]
+#[ignore = "explicit fixture regeneration only"]
+async fn generate_pending_requirement_fixture() {
+    println!("FLEET_PENDING={}", pending_requirement_fixture().await);
+}
+#[tokio::test]
+async fn pending_requirement_rows_match_native_fixture() {
+    let expected: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/fleet-pending.json")).unwrap();
+    assert_eq!(pending_requirement_fixture().await, expected);
 }

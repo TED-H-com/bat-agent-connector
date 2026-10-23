@@ -2,7 +2,7 @@
 import {testScratchRoot} from './test-scratch.mjs';
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
-import {mkdtemp, rm, cp, appendFile} from "node:fs/promises";
+import {mkdtemp, rm, cp, appendFile, readFile} from "node:fs/promises";
 import {resolve, join, delimiter} from "node:path";
 import {pathToFileURL, fileURLToPath} from "node:url";
 import {chromium} from "@playwright/test";
@@ -20,16 +20,25 @@ const packageRoot = join(pythonRoot, 'bat_agent_connector');
 await cp(fileURLToPath(new URL('../../src/bat_agent_connector', import.meta.url)), packageRoot,
   {recursive: true, filter: source => !source.includes('__pycache__')});
 const python = process.env.BATC_TEST_PYTHON || resolve(process.platform === "win32" ? "../.venv/Scripts/python.exe" : "../.venv/bin/python");
-function runtime(command) {
+const stoppedGolden = JSON.parse(await readFile(new URL('../../tests/fixtures/managed-stop-hold.json', import.meta.url), 'utf8'));
+function runtime(command, {stopped} = {}) {
   const result = spawnSync(python, ["-m", "bat_agent_connector.managed_runtime", command, "--data-dir", directory],
     {encoding: "utf8", timeout: 60000, cwd: resolve(".."),
       env: {...process.env, PYTHONPATH: [pythonRoot, process.env.PYTHONPATH].filter(Boolean).join(delimiter)}});
+  if (stopped) {
+    assert.equal(result.status, stoppedGolden.exit);
+    const reply = JSON.parse(result.stdout);
+    assert.deepEqual(reply, {...stoppedGolden.reply, lifecycle: {...stoppedGolden.reply.lifecycle,
+      requested_at: stopped.requested_at, stopped_at: stopped.stopped_at}});
+    return reply;
+  }
   assert.equal(result.status, 0, `managed ${command} failed (${result.error?.name || result.status})`);
   return JSON.parse(result.stdout);
 }
 let browser, active = false;
 try {
-  const first = runtime("ensure"); active = true;
+  active = true;
+  const first = runtime("ensure");
   browser = await chromium.launch();
   const context = await browser.newContext({locale});
   const page = await context.newPage();
@@ -103,8 +112,10 @@ try {
   assert.equal(await page.locator("body.has-workspace").count(), 0);
   assert.deepEqual(errors, []);
   await context.close();
-  runtime("stop"); active = false;
-  const second = runtime("ensure"); active = true;
+  const stopped = runtime("stop").lifecycle;
+  runtime("ensure", {stopped});
+  runtime("browser", {stopped});
+  const second = runtime("resume");
   assert.equal(second.server_id, first.server_id);
   assert.equal(second.principal_id, first.principal_id);
   console.log(`Managed browser (${locale}): served/loaded identity, in-place upgrade, stale/reload, file POST, authenticated dashboard, sign-out and service restart passed`);

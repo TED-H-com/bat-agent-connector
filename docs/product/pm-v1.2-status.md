@@ -1,5 +1,14 @@
 # PM v1.2 開發狀態
 
+2026-10-22：[最新進度與發布紀錄](progress-2026-10-22.md)列出主線至 `793c6541` 的合併內容。
+已發布預覽版為 Connector 0.2.13／desktop 0.1.9（`437ee6a7`），穩定版仍為 0.2.12／0.1.8。
+#399–#403 不在預覽版內；本預覽版尚未安裝或實機驗收。下方日期紀錄保留歷史狀態。
+
+October 22: the [latest progress and publication note](progress-2026-10-22.md) records merges through
+`793c6541`. The published preview is Connector 0.2.13 / desktop 0.1.9 (`437ee6a7`);
+stable remains 0.2.12 / 0.1.8. The preview excludes #399–#403 and has not been installed or live-tested.
+The dated entries below retain their historical status.
+
 已合併發布來源 `14c62830`（截至 #314，2026 年 10 月 19 日）支援建立 Work、採用並開始已審閱計畫、對同一工作追加第二句、讀取固定成果與差異、執行已設定驗證、從同一成果發布 PR，以及選兩份既有評估帶入 PM 討論。工作設定檔、readiness 與 API／MCP 對等也已納入。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；安裝與真實 BAT／模型驗收仍須另有證據。
 
 完整範圍仍依 [PM v1.2](pm-v1.2-plan.md)、[v1.3](v1.3-closed-loop-plan.md) 與 [EC-1.1](experience-convergence.md)。Python Connector／Task Service 是唯一中央權威，Web／Tauri 共用 `desktop/src`。

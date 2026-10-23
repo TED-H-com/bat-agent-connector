@@ -1,3 +1,4 @@
+import {managedServiceControls} from "./managed-service.js";
 import {startupRoleChoice} from "./startup-role.js";
 import {boardGitHubPanel} from './board-github.js';
 import {clientActionGate, pollFailure} from "./central-service-status.js";
@@ -3880,22 +3881,8 @@ async function viewManagedSettings(main) {
   frame.show("fleet");
   let disposeFleet, disposeTailscale;
   if (nativeDesktop) {
-    const login = h("input", {type: "checkbox", disabled: true});
-    const open = h("button", {class: "secondary", onclick: async () => {
-      open.disabled = true;
-      try {guard(); await managedControl({action: "open_browser"}); guard(); status.replaceChildren();}
-      catch (error) {if (connection.generation === generation) status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}
-      finally {open.disabled = false;}
-    }}, t("managed_open_browser"));
-    local.append(h("div", {class: "actions"}, open, h("label", {}, login, " ", t("managed_start_login"))));
-    try {const state = await managedControl({action: "status"}); guard(); login.checked = !!state.login_enabled; login.disabled = false;}
-    catch (error) {status.replaceChildren(errorBox(error, {within:status}));}
-    login.addEventListener("change", async () => {
-      const wanted = login.checked; login.disabled = true;
-      try {guard(); const result = await managedControl({action: "set_login", enabled: wanted}); guard(); login.checked = !!result.login_enabled;}
-      catch (error) {if (connection.generation === generation) {login.checked = !wanted; status.replaceChildren(errorBox(error, {sourceRefresh:false, within:status}));}}
-      finally {login.disabled = false;}
-    });
+    await managedServiceControls(local, {h, t, managedControl, errorBox, guard,
+      onStarted: async () => {await nativeTransition('connect');}});
     try {
       const native = await nativeStatus(); guard();
       if (native.configuration_source === "managed" && native.configuration_setup) {
@@ -4038,7 +4025,15 @@ async function viewNativeSettings(main) {
       onVersions:paint=>{versionPainters.add(paint);return()=>versionPainters.delete(paint);}});
     if (mine !== generation || !main.contains(details)) { disposeUpdates?.(); return; }
     const row = (label, value) => { if (value) details.append(h("dt", {}, t(label)), h("dd", {}, value)); };
-    if (status.configuration_setup === true) {
+    const service = await managedServiceControls(frame.panel('connection'), {h, t, managedControl, errorBox,
+      guard: () => {if (mine !== generation) throw new Error('VIEW_CHANGED');},
+      onStarted: async () => {await nativeTransition('connect');}});
+    if (mine !== generation) return;
+    const serviceHeld = status.configuration_source === 'managed' && service?.lifecycle?.state !== 'running' && !!service?.lifecycle;
+    if (serviceHeld) {
+      details.hidden = true; actions.hidden = true; platform.hidden = true; introduction.hidden = true; saved.hidden = true;
+    }
+    if (status.configuration_setup === true && !serviceHeld) {
       firstConnection = true;
       setup.hidden = false;
       details.hidden = true;

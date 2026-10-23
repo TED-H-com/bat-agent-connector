@@ -20,6 +20,10 @@ const layerReason = {inventory: 'configuration', tunnel: 'network', tls: 'trust'
 const layerStep = {tunnel: 'network', tls: 'identity', auth: 'identity', bat: 'service',
   connector: 'service', contract: 'service', workspace: 'workspace'};
 const lookup = (table, key) => Object.hasOwn(table, key) ? table[key] : undefined;
+const routeRequirement = {
+  DIRECT_PEER_UNKNOWN: 'peer_unknown', DIRECT_NOT_CONFIRMED: 'direct_unconfirmed',
+  DIRECT_TCP_UNREACHABLE: 'tcp_unconfirmed', CONFIGURED_ROUTES_EXHAUSTED: 'exhausted',
+};
 
 export function fleetDiagnosis(row, {snapshot, readable, kind = 'host'} = {}) {
   const layers = row?.layers || {};
@@ -28,6 +32,7 @@ export function fleetDiagnosis(row, {snapshot, readable, kind = 'host'} = {}) {
   // Unsaved checkboxes are not evidence. Cached rows cannot stay green after
   // failed reads, stopped monitoring or unapplied selection changes.
   if (!readable) state = 'unavailable';
+  else if (reason === 'STOP_UNCONFIRMED') state = 'ownership';
   else if (row?.selected === false || row?.level === 'off') state = 'off';
   // An unsettled process outcome survives selection/shutdown transitions.
   else if (lookup(codeReason, reason) === 'ownership') state = 'ownership';
@@ -108,7 +113,17 @@ export function fleetStatus(row, {h, t, snapshot, readable, entry, detailsState,
   return h('div', {class: 'fleet-diagnosis', 'data-fleet-diagnosis': entry.name, 'data-fleet-state': state, 'data-freshness': fact.freshness},
     h('p', {class: 'fleet-diagnosis-title'}, title),
     h('p', {class: 'muted fleet-diagnosis-help'}, help), details,
+    ...fleetRequirement(row, {h, t, snapshot, readable, entry}),
     ...fleetRoute(row, {h, t, snapshot, readable, entry, now}));
+}
+
+function fleetRequirement(row, {h, t, snapshot, readable, entry}) {
+  const reason = lookup(routeRequirement, row?.route_requirement);
+  if (!reason || !readable || row.selected !== true || snapshot.monitor.state !== 'running'
+    || snapshot.readiness.state === 'unavailable'
+    || snapshot.selection.applied_revision !== snapshot.selection.revision) return [];
+  return [h('p', {class: 'muted', 'data-fleet-route-requirement': entry.name},
+    t('fleet_route_requirement_' + reason))];
 }
 
 function paintDiagnosis(node, {state, steps, fact, title, help}, t) {

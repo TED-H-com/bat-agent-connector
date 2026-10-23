@@ -1,3 +1,4 @@
+import {managedStatusFixture} from './managed-status-fixture.ts';
 import {test, expect, type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {STRINGS} from '../src/i18n.js';
@@ -125,10 +126,11 @@ for (const locale of ['en-US', 'zh-TW']) {
           events: [], next_cursor: 0, head_cursor: 0, has_more: false, sync: golden.sync}};
         return fixture.dispatch(input);
       });
+      if (native) await page.exposeFunction('reasonManagedStatus', () => managedStatusFixture());
       if (native) await page.addInitScript(() => {
         const original = (window as any).__TAURI_INTERNALS__.invoke;
         (window as any).__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
-          if (command === 'managed_control') return {mode: 'managed', ready: true, background: true, login_enabled: false};
+          if (command === 'managed_control') return (window as any).reasonManagedStatus();
           if (command === 'fleet_availability') return {configured: false, platform_supported: false};
           return original(command, args);
         };

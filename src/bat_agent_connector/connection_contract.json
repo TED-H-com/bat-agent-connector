@@ -1,0 +1,181 @@
+{
+  "contract_version": 1,
+  "generator_versions": [
+    1
+  ],
+  "roles": [
+    "inventory",
+    "profile_index",
+    "ssh_reference",
+    "installation"
+  ],
+  "outcomes": [
+    "applied",
+    "unchanged",
+    "refused",
+    "uncertain",
+    "abandoned"
+  ],
+  "phases": [
+    "preflight",
+    "publishing",
+    "readback",
+    "abandonment"
+  ],
+  "observations": [
+    "present",
+    "absent",
+    "unreadable"
+  ],
+  "modes": [
+    "claim",
+    "readback"
+  ],
+  "codes": {
+    "LOCAL_REVIEW_CHANGED": {
+      "reason": "The reviewed local plan changed / 已檢閱的本機計畫已變更"
+    },
+    "LOCAL_PLAN_UNAVAILABLE": {
+      "reason": "The original local plan is unavailable / 無法取得原本機計畫"
+    },
+    "LOCAL_GENERATOR_UNSUPPORTED": {
+      "reason": "The local generator is unsupported / 不支援此本機產生器"
+    },
+    "LOCAL_SOURCE_ASSOCIATION_UNPROVEN": {
+      "reason": "The local source association is unproven / 本機來源關聯尚未證實"
+    },
+    "LOCAL_THIRD_BYTES": {
+      "reason": "Local files contain another value / 本機檔案出現其他內容"
+    },
+    "LOCAL_OWNERSHIP_UNPROVEN": {
+      "reason": "Local artifact ownership is unproven / 本機產物的管理權尚未證實"
+    },
+    "LOCAL_UNFINISHED_PLAN": {
+      "reason": "Another local plan is unfinished / 另一個本機計畫尚未完成"
+    },
+    "LOCAL_INVALID_PLAN": {
+      "reason": "The local publication plan is invalid / 本機發布計畫無效"
+    },
+    "LOCAL_RECEIPT_CONFLICT": {
+      "reason": "Local receipt evidence conflicts / 本機回執證據衝突"
+    },
+    "LOCAL_BUSY": {
+      "reason": "Local publication is busy / 本機發布忙碌中"
+    },
+    "LOCAL_INVALID_STATE": {
+      "reason": "Local publication state is invalid / 本機發布狀態無效"
+    },
+    "LOCAL_EFFECT_EXPIRED": {
+      "reason": "Local effect authority expired; no new writes may begin / 本機效果授權已過期；不可開始新的寫入"
+    },
+    "LOCAL_CLOCK_UNPROVEN": {
+      "reason": "The local clock cannot be proven / 無法確認本機時鐘"
+    },
+    "LOCAL_GATE_UNPROVEN": {
+      "reason": "The local publication guard could not be proven / 無法確認本機發布的保護條件"
+    },
+    "LOCAL_PLATFORM_UNSUPPORTED": {
+      "reason": "Local publication is unsupported on this platform / 此平台不支援本機發布"
+    },
+    "LOCAL_PLAN_ABANDONED": {
+      "reason": "Remaining local publication was abandoned; existing effects are retained / 已放棄剩餘本機發布；保留既有效果"
+    }
+  },
+  "matrix": {
+    "applied": {
+      "readback": [
+        null
+      ]
+    },
+    "unchanged": {
+      "readback": [
+        null
+      ]
+    },
+    "refused": {
+      "preflight": [
+        "LOCAL_REVIEW_CHANGED",
+        "LOCAL_PLAN_UNAVAILABLE",
+        "LOCAL_GENERATOR_UNSUPPORTED",
+        "LOCAL_SOURCE_ASSOCIATION_UNPROVEN",
+        "LOCAL_THIRD_BYTES",
+        "LOCAL_OWNERSHIP_UNPROVEN",
+        "LOCAL_UNFINISHED_PLAN",
+        "LOCAL_INVALID_PLAN",
+        "LOCAL_RECEIPT_CONFLICT",
+        "LOCAL_BUSY",
+        "LOCAL_INVALID_STATE",
+        "LOCAL_EFFECT_EXPIRED",
+        "LOCAL_CLOCK_UNPROVEN",
+        "LOCAL_GATE_UNPROVEN",
+        "LOCAL_PLATFORM_UNSUPPORTED"
+      ],
+      "readback": [
+        "LOCAL_REVIEW_CHANGED",
+        "LOCAL_PLAN_UNAVAILABLE",
+        "LOCAL_GENERATOR_UNSUPPORTED",
+        "LOCAL_SOURCE_ASSOCIATION_UNPROVEN",
+        "LOCAL_THIRD_BYTES",
+        "LOCAL_OWNERSHIP_UNPROVEN",
+        "LOCAL_UNFINISHED_PLAN",
+        "LOCAL_INVALID_PLAN",
+        "LOCAL_RECEIPT_CONFLICT",
+        "LOCAL_BUSY",
+        "LOCAL_INVALID_STATE",
+        "LOCAL_EFFECT_EXPIRED",
+        "LOCAL_CLOCK_UNPROVEN",
+        "LOCAL_GATE_UNPROVEN",
+        "LOCAL_PLATFORM_UNSUPPORTED"
+      ]
+    },
+    "uncertain": {
+      "publishing": [
+        "LOCAL_REVIEW_CHANGED",
+        "LOCAL_PLAN_UNAVAILABLE",
+        "LOCAL_GENERATOR_UNSUPPORTED",
+        "LOCAL_SOURCE_ASSOCIATION_UNPROVEN",
+        "LOCAL_THIRD_BYTES",
+        "LOCAL_OWNERSHIP_UNPROVEN",
+        "LOCAL_UNFINISHED_PLAN",
+        "LOCAL_INVALID_PLAN",
+        "LOCAL_RECEIPT_CONFLICT",
+        "LOCAL_BUSY",
+        "LOCAL_INVALID_STATE",
+        "LOCAL_EFFECT_EXPIRED",
+        "LOCAL_CLOCK_UNPROVEN",
+        "LOCAL_GATE_UNPROVEN",
+        "LOCAL_PLATFORM_UNSUPPORTED"
+      ],
+      "readback": [
+        "LOCAL_REVIEW_CHANGED",
+        "LOCAL_PLAN_UNAVAILABLE",
+        "LOCAL_GENERATOR_UNSUPPORTED",
+        "LOCAL_SOURCE_ASSOCIATION_UNPROVEN",
+        "LOCAL_THIRD_BYTES",
+        "LOCAL_OWNERSHIP_UNPROVEN",
+        "LOCAL_UNFINISHED_PLAN",
+        "LOCAL_INVALID_PLAN",
+        "LOCAL_RECEIPT_CONFLICT",
+        "LOCAL_BUSY",
+        "LOCAL_INVALID_STATE",
+        "LOCAL_EFFECT_EXPIRED",
+        "LOCAL_CLOCK_UNPROVEN",
+        "LOCAL_GATE_UNPROVEN",
+        "LOCAL_PLATFORM_UNSUPPORTED"
+      ]
+    },
+    "abandoned": {
+      "abandonment": [
+        "LOCAL_PLAN_ABANDONED"
+      ]
+    }
+  },
+  "bounds": {
+    "native_plan_bytes": 4096,
+    "receipt_bytes": 8192,
+    "handoff_bytes": 2048,
+    "installation_ref_chars": 128,
+    "challenge_ttl_s": 300,
+    "digest_hex_chars": 64
+  }
+}

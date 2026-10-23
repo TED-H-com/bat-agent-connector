@@ -248,6 +248,16 @@ class Journal:
                 external_ref TEXT, error TEXT, started_at REAL NOT NULL, finished_at REAL,
                 PRIMARY KEY(operation_id, seq), UNIQUE(operation_id, name)
             );
+            CREATE TABLE IF NOT EXISTS connection_bindings (
+                principal TEXT NOT NULL, installation_ref TEXT NOT NULL, connection_id TEXT NOT NULL,
+                revision INTEGER NOT NULL, state TEXT NOT NULL CHECK(state IN ('active','detached')),
+                reference TEXT NOT NULL, source_digest TEXT NOT NULL, kind TEXT NOT NULL,
+                policy_version INTEGER NOT NULL, profile_reference TEXT, association TEXT NOT NULL,
+                remote_profile_id TEXT NOT NULL, service_ref TEXT, workspace_ref TEXT,
+                label TEXT NOT NULL, preferences TEXT NOT NULL,
+                operation_id TEXT NOT NULL REFERENCES operations(operation_id), receipt_refs TEXT NOT NULL,
+                PRIMARY KEY(principal, installation_ref, connection_id)
+            );
             CREATE TABLE IF NOT EXISTS hosts_observed (
                 host TEXT PRIMARY KEY, reachable INTEGER NOT NULL DEFAULT 0, error TEXT,
                 server_version TEXT, last_attempt_at REAL, last_success_at REAL,

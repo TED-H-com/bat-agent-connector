@@ -4,12 +4,16 @@ from __future__ import annotations
 import json
 import os
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from bat_agent_connector import (
     inventory,
+    managed_setup,
     platform_files,
     pm_native_runtime,
     pm_work_profiles,
@@ -24,6 +28,172 @@ from tests.test_repository_sync import start
 
 world = profiles.world
 GOLDEN = Path(__file__).parent / "fixtures" / "work-profile-readiness.json"
+
+
+@pytest.fixture
+async def source_readiness(world, mock, monkeypatch):
+    """Real Work actions and Inventory producer; only BAT and the clock are fixtures."""
+    daemon = world["d"]
+    ops = daemon.ops
+    owner = Principal("profile-owner", frozenset({"observe", "manage"}))
+    auth = token(daemon, owner.actor, *owner.scopes)
+    ops.context["git_runner"] = HostGitRunner(daemon.fleet.config, {"h1": "fixture-bat"})
+    operation, _ = ops.create(owner, action="pm.workspace.create", params={"name": "Profiles"},
+        idempotency_key="source-workspace")
+    saved = await profiles._finish(ops, operation)
+    wid = saved["result"]["workspace"]["workspace_id"]
+    document = {"version": 1, "binding": {"repository": "o/r", "host": "h1", "workspace_id": "ws-1"},
+        "agent": "claude", "delivery_policy_ref": {"goal": "pull_request"}}
+    operation, _ = ops.create(owner, action=pm_work_profiles.ACTION, target={"workspace_id": wid},
+        params={"document": document}, idempotency_key="source-profile")
+    saved = await profiles._finish(ops, operation)
+    ident = saved["result"]["profile_id"]
+    clock = {"now": float(int(time.time()))}
+    monkeypatch.setattr(inventory, "time", SimpleNamespace(
+        time=lambda: clock["now"], strftime=time.strftime, gmtime=time.gmtime))
+    monkeypatch.setattr(pm_work_profiles, "time", SimpleNamespace(
+        time=lambda: clock["now"], strptime=time.strptime))
+    assert (await daemon.inventory.refresh_host("h1"))["reachable"] is True
+    scope, = daemon.inventory.discovery("h1")["scopes"]
+    assert scope["status"] == "succeeded" and "ws-1" in scope["coverage"]["workspace_ids"]
+
+    async def read():
+        before = (list(mock.frames), ops.db.total_changes, daemon.journal.api_head())
+        status, result = await http(world["port"], "GET",
+            f"/api/v1/pm/workspaces/{wid}/work-profiles/{ident}/readiness", tok=auth)
+        assert status == 200, result
+        assert result["calls_bat"] is False
+        assert before == (list(mock.frames), ops.db.total_changes, daemon.journal.api_head())
+        return result
+
+    return daemon, read, clock, scope
+
+
+def _changed_source(host, field):
+    return replace(host, **{field: {
+        "url": host.url + "?source=other",
+        "fingerprint": "00" * 32,
+        "profile_id": "other-profile",
+    }[field]})
+
+
+def _configure_source(daemon, host):
+    daemon.fleet.config.hosts["h1"] = host
+    # Like setup's config reload, rebuild the runner for the configured source.
+    # Its independent execution-location fence must not mask Inventory's evidence.
+    daemon.ops.context["git_runner"] = HostGitRunner(daemon.fleet.config, {"h1": "fixture-bat"})
+
+
+def _assert_scope_unknown(result, name):
+    state = result["states"][name]
+    assert state["value"] == "unknown", state
+    assert state["reason"] == "DISCOVERY_SCOPE_CHANGED", state
+    assert state["evidence_ref"] is None
+    assert "observed_at" not in state and "valid_until" not in state
+
+
+@pytest.mark.parametrize("field", ["url", "fingerprint", "profile_id"])
+@pytest.mark.parametrize("name", ["discovered", "can_observe"])
+async def test_current_source_readiness_before_refresh(source_readiness, field, name):
+    daemon, read, _, _ = source_readiness
+    assert (await read())["states"][name]["value"] == "ready"
+    original = daemon.fleet.config.hosts["h1"]
+    _configure_source(daemon, _changed_source(original, field))
+    _assert_scope_unknown(await read(), name)
+
+
+@pytest.mark.parametrize("field", ["fingerprint", "profile_id"])
+async def test_same_labels_and_port_do_not_identify_source(source_readiness, field):
+    daemon, read, _, scope = source_readiness
+    original = daemon.fleet.config.hosts["h1"]
+    changed = _changed_source(original, field)
+    assert changed.url == original.url and changed.name == original.name
+    _configure_source(daemon, changed)
+    assert daemon.inventory._binding("h1") != scope["binding_version"]
+    result = await read()
+    for name in ("discovered", "can_observe"):
+        _assert_scope_unknown(result, name)
+
+
+async def test_delayed_profile_switch_back_requires_original_binding(source_readiness):
+    daemon, read, clock, scope = source_readiness
+    original = daemon.fleet.config.hosts["h1"]
+    initial = await read()
+    clock["now"] += 61
+    _configure_source(daemon, _changed_source(original, "profile_id"))
+    changed = await read()
+    for name in ("discovered", "can_observe"):
+        _assert_scope_unknown(changed, name)
+    # Restoring the profile alone is insufficient if its pin still differs.
+    _configure_source(daemon, _changed_source(original, "fingerprint"))
+    changed = await read()
+    for name in ("discovered", "can_observe"):
+        _assert_scope_unknown(changed, name)
+    _configure_source(daemon, original)
+    assert daemon.inventory._binding("h1") == scope["binding_version"]
+    restored = await read()
+    for name in ("discovered", "can_observe"):
+        # The same source's still-fresh evidence applies again, without renewal.
+        assert restored["states"][name] == initial["states"][name]
+    clock["now"] += daemon.inventory.settings.stale_after_s
+    expired = await read()
+    for name in ("discovered", "can_observe"):
+        assert expired["states"][name]["value"] != "ready"
+        assert expired["states"][name]["verified"] == initial["states"][name]["verified"]
+
+
+@pytest.mark.parametrize("field", ["url", "fingerprint", "profile_id"])
+async def test_current_source_readiness_after_scope_refusal(source_readiness, mock, field):
+    daemon, read, _, scope = source_readiness
+    _configure_source(daemon, _changed_source(daemon.fleet.config.hosts["h1"], field))
+    for _ in range(2):
+        frames = list(mock.frames)
+        refreshed = await daemon.inventory.refresh_host("h1")
+        assert refreshed["reachable"] is False and "DISCOVERY_SCOPE_CHANGED" in refreshed["error"]
+        assert frames == mock.frames
+        current_profile = daemon.fleet.config.hosts["h1"].profile_id
+        failed, = [item for item in daemon.inventory.discovery("h1")["scopes"]
+            if item["profile_id"] == current_profile]
+        assert failed["status"] == "failed" and failed["error_code"] == "DISCOVERY_SCOPE_CHANGED"
+        assert failed["binding_version"] == scope["binding_version"]
+        assert failed["attempted_binding_version"] == daemon.inventory._binding("h1")
+        result = await read()
+        for name in ("discovered", "can_observe"):
+            _assert_scope_unknown(result, name)
+
+
+async def test_unchanged_source_readiness_keeps_evidence_and_deadline(source_readiness):
+    _, read, clock, scope = source_readiness
+    initial = await read()
+    clock["now"] += 61
+    later = await read()
+    for name in ("discovered", "can_observe"):
+        assert initial["states"][name]["value"] == "ready"
+        assert later["states"][name] == initial["states"][name]
+    assert later["states"]["discovered"]["evidence_ref"]["scan_id"] == scope["scan_id"]
+
+
+@pytest.mark.parametrize("field", ["url", "fingerprint", "profile_id"])
+async def test_setup_and_work_reject_previous_source_evidence(source_readiness, mock, field):
+    daemon, read, _, _ = source_readiness
+    original = daemon.fleet.config.hosts["h1"]
+    assert not daemon.fleet._clients  # Setup must use Inventory, not a live writer.
+    before = (list(mock.frames), daemon.journal.db.total_changes)
+    connection = managed_setup._connection_state(daemon, "h1", original)
+    assert connection["connected"] is True and connection["connection_status"] == "connected"
+    assert connection["connection_checked_at"] is not None
+    initial = await read()
+    for name in ("discovered", "can_observe"):
+        assert initial["states"][name]["value"] == "ready"
+
+    changed = _changed_source(original, field)
+    _configure_source(daemon, changed)
+    connection = managed_setup._connection_state(daemon, "h1", changed)
+    assert connection == {"connected": None, "connection_status": "checking", "connection_checked_at": None}
+    result = await read()
+    for name in ("discovered", "can_observe"):
+        _assert_scope_unknown(result, name)
+    assert before == (list(mock.frames), daemon.journal.db.total_changes)
 
 
 async def test_work_profile_readiness_matches_producer_golden(world, mock, tmp_path, monkeypatch):

@@ -14,6 +14,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -396,8 +397,12 @@ class OperationService:
         return op
 
     def list(self, *, statuses: list[str] | None = None, actor: str | None = None, action: str | None = None,
-             before: float | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
+             before: float | None = None, before_id: str | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
         limit = max(1, min(200, int(limit)))
+        if before_id is not None and (before is None or not isinstance(before_id, str)
+                or not re.fullmatch(r"op_[0-9a-f]{32}", before_id)):
+            raise OperationError("INVALID_FILTER", "Use before and its bounded operation before_id together / "
+                "請同時提供 before 與對應且符合格式的操作 before_id", 422)
         sql, args = "SELECT * FROM operations WHERE 1=1", []
         if statuses:
             bad = [s for s in statuses if s not in STATES]
@@ -410,14 +415,19 @@ class OperationService:
         if action:
             sql, args = sql + " AND action=?", [*args, action]
         if before is not None:
-            sql, args = sql + " AND created_at<?", [*args, float(before)]
-        rows = self.db.execute(sql + " ORDER BY created_at DESC LIMIT ?", (*args, limit + 1)).fetchall()
+            if before_id is not None:
+                sql += " AND (created_at<? OR (created_at=? AND operation_id<?))"
+                args += [float(before), float(before), before_id]
+            else:
+                sql, args = sql + " AND created_at<?", [*args, float(before)]
+        rows = self.db.execute(sql + " ORDER BY created_at DESC, operation_id DESC LIMIT ?", (*args, limit + 1)).fetchall()
         ops = [self._decode(r) for r in rows[:limit]]
         next_before = ops[-1]["created_at"] if len(rows) > limit else None
+        next_before_id = ops[-1]["operation_id"] if len(rows) > limit else None
         if principal is not None:
             from .pm_access import visible
             ops = [op for op in ops if visible(self.db, principal, op)]
-        return {"operations": ops, "next_before": next_before}
+        return {"operations": ops, "next_before": next_before, "next_before_id": next_before_id}
 
     def _transition(self, operation_id: str, status: str, *, reason: str | None = None,
                     error_code: str | None = None, result: dict | None = None, next_run_at: float = 0.0,
@@ -647,6 +657,9 @@ class OperationService:
             refs["resolved_params"] = _resolved_params
         now = time.time()
         with self.journal.tx():
+            if action in {"setup.connection.apply", "connection.reference.apply"}:
+                from .setup_connections import _require_connection_available
+                _require_connection_available(self, binding["principal_id"], target)
             from .pm_overview_assessments import ACTION as OVERVIEW_ACTION
             from .pm_overview_assessments import admit_operation as admit_overview
             if action == OVERVIEW_ACTION:
@@ -737,6 +750,15 @@ class OperationService:
         cancel_work_follow_up(self, principal, op)
         if op["status"] in TERMINAL:
             return op
+        if op["action"] == "setup.connection.apply" and op["status"] == "needs_attention":
+            if op["error_code"] == "CONNECTION_PROJECTION_CHANGED":
+                from .setup_connections import cancel_projection_conflict
+                return cancel_projection_conflict(self, principal, op)
+            open_step = self.db.execute("SELECT name FROM operation_steps WHERE operation_id=? "
+                "AND status IN ('started','uncertain') ORDER BY seq DESC LIMIT 1", (operation_id,)).fetchone()
+            if open_step and open_step["name"] == "native_effects":
+                from .setup_connections import abandon
+                return abandon(self, principal, op)
         if op["action"] == "worktree.merge":
             from .worktree_merge_operations import cancel
             return cancel(self, principal, op)
@@ -803,6 +825,9 @@ class OperationService:
         if op["status"] != "needs_attention":
             raise OperationError("NOT_RESUMABLE", f"only needs_attention operations resume (this one is "
                                  f"{op['status']})", 409)
+        if op["action"] == "setup.connection.apply":
+            from .connection_handoff import renew_unclaimed
+            renew_unclaimed(self, op)
         op = self._transition(operation_id, "running", reason=f"resumed by {principal.actor}", uncertain_tries=0,
                               actor=principal.actor)
         if op["action"] == "session.approve_pending":

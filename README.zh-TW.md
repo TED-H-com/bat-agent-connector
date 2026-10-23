@@ -4,7 +4,7 @@
 用合成的唯讀專案資料操作正式共用介面：搜尋工作、展開需求、查看交付證據與工作階段。
 展示內另有 v1.3 工作流程預覽，可模擬開始工作、追加修改與驗收決策；兩者都不連線到 BAT 或模型。
 主線上已有真正的「開始工作」面板，它需要已設定的 BAT 主機與已綁定的儲存庫。
-已合併主線 `14c62830`（截至 #314，2026 年 10 月 19 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。
+已發布預覽版來源 `437ee6a7`（截至 #395，2026 年 10 月 22 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。
 
 **看懂專案、找到問題，與 PM 完成一次決策。**
 
@@ -20,7 +20,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 **Web 與 Tauri 桌面版共用介面及 Python 後端。** 你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
 
-> **開發預覽。** 截圖來自已合併的 `main` `14c62830`（2026 年 10 月 19 日，包含 #314）。
+> **開發預覽。** 截圖來自已發布預覽版來源 `437ee6a7`（2026 年 10 月 22 日，截至 #395）。
 > 圖庫使用合成資料；發布、安裝與實機驗收分別記錄。
 > [進度報告](docs/product/implementation-status.md)分開列出分支、合併、安裝與實機驗收狀態。
 > 下載時請核對套件的精確來源；截圖與 CI 不能代替原生或實機驗收。
@@ -71,7 +71,11 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 ## 安裝與連線
 
-下載[已發布版本](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)：Connector **0.2.12**、desktop **0.1.8**，固定來源為 `14c62830`。包含 Python 套件、Windows／Linux／macOS 桌面包、來源清單與 SHA-256 校驗碼；套件為未簽章或 ad-hoc 簽章的開發預覽。後續候選仍可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對成功的平台 job 與精確來源；Actions artifacts 可能到期。
+最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)是 Connector **0.2.12**／desktop **0.1.8**，固定於 `14c62830`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，固定於 `437ee6a7143a82e32eae1d6a008203b2df072aaf`（`437ee6a7`）。每版各有八個檔案：Python wheel 與 sdist、Linux deb、兩個 macOS DMG、Windows 安裝器、`release-manifest.json` 及 `SHA256SUMS`。從發布頁選擇桌面套件，並核對來源清單與校驗碼。這些仍是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道。
+
+Connector 請依[驗證安裝器說明](docs/getting-started.zh-TW.md#2-安裝-connector)操作。穩定版使用 `--tag v0.2.12 --channel-check stable`；本預覽版使用 `--tag v0.2.13-preview.20261022 --channel-check preview`，啟動安裝腳本也取自同一 tag。安裝器必須指定 tag，通道檢查預設為 `preview`，可接受穩定版與預覽版；`stable` 會拒絕預覽版。Linux 加上 `--enable-updates` 才會登記同一通道並啟用排程；單純安裝不會啟用更新。依據見[安裝器原始碼](scripts/install_connector.py)與[更新指南](docs/connector-updates.md)。
+
+已登記的更新器在 `stable` 提供符合條件的較新穩定版，在 `preview` 提供符合條件的較新穩定版或預覽版；穩定通道不會提供本預覽版。後續開發包可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對成功的平台 job 與來源；Actions artifacts 可能到期。
 
 [Connector 自動更新](docs/connector-updates.md)適用於已核對的 Linux 使用者安裝。啟用後每小時檢查已發布版本，更新供下一次啟動使用；既有 MCP、central 與 BAT 程序繼續執行。
 
@@ -121,7 +125,7 @@ flowchart TB
 | 狀態 | 範圍 |
 | --- | --- |
 | 已合併主線 | 桌面／中央底座；PM 討論及計畫採用；工程包及有界派工；驗證、需求接受與依賴證據；政策內維護修復；BAT 提案／Follow-up；AHP 唯讀觀察。#132 補上中央總覽、討論來源與改名、登記表、時程、技術相依及每日資源桶；#134 補上採用後目標、近期決策及問題解決回報引導。 |
-| 已合併工作台 | 已合併主線 `14c62830`（截至 #314，2026 年 10 月 19 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。 |
+| 已合併工作台 | 已發布預覽版來源 `437ee6a7`（截至 #395，2026 年 10 月 22 日）接通計畫採用、建立工作、持久第二句、固定成果、驗證與 PR 交付。Workbench 提供手機導航與前景恢復，profile 在開始前顯示路線限制。PM 可討論兩份固定評估、保存接續摘要，並依明確要求判讀總覽；資源頁可讀取另行授權的本機 Codex／Claude 對話。清單先載入摘要，未送指令可留成 Idea；核心 UI 操作共用 HTTP／MCP 契約。Classic 仍為預設。整合測試使用真正 Connector、磁碟 Git 與 mock BAT／providers；真 BAT／模型及實體裝置仍需另行驗收。 |
 | PM v1.2 剩餘工作 | 一般原生 coding adapter、AHP 自建／寫入、其餘文件視圖與簡報、更多 CLI 支援、遠端用量收集與交付效率歸因。 |
 
 已有 Codex／Claude 本機用量收集；這輪 Agent 資源改版補上有來源的每日趨勢與回報配額窗。
