@@ -31,6 +31,18 @@ def _quoted(value):
     return '"' + value.replace('"', '""') + '"'
 
 
+def _temporary_tables(db):
+    from .pm_external_history import GRANT_TABLES
+
+    if any(row[1] not in {'main', 'temp'} for row in db.execute('PRAGMA database_list')):
+        return None
+    rows = db.execute("SELECT t.name,t.sql,m.name FROM temp.sqlite_schema t LEFT JOIN main.sqlite_schema m "
+        "ON m.name=t.name WHERE t.type='table' ORDER BY t.name").fetchall()
+    if any(name not in GRANT_TABLES or shadow is not None for name, _, shadow in rows):
+        return None
+    return tuple((name, sql) for name, sql, _ in rows)
+
+
 class _History:
     def __init__(self, db, operation_id):
         self.db, self.operation_id, self.owner = db, operation_id, _owner()
@@ -81,24 +93,26 @@ class _History:
         for name in self.triggers:
             self.db.execute('DROP TRIGGER IF EXISTS temp.' + _quoted(name))
         self.triggers.clear()
-        # A TEMP table could shadow an authoritative main table. Attached
-        # databases and virtual tables have no complete tracked write surface.
-        if (any(row[1] not in {'main', 'temp'} for row in self.db.execute('PRAGMA database_list'))
-                or self.db.execute("SELECT 1 FROM temp.sqlite_schema WHERE type='table' LIMIT 1").fetchone()):
+        # Only the known grant projection may coexist with main trackers. Its
+        # writes also invalidate historical proofs; it must never shadow main.
+        temporary = _temporary_tables(self.db)
+        if temporary is None:
             return False
-        tables = self.db.execute("SELECT name,sql FROM main.sqlite_schema WHERE type='table' AND name NOT GLOB 'sqlite_*'").fetchall()
-        if any('CREATE VIRTUAL TABLE' in (row[1] or '').upper() for row in tables):
+        main = self.db.execute("SELECT name,sql FROM main.sqlite_schema WHERE type='table' AND name NOT GLOB 'sqlite_*'").fetchall()
+        tables = [('main', *row) for row in main] + [('temp', *row) for row in temporary]
+        if any('CREATE VIRTUAL TABLE' in (sql or '').upper() for _, _, sql in tables):
             return False
-        for table, _ in tables:
-            columns = [row[1] for row in self.db.execute('PRAGMA main.table_info(' + _quoted(table) + ')')]
+        for namespace, table, _ in tables:
+            columns = [row[1] for row in self.db.execute(f'PRAGMA {namespace}.table_info(' + _quoted(table) + ')')]
             for verb in ('INSERT', 'UPDATE', 'DELETE'):
                 name = self.name + '_' + str(len(self.triggers))
                 ignored = self._ignore(table, verb, columns)
                 # Own the name before SQLite executes: interruption after its
                 # CREATE succeeds must still drop that trigger in finally.
                 self.triggers.append(name)
-                self.db.execute(f'CREATE TEMP TRIGGER {_quoted(name)} AFTER {verb} ON main.{_quoted(table)} '
+                self.db.execute(f'CREATE TEMP TRIGGER {_quoted(name)} AFTER {verb} ON {namespace}.{_quoted(table)} '
                     f'WHEN NOT ({ignored}) BEGIN SELECT {self.name}(); END')
+        self.temporary = temporary
         return True
 
     def stamp(self):
@@ -110,12 +124,12 @@ class _History:
         if getattr(self, 'bounds', None) != bounds:
             self.changed()
             self.bounds = bounds
-        if (any(row[1] not in {'main', 'temp'} for row in self.db.execute('PRAGMA database_list'))
-                or self.db.execute("SELECT 1 FROM temp.sqlite_schema WHERE type='table' LIMIT 1").fetchone()):
+        temporary = _temporary_tables(self.db)
+        if temporary is None:
             self.changed()
             return None
         schema = self.db.execute('PRAGMA main.schema_version').fetchone()[0]
-        if schema != self.schema:
+        if schema != self.schema or temporary != getattr(self, 'temporary', None):
             self.changed()
             if not self._install():
                 return None
