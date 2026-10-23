@@ -1,5 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
+import {setTimeout as delay} from 'node:timers/promises';
 import {conversationFixture, mountConversation} from './conversation-fixture';
 import {STRINGS} from '../src/i18n.js';
 import {runtimeGolden} from './session-runtime-fixture';
@@ -398,11 +399,16 @@ for (const locale of ['en-US', 'zh-TW']) {
     const context = await browser.newContext({locale}), page = await context.newPage();
     const fixture = conversationFixture(); let changed = false, bootstraps = 0;
     let release!: () => void; const held = new Promise<void>(resolve => {release = resolve;});
-    await page.clock.install({time: at}); await page.clock.pauseAt(at);
+    let finishTicks!: () => void; const ticksFinished = new Promise<void>(resolve => {finishTicks = resolve;});
+    // pauseAt installs the clock too, without a running install-to-pause gap.
+    await page.clock.pauseAt(at);
     await mountConversation(page, false, async input => {
       const path = new URL(input.path, 'http://fixture').pathname;
       if (path === '/bootstrap') {
         bootstraps++;
+        // Keep the verification reply behind the test's initial display ticks.
+        // This is a real Node timer, independent of the paused page clock.
+        if (bootstraps > 1) {await ticksFinished; await delay(1_500);}
         if (failure === 'pending' && bootstraps > 1) await held;
         if (failure === true && bootstraps > 1) return {status: 503, data: {error: {code: 'TEMPORARY_UNAVAILABLE'}}};
       }
@@ -421,15 +427,30 @@ for (const locale of ['en-US', 'zh-TW']) {
       changed = true;
       await page.evaluate(() => {location.hash = '#/settings?section=connection';});
       await expect(page.locator('.global-connection-facts')).toBeVisible();
+      const verification = failure === 'pending' ? null : page.waitForResponse('**/api/v1/bootstrap');
       await page.clock.runFor(1_000);
       await page.clock.runFor(1_000);
-      await expect.poll(() => bootstraps).toBe(2);
-      if (failure === 'pending') await page.clock.runFor(61_000);
+      finishTicks();
+      if (failure === 'pending') {
+        const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+        await expect.poll(async () => {
+          await page.clock.runFor(1_000);
+          return page.locator('#installation-health [data-health-key=capabilities]').allTextContents();
+        }).toEqual([copy.health_capabilities_checking]);
+        await page.clock.runFor(61_000);
+      } else await (await verification!).finished();
+      // Verification applies on receipt; the health strip paints on its 1 s tick.
+      // Keep ticking until the shell displays the applied result, not a request count.
+      await expect.poll(async () => {
+        await page.clock.runFor(1_000);
+        return failure ? page.locator('#installation-health [data-health-key=reload]').isVisible()
+          : await page.locator('#installation-health [data-health-key=capabilities]').count() === 0;
+      }).toBe(true);
       if (failure) await expect(page.locator('#installation-health [data-health-key=reload]')).toBeVisible();
       else await expect(page.locator('#installation-health [data-health-key=capabilities]')).toHaveCount(0);
       await expect(page.locator('#installation-health [data-health-selected]')).toBeVisible();
       await page.clock.runFor(10_000); expect(bootstraps).toBe(2);
       expect(await page.evaluate(() => localStorage.getItem('batc.key.fixture.health'))).toBe('retained-key');
-    } finally {release(); await context.close();}
+    } finally {finishTicks(); release(); await context.close();}
   });
 }
