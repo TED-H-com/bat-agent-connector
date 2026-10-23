@@ -1,5 +1,7 @@
 //! Restart records only. No discovery, execution, transport, IPC or production backend.
 mod model;
+#[doc(hidden)]
+pub mod protected;
 mod store;
 mod wire;
 pub use model::{Accepted, Error, Intent, Namespace, Scope, Target};
