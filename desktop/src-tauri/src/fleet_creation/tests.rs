@@ -194,6 +194,53 @@ fn unsupported_creation_never_discovers_or_touches_the_sentinel() {
     assert_eq!(std::fs::read(&sentinel).unwrap(), b"unchanged");
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
 }
+fn intended_publication<S: Security>(
+    p: &mut CreationPlatform<S>,
+    f: &Fixture,
+    owner: &bat_fleet_core::connection_setup::OwnerEvidence,
+    baseline: [Baseline; 4],
+    ticket: &Ticket,
+) {
+    let mut input = generator::setup();
+    input.root = p.receipt().scope.kit_root.clone();
+    input.owner = owner.clone();
+    let plan = bat_fleet_core::connection_setup::build(&input).unwrap();
+    let publisher = Publisher::new(
+        &f.state.join("fleet.json"),
+        &f.data.join("Startup"),
+        &f.data.join("user"),
+    )
+    .unwrap();
+    let frozen = publisher.export_plan(&plan, p).unwrap();
+    p.with_writer(|w| {
+        let bytes = w
+            .read_private(&EvidenceKey::Provisioning, RECEIPT_LIMIT)?
+            .unwrap();
+        let hash = bat_fleet_core::digest(&bytes);
+        let link = Record::Publication(PublicationLink {
+            binding: w.receipt().binding(&hash, w.login()?.session_id)?,
+            predecessor_sha256: hash,
+            predecessor_terminal: None,
+            frozen,
+            generator_version: plan.generator_version,
+            baseline: baseline,
+            acceptance_reference: "native-review-fixture".into(),
+        });
+        w.append(owner, &link, &mut || ticket.verify())?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        publisher.publish_authorized(&plan, p, &mut |_, _| ticket.verify(), &mut |point, _| {
+            if point == publication::Boundary::AfterIntended {
+                Err("INTERRUPTED")
+            } else {
+                Ok(())
+            }
+        }),
+        Err(publication::Error::Gate("INTERRUPTED"))
+    );
+}
 #[test]
 fn real_selected_startup_context_reserves_reopens_and_proves_original_publication() {
     let f = Fixture::new();
@@ -231,52 +278,7 @@ fn real_selected_startup_context_reserves_reopens_and_proves_original_publicatio
         std::fs::read(startup_role::record_path(&f.data)).unwrap(),
         original_role
     );
-    let mut input = generator::setup();
-    input.root = p.receipt().scope.kit_root.clone();
-    input.owner = prepared.owner.clone();
-    let plan = bat_fleet_core::connection_setup::build(&input).unwrap();
-    let publisher = Publisher::new(
-        &f.state.join("fleet.json"),
-        &f.data.join("Startup"),
-        &f.data.join("user"),
-    )
-    .unwrap();
-    let frozen = publisher.export_plan(&plan, &mut p).unwrap();
-    p.with_writer(|w| {
-        let bytes = w
-            .read_private(&EvidenceKey::Provisioning, RECEIPT_LIMIT)?
-            .unwrap();
-        let hash = bat_fleet_core::digest(&bytes);
-        let link = Record::Publication(PublicationLink {
-            binding: w
-                .receipt()
-                .binding(&hash, f.security.login.borrow().session_id)?,
-            predecessor_sha256: hash,
-            predecessor_terminal: None,
-            frozen,
-            generator_version: plan.generator_version,
-            baseline: reopened.baseline,
-            acceptance_reference: "native-review-fixture".into(),
-        });
-        w.append(&prepared.owner, &link, &mut || ticket.verify())?;
-        Ok(())
-    })
-    .unwrap();
-    assert_eq!(
-        publisher.publish_authorized(
-            &plan,
-            &mut p,
-            &mut |_, _| ticket.verify(),
-            &mut |point, _| {
-                if point == publication::Boundary::AfterIntended {
-                    Err("INTERRUPTED")
-                } else {
-                    Ok(())
-                }
-            }
-        ),
-        Err(publication::Error::Gate("INTERRUPTED"))
-    );
+    intended_publication(&mut p, &f, &prepared.owner, reopened.baseline, &ticket);
     let _launcher = p.launcher_guard().unwrap();
     let path = p
         .receipt()
@@ -409,4 +411,31 @@ fn lifecycle_stop_after_staging_prevents_final_receipt_publication() {
     assert!(!root
         .join(EvidenceKey::Provisioning.relative_path().unwrap())
         .exists());
+}
+
+#[test]
+fn unfinished_old_session_refuses_before_creating_artifact_parents() {
+    let f = Fixture::new();
+    let tickets = Arc::new(crate::fleet_lifecycle::Tickets::default());
+    let ticket = tickets.capture();
+    let mut p = f.platform(&ticket, &mut || ["a".repeat(32), "b".repeat(32)]);
+    let (owner, baseline) = p
+        .with_writer(|w| {
+            let owner = w.reserve(&mut || ticket.verify())?;
+            w.prepare_publication_directories(&mut || ticket.verify())?;
+            let baseline = w.baseline(&owner)?;
+            Ok((owner, baseline))
+        })
+        .unwrap();
+    let kit = p.receipt().scope.kit_root.clone();
+    intended_publication(&mut p, &f, &owner, baseline, &ticket);
+    assert!(!kit.exists());
+    drop(p);
+    f.security.login.borrow_mut().session_id += 1;
+    let mut p = f.platform(&ticket, &mut || panic!("existing receipt never mints"));
+    assert!(prepare(&mut p, &ticket).is_err());
+    assert!(
+        !kit.exists(),
+        "an unfinished old-session review cannot create artifact parents"
+    );
 }
