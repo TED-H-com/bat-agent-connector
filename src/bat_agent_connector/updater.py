@@ -207,6 +207,7 @@ class Updater:
                     replace_link(path, target, enrollment[str(path)])
             state.pop("enrollment")
             state["last"] = {"status": "enrolled_for_next_launch", "at": timestamp()}
+            state["installed_at"] = state["last"]["at"]
             self.save(state)
         pending = state.get("pending")
         if pending:
@@ -222,6 +223,7 @@ class Updater:
             state["previous"] = pending["from"]
             state["current"] = pending["to"]
             state["last"] = self.outcome(pending)
+            state["installed_at"] = state["last"]["at"]
             state.pop("pending")
             self.save(state)
         self.check_links()
@@ -295,6 +297,9 @@ class Updater:
         result = {"enabled": state["enabled"], "channel": state["channel"],
                   "installed": current["release"] if matches else None, "installation_matches_state": matches,
                   "previous": state["previous"], "last": state.get("last"),
+                  "installed_at": state.get("installed_at"),
+                  "release_check": (state.get("release_check")
+                                    if state.get("release_check", {}).get("channel") == state["channel"] else None),
                   "pending": bool(state.get("pending") or state.get("enrollment")),
                   "activation": "next_launch", "processes_restarted": False,
                   "scheduler_configured": bool(state.get("schedule_complete"))}
@@ -302,6 +307,26 @@ class Updater:
 
     def status(self, state=None):
         return self._status_snapshot(state)[2]
+
+    def _check_release(self, state):
+        # Persist completion before installation; status/capabilities never
+        # renew this finder observation.
+        observation = {}
+        candidate = self.find_release(state["channel"], observation=observation)
+        # Preserve the shared install candidate. The selected release item's
+        # display clock belongs only to this completed check's observation.
+        recorded = ({**candidate, "published_at": observation["published_at"]}
+                    if candidate is not None and observation.get("published_at") is not None else candidate)
+        state["release_check"] = {"channel": state["channel"], "completed_at": timestamp(),
+                                  "candidate": recorded}
+        self.save(state)
+        return candidate
+
+    def check(self):
+        with self.locked():
+            state = self.read()
+            candidate = self._check_release(state)
+            return {"available": candidate, **self.status(state)}
 
     def apply(self):
         with self.locked():
@@ -311,7 +336,7 @@ class Updater:
             try:
                 self.reconcile(state)
                 self.verify(state["versions"][state["current"]])
-                candidate = self.find_release(state["channel"])
+                candidate = self._check_release(state)
                 current = state["versions"][state["current"]]["release"]
                 if not candidate or version(candidate["version"]) < version(current["version"]):
                     state["last"] = {"status": "no_newer_release", "at": timestamp()}
@@ -402,6 +427,32 @@ class Updater:
             return self.status(state)
 
 
+def _public_time(at):
+    if at is not None:
+        require(isinstance(at, str) and len(at) <= 40
+                and datetime.fromisoformat(at.replace("Z", "+00:00")).tzinfo is not None,
+                "update_state_unreadable")
+    return at
+
+
+def _public_release_check(check):
+    if check is None:
+        return None
+    at = _public_time(check["completed_at"])
+    require(at is not None, "update_state_unreadable")
+    candidate = check["candidate"]
+    if candidate is not None:
+        version(candidate["version"])
+        commit(candidate["commit"])
+        published = candidate.get("published_at")
+        # Older private state has no supported publication observation.
+        if published is None:
+            return None
+        _public_time(published)
+        candidate = {key: candidate[key] for key in ("version", "commit", "published_at")}
+    return {"completed_at": at, "candidate": candidate}
+
+
 def _public_status(result):
     """Explicit public fields only; private receipts and installation proofs stay local."""
     require(result["installation_matches_state"], "update_installation_mismatch")
@@ -425,7 +476,8 @@ def _public_status(result):
         last = public_last
     return {"state": "reported", "enabled": result["enabled"], "channel": result["channel"],
             "installed": {"version": installed["version"], "commit": sha}, "pending": result["pending"],
-            "last": last, "activation": "next_launch"}
+            "last": last, "activation": "next_launch", "installed_at": _public_time(result.get("installed_at")),
+            "release_check": _public_release_check(result.get("release_check"))}
 
 
 def _capture_process_installation():
@@ -500,9 +552,6 @@ def main(argv=None):
                 result = updater.policy(True, args.channel)
         elif args.action == "disable":
             result = updater.policy(False)
-        elif args.action == "check":
-            state = updater.read()
-            result = {"available": updater.find_release(state["channel"]), **updater.status(state)}
         elif args.action == "run":
             result = updater.apply()
         elif args.action == "rollback" and args.preview:

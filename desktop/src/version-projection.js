@@ -23,6 +23,13 @@ const fact = (id, value, source, at, period, extra = {}) => {
   return {id,...selected,source:observed?source:'not_reported',observed_at,
     period:observed?period:'unknown',build_source:buildSource(value?.source),...extra};
 };
+// A candidate without its producer's completed-check clock is no release fact.
+// Neither a later status read nor an installed/loaded value can fill this slot.
+const released = (id, candidate, source, at) => {
+  const known = version(candidate?.version) && commit(candidate?.commit) && time(at);
+  return fact(id, known ? candidate : null, source, known ? at : null, 'release_check',
+    {published_at:known ? time(candidate.published_at) : null});
+};
 export function versionProjection(input = {}) {
   const caps = input.online === false ? null : input.caps;
   const managed = input.managedRuntime;
@@ -31,11 +38,19 @@ export function versionProjection(input = {}) {
   const frontend = input.frontendBuild === undefined ? loadedFrontendBuild : input.frontendBuild;
   const update = caps?.connector_update;
   const reported = update?.state === 'reported';
+  const releaseCheck = reported ? update.release_check : null;
+  const candidate = input.updaterReadFailed ? null : input.updater?.candidate;
   const last = reported && updateResults.includes(update.last?.status)
     ? {status:update.last.status,code:updateCode(update.last.code),at:time(update.last.at)} : null;
   const loadedAt = input.frontendLoadedAt === undefined && frontend === loadedFrontendBuild && digest(frontend?.frontend_digest)
     ? frontendLoadedAt : input.frontendLoadedAt;
   const rows = [
+    released('desktop_released', input.desktop && candidate ? {version:candidate.version,commit:candidate.source_sha} : null,
+      'desktop_updater', input.desktop ? candidate?.checked_at : null),
+    released('connector_released', releaseCheck?.candidate, 'connector_release_check', releaseCheck?.completed_at),
+    // Dashboard has no MCP observation transport. Central or installed files
+    // cannot identify an external MCP process.
+    fact('mcp', null, 'not_reported', null, 'unknown'),
     fact('desktop', input.desktop ? input.appBuild : null, 'native_app_build', input.nativeReadAt, 'loaded'),
     fact('loaded_ui', {digest:frontend?.frontend_digest}, 'loaded_ui', loadedAt, 'loaded'),
     fact('served_ui', {digest:caps?.frontend?.digest}, 'capabilities', caps ? input.capabilitiesReadAt : null, 'read'),
@@ -43,6 +58,7 @@ export function versionProjection(input = {}) {
       'capabilities', caps ? input.capabilitiesReadAt : null, 'read'),
     fact('connector_installed', reported ? update.installed : null, 'connector_update',
       reported ? input.capabilitiesReadAt : null, 'next_launch', {
+        installed_at:reported ? time(update.installed_at) : null,
         state:updateStates.includes(update?.state) ? update.state : 'not_reported',
         code:update?.state === 'unreadable' ? updateCode(update.code) : null,
         enabled:reported && typeof update.enabled === 'boolean' ? update.enabled : null,

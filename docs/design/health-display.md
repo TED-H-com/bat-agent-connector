@@ -40,7 +40,7 @@ their existing namespaces. No display state authorizes work or changes final gat
 | Native Fleet machine attention | Existing native `Entry::observed` readiness, through `fleet::sanitize_result` / `readiness_row`, consumed by the existing Fleet status/overview read. | Row `observed_at`, readiness stale state and the shared `fleetDiagnosis` (including monitor/selection state). Native aliases are a separate identity domain; never join them to central host names. |
 | Route kind and observation time | Native accepted `RouteChoice`, through `Entry::observed`, `Context::status` and the IPC allowlist. | Last supervisor-verified use, the shared 60-second deadline and active route generation. No new probes. |
 | Desktop and managed runtime versions | Existing native `app_build` and managed status producers; each remains its own version fact. | Bootstrap/version/build invalidation. Installed and launch-observed versions are separate. |
-| Loaded MCP process version (required, not built) | Missing process-owned MCP runtime identity producer; see the lifecycle follow-up below. Existing adapter/version facts cannot establish this identity. | The future observation must bind loaded version/build to process generation. Installing does not prove an existing process loaded new code. |
+| Loaded MCP process version | `batc://identity` reports only the calling MCP process’s loaded build and start time, separately from its central capabilities observation. | Its next-launch comparison reuses the updater’s process installation proof. Dashboard has no MCP observation transport and leaves this row unknown. |
 
 ## Summary and compact presentation
 
@@ -384,13 +384,29 @@ Windows Fleet monitor and tunnels belong to the native application. Quit stops o
 its own resources, preserving uncertain ownership refusals. An external/plain
 Connector belongs to its service manager; the application never stops it.
 
-Long-running MCP processes are never restarted automatically. The required display
-when a newer version is installed is **Restart to load {version} / 重新啟動以載入
-{version}**. **This notice is not built.** There is no producer reporting the loaded
-version/build of each running MCP process, and no corresponding UI copy/consumer.
-The follow-up needs a process-owned MCP runtime identity observation (loaded
-version/build and process generation), separately compared with the updater's
-installed-for-next-launch version. Installing must not change the loaded identity.
-Diagnostics' existing `diag_runtime_differs` compares bundled and launch-observed
-managed runtime versions; it cannot prove a running MCP process's loaded version.
+Long-running MCP processes are never restarted automatically. `batc://identity`
+reports the calling process's loaded build and start time, with an independent
+central capabilities observation. Its `next_launch` observation reuses
+`connector_update_status` and the updater's captured startup installation proof.
+Only a snapshot belonging to that same updater installation can yield `same` or
+`differs`. A difference supplies **Restart to load {version} / 重新啟動以載入
+{version}** for this identified process only; it may reflect an upgrade or rollback.
+Different installations, missing enrollment, an unproven loaded package or an
+unreadable pointer yield `unknown` and no restart advice. Central unavailability
+or authorization failure does not hide the loaded MCP build or local comparison.
+Installing never changes the loaded identity. There is no MCP process scan,
+registry or Dashboard transport; the Dashboard MCP row remains explicitly unknown.
+Diagnostics' `diag_runtime_differs` compares bundled and launch-observed managed
+runtime versions and cannot fill the MCP row.
+
+The shared version projection also retains independent released rows for Desktop
+and Connector. Unknown is the default: no loaded, installed or answering value can
+fill a released slot. Desktop uses only the native updater's validated candidate
+and its completed-check clock. Failed checks retain the prior candidate's original
+clock; Status never renews it. Connector uses only its updater's persisted,
+completed release check for the current channel, with separate completion and
+publication times. Capabilities reads that private state without a lease, writes
+or network access; old states without this observation stay unknown. Check policy
+and activation are unchanged. About, Updates and diagnostics export share these
+same facts; read time is never substituted for check completion or publication.
 This display slice makes no lifecycle changes or claim of native/live acceptance.

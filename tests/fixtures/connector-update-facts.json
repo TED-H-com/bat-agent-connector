@@ -29,7 +29,9 @@
         "status": "enrolled_for_next_launch",
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
-      "activation": "next_launch"
+      "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
+      "release_check": null
     }
   },
   "failed": {
@@ -52,7 +54,9 @@
         "at": "2026-10-22T12:00:00.123456+00:00",
         "code": "fixture_install_failed"
       },
-      "activation": "next_launch"
+      "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
+      "release_check": null
     }
   },
   "unreadable": {
@@ -131,7 +135,9 @@
         "status": "installed_for_next_launch",
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
-      "activation": "next_launch"
+      "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
+      "release_check": null
     }
   },
   "rollback": {
@@ -153,7 +159,9 @@
         "status": "rolled_back_updates_disabled",
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
-      "activation": "next_launch"
+      "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
+      "release_check": null
     }
   },
   "rollback_differs": {
@@ -175,7 +183,64 @@
         "status": "rolled_back_updates_disabled",
         "at": "2026-10-22T12:00:00.123456+00:00"
       },
-      "activation": "next_launch"
+      "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
+      "release_check": null
+    }
+  },
+  "released": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "state": "reported",
+      "enabled": true,
+      "channel": "preview",
+      "installed": {
+        "version": "0.2.8",
+        "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "pending": false,
+      "last": {
+        "status": "installed_for_next_launch",
+        "at": "2026-10-22T12:00:00.123456+00:00"
+      },
+      "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
+      "release_check": {
+        "completed_at": "2026-10-22T13:00:00.123456+00:00",
+        "candidate": {
+          "version": "0.2.9",
+          "commit": "cccccccccccccccccccccccccccccccccccccccc",
+          "published_at": "2026-10-17T00:00:00Z"
+        }
+      }
+    }
+  },
+  "publication_unknown": {
+    "build": {
+      "version": "0.2.7",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "vcs"
+    },
+    "connector_update": {
+      "state": "reported",
+      "enabled": true,
+      "channel": "preview",
+      "installed": {
+        "version": "0.2.9",
+        "commit": "cccccccccccccccccccccccccccccccccccccccc"
+      },
+      "pending": false,
+      "last": {
+        "status": "installed_for_next_launch",
+        "at": "2026-10-22T12:00:00.123456+00:00"
+      },
+      "activation": "next_launch",
+      "installed_at": "2026-10-22T12:00:00.123456+00:00",
+      "release_check": null
     }
   }
 }

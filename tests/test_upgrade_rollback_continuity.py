@@ -92,7 +92,7 @@ async def world(request, tmp_path, mock, monkeypatch):
 def enroll(deployment):
     updater, receipt, _ = deployment
     updater.enroll(receipt, 'preview')
-    updater.find_release = lambda _: release('b' * 40, '0.2.8')
+    updater.find_release = lambda _, observation=None: release('b' * 40, '0.2.8')
     updater.install = lambda root, candidate, **_: make_package(root, candidate)
     return updater
 

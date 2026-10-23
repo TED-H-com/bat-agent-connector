@@ -1468,6 +1468,13 @@ var diagnosticsStrings;
 var init_diagnostics_strings = __esmMin((() => {
 	diagnosticsStrings = {
 		en: {
+			diag_version_desktop_released: "Released Desktop app",
+			diag_version_connector_released: "Released Connector",
+			diag_version_mcp: "Loaded MCP process (not observed by Dashboard)",
+			diag_version_source_connector_release_check: "Source: validated Connector release check",
+			diag_version_period_release_check: "Release check completed at",
+			diag_version_installed_at: "Installation pointer confirmed at {time}",
+			diag_version_published: "Release published at {time}",
 			diag_version_connector_installed: "Connector installed for the next launch",
 			diag_version_source_connector_update: "Source: Connector update status",
 			diag_version_period_next_launch: "Installed for the next launch",
@@ -1577,6 +1584,13 @@ var init_diagnostics_strings = __esmMin((() => {
 			diag_state_unknown: "Unknown"
 		},
 		"zh-TW": {
+			diag_version_desktop_released: "已發布的桌面程式",
+			diag_version_connector_released: "已發布的 Connector",
+			diag_version_mcp: "已載入的 MCP 程序（Dashboard 尚無觀察資料）",
+			diag_version_source_connector_release_check: "來源：已驗證的 Connector 發布檢查",
+			diag_version_period_release_check: "發布檢查完成時間",
+			diag_version_installed_at: "安裝指標確認時間：{time}",
+			diag_version_published: "發布時間：{time}",
 			diag_version_connector_installed: "供下次啟動的 Connector 安裝",
 			diag_version_source_connector_update: "來源：Connector 更新狀態",
 			diag_version_period_next_launch: "已安裝，供下次啟動使用",
@@ -17735,6 +17749,10 @@ var fact$1 = (id, value, source, at, period, extra = {}) => {
 		...extra
 	};
 };
+var released = (id, candidate, source, at) => {
+	const known = version$2(candidate?.version) && commit(candidate?.commit) && time(at);
+	return fact$1(id, known ? candidate : null, source, known ? at : null, "release_check", { published_at: known ? time(candidate.published_at) : null });
+};
 function versionProjection(input = {}) {
 	const caps = input.online === false ? null : input.caps;
 	const managed = input.managedRuntime;
@@ -17743,6 +17761,8 @@ function versionProjection(input = {}) {
 	const frontend = input.frontendBuild === void 0 ? frontendBuild : input.frontendBuild;
 	const update = caps?.connector_update;
 	const reported = update?.state === "reported";
+	const releaseCheck = reported ? update.release_check : null;
+	const candidate = input.updaterReadFailed ? null : input.updater?.candidate;
 	const last = reported && updateResults.includes(update.last?.status) ? {
 		status: update.last.status,
 		code: updateCode(update.last.code),
@@ -17750,6 +17770,12 @@ function versionProjection(input = {}) {
 	} : null;
 	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$10(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
 	const rows = [
+		released("desktop_released", input.desktop && candidate ? {
+			version: candidate.version,
+			commit: candidate.source_sha
+		} : null, "desktop_updater", input.desktop ? candidate?.checked_at : null),
+		released("connector_released", releaseCheck?.candidate, "connector_release_check", releaseCheck?.completed_at),
+		fact$1("mcp", null, "not_reported", null, "unknown"),
 		fact$1("desktop", input.desktop ? input.appBuild : null, "native_app_build", input.nativeReadAt, "loaded"),
 		fact$1("loaded_ui", { digest: frontend?.frontend_digest }, "loaded_ui", loadedAt, "loaded"),
 		fact$1("served_ui", { digest: caps?.frontend?.digest }, "capabilities", caps ? input.capabilitiesReadAt : null, "read"),
@@ -17758,6 +17784,7 @@ function versionProjection(input = {}) {
 			version: caps.build?.version ?? caps.connector
 		} : null, "capabilities", caps ? input.capabilitiesReadAt : null, "read"),
 		fact$1("connector_installed", reported ? update.installed : null, "connector_update", reported ? input.capabilitiesReadAt : null, "next_launch", {
+			installed_at: reported ? time(update.installed_at) : null,
 			state: updateStates.includes(update?.state) ? update.state : "not_reported",
 			code: update?.state === "unreadable" ? updateCode(update.code) : null,
 			enabled: reported && typeof update.enabled === "boolean" ? update.enabled : null,
@@ -18123,7 +18150,10 @@ function versionFactText(row, t) {
 	const unknown = t("diag_unknown");
 	if ([
 		"desktop",
+		"desktop_released",
 		"connector",
+		"connector_released",
+		"mcp",
 		"connector_installed",
 		"bundled_runtime",
 		"running_runtime"
@@ -18133,14 +18163,18 @@ function versionFactText(row, t) {
 	return t("diag_version_number", { version: row.version || unknown });
 }
 function versionFacts({ h, t, projection }) {
-	const rows = projection.rows.filter((row) => projection.platform === "desktop" || !["desktop", "desktop_update"].includes(row.id));
+	const rows = projection.rows.filter((row) => projection.platform === "desktop" || ![
+		"desktop",
+		"desktop_update",
+		"desktop_released"
+	].includes(row.id));
 	return h("section", {
 		class: "version-facts",
 		"data-version-facts": ""
-	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.id === "connector_installed" ? h("div", {}, row.state !== "reported" ? h("p", { class: "muted" }, t("diag_version_update_" + row.state), row.code ? " · " + row.code : "") : null, row.channel ? h("p", { class: "muted" }, t("diag_version_update_channel", { channel: t("diag_version_channel_" + row.channel) })) : null, row.enabled !== null ? h("p", { class: "muted" }, t("diag_version_update_" + (row.enabled ? "enabled" : "disabled"))) : null, row.pending === true ? h("p", { class: "muted" }, t("diag_version_update_pending")) : null, row.last ? h("p", { class: "muted" }, t("diag_version_update_last", {
+	}, h("h3", {}, t("diag_versions")), h("dl", {}, ...rows.map((row) => h("div", { "data-version-row": row.id }, h("dt", {}, t("diag_version_" + row.id)), h("dd", {}, h("p", { class: "mono" }, versionFactText(row, t)), h("p", { class: "muted" }, t("diag_version_source_" + row.source), " · ", t("diag_version_period_" + row.period), " · ", row.observed_at || t("diag_version_time_unknown")), row.id === "connector_installed" ? h("div", {}, row.state !== "reported" ? h("p", { class: "muted" }, t("diag_version_update_" + row.state), row.code ? " · " + row.code : "") : null, row.installed_at ? h("p", { class: "muted" }, t("diag_version_installed_at", { time: row.installed_at })) : null, row.channel ? h("p", { class: "muted" }, t("diag_version_update_channel", { channel: t("diag_version_channel_" + row.channel) })) : null, row.enabled !== null ? h("p", { class: "muted" }, t("diag_version_update_" + (row.enabled ? "enabled" : "disabled"))) : null, row.pending === true ? h("p", { class: "muted" }, t("diag_version_update_pending")) : null, row.last ? h("p", { class: "muted" }, t("diag_version_update_last", {
 		result: t("diag_version_result_" + row.last.status),
 		at: row.last.at || t("diag_version_time_unknown")
-	}), row.last.code ? " · " + row.last.code : "") : null, h("p", { "data-connector-installation-difference": "" }, t("diag_version_installation_" + projection.connector_installation_difference))) : null, row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
+	}), row.last.code ? " · " + row.last.code : "") : null, h("p", { "data-connector-installation-difference": "" }, t("diag_version_installation_" + projection.connector_installation_difference))) : null, row.published_at ? h("p", { class: "muted" }, t("diag_version_published", { time: row.published_at })) : null, row.recorded_at ? h("p", { class: "muted" }, t("diag_version_run_updated", { time: row.recorded_at })) : null)))), h("p", { "data-runtime-difference": "" }, t("diag_runtime_" + projection.runtime_difference)), h("p", { class: "muted" }, t("diag_adapter_observed_unknown")));
 }
 //#endregion
 //#region src/diagnostics-dialog.js
@@ -63960,7 +63994,14 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 			value = next;
 			readable = true;
 			readAt = new Date().toISOString();
-			onRead({ current_version: next.current_version }, readAt);
+			onRead({
+				current_version: next.current_version,
+				candidate: next.candidate ? {
+					version: next.candidate.version,
+					source_sha: next.candidate.source_sha,
+					checked_at: next.candidate.checked_at
+				} : null
+			}, readAt);
 			if (next.code && next.available && !next.installation) message.textContent = `${t("update_problem")} ${next.code}`;
 		} catch {
 			if (active()) {
