@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {setTimeout as delay} from 'node:timers/promises';
 import {conversationFixture, mountConversation} from './conversation-fixture';
 import {runtimeGolden} from './session-runtime-fixture';
 import {hostGolden} from './header-hosts-fixture';
@@ -103,36 +104,51 @@ for (const locale of ['en-US', 'zh-TW']) {
     for (const axis of ['activity', 'connection']) Object.assign(session.state.evidence[axis], {
       observed_at: host.last_attempt_at, valid_until: host.valid_until, stale: true});
     const path = '/sessions/fixture-host/fixture-session', counts = new Map<string, number>();
-    let posts = 0, completed = false, release: () => void = () => {};
+    let posts = 0, release: () => void = () => {};
     const held = new Promise<void>(resolve => {release = resolve;});
-    await page.clock.install({time: 1790000600000}); await page.clock.pauseAt(1790000600000);
+    await page.clock.pauseAt(1790000600000);
     await mountConversation(page, false, async input => {
       if (input.method !== 'GET') posts++;
       if (input.path === '/hosts' || input.path === path) {
         counts.set(input.path, (counts.get(input.path) || 0) + 1);
-        if (counts.get(input.path) === 2) {await held; completed = true;}
+        if (counts.get(input.path) === 2) {await held; await delay(1_500);}
         return {status: 200, data: input.path === '/hosts' ? doc : {session}};
       }
       return fixture.dispatch(input);
     });
     try {
       await page.goto('/dashboard/#/sessions');
-      await expect.poll(() => counts.get('/hosts')).toBe(1);
+      await expect(page.locator('.filters select option[value="fixture-host"]')).toBeAttached();
+      expect(counts.get('/hosts')).toBe(1);
+      // Start hosts renewal before selecting the session. The shell serializes
+      // renewals, so the later session result proves both reads have applied.
+      await page.clock.fastForward(1_000);
       await page.evaluate(() => {location.hash = '#/session/fixture-host/fixture-session';});
       const activity = page.locator('#installation-health .health-last-value');
+      const checking = page.locator('#installation-health [data-health-checking]');
       await expect(activity).toHaveText(locale === 'en-US' ? 'Idle · 10 min ago' : '閒置 · 10 分鐘前');
-      await expect(page.locator('#installation-health [data-health-checking]')).toHaveText(locale === 'en-US' ? 'Checking' : '檢查中');
-      await page.clock.fastForward(1_000);
-      await expect.poll(() => counts.get(path)).toBe(2);
-      release(); await expect.poll(() => completed).toBe(true);
+      await expect(checking).toHaveCount(1);
+      await expect(checking).toHaveText(locale === 'en-US' ? 'Checking' : '檢查中');
+      release();
+      await expect.poll(async () => {
+        await page.clock.fastForward(1_000);
+        return activity.textContent();
+      }).toBe(locale === 'en-US'
+        ? 'Idle · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
+        : '閒置 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+      expect(counts.get(path)).toBe(2);
       await expect(activity).toHaveText(locale === 'en-US'
         ? 'Idle · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
         : '閒置 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
       await expect(page.locator('#installation-health .health-installation-connection')).toHaveText(locale === 'en-US'
         ? 'Connected · 10 min ago · Could not confirm (OBSERVATION_NOT_RENEWED)'
         : '已連線 · 10 分鐘前 · 無法確認（OBSERVATION_NOT_RENEWED）');
+      // An applied unchanged observation is still stale, so the strip retains
+      // its single Checking statement even though the renewal has completed.
+      await expect(checking).toHaveCount(1);
+      await expect(checking).toHaveText(locale === 'en-US' ? 'Checking' : '檢查中');
       await page.clock.fastForward(1_000);
-      await expect.poll(() => counts.get('/hosts')).toBe(2);
+      expect(counts.get('/hosts')).toBe(2);
       await page.clock.fastForward(600_000);
       await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
       expect(Object.fromEntries(counts)).toEqual({'/hosts': 2, [path]: 2});
