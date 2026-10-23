@@ -302,6 +302,69 @@ Assert-Fixture ($saved.attempts[19].unavailable_nodes -eq 1 -and $saved.attempts
     $null -eq $saved.attempts[19].error_hresult -and -not $json.Contains('private UI text')) 'UIA diagnostics leaked text or paired an old HRESULT'
 Write-Host 'Passed helper: bounded UIA evidence round-trips phases, outcomes and sanitized diagnostics'
 
+# Diagnostics only: neither a responsive HWND nor a slow-start phase permits a
+# timed-out UIA query to be retried without evidence establishing its cause.
+$timed = New-FixtureViewAttempt $history
+Set-FixtureViewDiagnostics $timed "started`nphase_elapsed_ms:started:7300`nphase_elapsed_ms:owner_verified:7310`nphase_elapsed_ms:assemblies_loaded:7800`n"
+Assert-Fixture ($timed.phase_elapsed_ms.started -eq 7300 -and $timed.phase_elapsed_ms.assemblies_loaded -eq 7800 -and
+    $timed.phases.assemblies_loaded -and -not $timed.phases.window_resolved) 'Cold probe startup time was lost'
+Set-FixtureViewDiagnostics $timed "phase_elapsed_ms:started:1`nphase_elapsed_ms:private UI text:2`nphase_elapsed_ms:failed:-1`nphase_elapsed_ms:failed:60001`nphase_elapsed_ms:failed:99999999999999`nphase_elapsed_ms:failed:1 secret`n"
+Assert-Fixture ($timed.phase_elapsed_ms.started -eq 7300 -and $timed.phase_elapsed_ms.Count -eq 3) 'Malformed, duplicate or unbounded phase timing was retained'
+$bounded = New-FixtureViewAttempt $history
+Set-FixtureViewDiagnostics $bounded (("private UI text`n" * 256) + "phase_elapsed_ms:completed:1`n")
+Assert-Fixture ($bounded.diagnostics_truncated -and $bounded.phase_elapsed_ms.Count -eq 0) 'Diagnostic line bound was ignored'
+$bounded = New-FixtureViewAttempt $history
+Set-FixtureViewDiagnostics $bounded (('x' * 16384) + "`nphase_elapsed_ms:completed:1`n")
+Assert-Fixture ($bounded.diagnostics_truncated -and $bounded.phase_elapsed_ms.Count -eq 0) 'Diagnostic character bound was ignored'
+Set-FixtureViewDiagnostics $timed "phase_elapsed_ms:failed:60000`n"
+Assert-Fixture ($timed.phase_elapsed_ms.failed -eq 60000) 'Maximum fixed-format elapsed time was lost'
+$json = $timed | ConvertTo-Json -Depth 5
+Assert-Fixture (-not $json.Contains('private UI text') -and -not $json.Contains('secret')) 'Timing diagnostics retained provider text'
+Write-Host 'Passed helper: phase elapsed times are fixed, first-only and bounded without provider text'
+
+$sampleClock = New-FakeClock
+foreach ($state in @('responsive', 'hung', 'failed', 'owner_changed')) {
+    $response = Get-FixtureWindowResponse ([IntPtr]1) 42 ((& $sampleClock.Now).AddMilliseconds(75)) {
+        param($Window, $Owner, $Timeout)
+        Assert-Fixture ($Window -eq [IntPtr]1 -and $Owner -eq 42 -and $Timeout -eq 75) 'WM_NULL sample escaped its target or remaining deadline'
+        [pscustomobject]@{State=$state; ElapsedMilliseconds=75L; ErrorCode=0}
+    } -Now $sampleClock.Now
+    Assert-Fixture ($response.state -ceq $state -and $response.elapsed_ms -eq 75 -and $response.timeout_ms -eq 75) 'Responsiveness sample changed'
+}
+$response = Get-FixtureWindowResponse ([IntPtr]1) 42 ((& $sampleClock.Now).AddSeconds(30)) {
+    param($Window, $Owner, $Timeout)
+    Assert-Fixture ($Timeout -eq 200) 'WM_NULL sample cap changed'
+    [pscustomobject]@{State='responsive'; ElapsedMilliseconds=1L; ErrorCode=0}
+} -Now $sampleClock.Now
+$expired = Get-FixtureWindowResponse ([IntPtr]1) 42 ((& $sampleClock.Now).AddMilliseconds(-1)) {
+    throw 'Expired responsiveness sample ran'
+} -Now $sampleClock.Now
+Assert-Fixture ($expired.state -ceq 'not_sampled' -and $expired.timeout_ms -eq 0) 'Expired window sampling used a new deadline'
+foreach ($invalid in @(
+    @{State='private UI text'; ElapsedMilliseconds=1L; ErrorCode=0},
+    @{State='responsive'; ElapsedMilliseconds=-1L; ErrorCode=0},
+    @{State='responsive'; ElapsedMilliseconds='secret'; ErrorCode=0}
+)) {
+    $refused = $false
+    try { Get-FixtureWindowResponse ([IntPtr]1) 42 ((& $sampleClock.Now).AddSeconds(30)) { $invalid } -Now $sampleClock.Now }
+    catch { $refused = $true }
+    Assert-Fixture $refused 'Unknown responsiveness diagnostics escaped'
+}
+foreach ($stage in @('assemblies_loaded', 'query_started')) {
+    foreach ($responseState in @('responsive', 'hung')) {
+        $attempt = New-FixtureViewAttempt $history
+        $attempt.phases[$stage] = $true
+        $attempt.phases.timed_out = $true
+        $attempt.window_response = @{state=$responseState; elapsed_ms=200; timeout_ms=200; win32_error=1460}
+        $attempt.exit_code = 3
+        $fatal = $false
+        try { Test-FixtureViewResult $attempt $ready $view | Out-Null }
+        catch { $fatal = $_.Exception.Message -ceq 'Native UI Automation probe exceeded its deadline' }
+        Assert-Fixture ($fatal -and $view.state.Count -eq 0) 'Diagnostics weakened timeout/readiness classification'
+    }
+}
+Write-Host 'Passed helper: bounded native window samples are diagnostic only; all UIA timeouts remain fatal'
+
 if ($IsWindows) {
     # Compile the actual probe plus a different test entry point against the same
     # .NET Framework UIA assemblies used by the installed fixture.
