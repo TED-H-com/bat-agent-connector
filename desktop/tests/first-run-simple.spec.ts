@@ -13,7 +13,13 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
       await expect(page.locator(`[data-setup-field=${field}]`)).toBeHidden();
     await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(page.locator('[data-setup-sessions]')).toBeVisible();
-    await expect(page.locator('[data-setup-progress]')).toHaveText(locale === 'en' ? 'Setup is complete. You’re ready to go.' : '設定完成，可以開始使用了。');
+    // This legacy fixture has no matching versioned observation for the saved
+    // host. A successful setup receipt cannot turn its connected boolean ready.
+    await expect(page.locator('[data-setup-progress]')).toHaveText(locale === 'en'
+      ? 'Connector verified the connection and saved the configuration for bat at —.'
+      : 'Connector 已驗證連線並儲存設定：bat · —。');
+    await expect(page.locator('[data-setup-facet="connection"] [data-setup-fact-value]')).toHaveText(locale === 'en'
+      ? 'Not verified yet · Checking' : '尚未驗證 · 檢查中');
     expect(state.posts).toHaveLength(1); expect(state.staged).toEqual([]);
     expect(state.posts[0].body).toMatchObject({action: 'setup.host', target: {host: 'bat'}, params: {
       import_profile_id: 'profile-demo', writes: false, orchestrate: false, shared_clone_worktrees: false, managed_roots: []}});

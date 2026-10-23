@@ -1,11 +1,10 @@
 import {test, expect, type Page} from '@playwright/test';
 import {managedSetupFixture, reviewSetupConnection, expectLegacyProfileFallback, openSetupAdvanced, applySetupReview} from './managed-setup-fixture.ts';
 import {readFileSync} from 'node:fs';
+import {mountSetupObservation} from './setup-observation-fixture.ts';
 // Literal expectations remain independent of the runtime translation producer.
 const labels: Record<string, Record<string, string>> = {
   en: {
-    setup_connection_connected: 'Connected', setup_connection_checking: 'Checking…', setup_connection_unreachable: 'Can’t reach this connection',
-    setup_connection_action: 'Make sure BAT is open, then select Refresh.', setup_connection_checking_help: 'There’s no recent connection result yet. Refresh in a moment.',
     setup_operation_receipt: 'Setup operation · {status}', setup_operation_done: 'Done',
     setup_ready: 'Setup is complete. You’re ready to go.', setup_profile: 'BAT connection profile',
     setup_host_name: 'Host ID', setup_bat_token: 'BAT connection token (optional with a profile)', pm_refresh: 'Refresh',
@@ -23,8 +22,6 @@ const labels: Record<string, Record<string, string>> = {
     sessions_title: 'Sessions',
   },
   'zh-TW': {
-    setup_connection_connected: '已連線', setup_connection_checking: '確認連線中…', setup_connection_unreachable: '目前無法連線',
-    setup_connection_action: '請確認 BAT 已開啟，再按「重新整理」。', setup_connection_checking_help: '目前還沒有最新的連線結果，請稍後重新整理。',
     setup_operation_receipt: '設定操作 · {status}', setup_operation_done: '完成', setup_ready: '設定完成，可以開始使用了。',
     setup_profile: 'BAT 連線設定檔', setup_host_name: '主機代號', setup_bat_token: 'BAT 連線權杖（使用設定檔時可留白）', pm_refresh: '重新整理',
     error_generic: '無法完成此要求，請查看詳細資料。', setup_save_host: '預覽連線', setup_recover: '查回請求',
@@ -40,6 +37,63 @@ const labels: Record<string, Record<string, string>> = {
   },
 };
 const setupEvidence = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url), 'utf8'));
+for (const locale of ['en', 'zh-TW']) for (const width of [390,1440])
+  for (const outcome of ['renewed','unchanged','503','refused']) test(`${locale} Settings ${outcome} observation renewal at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width,height:900});
+    await page.clock.install({time:new Date(1800000600000)}); await page.clock.pauseAt(1800000600000);
+    let release:()=>void;
+    const held=new Promise<void>(resolve=>release=resolve);
+    const body=structuredClone(setupEvidence.observations.connected.setup);
+    const f=await mountSetupObservation(page,body,setupEvidence.operation,locale,async(route,n)=>{
+      if(n<=2){await route.fulfill({status:200,json:body});return;}
+      await held;
+      const refusal=setupEvidence.observations.connected.read_refusal;
+      await route.fulfill(outcome==='refused'?{status:refusal.status,json:refusal.body}:outcome==='503'?{status:503,json:{}}:
+        {status:200,json:outcome==='renewed'?setupEvidence.observations.renewed.setup:body});
+    });
+    const count=()=>f.reads.filter(path=>path.endsWith('/managed/setup')).length;
+    const link=f.panel.locator('[data-setup-operation]'),draft=f.panel.locator('[data-setup-field="host"]');
+    await expect(f.fact('connection')).toHaveText(locale==='en'?'Ready':'已就緒');
+    await expect(draft).toHaveValue('retained-draft'); await link.focus();
+    const original=await link.elementHandle();
+    const stored=await page.evaluate(()=>localStorage.getItem('batc.managed.setup.observation-fixture'));
+    expect(count()).toBe(2);
+    try {
+      await page.clock.runFor(179999); expect(count()).toBe(2);
+      await page.clock.runFor(1); await expect.poll(count).toBe(3);
+      await expect(f.fact('connection')).toHaveText(locale==='en'?'Ready · 3 min ago · Checking':'已就緒 · 3 分鐘前 · 檢查中');
+      await expect(link).toBeFocused();
+      const source=f.panel.locator('[data-setup-facet="connection"] details summary');
+      await source.focus(); release!();
+      const expected=outcome==='renewed'?(locale==='en'?'Ready':'已就緒'):
+        (locale==='en'?`Ready · 3 min ago · Could not confirm (${outcome==='unchanged'?'OBSERVATION_NOT_RENEWED':outcome==='refused'?'FORBIDDEN':'503'})`:
+          `已就緒 · 3 分鐘前 · 無法確認（${outcome==='unchanged'?'OBSERVATION_NOT_RENEWED':outcome==='refused'?'FORBIDDEN':'503'}）`);
+      await expect(f.fact('connection')).toHaveText(expected);
+      await expect(source).toBeFocused();
+      await expect(source.locator('..')).toHaveAttribute('open','');
+      await link.focus(); await expect(draft).toHaveValue('retained-draft');
+      expect(await original!.evaluate(node=>node===document.activeElement)).toBe(true);
+      expect(await page.evaluate(()=>localStorage.getItem('batc.managed.setup.observation-fixture'))).toBe(stored);
+      const progress=f.panel.locator('[data-setup-progress]');
+      if(outcome!=='renewed'){
+        await expect(progress).toContainText(locale==='en'?'Connector verified the connection and saved the configuration':'Connector 已驗證連線並儲存設定');
+        await expect(progress.locator('time')).toHaveAttribute('datetime',new Date(setupEvidence.operation.updated_at*1000).toISOString());
+        await page.clock.fastForward(3600000); expect(count()).toBe(3);
+        await expect(f.fact('connection')).not.toContainText(locale==='en'?'Checking':'檢查中');
+        if(outcome==='unchanged'){
+          body.revision='c'.repeat(64); // Unrelated config changes do not renew a source observation.
+          await page.evaluate(()=>(window as any).__setupObservation.reload());
+          expect(count()).toBe(4);await page.clock.fastForward(60000);expect(count()).toBe(4);
+        }
+      } else {
+        await page.clock.runFor(180000); await expect.poll(count).toBe(4);
+        await page.clock.fastForward(3600000); expect(count()).toBe(4);
+      }
+      expect(f.posts).toEqual([]);
+      expect(f.reads.every(path=>path.endsWith('/managed/setup')||path.includes('/operations/'))).toBe(true);
+    } finally {release!();}
+  });
+
 for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', () => {
   test.use({locale: locale === 'en' ? 'en-US' : locale});
   const fixture = (page: Page, native: boolean) => managedSetupFixture(page, native, locale);
@@ -56,6 +110,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
   for (const width of [390, 1440]) for (const condition of ['unreachable', 'checking', 'connected'])
     test(`past setup evidence and current ${condition} at ${width}px`, async ({page}) => {
       await page.setViewportSize({width, height: 900});
+      await page.clock.install({time:new Date(1800000600000)}); await page.clock.pauseAt(1800000600000);
       const posts: string[] = [];
       page.on('request', request => {if (request.method() === 'POST') posts.push(request.url());});
       const state = await managedSetupFixture(page, false, locale, {
@@ -63,8 +118,11 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);
       await expectSetupOperation(page);
       const panel = page.locator('[data-managed-setup]'), progress = panel.locator('[data-setup-progress]');
-      const host = panel.locator(`[data-setup-host-state="${condition}"]`);
-      await expect(host).toContainText(copy(`setup_connection_${condition}`));
+      const host = panel.locator('[data-setup-facet="connection"]');
+      await expect(host.locator('[data-setup-fact-value]')).toHaveText(condition === 'connected'
+        ? locale === 'en' ? 'Ready' : '已就緒'
+        : locale === 'en' ? `Unavailable · Last attempt: ${condition === 'checking' ? '15 min ago' : 'Less than a minute ago'}; host unreachable, last successful observation is stale`
+        : `不可用 · 上次嘗試：${condition === 'checking' ? '15 分鐘前' : '不到一分鐘前'}；無法連至主機，上次成功觀察已過期`);
       if (condition === 'connected') await expect(progress).toHaveText(copy('setup_ready'));
       else {
         // Assert the original contradiction first, before checking new evidence copy.
@@ -73,7 +131,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
         await expect(progress).toContainText(locale === 'zh-TW' ? 'Connector 已驗證連線並儲存設定' : 'Connector verified the connection and saved the configuration');
         await expect(progress.locator('time')).toHaveAttribute('datetime', new Date(setupEvidence.operation.updated_at * 1000).toISOString());
         await expect(progress.locator('time')).not.toHaveText('');
-        await expect(host).toContainText(copy(condition === 'unreachable' ? 'setup_connection_action' : 'setup_connection_checking_help'));
+        await expect(host).toContainText(locale === 'en' ? 'The Inventory read failed; the last successful observation is stale.' : 'Inventory 讀取失敗；上次成功觀察已過期。');
       }
       await expect(host.locator('time')).toHaveAttribute('datetime', new Date(setupEvidence.states[condition].hosts[0].connection_checked_at * 1000).toISOString());
       await expect(host.locator('time')).not.toHaveText('');

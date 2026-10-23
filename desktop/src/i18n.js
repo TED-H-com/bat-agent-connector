@@ -1,4 +1,5 @@
 import {healthStrings} from './health-strings.js';
+import {setupObservationStrings} from './setup-observation-strings.js';
 import {resultSourcesStrings} from './result-sources-strings.js';
 import {earlierDraftStrings} from './earlier-drafts-strings.js';
 import {externalHistoryStrings} from './pm-external-history-strings.js';
@@ -41,6 +42,7 @@ import {FLEET_STRINGS} from './fleet-strings.js';
 export const STRINGS = {
   "zh-TW": {
     ...healthStrings['zh-TW'],
+    ...setupObservationStrings['zh-TW'],
     ...FLEET_STRINGS['zh-TW'],
     ...workbenchStrings["zh-TW"],
     ...resultSourcesStrings["zh-TW"],
@@ -175,8 +177,6 @@ export const STRINGS = {
     connection_scope_merge: "合併",
     setup_link_ready: "已收到連線資料，請按「繼續設定」。",
     setup_waiting: "可以開始設定了",
-    setup_connection_connected: "已連線", setup_connection_checking: "確認連線中…", setup_connection_unreachable: "目前無法連線",
-    setup_connection_action: "請確認 BAT 已開啟，再按「重新整理」。", setup_connection_checking_help: "目前還沒有最新的連線結果，請稍後重新整理。",
     setup_language: "顯示語言", setup_language_en: "English", setup_language_zh: "繁體中文",
     setup_review_connection: "預覽連線",
     setup_reviewing_connection: "正在預覽連線",
@@ -1157,6 +1157,7 @@ export const STRINGS = {
   },
   en: {
     ...healthStrings.en,
+    ...setupObservationStrings.en,
     ...FLEET_STRINGS.en,
     ...workbenchStrings.en,
     ...resultSourcesStrings.en,
@@ -1291,8 +1292,6 @@ export const STRINGS = {
     connection_scope_merge: "Merge",
     setup_link_ready: "Connection details are ready. Select Continue setup.",
     setup_waiting: "Ready to set up",
-    setup_connection_connected: "Connected", setup_connection_checking: "Checking…", setup_connection_unreachable: "Can’t reach this connection",
-    setup_connection_action: "Make sure BAT is open, then select Refresh.", setup_connection_checking_help: "There’s no recent connection result yet. Refresh in a moment.",
     setup_language: "Language", setup_language_en: "English", setup_language_zh: "繁體中文",
     setup_review_connection: "Review connection",
     setup_reviewing_connection: "Reviewing connection",

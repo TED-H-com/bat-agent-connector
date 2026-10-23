@@ -34,19 +34,19 @@ test('explicit protocol-default BAT ports survive URL normalization', () => {
   assert.equal(validSetupEndpoint('wss://localhost:443/'), true);
 });
 
-test('an absent legacy socket is unknown reachability, while explicit observation states are preserved', async () => {
-  const {setupConnectionStatus} = await import('../src/managed-setup.js');
-  assert.equal(setupConnectionStatus({connected: false}), 'checking');
-  assert.equal(setupConnectionStatus({}), 'checking');
-  assert.equal(setupConnectionStatus({connected: true}), 'connected');
+test('legacy and unsupported observations cannot establish readiness', async () => {
+  const {setupConnectionFacts} = await import('../src/managed-setup.js');
+  const unknown = host => assert.equal(setupConnectionFacts(host).connection.value, 'unknown');
+  unknown({connected:false}); unknown({}); unknown({connected:true});
   for (const status of ['connected', 'checking', 'unreachable'])
-    assert.equal(setupConnectionStatus({connected: false, connection_status: status}), status);
+    unknown({connected:true,connection_status:status});
+  unknown({connected:true,connection_observation:{version:2}});
 });
 
 test('setup status separates the original operation from each current host observation', async () => {
   const {setupStatusLine} = await import('../src/managed-setup.js');
   const {operation, states} = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url), 'utf8'));
-  const status = (hosts: any[], op: any = operation, extra = {}) => setupStatusLine({hosts, operation: op, readReady: true, ...extra});
+  const status = (hosts: any[], op: any = operation, extra = {}) => setupStatusLine({hosts, operation: op, readReady: true, now:1800000600000, ...extra});
   const past = {key: 'setup_verified_saved', verifiedAt: operation.updated_at};
   for (const condition of ['unreachable', 'checking']) {
     assert.deepEqual(status(states[condition].hosts), past);
@@ -63,4 +63,28 @@ test('setup status separates the original operation from each current host obser
   assert.deepEqual(status(states.checking.hosts, {...operation, status: 'failed'}), {key: 'setup_failed_operation'});
   assert.deepEqual(status([], null), {key: 'setup_waiting'});
   assert.deepEqual(status([], null, {readReady: false}), {key: 'setup_loading'});
+});
+
+test('all producer facets use the shared clock and Settings agrees with Work', async () => {
+  const {setupConnectionFacts, setupStatusLine} = await import('../src/managed-setup.js');
+  const {profileStateFacts} = await import('../src/pm-work-profile-state.js');
+  const {healthLabel} = await import('../src/health-display.js');
+  const {t,setLocale} = await import('../src/i18n.js');
+  const golden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-setup-evidence.json', import.meta.url),'utf8'));
+  for(const locale of ['en','zh-TW']) {
+    setLocale(locale);
+    for(const [name,body] of Object.entries(golden.observations) as [string,any][]) {
+      const now=1800000780000;
+      const facts=setupConnectionFacts(body.setup.hosts[0],{now});
+      assert.equal(Object.keys(facts).length,4);
+      const work=profileStateFacts(body.work,{now});
+      if(work.fact)assert.equal(healthLabel(facts.connection,t),healthLabel(work.fact,t),name);
+      if(name==='active_writer')assert.notEqual(setupStatusLine({hosts:body.setup.hosts,readReady:true,now}).key,'setup_ready');
+    }
+    const host=golden.observations.connected.setup.hosts[0];
+    const at=Date.parse(host.connection_observation.facets.connection.valid_until);
+    assert.equal(setupConnectionFacts(host,{now:at-1}).connection.freshness,'current');
+    assert.equal(setupConnectionFacts(host,{now:at}).connection.freshness,'stale');
+    assert.notEqual(setupStatusLine({hosts:[host],readReady:true,now:at}).key,'setup_ready');
+  }
 });

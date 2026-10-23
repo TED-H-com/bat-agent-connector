@@ -157,6 +157,57 @@ var init_health_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/setup-observation-strings.js
+var setupObservationStrings;
+var init_setup_observation_strings = __esmMin((() => {
+	setupObservationStrings = {
+		en: {
+			setup_observation_transport: "Transport",
+			setup_observation_service: "BAT service",
+			setup_observation_trust_sign_in: "Trust and sign-in",
+			setup_observation_connection: "Connection observation",
+			setup_observation_source: "Observation source",
+			setup_observation_hosts_observed: "Inventory",
+			setup_observation_fleet_client: "Active authenticated connection",
+			setup_observation_reason_unknown: "No classified observation is available.",
+			setup_observation_reason_never_observed: "Inventory has not observed this source yet.",
+			setup_observation_reason_host_unreachable: "The Inventory read failed; the last successful observation is stale.",
+			setup_observation_reason_host_not_refreshed: "The Inventory observation has expired.",
+			setup_observation_reason_DISCOVERY_SCOPE_CHANGED: "The configured source changed; earlier observations do not apply.",
+			setup_observation_reason_transport: "The client could not establish or keep the transport.",
+			setup_observation_reason_tls_trust: "The certificate did not match the trusted fingerprint.",
+			setup_observation_reason_auth_or_protocol: "Sign-in or protocol negotiation failed.",
+			setup_observation_reason_credential_missing: "The configured credential is unavailable.",
+			setup_observation_reason_service_refused: "BAT refused the read.",
+			setup_observation_reason_service_timeout: "BAT did not answer the read in time.",
+			setup_observation_reason_authenticated_socket: "The authenticated connection is active; no workspace capability is established by this fact.",
+			setup_observation_reason_observed: "Inventory read this configured source successfully."
+		},
+		"zh-TW": {
+			setup_observation_transport: "傳輸連線",
+			setup_observation_service: "BAT 服務",
+			setup_observation_trust_sign_in: "信任與登入",
+			setup_observation_connection: "連線觀察",
+			setup_observation_source: "觀察來源",
+			setup_observation_hosts_observed: "Inventory",
+			setup_observation_fleet_client: "已驗證的現用連線",
+			setup_observation_reason_unknown: "目前沒有已分類的觀察結果。",
+			setup_observation_reason_never_observed: "Inventory 尚未觀察此來源。",
+			setup_observation_reason_host_unreachable: "Inventory 讀取失敗；上次成功觀察已過期。",
+			setup_observation_reason_host_not_refreshed: "Inventory 的觀察已過期。",
+			setup_observation_reason_DISCOVERY_SCOPE_CHANGED: "設定的來源已變更，先前觀察不適用。",
+			setup_observation_reason_transport: "用戶端無法建立或維持傳輸連線。",
+			setup_observation_reason_tls_trust: "憑證與信任的指紋不符。",
+			setup_observation_reason_auth_or_protocol: "登入或協定協商失敗。",
+			setup_observation_reason_credential_missing: "設定的憑證目前無法使用。",
+			setup_observation_reason_service_refused: "BAT 拒絕讀取。",
+			setup_observation_reason_service_timeout: "BAT 未在期限內回應讀取。",
+			setup_observation_reason_authenticated_socket: "已驗證的連線仍在運作；這項事實不代表工作區能力已就緒。",
+			setup_observation_reason_observed: "Inventory 已成功讀取此設定來源。"
+		}
+	};
+}));
+//#endregion
 //#region src/result-sources-strings.js
 var resultSourcesStrings;
 var init_result_sources_strings = __esmMin((() => {
@@ -10357,6 +10408,7 @@ function t(key, vars = {}) {
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
 	init_health_strings();
+	init_setup_observation_strings();
 	init_result_sources_strings();
 	init_earlier_drafts_strings();
 	init_pm_external_history_strings();
@@ -10398,6 +10450,7 @@ var init_i18n = __esmMin((() => {
 	STRINGS = {
 		"zh-TW": {
 			...healthStrings["zh-TW"],
+			...setupObservationStrings["zh-TW"],
 			...FLEET_STRINGS["zh-TW"],
 			...workbenchStrings$1["zh-TW"],
 			...resultSourcesStrings["zh-TW"],
@@ -10547,11 +10600,6 @@ var init_i18n = __esmMin((() => {
 			connection_scope_merge: "合併",
 			setup_link_ready: "已收到連線資料，請按「繼續設定」。",
 			setup_waiting: "可以開始設定了",
-			setup_connection_connected: "已連線",
-			setup_connection_checking: "確認連線中…",
-			setup_connection_unreachable: "目前無法連線",
-			setup_connection_action: "請確認 BAT 已開啟，再按「重新整理」。",
-			setup_connection_checking_help: "目前還沒有最新的連線結果，請稍後重新整理。",
 			setup_language: "顯示語言",
 			setup_language_en: "English",
 			setup_language_zh: "繁體中文",
@@ -12149,6 +12197,7 @@ var init_i18n = __esmMin((() => {
 		},
 		en: {
 			...healthStrings.en,
+			...setupObservationStrings.en,
 			...FLEET_STRINGS.en,
 			...workbenchStrings$1.en,
 			...resultSourcesStrings.en,
@@ -12298,11 +12347,6 @@ var init_i18n = __esmMin((() => {
 			connection_scope_merge: "Merge",
 			setup_link_ready: "Connection details are ready. Select Continue setup.",
 			setup_waiting: "Ready to set up",
-			setup_connection_connected: "Connected",
-			setup_connection_checking: "Checking…",
-			setup_connection_unreachable: "Can’t reach this connection",
-			setup_connection_action: "Make sure BAT is open, then select Refresh.",
-			setup_connection_checking_help: "There’s no recent connection result yet. Refresh in a moment.",
 			setup_language: "Language",
 			setup_language_en: "English",
 			setup_language_zh: "繁體中文",
@@ -41864,6 +41908,36 @@ function profileStateFacts(state, { now = Date.now(), error = null } = {}) {
 	};
 }
 //#endregion
+//#region src/observation-renewal.js
+function claimObservationRenewal(renewed, key, deadline, now = Date.now()) {
+	if (!Number.isFinite(deadline) || now < deadline || renewed.has(key)) return null;
+	const attempt = { error: {
+		code: "OBSERVATION_NOT_RENEWED",
+		unchangedDeadline: true
+	} };
+	renewed.set(key, attempt);
+	return attempt;
+}
+//#endregion
+//#region src/ui/patch.js
+function patch(current, next) {
+	if (current.isEqualNode(next)) return;
+	if (current.nodeType !== next.nodeType || current.nodeName !== next.nodeName) {
+		current.replaceWith(next);
+		return;
+	}
+	if (current.nodeType === Node.TEXT_NODE) {
+		current.data = next.data;
+		return;
+	}
+	for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name) && attr.name !== "open") current.removeAttribute(attr.name);
+	for (const attr of next.attributes) if (attr.name !== "open") current.setAttribute(attr.name, attr.value);
+	const old = [...current.childNodes], fresh = [...next.childNodes];
+	for (let i = 0; i < Math.max(old.length, fresh.length); i++) if (!old[i]) current.append(fresh[i]);
+	else if (!fresh[i]) old[i].remove();
+	else patch(old[i], fresh[i]);
+}
+//#endregion
 //#region src/pm-work-profile-picker.js
 init_health_fact();
 var identity = (value) => typeof value === "string" && /^wpf_[0-9a-f]{32}$/.test(value);
@@ -41949,11 +42023,8 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		else renew(observation, at);
 	}
 	async function renew(current, at) {
-		const attempt = { error: {
-			code: "OBSERVATION_NOT_RENEWED",
-			unchangedDeadline: true
-		} };
-		renewed.set(renewalKey(current.row, at), attempt);
+		const attempt = claimObservationRenewal(renewed, renewalKey(current.row, at), at);
+		if (!attempt) return;
 		try {
 			await read(current.row, current.ticket, true);
 		} catch (error) {
@@ -42024,23 +42095,6 @@ function workProfilePicker({ t, api, alive, namespace, workspaceId, workId, caps
 		}
 		status.replaceChildren(h$1("p", { class: "muted" }, t(message)));
 		options();
-	}
-	function patch(current, next) {
-		if (current.isEqualNode(next)) return;
-		if (current.nodeType !== next.nodeType || current.nodeName !== next.nodeName) {
-			current.replaceWith(next);
-			return;
-		}
-		if (current.nodeType === Node.TEXT_NODE) {
-			current.data = next.data;
-			return;
-		}
-		for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name) && attr.name !== "open") current.removeAttribute(attr.name);
-		for (const attr of next.attributes) if (attr.name !== "open") current.setAttribute(attr.name, attr.value);
-		const old = [...current.childNodes], fresh = [...next.childNodes];
-		for (let i = 0; i < Math.max(old.length, fresh.length); i++) if (!old[i]) current.append(fresh[i]);
-		else if (!fresh[i]) old[i].remove();
-		else patch(old[i], fresh[i]);
 	}
 	function display(data, row, renewal = false) {
 		const scroll = [];
@@ -56650,6 +56704,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 }
 //#endregion
 //#region src/managed-setup.js
+init_health_fact();
 function normalizeSetupFingerprint(value) {
 	const normalized = value.trim().toUpperCase().replace(/^SHA256:/, "").replace(/[: ]/g, "");
 	return /^[0-9A-F]{64}$/.test(normalized) ? normalized : null;
@@ -56686,24 +56741,69 @@ function validSetupEndpoint(value) {
 	}
 }
 var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
-function setupConnectionStatus(host) {
-	return [
-		"connected",
-		"checking",
-		"unreachable"
-	].includes(host.connection_status) ? host.connection_status : host.connected === true ? "connected" : "checking";
+var connectionFacets = [
+	"transport",
+	"service",
+	"trust_sign_in",
+	"connection"
+];
+var connectionReasons = new Set([
+	"never_observed",
+	"host_unreachable",
+	"host_not_refreshed",
+	"DISCOVERY_SCOPE_CHANGED",
+	"transport",
+	"tls_trust",
+	"auth_or_protocol",
+	"credential_missing",
+	"service_refused",
+	"service_timeout",
+	"unknown",
+	"authenticated_socket"
+]);
+function setupConnectionFacts(host, { now = Date.now(), error = null } = {}) {
+	const envelope = host?.connection_observation;
+	return Object.fromEntries(connectionFacets.map((name) => {
+		const raw = envelope?.version === 1 ? envelope.facets?.[name] : null;
+		const bound = raw?.source && typeof host.name === "string" && raw.source.host === host.name && raw.source.profile_id === host.profile_id && /^[0-9a-f]{64}$/.test(raw.source.binding_version) && (raw.source.kind === "hosts_observed" || name === "transport" && raw.source.kind === "fleet_client") && raw.source.ref === `${raw.source.kind}:${host.name}` && (raw.reason === null || connectionReasons.has(raw.reason));
+		const value = bound && [
+			"ready",
+			"unavailable",
+			"missing",
+			"unknown"
+		].includes(raw.value) ? raw.value : "unknown";
+		const reason = bound && connectionReasons.has(raw.reason) ? raw.reason : null;
+		const deadline = bound && typeof raw.valid_until === "string" ? Date.parse(raw.valid_until) : NaN;
+		const observed = bound && typeof raw.observed_at === "number" && Number.isFinite(raw.observed_at) ? raw.observed_at * 1e3 : null;
+		return [name, displayFact({
+			value,
+			key: `wpf_${value}`,
+			reason,
+			source: bound ? raw.source : null,
+			observed_at: observed,
+			valid_until: Number.isFinite(deadline) ? deadline : null,
+			stale: ["host_unreachable", "host_not_refreshed"].includes(reason),
+			stale_reason: reason,
+			...Number.isFinite(deadline) ? {} : { observed_at: null },
+			error: healthReadError(reason, error)
+		}, { now })];
+	}));
 }
-function setupStatusLine({ busy = false, operation = null, hosts = [], readReady = false }) {
+function setupStatusLine({ busy = false, operation = null, hosts = [], readReady = false, now = Date.now() }) {
+	const ready = (host) => {
+		const fact = setupConnectionFacts(host, { now }).connection;
+		return fact.value === "ready" && fact.freshness === "current";
+	};
 	if (busy) return { key: "setup_checking" };
 	if (operation?.status === "succeeded" && operation.action === "setup.host") {
 		const host = hosts.find((row) => row.name === operation.target?.host);
-		if (readReady && host && setupConnectionStatus(host) === "connected") return { key: "setup_ready" };
+		if (readReady && host && ready(host)) return { key: "setup_ready" };
 		return {
 			key: "setup_verified_saved",
 			verifiedAt: operation.updated_at
 		};
 	}
-	if (readReady && hosts.length && hosts.every((row) => setupConnectionStatus(row) === "connected")) return { key: "setup_ready" };
+	if (readReady && hosts.length && hosts.every(ready)) return { key: "setup_ready" };
 	if (operation) return { key: [
 		"succeeded",
 		"failed",
@@ -56732,6 +56832,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	const stagedSecrets = new Map();
 	let review = null, reviewing = false, reviewSerial = 0, reviewChanged = false;
 	let discovery = null, discovering = false, discoverySerial = 0, secretTimer;
+	const renewedObservations = new Map();
+	let observationRead = false;
 	try {
 		saved = JSON.parse(localStorage.getItem(key) || "{}");
 	} catch {}
@@ -57904,13 +58006,90 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 		}, `${row.name || row.title || row.workspace_id || row.id} · ${row.workspace_id || row.id}`)));
 	}
-	async function refresh() {
+	const observationKey = (row, fact) => JSON.stringify([
+		row.connection_observation?.version,
+		fact.source?.host,
+		fact.source?.profile_id,
+		fact.source?.binding_version,
+		fact.source?.kind,
+		fact.valid_until
+	]);
+	function paintObservations() {
+		if (!alive() || document.hidden || !snapshot) return;
+		for (const row of snapshot.hosts || []) {
+			const facts = setupConnectionFacts(row);
+			for (const name of connectionFacets) {
+				const fact = facts[name];
+				const shown = setupConnectionFacts(row, { error: renewedObservations.get(observationKey(row, fact))?.error })[name];
+				const node = [...connectionStatus.querySelectorAll("[data-setup-facet]")].find((node) => node.dataset.host === row.name && node.dataset.setupFacet === name);
+				if (node) {
+					node.dataset.freshness = shown.freshness;
+					node.querySelector("[data-setup-fact-value]").textContent = healthLabel(shown, t);
+				}
+			}
+		}
+		const status = setupStatusLine({
+			busy,
+			operation,
+			hosts: snapshot.hosts || [],
+			readReady
+		});
+		if (!review && !reviewing) automaticStatus.replaceChildren(status.key === "setup_verified_saved" ? timeLabel(t, status.key, {
+			host: operation.target.host,
+			time: timeStamp(status.verifiedAt)
+		}) : status.key ? t(status.key) : "");
+	}
+	function renderObservations() {
+		patch(connectionStatus, h("div", {
+			"data-setup-host-status": "",
+			hidden: connectionStatus.hidden
+		}, ...(snapshot.hosts || []).map((row) => {
+			const facts = setupConnectionFacts(row);
+			return h("section", {
+				"data-setup-host-state": "",
+				"data-host": row.name
+			}, h("h3", {}, row.name), ...connectionFacets.map((name) => {
+				const fact = facts[name], raw = row.connection_observation?.version === 1 ? row.connection_observation.facets?.[name] : null;
+				return h("div", {
+					"data-setup-facet": name,
+					"data-host": row.name
+				}, h("p", {}, h("strong", {}, t(`setup_observation_${name}`)), " · ", h("span", { "data-setup-fact-value": "" })), h("p", {
+					"data-setup-fact-reason": "",
+					class: "muted"
+				}, t(`setup_observation_reason_${fact.reason || (fact.value === "ready" ? "observed" : "unknown")}`)), fact.source && typeof raw?.observed_at === "number" ? h("p", { class: "muted" }, timeLabel(t, "setup_connection_checked", { time: timeStamp(raw.observed_at) })) : null, fact.source ? h("details", {}, h("summary", {}, t("setup_observation_source")), h("p", {}, t(`setup_observation_${fact.source.kind}`), " · ", fact.source.profile_id), h("code", {}, fact.source.ref), h("p", {}, h("code", {}, fact.source.binding_version))) : null);
+			}));
+		})));
+		paintObservations();
+	}
+	async function renewObservations() {
+		paintObservations();
+		if (!alive() || document.hidden || observationRead || !snapshot) return;
+		for (const row of snapshot.hosts || []) for (const fact of Object.values(setupConnectionFacts(row))) {
+			const at = fact.valid_until, key = observationKey(row, fact);
+			const attempt = claimObservationRenewal(renewedObservations, key, at);
+			if (!attempt) continue;
+			observationRead = true;
+			try {
+				await refresh({ observationOnly: true });
+			} catch (error) {
+				attempt.error = { code: error.code || error.status || "READ_FAILED" };
+			} finally {
+				observationRead = false;
+				paintObservations();
+			}
+			return;
+		}
+	}
+	document.addEventListener("health-display-tick", renewObservations);
+	document.addEventListener("visibilitychange", renewObservations);
+	async function refresh({ observationOnly = false } = {}) {
 		const serial = ++readSerial;
 		let result;
 		try {
 			result = await api("GET", "/managed/setup");
 			guard();
 		} catch (error) {
+			if (observationOnly) throw error;
 			if (alive() && serial === readSerial) {
 				invalidateReview();
 				readReady = false;
@@ -57928,6 +58107,14 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			throw error;
 		}
 		if (disposed || serial !== readSerial) return;
+		if (observationOnly) {
+			snapshot = {
+				...snapshot,
+				hosts: result.hosts || []
+			};
+			renderObservations();
+			return;
+		}
 		if (!validVerification(result.verification)) {
 			if (allowed("verification")) {
 				readReady = false;
@@ -57954,10 +58141,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			onclick: () => fillVerification(project)
 		}, t("setup_verification_edit", { project })))));
 		const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
-		connectionStatus.replaceChildren(...(result.hosts || []).map((row) => {
-			const status = setupConnectionStatus(row);
-			return h("div", { "data-setup-host-state": status }, h("p", {}, h("strong", {}, row.name), " · ", t(`setup_connection_${status}`)), row.connection_checked_at == null ? null : h("p", { class: "muted" }, timeLabel(t, "setup_connection_checked", { time: timeStamp(row.connection_checked_at) })), status === "connected" ? null : h("p", { class: "muted" }, t(status === "unreachable" ? "setup_connection_action" : "setup_connection_checking_help")));
-		}));
+		renderObservations();
 		summary.replaceChildren(h("p", {}, t("setup_counts", {
 			hosts,
 			repositories,
@@ -57992,6 +58176,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		dispose() {
 			copyInput.value = "";
 			disposed = true;
+			document.removeEventListener("health-display-tick", renewObservations);
+			document.removeEventListener("visibilitychange", renewObservations);
 			clearTimeout(secretTimer);
 			stagedSecrets.clear();
 			for (const name of [
