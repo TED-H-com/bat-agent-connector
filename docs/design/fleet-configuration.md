@@ -1108,6 +1108,11 @@ tunnel, revokes credentials, deletes a source/profile, merges history or reattac
 No native reference participant exists yet: this server contract alone cannot complete a
 detach from any current client, and the UI has no detach button or flow.
 
+The native [reference codec](../../desktop/fleet-core/src/connection_contract/reference.rs)
+now encodes and validates v2 plans and receipts using the shared vocabulary. There is no
+native review generator or reference executor yet. 本機 reference codec 已依共用詞彙提供
+v2 計畫與回執的編解碼及驗證；本機檢閱產生器與關聯執行器仍未實作。
+
 The request has exactly these fields (normal operation idempotency keys remain in the header):
 
 ```json
