@@ -1,9 +1,10 @@
 # Native Fleet creation evidence
 
 `fleet-core::creation_evidence` provides bounded records, guarded storage contracts,
-and a pure ownership resolver. It has no production Windows adapter, native route,
-IPC, configuration writer, or public Apply entrypoint. Native integration must
-supply `EvidenceIo` on one blocking thread. Launcher serializes all evidence
+and a pure ownership resolver. A [read-only Windows adapter core](../../desktop/fleet-core/src/windows_creation/native.rs#L116)
+now implements ownership reads through this resolver; it has no production caller,
+evidence writer, native route, IPC or public Apply entrypoint. Native integration must
+keep `EvidenceIo` on one blocking thread. Launcher serializes all evidence
 operations. New reservations and admissions additionally hold Monitor and prove
 absence through `verify_effect_context`; the write fence repeats that check.
 Migration-intent admission additionally requires `verify_no_pending_migration`
@@ -181,7 +182,7 @@ control characters. SID validation reuses the existing 184-byte bound.
 | `Record` | Closed union of the eight document kinds (provisioning boxed); auxiliary documents at most 32,768 bytes. Deserialization alone is not authority. |
 | `EvidenceKey` | Fixed provision/lineage/closure/directory/managed/migration namespaces; variable filename components are 64-hex hashes. |
 | `ObservedSlot` | Absent, bounded Bytes/External, or Unavailable. The publisher's shared artifact limit is passed to observe: Installation 16 KiB, each other slot 1 MiB. The adapter must bound allocation/read, not just truncate afterward. |
-| `EvidenceIo` | Trusted synchronous platform boundary; methods listed below. No production implementation is supplied. |
+| `EvidenceIo` | Trusted synchronous platform boundary; methods listed below. The Windows adapter's [private reader](../../desktop/fleet-core/src/windows_creation.rs#L214) implements reads; effect checks and create-only writes still refuse. |
 | `WriteFence` | Opaque pre-write login, at most 4096 record hashes and four bounded observations. |
 | `CapturedEvidence` | Opaque guarded receipt/record/observation capture; no deserializer or public constructor. |
 | `Resolution` | Opaque replay result, at most two admissible versions per slot for active Intended recovery. |
