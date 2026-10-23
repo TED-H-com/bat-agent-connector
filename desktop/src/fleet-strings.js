@@ -1,5 +1,9 @@
 export const FLEET_STRINGS = {
   'zh-TW': {
+    fleet_route_requirement_peer_unknown: '僅設定 Tailscale 直連。目前的 peer 證據未知。',
+    fleet_route_requirement_direct_unconfirmed: '僅設定 Tailscale 直連。尚未確認 peer 的直連連線。',
+    fleet_route_requirement_tcp_unconfirmed: '僅設定 Tailscale 直連。直連 TCP 檢查未成功。',
+    fleet_route_requirement_exhausted: '所有已設定的路徑都未滿足連線條件。',
     fleet_check_advanced: '進階：開機自動連線與連線方式',
     fleet_check_advanced_pending: '進階：檢視連線設定變更',
     fleet_check_network: '網路', fleet_check_identity: '身分', fleet_check_service: '服務', fleet_check_workspace: '工作區',
@@ -50,6 +54,10 @@ export const FLEET_STRINGS = {
     fleet_check_help_unknown: '先重新讀取狀態；若仍無法確認，展開詳細資料取得錯誤代碼。',
   },
   en: {
+    fleet_route_requirement_peer_unknown: 'Only Tailscale direct is configured. The peer evidence is unknown.',
+    fleet_route_requirement_direct_unconfirmed: 'Only Tailscale direct is configured. A direct peer connection was not confirmed.',
+    fleet_route_requirement_tcp_unconfirmed: 'Only Tailscale direct is configured. The direct TCP check did not succeed.',
+    fleet_route_requirement_exhausted: 'None of the configured routes met the connection requirements.',
     fleet_check_advanced: 'Advanced: automatic connections and connection method',
     fleet_check_advanced_pending: 'Advanced: review connection setting changes',
     fleet_check_network: 'Network', fleet_check_identity: 'Identity', fleet_check_service: 'Service', fleet_check_workspace: 'Workspace',

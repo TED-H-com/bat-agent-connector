@@ -1,0 +1,312 @@
+{
+  "aged": {
+    "configuration": {
+      "binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "connections": [
+        {
+          "kind": "host",
+          "label": "Fixture 1",
+          "name": "node-1"
+        },
+        {
+          "kind": "host",
+          "label": "Fixture 2",
+          "name": "node-2"
+        },
+        {
+          "kind": "host",
+          "label": "Fixture 3",
+          "name": "node-3"
+        },
+        {
+          "kind": "host",
+          "label": "Fixture 4",
+          "name": "node-4"
+        },
+        {
+          "kind": "host",
+          "label": "Fixture 5",
+          "name": "node-5"
+        },
+        {
+          "kind": "connector",
+          "label": "Fixture Connector",
+          "name": "connector"
+        }
+      ],
+      "issue_count": 0,
+      "valid": true
+    },
+    "monitor": {
+      "controllable": true,
+      "epoch": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "state": "running"
+    },
+    "readiness": {
+      "connector": {
+        "blocking": "tunnel",
+        "code": "STOP_UNCONFIRMED",
+        "label": "Fixture Dashboard",
+        "layers": {
+          "bat": false,
+          "tls": false,
+          "tunnel": false,
+          "workspace": false
+        },
+        "level": "down",
+        "name": "connector",
+        "observed_at": null,
+        "selected": true,
+        "stale": true
+      },
+      "hosts": [
+        {
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
+          "label": "Fixture 1",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "down",
+          "name": "node-1",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
+          "label": "Fixture 2",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "down",
+          "name": "node-2",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
+          "label": "Fixture 3",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "down",
+          "name": "node-3",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
+          "label": "Fixture 4",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "down",
+          "name": "node-4",
+          "observed_at": null,
+          "selected": true,
+          "stale": true
+        },
+        {
+          "blocking": null,
+          "code": null,
+          "label": "Fixture 5",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "off",
+          "name": "node-5",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        }
+      ],
+      "observed_at": "1970-01-01T00:00:01.2Z",
+      "state": "stale"
+    },
+    "selection": {
+      "applied_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "connections": [
+        "node-1",
+        "node-2",
+        "node-3",
+        "node-4",
+        "connector"
+      ],
+      "revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  },
+  "deselected": {
+    "configuration": {
+      "binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "connections": [
+        {
+          "kind": "host",
+          "label": "Fixture 1",
+          "name": "node-1"
+        },
+        {
+          "kind": "host",
+          "label": "Fixture 2",
+          "name": "node-2"
+        },
+        {
+          "kind": "host",
+          "label": "Fixture 3",
+          "name": "node-3"
+        },
+        {
+          "kind": "host",
+          "label": "Fixture 4",
+          "name": "node-4"
+        },
+        {
+          "kind": "host",
+          "label": "Fixture 5",
+          "name": "node-5"
+        },
+        {
+          "kind": "connector",
+          "label": "Fixture Connector",
+          "name": "connector"
+        }
+      ],
+      "issue_count": 0,
+      "valid": true
+    },
+    "monitor": {
+      "controllable": true,
+      "epoch": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "state": "running"
+    },
+    "readiness": {
+      "connector": {
+        "blocking": "connector",
+        "code": "PROBE_PENDING",
+        "label": "Fixture Dashboard",
+        "layers": {
+          "bat": false,
+          "tls": false,
+          "tunnel": false,
+          "workspace": false
+        },
+        "level": "degraded",
+        "name": "connector",
+        "observed_at": null,
+        "selected": true,
+        "stale": false
+      },
+      "hosts": [
+        {
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
+          "label": "Fixture 1",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "down",
+          "name": "node-1",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        },
+        {
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
+          "label": "Fixture 2",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "down",
+          "name": "node-2",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        },
+        {
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
+          "label": "Fixture 3",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "down",
+          "name": "node-3",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        },
+        {
+          "blocking": "tunnel",
+          "code": "STOP_UNCONFIRMED",
+          "label": "Fixture 4",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "down",
+          "name": "node-4",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        },
+        {
+          "blocking": null,
+          "code": null,
+          "label": "Fixture 5",
+          "layers": {
+            "bat": false,
+            "tls": false,
+            "tunnel": false,
+            "workspace": false
+          },
+          "level": "off",
+          "name": "node-5",
+          "observed_at": null,
+          "selected": false,
+          "stale": false
+        }
+      ],
+      "observed_at": "1970-01-01T00:00:01.2Z",
+      "state": "stale"
+    },
+    "selection": {
+      "applied_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "connections": [
+        "connector"
+      ],
+      "revision": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  }
+}

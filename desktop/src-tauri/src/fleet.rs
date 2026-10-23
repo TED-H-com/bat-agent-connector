@@ -837,6 +837,13 @@ fn readiness_row(value: &Value) -> Result<Value, String> {
     if let Some(route) = readiness_route(&value["route"])? {
         row["route"] = route;
     }
+    if let Some(requirement) = value.get("route_requirement") {
+        // Rebuild from the producer's closed enum, never arbitrary diagnostic data.
+        let requirement: bat_fleet_core::route::RouteRequirement =
+            serde_json::from_value(requirement.clone())
+                .map_err(|_| "Invalid Fleet route requirement".to_owned())?;
+        row["route_requirement"] = json!(requirement);
+    }
     Ok(row)
 }
 
@@ -847,7 +854,12 @@ mod tests {
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-status.json")).unwrap()
     }
     fn producer_status() -> Value {
-        let mut result = fixture()["result"].clone();
+        project_status(fixture()["result"].clone())
+    }
+    fn project_status(result: Value) -> Value {
+        project_status_at(result, 1_791_460_800_000)
+    }
+    fn project_status_at(mut result: Value, now: u64) -> Value {
         let readiness = &result["readiness"];
         let mut entries = readiness["hosts"].as_array().unwrap().clone();
         entries.push(readiness["connector"].clone());
@@ -860,8 +872,199 @@ mod tests {
         .unwrap();
         // This is the same projection Context::status calls after its ownership
         // checks. Platform discovery stays outside this synthetic fixture.
-        result["readiness"] = native_readiness(Some(&snapshot), 1_791_460_800_000).unwrap();
+        result["readiness"] = native_readiness(Some(&snapshot), now).unwrap();
         result
+    }
+    fn stop_cases() -> Value {
+        let cases: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-stop.json")).unwrap();
+        let mut output = json!({});
+        for (name, case) in cases.as_object().unwrap() {
+            output[name] = project_snapshot_case(case);
+        }
+        output
+    }
+    fn project_snapshot_case(case: &Value) -> Value {
+        let snapshot = serde_json::from_value(case["snapshot"].clone()).unwrap();
+        let mut result = fixture()["result"].clone();
+        result["selection"]["revision"] = case["selection_revision"].clone();
+        result["selection"]["connections"] = case["connections"].clone();
+        result["readiness"] =
+            native_readiness(Some(&snapshot), case["now"].as_u64().unwrap()).unwrap();
+        sanitize_result(&result, "status").unwrap()
+    }
+    fn pending_cases() -> Value {
+        let raw: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-pending.json")).unwrap();
+        raw.as_object()
+            .unwrap()
+            .iter()
+            .map(|(name, variants)| {
+                let cases: Value = variants
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(state, case)| (state.clone(), project_snapshot_case(case)))
+                    .collect();
+                (name.clone(), cases)
+            })
+            .collect()
+    }
+    #[test]
+    fn pending_requirement_survives_native_projection_and_sanitizer() {
+        let cases = pending_cases();
+        for (name, expected) in [
+            ("unknown", "DIRECT_PEER_UNKNOWN"),
+            ("tcp", "DIRECT_TCP_UNREACHABLE"),
+            ("exhausted", "CONFIGURED_ROUTES_EXHAUSTED"),
+        ] {
+            let row = &cases[name]["pending"]["readiness"]["hosts"][0];
+            assert_eq!(row["code"], "PROBE_PENDING");
+            assert_eq!(row["route_requirement"], expected, "{name}");
+            assert!(row["observed_at"].is_null());
+            assert_eq!(
+                cases[name]["pending"]["readiness"]["hosts"][1]["level"],
+                "ready"
+            );
+        }
+    }
+    #[test]
+    fn aged_pending_requirement_is_withdrawn_by_parse() {
+        for case in pending_cases().as_object().unwrap().values() {
+            let row = &case["aged"]["readiness"]["hosts"][0];
+            assert_eq!(row["code"], "PROBE_STALE");
+            assert!(row.get("route_requirement").is_none());
+        }
+    }
+    #[test]
+    #[ignore = "explicit fixture regeneration only"]
+    fn pending_generate_golden() {
+        println!("FLEET_PENDING_GOLDEN={}", pending_cases());
+    }
+    #[test]
+    fn pending_evidence_matches_shared_frontend_golden() {
+        let expected: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/fleet-pending.golden.json"
+        ))
+        .unwrap();
+        assert_eq!(pending_cases(), expected);
+    }
+    #[test]
+    fn stop_aged_evidence_survives_native_projection_and_sanitizer() {
+        assert_stop_evidence("aged");
+    }
+    #[test]
+    fn stop_deselected_evidence_survives_native_projection_and_sanitizer() {
+        assert_stop_evidence("deselected");
+    }
+    fn assert_stop_evidence(name: &str) {
+        let cases = stop_cases();
+        let status = &cases[name];
+        {
+            let row = status["readiness"]["hosts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["name"] == "node-1")
+                .unwrap();
+            assert_eq!(row["code"], "STOP_UNCONFIRMED", "{name}");
+            assert_eq!(row["level"], "down");
+            assert_eq!(status["readiness"]["state"], "stale");
+            assert_eq!(row["layers"]["tunnel"], false);
+        }
+    }
+    #[test]
+    #[ignore = "explicit fixture regeneration only"]
+    fn stop_generate_golden() {
+        println!("FLEET_STOP_GOLDEN={}", stop_cases());
+    }
+    fn requirement_cases() -> Value {
+        let cases: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-requirement.json"))
+                .unwrap();
+        cases
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(name, case)| {
+                (
+                    name.clone(),
+                    sanitize_result(
+                        &project_status_at(
+                            case["result"].clone(),
+                            case["now"].as_u64().unwrap_or(1_791_460_800_000),
+                        ),
+                        "status",
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect()
+    }
+    #[test]
+    fn requirement_evidence_survives_native_projection_and_sanitizer() {
+        let cases = requirement_cases();
+        for (name, expected) in [
+            ("missing", "DIRECT_PEER_UNKNOWN"),
+            ("unknown", "DIRECT_PEER_UNKNOWN"),
+            ("idle", "DIRECT_NOT_CONFIRMED"),
+            ("tcp", "DIRECT_TCP_UNREACHABLE"),
+            ("exhausted", "CONFIGURED_ROUTES_EXHAUSTED"),
+        ] {
+            let row = &cases[name]["readiness"]["hosts"][0];
+            assert_eq!(row["route_requirement"], expected, "{name}");
+            assert!(row.get("route").is_none());
+            assert_eq!(
+                cases[name]["readiness"]["hosts"][1],
+                sanitize_result(&producer_status(), "status").unwrap()["readiness"]["hosts"][1]
+            );
+        }
+    }
+    #[test]
+    fn aged_requirement_is_withdrawn_through_native_projection_and_sanitizer() {
+        let cases = requirement_cases();
+        let row = &cases["aged"]["readiness"]["hosts"][0];
+        assert_eq!(cases["aged"]["readiness"]["state"], "stale");
+        assert_eq!(row["code"], "PROBE_STALE");
+        assert_eq!(row["level"], "degraded");
+        assert_eq!(row["blocking"], "stale");
+        assert_eq!(row["layers"]["tunnel"], false);
+        assert!(row.get("route_requirement").is_none());
+    }
+    #[test]
+    fn requirement_allowlist_rejects_anything_outside_the_closed_vocabulary() {
+        for value in [
+            Value::Null,
+            json!({"DIRECT_PEER_UNKNOWN": null}),
+            json!("relay"),
+            json!("DIRECT_PEER_UNKNOWN private output"),
+            json!("constructor"),
+            json!({"peer":{"CurAddr":"192.0.2.1"}}),
+            json!(["DIRECT_PEER_UNKNOWN"]),
+            json!(1),
+            json!(false),
+        ] {
+            let mut raw = producer_status();
+            raw["readiness"]["hosts"][0]["route_requirement"] = value;
+            assert!(sanitize_result(&raw, "status").is_err());
+        }
+    }
+    #[test]
+    #[ignore = "explicit fixture regeneration only"]
+    fn requirement_generate_golden() {
+        println!("FLEET_REQUIREMENT_GOLDEN={}", requirement_cases());
+    }
+    #[test]
+    fn evidence_matches_shared_frontend_goldens() {
+        let requirements: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/fleet-requirement.golden.json"
+        ))
+        .unwrap();
+        let stops: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/fleet-stop.golden.json"))
+                .unwrap();
+        assert_eq!(requirement_cases(), requirements);
+        assert_eq!(stop_cases(), stops);
     }
     #[test]
     fn sanitized_status_matches_shared_frontend_golden() {
