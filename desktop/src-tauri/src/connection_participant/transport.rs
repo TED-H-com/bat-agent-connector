@@ -50,6 +50,22 @@ pub(crate) trait Transport {
     fn check(&self, scope: &bat_fleet_core::connection_participant::Scope) -> Result<()>;
     async fn read(&self, query: Query) -> Result<Reply>;
 }
+#[derive(Debug)]
+pub(crate) enum PostFailure {
+    BeforeSender(Error),
+    PossiblySent(Error),
+}
+pub(crate) type PostResult = std::result::Result<Reply, PostFailure>;
+pub(crate) trait ClaimTransport: Transport {
+    fn check_original(
+        &self,
+        accepted: &bat_fleet_core::connection_participant::Accepted,
+    ) -> Result<()>;
+    async fn handoff(&self, intent: &Intent, body: &[u8]) -> PostResult;
+}
+pub(crate) trait ReceiptTransport: ClaimTransport {
+    async fn receipt(&self, intent: &Intent, body: &[u8]) -> PostResult;
+}
 pub(crate) struct NativeTransport<'a> {
     pub bridge: &'a Bridge,
     pub scope: NativeScope,
@@ -81,6 +97,53 @@ impl Transport for NativeTransport<'_> {
                     .await
             }
         }
+    }
+}
+impl ClaimTransport for NativeTransport<'_> {
+    fn check_original(
+        &self,
+        accepted: &bat_fleet_core::connection_participant::Accepted,
+    ) -> Result<()> {
+        self.check(&accepted.scope)?;
+        if accepted.credential_generation != self.scope.connection.binding {
+            return Err(Error::Changed);
+        }
+        Ok(())
+    }
+    async fn handoff(&self, intent: &Intent, body: &[u8]) -> PostResult {
+        self.check_original(intent.accepted())
+            .map_err(PostFailure::BeforeSender)?;
+        let parsed = bat_fleet_core::strict_json::parse(
+            body,
+            bat_fleet_core::connection_contract::vocabulary()["bounds"]["handoff_bytes"]
+                .as_u64()
+                .unwrap() as usize,
+        )
+        .map_err(|_| PostFailure::BeforeSender(Error::Invalid))?;
+        let mode = match parsed["mode"].as_str() {
+            Some("claim") => bat_fleet_core::connection_participant::request::Mode::Claim,
+            Some("readback") => bat_fleet_core::connection_participant::request::Mode::Readback,
+            _ => return Err(PostFailure::BeforeSender(Error::Invalid)),
+        };
+        let expected = bat_fleet_core::connection_participant::request::handoff(intent, mode)
+            .map_err(|_| PostFailure::BeforeSender(Error::Invalid))?;
+        if body != expected {
+            return Err(PostFailure::BeforeSender(Error::Invalid));
+        }
+        self.bridge
+            .participant_exchange_attempt(&self.scope, "/connections/handoff".into(), Some(body))
+            .await
+    }
+}
+impl ReceiptTransport for NativeTransport<'_> {
+    async fn receipt(&self, intent: &Intent, body: &[u8]) -> PostResult {
+        self.check_original(intent.accepted())
+            .map_err(PostFailure::BeforeSender)?;
+        bat_fleet_core::connection_participant::request::stored_receipt(body)
+            .map_err(|_| PostFailure::BeforeSender(Error::Invalid))?;
+        self.bridge
+            .participant_exchange_attempt(&self.scope, "/connections/receipt".into(), Some(body))
+            .await
     }
 }
 impl Bridge {
@@ -198,11 +261,25 @@ impl Bridge {
         path: String,
         body: Option<&[u8]>,
     ) -> Result<Reply> {
+        self.participant_exchange_attempt(scope, path, body)
+            .await
+            .map_err(|failure| match failure {
+                PostFailure::BeforeSender(error) | PostFailure::PossiblySent(error) => error,
+            })
+    }
+    pub(super) async fn participant_exchange_attempt(
+        &self,
+        scope: &NativeScope,
+        path: String,
+        body: Option<&[u8]>,
+    ) -> PostResult {
         self.check_file_scope(&scope.connection)
-            .map_err(|_| Error::Changed)?;
-        let (generation, active) = self.active().map_err(|_| Error::Unavailable)?;
+            .map_err(|_| PostFailure::BeforeSender(Error::Changed))?;
+        let (generation, active) = self
+            .active()
+            .map_err(|_| PostFailure::BeforeSender(Error::Unavailable))?;
         if active.record.identity != scope.identity {
-            return Err(Error::Changed);
+            return Err(PostFailure::BeforeSender(Error::Changed));
         }
         if body.is_some()
             && self
@@ -216,11 +293,12 @@ impl Bridge {
                 .is_err()
         {
             self.invalidate(generation);
-            return Err(Error::Changed);
+            return Err(PostFailure::BeforeSender(Error::Changed));
         }
         self.check_file_scope(&scope.connection)
-            .map_err(|_| Error::Changed)?;
-        self.unchanged(generation).map_err(|_| Error::Changed)?;
+            .map_err(|_| PostFailure::BeforeSender(Error::Changed))?;
+        self.unchanged(generation)
+            .map_err(|_| PostFailure::BeforeSender(Error::Changed))?;
         let request = ConnectorRequest {
             method: if body.is_some() { "POST" } else { "GET" }.into(),
             path,
@@ -230,13 +308,14 @@ impl Bridge {
         let response = self
             .send_encoded(&active.config, &active.record.token, &request, body)
             .await
-            .map_err(|_| Error::Unavailable)?;
-        self.unchanged(generation).map_err(|_| Error::Changed)?;
+            .map_err(|_| PostFailure::PossiblySent(Error::Unavailable))?;
+        self.unchanged(generation)
+            .map_err(|_| PostFailure::PossiblySent(Error::Changed))?;
         self.check_file_scope(&scope.connection)
-            .map_err(|_| Error::Changed)?;
+            .map_err(|_| PostFailure::PossiblySent(Error::Changed))?;
         if response.status == 401 {
             self.invalidate(generation);
-            return Err(Error::Unavailable);
+            return Err(PostFailure::PossiblySent(Error::Unavailable));
         }
         if request.path == "/bootstrap"
             && response.status == 200
@@ -246,7 +325,7 @@ impl Bridge {
                 != Some(&scope.identity)
         {
             self.invalidate(generation);
-            return Err(Error::Changed);
+            return Err(PostFailure::PossiblySent(Error::Changed));
         }
         Ok(Reply {
             status: response.status,

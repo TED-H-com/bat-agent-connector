@@ -1,6 +1,8 @@
 //! Restart records only. No discovery, execution, transport, IPC or production backend.
 mod model;
 mod post;
+#[doc(hidden)]
+pub mod protected;
 pub mod request;
 mod store;
 mod wire;

@@ -25,9 +25,13 @@ def observe(stage, req, value):
                 raise ValueError('NATIVE_CARRIER_CREATION_UNPROVEN')
             if creation['clone'] != physical(req['clone_path']):
                 raise ValueError('NATIVE_CARRIER_CHANGED')
+            safe_objects(req['clone_path'], req['clone_path'] + '/.git', 'NATIVE_CARRIER_CHANGED')
         elif req.get('creation'):
             raise ValueError('NATIVE_CARRIER_CHANGED')
         return value
+    if req['phase'] == 'prepare':
+        for name in ('hooks', 'info'):
+            os.makedirs(req['clone_path'] + '/.git/' + name, exist_ok=True)
     facts = {'clone': physical(req['clone_path'])}
     path = req['worktree_path']
     if os.path.lexists(path):
@@ -42,20 +46,26 @@ def observe(stage, req, value):
     return {**value, 'physical': facts}
 
 
+def safe_objects(source, common, code):
+    real(common)
+    if os.path.realpath(common + '/config') != common + '/config':
+        raise ValueError(code)
+    keys = git(source, 'config', '--local', '--no-includes', '--name-only', '--list').lower().splitlines()
+    if (any(k.endswith('.promisor') or k == 'extensions.partialclone'
+            or k.startswith(('uploadpack.', 'include.', 'includeif.')) for k in keys)
+            or any(os.path.lexists(common + '/' + p) for p in ('objects/info/alternates', 'objects/info/http-alternates', 'shallow', 'info/grafts', 'modules'))
+            or git(source, 'for-each-ref', 'refs/replace')):
+        raise ValueError(code)
+
+
 def copy_source(req):
     if req['source_ref'] is not None:
         return fetch_source(req)
     source = req['remote_url']
     real(source)
     common = git(source, 'rev-parse', '--path-format=absolute', '--git-common-dir')
-    real(common)
-    # Refuse external object stores and lazy fetching before reading any commit.
-    keys = git(source, 'config', '--local', '--name-only', '--list').lower().splitlines()
-    if (any(k.endswith('.promisor') or k == 'extensions.partialclone'
-            or k.startswith(('uploadpack.', 'include.', 'includeif.')) for k in keys)
-            or any(os.path.lexists(common + '/' + p) for p in ('objects/info/alternates', 'objects/info/http-alternates', 'shallow', 'info/grafts'))
-            or git(source, 'for-each-ref', 'refs/replace')
-            or git(source, 'cat-file', '-t', req['source_sha']) != 'commit'):
+    safe_objects(source, common, 'NATIVE_SOURCE_UNPROVEN')
+    if git(source, 'cat-file', '-t', req['source_sha']) != 'commit':
         raise ValueError('NATIVE_SOURCE_UNPROVEN')
     # Fetch copies objects into the new clone; it never shares or hardlinks a store.
     git(req['clone_path'], 'fetch', '--no-tags', '--no-write-fetch-head', '--no-recurse-submodules', source, req['source_sha'])

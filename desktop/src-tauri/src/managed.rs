@@ -20,6 +20,9 @@ use zeroize::Zeroizing;
 const MAX_RUNTIME: u64 = 512 * 1024 * 1024;
 const MAX_REPLY: u64 = 16384;
 
+#[allow(dead_code)]
+mod creation;
+
 fn runtime_executable_busy(error: &std::io::Error) -> bool {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
@@ -202,6 +205,7 @@ pub struct Status {
 
 #[derive(Clone, Default)]
 struct RuntimeFacts {
+    creation: Option<creation::ServiceIdentity>,
     bundled: Option<RuntimeIdentity>,
     running: Option<RuntimeIdentity>,
     difference: Option<RuntimeDifference>,
@@ -210,6 +214,10 @@ struct RuntimeFacts {
 impl RuntimeFacts {
     fn from_launch(launch: &Launch) -> Self {
         Self {
+            creation: Some(creation::ServiceIdentity {
+                actor: launch.actor.clone(),
+                identity: launch.identity(),
+            }),
             bundled: launch.bundled_runtime.clone(),
             running: launch.running_runtime.clone(),
             difference: Some(

@@ -316,3 +316,23 @@ async def test_source_config_cannot_hide_lazy_fetch_in_an_include(world):
     git(world.source, 'config', 'include.path', str(config))
     with refused('NATIVE_SOURCE_UNPROVEN'):
         await prepare(world)
+
+
+@pytest.mark.parametrize('hazard', ['modules', 'objects/info/alternates', 'objects/info/http-alternates',
+    'shallow', 'info/grafts', 'refs/replace', 'remote.origin.promisor', 'extensions.partialClone', 'uploadpack.packObjectsHook', 'include.path'])
+async def test_readback_rejects_checkpoint_hazards(world, hazard):
+    receipt = await prepare(world)
+    clone = Path(receipt.reference()['clone']['path'])
+    if hazard == 'refs/replace':
+        git(clone, 'update-ref', 'refs/replace/' + world.fixed.sha, world.fixed.sha)
+    elif '.' in hazard and '/' not in hazard:
+        git(clone, 'config', hazard, 'fixture')
+    else:
+        path = clone / '.git' / hazard
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if hazard == 'modules':
+            path.mkdir()
+        else:
+            path.write_text('untrusted\n')
+    with refused('NATIVE_CARRIER_CHANGED'):
+        await readback(world, receipt)

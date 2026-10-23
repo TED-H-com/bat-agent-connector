@@ -229,3 +229,44 @@ ACK 與精確 snapshot，重啟不認領同 URI。只有中央資源政策鑄造
 重驗現行權限、controller、coordinator、來源與生命週期、Work／Attempt／profile、
 所有權、permission、busy 與取消，再經 lineage guard、提交 sent fence，才同步送出。
 跨 fence 的未知結果只能查回，不重送；本輪沒有 create、turn、result、API 或 UI。
+
+### Separate AHP creation authority
+
+`AhpCreateGrant` is distinct from the existing turn `AhpGrant`. Only the central
+policy issues either capability; copies, outside constructors and cross-kind
+frames refuse. Creation binds the original handoff operation, controller
+incarnation, Work/Attempt, adapter/endpoint, reserved session URI, exact
+`createSession` request, carrier reference and config/profile/source digests.
+It uses Work-start scopes; turns retain observe/operate and existing ownership.
+Creation is not a turn and cannot satisfy `controller_authority.require_entry`.
+
+The explicit ledger reservation can retain a create intent without a chat URI:
+client/request IDs, provider/config, original handoff parent, step, carrier and
+bounded catalog absence evidence. The policy verifies the durable handoff
+relation; the same host/session URI cannot be reserved under a different resource
+ID to conceal an earlier intent. Each handoff operation retains one create intent,
+including after an unknown send; a new URI cannot replace it. Identical intent
+replays confer no new grant.
+It reads back the original `CarrierReceipt` through `native_carrier`.
+It repeats readback before the final frame. Fresh complete absence must describe
+the same endpoint and connection; a catalog window is never creation ownership.
+
+Both grant types use the same guard and current-authority checks after awaits.
+After the lineage gate, the grant type selects the existing `create_sent` fence
+or the turn fence. The transaction commits before socket enqueue. A create fence
+prevents another send even if the reply was lost; observation alone cannot clear it.
+
+An exact same-connection ACK and ready session snapshot establish creation.
+The advertised default chat, or sole advertised chat, is then bound in a separate
+append-only record referencing that creation receipt. Turns require this record.
+A rebind validates the fresh snapshot and preserves the first record for the same
+creation and chat. A different creation or chat conflicts without replacing it.
+No createChat, route, action, API, UI or production write caller is installed.
+
+繁體中文：create grant 與 turn grant 分型，均只能由中央政策鑄造，不可互換。
+create 只授權原 Work／Attempt／handoff child 的未送出預留；不是 session 所有權。
+原 carrier 在鑄造及最後送出前都須查回，absence 須完整、即時且同 connection。
+共用 guard 依型別選擇既有 create／turn fence，提交後才送出；未知結果不重送。
+session 建立證據成立後，另行追加其宣告 chat 的綁定；重綁須驗證新 snapshot，
+相同建立與 chat 保留首筆記錄，不同身分為衝突；沒有綁定
+不能 turn。此增量仍無正式 create route、action、API 或 UI。

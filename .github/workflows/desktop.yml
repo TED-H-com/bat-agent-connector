@@ -32,6 +32,7 @@ on:
       - "tests/fixtures/browser-credential-responses.json"
       - "tests/fixtures/checkpoint-refusal-destination.json"
       - "tests/fixtures/checkpoint-refusal-staging.json"
+      - "tests/fixtures/connection-association-targets.json"
       - "tests/fixtures/connector-update-facts.json"
       - "tests/fixtures/desktop-update-candidate.json"
       - "tests/fixtures/managed-bootstrap.json"
@@ -54,16 +55,19 @@ on:
       - "tests/mockbat.py"
       - "tests/operation_helpers.py"
       - "tests/package_build.py"
+      - "tests/source_policy_inputs.py"
       - "tests/test_api_v1.py"
       - "tests/test_api_v1_bootstrap_golden.py"
       - "tests/test_artifact_capture.py"
       - "tests/test_artifact_managed.py"
       - "tests/test_artifacts.py"
       - "tests/test_browser_credentials_browser.py"
+      - "tests/test_browser_sessions.py"
       - "tests/test_checkpoints.py"
       - "tests/test_cleanup.py"
       - "tests/test_confinement.py"
       - "tests/test_confinement_recovery.py"
+      - "tests/test_connection_sources.py"
       - "tests/test_connector_updates.py"
       - "tests/test_delivery.py"
       - "tests/test_deployment_rollback.py"
@@ -73,6 +77,8 @@ on:
       - "tests/test_lifecycle.py"
       - "tests/test_managed_setup.py"
       - "tests/test_managed_setup_browser.py"
+      - "tests/test_managed_setup_discovery.py"
+      - "tests/test_managed_setup_preview.py"
       - "tests/test_mcp_principal.py"
       - "tests/test_operations_unification.py"
       - "tests/test_platform_files.py"
@@ -106,6 +112,7 @@ on:
       - "tests/test_pm_workspace.py"
       - "tests/test_pm_worktree.py"
       - "tests/test_repository_sync.py"
+      - "tests/test_setup_connections.py"
       - "tests/test_task_cleanup.py"
       - "tests/test_task_service.py"
       - "tests/test_windows_central.py"
@@ -144,6 +151,7 @@ on:
       - "tests/fixtures/browser-credential-responses.json"
       - "tests/fixtures/checkpoint-refusal-destination.json"
       - "tests/fixtures/checkpoint-refusal-staging.json"
+      - "tests/fixtures/connection-association-targets.json"
       - "tests/fixtures/connector-update-facts.json"
       - "tests/fixtures/desktop-update-candidate.json"
       - "tests/fixtures/managed-bootstrap.json"
@@ -166,16 +174,19 @@ on:
       - "tests/mockbat.py"
       - "tests/operation_helpers.py"
       - "tests/package_build.py"
+      - "tests/source_policy_inputs.py"
       - "tests/test_api_v1.py"
       - "tests/test_api_v1_bootstrap_golden.py"
       - "tests/test_artifact_capture.py"
       - "tests/test_artifact_managed.py"
       - "tests/test_artifacts.py"
       - "tests/test_browser_credentials_browser.py"
+      - "tests/test_browser_sessions.py"
       - "tests/test_checkpoints.py"
       - "tests/test_cleanup.py"
       - "tests/test_confinement.py"
       - "tests/test_confinement_recovery.py"
+      - "tests/test_connection_sources.py"
       - "tests/test_connector_updates.py"
       - "tests/test_delivery.py"
       - "tests/test_deployment_rollback.py"
@@ -185,6 +196,8 @@ on:
       - "tests/test_lifecycle.py"
       - "tests/test_managed_setup.py"
       - "tests/test_managed_setup_browser.py"
+      - "tests/test_managed_setup_discovery.py"
+      - "tests/test_managed_setup_preview.py"
       - "tests/test_mcp_principal.py"
       - "tests/test_operations_unification.py"
       - "tests/test_platform_files.py"
@@ -218,6 +231,7 @@ on:
       - "tests/test_pm_workspace.py"
       - "tests/test_pm_worktree.py"
       - "tests/test_repository_sync.py"
+      - "tests/test_setup_connections.py"
       - "tests/test_task_cleanup.py"
       - "tests/test_task_service.py"
       - "tests/test_windows_central.py"
@@ -664,6 +678,19 @@ jobs:
           cargo fmt --manifest-path fleet-core/Cargo.toml --check
           cargo clippy --locked --manifest-path fleet-core/Cargo.toml --all-targets -- -D warnings
           cargo test --locked --manifest-path fleet-core/Cargo.toml --no-fail-fast
+      - name: Rust request oracle and unchanged Python handoff requests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cargo build --locked --manifest-path fleet-core/Cargo.toml --example participant_request_oracle
+          export BATC_PARTICIPANT_REQUEST_ORACLE="$PWD/fleet-core/target/debug/examples/participant_request_oracle"
+          cd ..
+          mkdir -p "$HOME/agent-work/tmp/pytest"
+          request_temp=$(mktemp -d "$HOME/agent-work/tmp/pytest/participant-XXXXXX")
+          trap 'rm -rf -- "$request_temp"' EXIT
+          for version in 3.13 3.10; do
+            uv run --isolated --python "$version" --extra dev pytest -q desktop/tests/test_participant_delivery.py --basetemp="$request_temp/$version"
+          done
       - name: Native file adapter with actual central service
         if: runner.os == 'Linux'
         timeout-minutes: 10
