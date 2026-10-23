@@ -193,6 +193,28 @@ async def test_launch_evidence_does_not_attach_an_old_process_to_a_new_current(p
     assert (await read_capabilities(tmp_path))["connector_update"]["state"] == "not_managed"
 
 
+def test_injected_finder_records_publication_clock_without_changing_install_candidate(process):
+    u, receipt, _ = process
+    u.enroll(receipt, "preview")
+    candidate = release("b" * 40, "0.2.8")
+    published_at = "2026-10-17T00:00:00Z"
+
+    def find_release(channel, observation=None):
+        assert channel == "preview"
+        if observation is not None:
+            observation["published_at"] = published_at
+        return candidate
+
+    u.find_release = find_release
+    result = u.check()
+
+    assert result["available"] is candidate
+    assert "published_at" not in candidate
+    assert result["release_check"]["completed_at"] == AT
+    assert result["release_check"]["candidate"] == {**candidate, "published_at": published_at}
+    assert u.read()["release_check"] == result["release_check"]
+
+
 async def test_completed_release_check_retains_three_independent_builds_and_clocks(process, tmp_path, monkeypatch):
     u, receipt, build = process
     u.enroll(receipt, "preview")
