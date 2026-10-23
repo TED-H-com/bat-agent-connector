@@ -426,11 +426,25 @@ for (const locale of ['en-US', 'zh-TW']) {
       changed = true;
       await page.evaluate(() => {location.hash = '#/settings?section=connection';});
       await expect(page.locator('.global-connection-facts')).toBeVisible();
+      const verification = failure === 'pending' ? null : page.waitForResponse('**/api/v1/bootstrap');
       await page.clock.runFor(1_000);
       await page.clock.runFor(1_000);
       finishTicks();
-      await expect.poll(() => bootstraps).toBe(2);
-      if (failure === 'pending') await page.clock.runFor(61_000);
+      if (failure === 'pending') {
+        const copy = STRINGS[locale === 'zh-TW' ? 'zh-TW' : 'en'];
+        await expect.poll(async () => {
+          await page.clock.runFor(1_000);
+          return page.locator('#installation-health [data-health-key=capabilities]').allTextContents();
+        }).toEqual([copy.health_capabilities_checking]);
+        await page.clock.runFor(61_000);
+      } else await (await verification!).finished();
+      // Verification applies on receipt; the health strip paints on its 1 s tick.
+      // Keep ticking until the shell displays the applied result, not a request count.
+      await expect.poll(async () => {
+        await page.clock.runFor(1_000);
+        return failure ? page.locator('#installation-health [data-health-key=reload]').isVisible()
+          : await page.locator('#installation-health [data-health-key=capabilities]').count() === 0;
+      }).toBe(true);
       if (failure) await expect(page.locator('#installation-health [data-health-key=reload]')).toBeVisible();
       else await expect(page.locator('#installation-health [data-health-key=capabilities]')).toHaveCount(0);
       await expect(page.locator('#installation-health [data-health-selected]')).toBeVisible();
