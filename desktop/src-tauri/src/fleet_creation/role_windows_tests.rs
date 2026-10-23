@@ -1,5 +1,8 @@
 use super::*;
-use std::{os::windows::ffi::OsStrExt, ptr};
+use std::{
+    os::windows::ffi::OsStrExt,
+    ptr::{self, NonNull},
+};
 use windows_sys::Win32::{
     Foundation::LocalFree,
     Security::{
@@ -97,21 +100,25 @@ fn inspect_dacl(bytes: &[u8], case: &str) -> AclReadback {
         present != 0 && !acl.is_null(),
         "{case}, sddl={sddl}: mandatory DACL"
     );
+    let acl = NonNull::new(acl).unwrap_or_else(|| panic!("{case}, sddl={sddl}: mandatory DACL"));
     assert_ne!(
-        unsafe { IsValidAcl(acl) },
+        unsafe { IsValidAcl(acl.as_ptr()) },
         0,
         "{case}, sddl={sddl}: valid DACL"
     );
     let (mut explicit, mut world) = (false, false);
-    for index in 0..unsafe { (*acl).AceCount } {
+    for index in 0..unsafe { acl.as_ref().AceCount } {
         let mut raw = ptr::null_mut();
         assert_ne!(
-            unsafe { GetAce(acl, u32::from(index), &mut raw) },
+            unsafe { GetAce(acl.as_ptr(), u32::from(index), &mut raw) },
             0,
             "{case}, sddl={sddl}: ACE readback"
         );
         assert!(!raw.is_null(), "{case}, sddl={sddl}: mandatory ACE");
-        let header = unsafe { &*raw.cast::<ACE_HEADER>() };
+        let ace = NonNull::new(raw)
+            .unwrap_or_else(|| panic!("{case}, sddl={sddl}: mandatory ACE"))
+            .cast::<ACCESS_ALLOWED_ACE>();
+        let header = unsafe { ace.cast::<ACE_HEADER>().as_ref() };
         assert_eq!(
             header.AceType, 0,
             "{case}, sddl={sddl}: ordinary allow ACE fixture"
@@ -121,7 +128,7 @@ fn inspect_dacl(bytes: &[u8], case: &str) -> AclReadback {
             "{case}, sddl={sddl}: complete ACE"
         );
         explicit |= header.AceFlags & 0x10 == 0;
-        let sid = unsafe { ptr::addr_of_mut!((*raw.cast::<ACCESS_ALLOWED_ACE>()).SidStart).cast() };
+        let sid = unsafe { ptr::addr_of_mut!((*ace.as_ptr()).SidStart).cast() };
         world |= header.AceFlags & 8 == 0 && unsafe { IsWellKnownSid(sid, WinWorldSid) } != 0;
     }
     AclReadback {
@@ -166,6 +173,7 @@ fn set_dacl(path: &Path, broad: bool) {
         present != 0 && !acl.is_null(),
         "{case}: source DACL must be present"
     );
+    let acl = NonNull::new(acl).unwrap_or_else(|| panic!("{case}: source DACL must be present"));
     let flags = DACL_SECURITY_INFORMATION
         | if broad {
             PROTECTED_DACL_SECURITY_INFORMATION
@@ -180,7 +188,7 @@ fn set_dacl(path: &Path, broad: bool) {
             flags,
             ptr::null_mut(),
             ptr::null_mut(),
-            acl,
+            acl.as_ptr(),
             ptr::null_mut(),
         )
     };
