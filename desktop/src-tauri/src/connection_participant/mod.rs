@@ -1,5 +1,6 @@
 //! Native transport and discovery. Activation waits for a visible status consumer.
 #![allow(dead_code)]
+pub(crate) mod delivery;
 pub(crate) mod discovery;
 pub(crate) mod driver;
 pub(crate) mod review;
