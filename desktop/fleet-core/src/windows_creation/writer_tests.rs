@@ -5,7 +5,7 @@ mod preparation;
 #[path = "reservation_tests.rs"]
 mod reservation;
 
-fn fresh() -> Fixture {
+pub(super) fn fresh() -> Fixture {
     fresh_from(Fixture::new())
 }
 fn fresh_from(f: Fixture) -> Fixture {

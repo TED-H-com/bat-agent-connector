@@ -1,5 +1,5 @@
-> 2026-10-23：[最新主線進度與未完成能力](progress-2026-10-23.md)，截至 `eb1e087e`，共 51 個新增合併 PR；沒有新發布，新增合併均未安裝或實機驗收。下方保留既有決議及歷史紀錄。
-> [Latest main progress and remaining capabilities](progress-2026-10-23.md), through `eb1e087e`, covering 51 additional merged PRs; no new release, installation or live acceptance of the additional merges. Existing decisions and historical records remain below.
+> 2026-10-23：[最新主線進度與未完成能力](progress-2026-10-23.md)，截至 `5f49e712`，共 55 個新增合併 PR；沒有新發布，新增合併均未安裝或實機驗收。下方保留既有決議及歷史紀錄。
+> [Latest main progress and remaining capabilities](progress-2026-10-23.md), through `5f49e712`, covering 55 additional merged PRs; no new release, installation or live acceptance of the additional merges. Existing decisions and historical records remain below.
 
 > 2026-10-22：[最新發布與未完成驗收](progress-2026-10-22.md)；下方保留既有決議及歷史紀錄。
 > [Latest publication and remaining acceptance](progress-2026-10-22.md); the decisions and historical records below remain intact.
