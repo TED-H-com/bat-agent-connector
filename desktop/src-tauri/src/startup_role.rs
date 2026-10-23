@@ -473,3 +473,7 @@ mod tests {
         assert_eq!(load_or_infer(root.path(), &config).unwrap_err(), UNREADABLE);
     }
 }
+
+#[cfg(all(test, windows))]
+#[path = "startup_role/windows_tests.rs"]
+mod windows_tests;
