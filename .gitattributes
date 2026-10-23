@@ -13,3 +13,4 @@ tests/fixtures/reference-codec-python.jsonl text eol=lf
 tests/fixtures/reference-codec-rust.jsonl text eol=lf
 # Python packaging and Rust embedding share the same contract bytes.
 src/bat_agent_connector/connection_contract.json text eol=lf
+tests/fixtures/native-isolation-plan.json text eol=lf
