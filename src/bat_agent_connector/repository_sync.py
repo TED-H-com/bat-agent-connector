@@ -10,7 +10,16 @@ import uuid
 from dataclasses import asdict
 from importlib import resources
 
-from . import artifacts, checkpoints, registry, resource_policy, service, task_control, work_items
+from . import (
+    artifacts,
+    checkpoints,
+    native_carrier,
+    registry,
+    resource_policy,
+    service,
+    task_control,
+    work_items,
+)
 from .operations import RERUN, ActionDef, AmbiguousOutcome, NeedsAttention, OperationError, StepFailed
 
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -313,19 +322,7 @@ async def run(ctx):
                  repository_id=plan["repository_id"], clone_path=plan["clone_path"], worktree_path=plan["worktree_path"],
                  branch=plan["branch"], source_sha=plan["source_sha"], source_ref=plan["source_ref"],
                  repository_binding=plan["binding_digest"])
-    async def reconcile_fetch(_):
-        observed = await host_call(ctx, plan, "read.fetch")
-        if observed.get("pinned") is True:
-            return {"clone_path": plan["clone_path"], "source_sha": plan["source_sha"], "pinned": True}
-        return RERUN  # fixed object fetch/CAS only; carrier/start is a separate effect
-    await ctx.step("repository.fetch", lambda: host_call(ctx, plan, "fetch"),
-                   request={"source_sha": plan["source_sha"], "repository_id": plan["repository_id"]}, reconcile=reconcile_fetch)
-    async def reconcile_carrier(_):
-        observed = await host_call(ctx, plan, "read.carrier")
-        return observed.get("carrier") or RERUN  # prepare refuses a leftover branch or different carrier
-    await ctx.step("worktree.prepare", lambda: host_call(ctx, plan, "prepare"),
-                   request={"clone_path": plan["clone_path"], "worktree_path": plan["worktree_path"], "branch": plan["branch"]},
-                   reconcile=reconcile_carrier)
+    await native_carrier.prepare_published(ctx, plan, lambda phase: host_call(ctx, plan, phase))
     binding = {"binding_digest": plan["binding_digest"], "source_sha": plan["source_sha"]}
     context = {"host": ctx.target["host"]}
     if refs and not ctx.service.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? AND name='send'",

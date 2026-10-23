@@ -6,5 +6,10 @@ desktop/vendor/glib-0.18.5/LICENSE whitespace=-blank-at-eof
 src/bat_agent_connector/dashboard/** text eol=lf
 # The native plan golden pins the generator's canonical bytes.
 tests/fixtures/native-plan-manifest.json text eol=lf
+# Canonical synthetic AHP shape bytes are checked on every platform.
+tests/fixtures/ahp-owned/protocol-shapes.jsonl text eol=lf
+# The reference codec goldens pin canonical bytes exchanged by Rust and Python.
+tests/fixtures/reference-codec-python.jsonl text eol=lf
+tests/fixtures/reference-codec-rust.jsonl text eol=lf
 # Python packaging and Rust embedding share the same contract bytes.
 src/bat_agent_connector/connection_contract.json text eol=lf
