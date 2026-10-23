@@ -30,7 +30,7 @@ def test_native_reader_retry_policy(code, release, flags):
             or isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id.startswith("PRIVATE_READ_")
                                                    for t in node.targets)]
     clock, attempts, sleeps = [0.0], [], []
-    error = OSError(errno.EACCES, "native refusal")
+    error = OSError({2: errno.ENOENT, 112: errno.ENOSPC}.get(code, errno.EACCES), "native refusal")
     error.winerror = code
 
     def opening(*args, **kwargs):

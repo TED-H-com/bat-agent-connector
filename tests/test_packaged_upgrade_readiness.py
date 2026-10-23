@@ -34,7 +34,7 @@ def put_pointer(root, pid, endpoint='http://127.0.0.1:45123/rpc'):
 def test_pointer_refusal_uses_production_reader_once_with_winerror(upgrade, tmp_path, monkeypatch, code):
     put_pointer(tmp_path, 42)
     calls = []
-    error = PermissionError('native pointer refusal')
+    error = PermissionError(13, 'native pointer refusal')
     error.winerror = code
 
     def read(path):
