@@ -68,6 +68,7 @@ def test_fixed_select_exclusions_match_real_statements():
 
 @pytest.mark.parametrize("module_name", sorted(FIXED_SELECTS))
 def test_fixed_selects_prepare_on_installed_schema(daemon, module_name):  # noqa: F811
+    failures = []
     for line, statement in FIXED_SELECTS[module_name]:
         exceptions = [value for (module, match), value in EXCLUSIONS.items()
                       if module == module_name and match in statement]
@@ -81,4 +82,5 @@ def test_fixed_selects_prepare_on_installed_schema(daemon, module_name):  # noqa
         try:
             daemon.ops.db.execute("EXPLAIN " + statement, (None,) * statement.count("?")).fetchall()
         except sqlite3.Error as error:
-            pytest.fail(f"{module_name}:{line}: {statement}: {error}")
+            failures.append(f"{module_name}:{line}: {statement}: {error}")
+    assert not failures, "\n".join(failures)
