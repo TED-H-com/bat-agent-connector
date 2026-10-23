@@ -66,7 +66,7 @@ async def test_capabilities_update_states_are_read_only(process, tmp_path, monke
     if scenario != "not_enrolled":
         u.enroll(receipt, "preview")
         if scenario == "failed":
-            u.find_release = lambda channel: release("b" * 40, "0.2.8")
+            u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
             def fail(*args, **kwargs):
                 raise UpdateError("fixture_install_failed")
             u.install = fail
@@ -133,7 +133,7 @@ async def test_running_process_reports_changed_installation_without_stale_state(
     monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
     first = await read_capabilities(tmp_path)
     assert first["connector_update"]["installed"]["commit"] == "a" * 40
-    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
     u.install = lambda root, candidate, **_: make_package(root, candidate)
     u.apply()
     before = update_tree(u.root)
@@ -159,7 +159,7 @@ async def test_running_process_reports_changed_installation_without_stale_state(
 async def test_rollback_can_leave_an_older_installation_waiting_for_next_launch(process, tmp_path, monkeypatch):
     u, receipt, build = process
     u.enroll(receipt, "preview")
-    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
     u.install = lambda root, candidate, **_: make_package(root, candidate)
     u.apply()
     # A newly launched process belongs to the current installation, then stays
@@ -184,7 +184,7 @@ async def test_rollback_can_leave_an_older_installation_waiting_for_next_launch(
 async def test_launch_evidence_does_not_attach_an_old_process_to_a_new_current(process, tmp_path, monkeypatch):
     u, receipt, _ = process
     u.enroll(receipt, "preview")
-    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
     u.install = lambda root, candidate, **_: make_package(root, candidate)
     u.apply()
     # First discovery after the switch cannot claim the old process was launched
@@ -242,7 +242,7 @@ async def test_completed_release_check_retains_three_independent_builds_and_cloc
     monkeypatch.setattr(updater, "timestamp", lambda: "2026-10-22T14:00:00+00:00")
     assert (await read_capabilities(tmp_path)) == caps
     assert update_tree(u.root) == before
-    def failed(channel):
+    def failed(channel, observation=None):
         raise UpdateError("release_network_unavailable")
     u.find_release = failed
     with pytest.raises(UpdateError):
@@ -250,7 +250,7 @@ async def test_completed_release_check_retains_three_independent_builds_and_cloc
     assert (await read_capabilities(tmp_path))["connector_update"]["release_check"] == check
     u.policy(True, "stable")
     assert (await read_capabilities(tmp_path))["connector_update"]["release_check"] is None
-    u.find_release = lambda channel: None
+    u.find_release = lambda channel, observation=None: None
     u.check()
     assert (await read_capabilities(tmp_path))["connector_update"]["release_check"]["candidate"] is None
     golden = json.loads(GOLDEN.read_text())
@@ -268,7 +268,7 @@ async def test_identified_mcp_compares_only_its_own_next_launch_installation(pro
         u.enroll(receipt, "preview")
         monkeypatch.setattr(updater, "_PROCESS_INSTALLATION", updater._capture_process_installation())
         if scenario == "differs":
-            u.find_release = lambda channel: release("b" * 40, "0.2.8")
+            u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
             u.install = lambda root, candidate, **_: make_package(root, candidate)
             u.apply()
         elif scenario == "foreign":

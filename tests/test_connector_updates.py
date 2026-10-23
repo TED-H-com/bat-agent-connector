@@ -144,7 +144,7 @@ def make_deployment(tmp_path):
         package = path / "tools/bat-agent-connector/lib/python3.13/site-packages/bat_agent_connector"
         return {"package": str(package), "files": digest_files(package_files(package)),
                 "python_files": digest_files(package_files(package, python_only=True)), "skill_sha256": SKILL_SHA}
-    u = updater.Updater(home, inspect=inspect, find_release=lambda channel: candidate)
+    u = updater.Updater(home, inspect=inspect, find_release=lambda channel, observation=None: candidate)
     return u, receipt, inspections
 
 
@@ -161,7 +161,7 @@ def test_enrollment_switches_future_launches_and_rollback_disables_updates(deplo
     def install(root, candidate, *, home):
         installs.append(candidate["commit"])
         return make_package(root, candidate)
-    u.find_release = lambda channel: candidate
+    u.find_release = lambda channel, observation=None: candidate
     u.install = install
     result = u.apply()
     assert result["installed"]["commit"] == candidate["commit"]
@@ -194,7 +194,7 @@ def test_status_is_byte_identical_and_does_not_create_a_lease(deployment, monkey
     u, receipt, inspections = deployment
     if phase != "not_enrolled":
         u.enroll(receipt, "preview")
-        u.find_release = lambda channel: release("b" * 40, "0.2.8")
+        u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
         u.install = lambda root, candidate, **_: make_package(root, candidate)
         if phase == "pending":
             reconcile = u.reconcile
@@ -258,7 +258,7 @@ def test_enrollment_rejects_modified_or_missing_ownership_before_execution(deplo
 def test_failed_stage_preserves_active_version_and_failure_receipt(deployment):
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
-    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
     def fail(*args, **kwargs):
         raise UpdateError("fixture_download_failed")
     u.install = fail
@@ -279,7 +279,7 @@ def test_interrupted_activation_reconciles_existing_install_without_reinstall(de
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
     candidate = release("b" * 40, "0.2.8")
-    u.find_release = lambda channel: candidate
+    u.find_release = lambda channel, observation=None: candidate
     installs = []
     def install(root, candidate, *, home):
         installs.append(candidate["commit"])
@@ -357,7 +357,7 @@ def test_private_state_symlink_and_concurrent_lease_are_refused(deployment):
 def test_disabling_after_interruption_does_not_activate_a_pending_release(deployment, monkeypatch):
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
-    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
     u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
     def crash(*args, **kwargs):
         raise KeyboardInterrupt()
@@ -406,7 +406,7 @@ def test_install_persists_pending_then_reconciled_state_without_rewriting(deploy
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
     candidate = release("b" * 40, "0.2.8")
-    u.find_release = lambda channel: candidate
+    u.find_release = lambda channel, observation=None: candidate
     u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
     path = u.root / "state.json"
     with state_replacements(u.root) as replacements:
@@ -430,7 +430,7 @@ def test_enable_after_pointer_refusal_only_saves_reconciled_state(deployment):
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
     candidate = release("b" * 40, "0.2.8")
-    u.find_release = lambda channel: candidate
+    u.find_release = lambda channel, observation=None: candidate
     pointer = u.root / "current"
     def install(root, candidate, **kwargs):
         proof = make_package(root, candidate)
@@ -458,7 +458,7 @@ def test_enable_after_pointer_refusal_only_saves_reconciled_state(deployment):
 def test_repeated_release_check_records_a_new_outcome(deployment, candidate):
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
-    u.find_release = lambda channel: candidate
+    u.find_release = lambda channel, observation=None: candidate
     first = u.apply()
     path = u.root / "state.json"
     before = policy_file_snapshot(path)
@@ -499,7 +499,7 @@ def test_repeated_disable_preserves_state_links_and_receipts(deployment, monkeyp
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
     # Retain a real update outcome as well as the original deployment receipt.
-    u.find_release = lambda channel: release("b" * 40, "0.2.8")
+    u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
     u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
     u.apply()
     calls = []
@@ -534,7 +534,7 @@ def test_policy_changes_are_persisted_including_reconciliation(deployment, monke
     u, receipt, _ = deployment
     u.enroll(receipt, "preview")
     if change == "pending":
-        u.find_release = lambda channel: release("b" * 40, "0.2.8")
+        u.find_release = lambda channel, observation=None: release("b" * 40, "0.2.8")
         u.install = lambda root, candidate, **kwargs: make_package(root, candidate)
         def crash(*args, **kwargs):
             raise KeyboardInterrupt("fixture stops before pointer activation")

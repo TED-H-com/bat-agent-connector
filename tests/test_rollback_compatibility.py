@@ -298,12 +298,12 @@ def test_real_enrollment_with_current_credentials_and_receipt_stays_unknown(inst
 
     # Real enrollment/update/state/link/receipt producers; only the package
     # installer/inspection boundary uses the existing synthetic package fixture.
-    service = updater.Updater(home, find_release=lambda channel: first, install=install,
+    service = updater.Updater(home, find_release=lambda channel, observation=None: first, install=install,
                               inspect=lambda root, candidate, **kwargs: proofs[root])
     enrolled = service.enroll(receipt, "preview")
     assert enrolled["installation_matches_state"] and not enrolled["pending"]
     second = release("b" * 40, "0.2.8")
-    service.find_release = lambda channel: second
+    service.find_release = lambda channel, observation=None: second
     assert service.apply()["installed"] == second
     state = service.read()
     assert state["previous"] == first["commit"]

@@ -59,7 +59,7 @@ def test_receipt_is_accepted_by_real_enrollment_and_digest_matches(installation)
     assert json.loads(receipt.read_text())["installed_proof"]["python_source_sha256"] == legacy.hexdigest()
     assert receipt.stat().st_mode & 0o777 == 0o600
     assert finalize(verify_only=True)["writes"] is False
-    u = updater.Updater(home, inspect=inspect, find_release=lambda channel: candidate)
+    u = updater.Updater(home, inspect=inspect, find_release=lambda channel, observation=None: candidate)
     assert u.enroll(receipt, "preview")["installation_matches_state"]
 
 
@@ -324,7 +324,7 @@ def test_adoption_enrollment_and_restore(legacy):
     assert installer.restore_adopted(root, home=home)['status'] == 'restored_adopted'
     assert (home / '.local/bin/batc').resolve() == tool / 'bin/batc'
     installer.adoption_links(home, root, adoption)
-    u = updater.Updater(home, inspect=inspect, find_release=lambda channel: candidate)
+    u = updater.Updater(home, inspect=inspect, find_release=lambda channel, observation=None: candidate)
     assert u.enroll(Path(summary['receipt']), 'preview')['installation_matches_state']
     with pytest.raises(ValueError, match='adoption_'):
         installer.restore_adopted(root, home=home)
@@ -425,7 +425,7 @@ def test_bootstrap_adoption_uses_verified_install_and_can_upgrade(legacy, monkey
     proof.update(files=digest_files(package_files(Path(proof["package"]))),
                  python_files=digest_files(package_files(Path(proof["package"]), python_only=True)))
     u = updater.Updater(home, inspect=lambda *a, **kw: proof,
-                        find_release=lambda channel: candidate)
+                        find_release=lambda channel, observation=None: candidate)
     assert u.enroll(Path(result['receipt']), 'preview')['installation_matches_state']
 
 

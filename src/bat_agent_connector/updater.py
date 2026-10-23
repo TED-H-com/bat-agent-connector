@@ -309,13 +309,10 @@ class Updater:
         return self._status_snapshot(state)[2]
 
     def _check_release(self, state):
-        # Only the existing release producer can supply this observation. Persist
-        # completion before installation; status/capabilities never renew it.
+        # Persist completion before installation; status/capabilities never
+        # renew this finder observation.
         observation = {}
-        if self.find_release is discover:
-            candidate = self.find_release(state["channel"], observation=observation)
-        else:
-            candidate = self.find_release(state["channel"])
+        candidate = self.find_release(state["channel"], observation=observation)
         # Preserve the shared install candidate. The selected release item's
         # display clock belongs only to this completed check's observation.
         recorded = ({**candidate, "published_at": observation["published_at"]}
