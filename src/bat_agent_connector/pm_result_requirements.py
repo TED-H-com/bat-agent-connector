@@ -4,12 +4,14 @@ from __future__ import annotations
 import json
 
 from . import (
+    controller_authority,
     pm_evidence,
     pm_package_handoff,
     pm_plans,
     pm_quality_reviews,
     pm_source_lineage,
     pm_work_packages,
+    pm_work_start,
     work_items,
 )
 from .operations import OperationError
@@ -18,6 +20,8 @@ from .pm_release_baselines import _snapshot_read
 
 MAX_BYTES = 262_144
 LIMIT = 50
+READINESS_LIMIT = 20
+HANDOFF_LIMIT = 50
 
 
 def _none():
@@ -33,6 +37,43 @@ def _bounded(value):
     if len(json.dumps(value, ensure_ascii=False).encode('utf-8')) > MAX_BYTES:
         raise OperationError('PM_RESULT_REQUIREMENTS_LIMIT', 'Original requirement relations exceed the read budget', 413)
     return value
+
+
+def _original(ops, principal, wid, child):
+    """Resolve only immutable handoff evidence, including registered Work routes."""
+    require_visible(ops.db, principal, child)
+    frozen = pm_package_handoff.binding(child)
+    if frozen:
+        if not pm_package_handoff.source_visible(ops.db, principal, child):
+            return None
+        contract = frozen["contract"]
+        ref, refs = contract["package_ref"], contract.get("pm_requirement_quality_refs")
+    else:
+        if not pm_work_start.installed(ops.db):
+            return None
+        row = ops.db.execute("SELECT * FROM pm_work_start_children WHERE operation_id=? AND slot='handoff'",
+                             (child["operation_id"],)).fetchone()
+        if row is None:
+            return None
+        parent = ops.get(row["parent_id"], steps=False)
+        require_visible(ops.db, principal, parent)
+        intent = pm_work_start._intent(parent)
+        request = json.loads(row["request"])
+        if (parent["action"] != pm_work_start.ACTION or row["ordinal"] != pm_work_start.SLOT_ORDINAL["handoff"]
+                or pm_work_start._digest(request) != row["request_digest"]
+                or any(child[key] != request[key] for key in ("action", "target", "params", "preconditions", "idempotency_key"))
+                or child["actor"] != parent["actor"] or child["target"] != parent["target"]
+                or parent["target"].get("workspace_id") != wid
+                or child["external_refs"].get(pm_work_start.LINK) != {"operation_id": parent["operation_id"], "slot": "handoff"}
+                or not controller_authority.same_controller(controller_authority.operation_binding(child), intent["controller"])):
+            return None
+        ref, refs = request["params"].get("package_ref"), None
+    if not isinstance(ref, dict) or ref.get("workspace_id") != wid:
+        return None
+    package = pm_package_handoff._package(ops, principal, ref)
+    if not frozen and package["work_item_id"] != parent["target"]["work_item_id"]:
+        return None
+    return package, ref, refs
 
 
 def _assessments(ops, principal, wid, package, execution, candidate):
@@ -69,11 +110,26 @@ def _assessments(ops, principal, wid, package, execution, candidate):
     return rows, bool(catalog['next_cursor'] or catalog['visibility_filtered'])
 
 
+def _handoffs(ops, wid, target, limit):
+    direct = ops.db.execute("SELECT operation_id FROM operations WHERE "
+        "json_extract(external_refs,'$.admission_binding.pm_handoff.contract.package_ref.workspace_id')=? "
+        "AND json_extract(external_refs,'$.admission_binding.pm_handoff.contract.package_ref.package_id')=? "
+        "ORDER BY operation_id LIMIT ?", (wid, target['package_id'], limit + 1)).fetchall()
+    # Original routed children need no runtime installation or action allowlist.
+    routed = ops.db.execute("""SELECT c.operation_id FROM work_attempts a
+        JOIN pm_work_start_children c ON c.parent_id=a.start_operation_id AND c.slot='handoff'
+        WHERE a.workspace_id=? AND a.work_item_id=? ORDER BY a.sequence LIMIT ?""",
+        (wid, target['work_item_id'], limit + 1)).fetchall() if pm_work_start.installed(ops.db) else []
+    return list({row['operation_id']: row for row in [*direct, *routed]}.values())
+
+
 def _dependents(ops, principal, wid, package):
     original = package['document']['context']['plan_ref']
     ids = {row['id'] for row in package['document']['requirements']}
     catalog = pm_work_packages.list_packages(ops, principal, wid, limit=LIMIT)
     result = []
+    readiness_left, handoffs_left = READINESS_LIMIT, HANDOFF_LIMIT
+    partial = bool(catalog["next_cursor"] or catalog["coverage"]["visibility_filtered"])
     for target in catalog['packages']:
         doc = target['document']
         if doc['context']['plan_ref'] != original:
@@ -88,19 +144,28 @@ def _dependents(ops, principal, wid, package):
             if exc.status != 404:
                 raise
             continue
+        if readiness_left == 0:
+            partial = True
+            break
+        default_readiness = pm_work_packages.readiness(ops, principal, wid, target['package_id'])
+        readiness_left -= 1
         selections = []
-        children = ops.db.execute("SELECT operation_id FROM operations WHERE action='repository.continue' "
-            "AND json_extract(params,'$.pm_package_ref.workspace_id')=? "
-            "AND json_extract(params,'$.pm_package_ref.package_id')=? ORDER BY created_at,operation_id LIMIT ?",
-            (wid, target['package_id'], LIMIT + 1)).fetchall()
-        for stub in children[:LIMIT]:
+        children = _handoffs(ops, wid, target, handoffs_left) if handoffs_left else []
+        complete = bool(handoffs_left) and len(children) <= handoffs_left
+        for stub in children[:handoffs_left]:
+            handoffs_left -= 1
             try:
                 child = ops.get(stub['operation_id'], steps=False)
-                require_visible(ops.db, principal, child)
-                frozen = pm_package_handoff.binding(child)
-                refs = frozen['contract'].get('pm_requirement_quality_refs') if frozen else None
+                handoff = _original(ops, principal, wid, child)
+                if handoff is None or handoff[1]['package_id'] != target['package_id']:
+                    continue
+                refs = handoff[2]
                 if refs is None:
                     continue
+                if readiness_left == 0:
+                    complete = False
+                    break
+                readiness_left -= 1
                 readiness = pm_work_packages.readiness(ops, principal, wid, target['package_id'], quality_refs=refs)
                 selections.append({'execution_operation_id': child['operation_id'], 'quality_refs': refs, 'readiness': readiness})
             except OperationError as exc:
@@ -108,10 +173,11 @@ def _dependents(ops, principal, wid, package):
                     raise
         result.append({'work_item_id': target['work_item_id'], 'title': work_items._get_item(ops.db, target['work_item_id'])['title'],
             'package_id': target['package_id'], 'document_digest': target['document_digest'], 'prerequisite_ids': needed,
-            'readiness': pm_work_packages.readiness(ops, principal, wid, target['package_id']),
-            'selections': selections, 'selections_complete': len(children) <= LIMIT,
+            'readiness': default_readiness,
+            'selections': selections, 'selections_complete': complete,
             'link': _link('pm_work_package_readiness_get', workspace_id=wid, package_id=target['package_id'])})
-    return result, bool(catalog['next_cursor'] or catalog['coverage']['visibility_filtered'])
+        partial |= not complete
+    return result, partial
 
 
 def _related(ops, principal, wid, package, execution):
@@ -153,13 +219,10 @@ def read(ops, principal, workspace_id, execution_operation_id, candidate_commit,
         return _none()
     try:
         child = ops.get(execution_operation_id, steps=False)
-        require_visible(ops.db, principal, child)
-        frozen = pm_package_handoff.binding(child)
-        if not frozen or frozen['contract']['package_ref']['workspace_id'] != workspace_id:
+        original = _original(ops, principal, workspace_id, child)
+        if original is None:
             return _none()
-        if not pm_package_handoff.source_visible(ops.db, principal, child):
-            return _none()
-        package = pm_package_handoff._package(ops, principal, frozen['contract']['package_ref'])
+        package, package_ref, _refs = original
     except OperationError as exc:
         if exc.status != 404:
             raise
@@ -184,7 +247,7 @@ def read(ops, principal, workspace_id, execution_operation_id, candidate_commit,
             'link': _link('pm_plan_get', workspace_id=workspace_id, revision_id=doc['context']['plan_ref']['revision_id'])})
         _bounded(items)
     dependents, packages_partial = _dependents(ops, principal, workspace_id, package)
-    result = {'relation': 'explicit', 'package_ref': frozen['contract']['package_ref'],
+    result = {'relation': 'explicit', 'package_ref': package_ref,
         'plan_ref': doc['context']['plan_ref'], 'dod_ref': doc['context']['dod_ref'], 'candidate_commit': candidate_commit,
         'verification': verification_status, 'verification_evidence': list(verification_evidence), 'items': items, 'dependent_work': dependents,
         'related': _related(ops, principal, workspace_id, package, execution_operation_id),

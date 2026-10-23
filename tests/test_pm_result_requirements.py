@@ -271,3 +271,51 @@ async def test_partial_coverage_and_whole_document_byte_limit(two_results, monke
     monkeypatch.setattr(pm_result_requirements, 'MAX_BYTES', size)
     monkeypatch.setattr(pm_result_requirements, 'LIMIT', 1)
     assert read()['coverage']['packages_partial']
+
+
+async def test_dependent_readiness_has_one_shared_read_budget(two_results, monkeypatch):
+    w, first, _ = two_results
+    local = await verified(w, first)
+    await downstream(local)
+    await downstream(local)
+    calls = []
+    original = pm_work_packages.readiness
+    def readiness(*args, **kwargs):
+        assert args[0].db.in_transaction
+        calls.append(args[3])
+        return original(*args, **kwargs)
+    monkeypatch.setattr(pm_work_packages, 'readiness', readiness)
+    monkeypatch.setattr(pm_result_requirements, 'READINESS_LIMIT', 1, raising=False)
+    section = pm_result_requirements.read(w['d'].ops, OWNER, w['workspace_id'],
+        local['child']['operation_id'], local['candidate'], 'verified')
+    assert len(calls) <= 1
+    assert len(section['dependent_work']) == 1
+    assert section['coverage']['packages_partial']
+
+
+async def test_direct_handoff_lookup_uses_an_index(two_results):
+    w, first, _ = two_results
+    local = await verified(w, first)
+    dw = await downstream(local)
+    review = await conclude(local)
+    refs = {'member.login': {'condition': acceptance.acceptance.freeze_condition(local['package'], ['member.login']),
+        'reference': reference(review), 'execution_operation_id': local['child']['operation_id']}}
+    child = await handoffs.run(dw, await handoffs.request(dw, pm_requirement_quality_refs=refs))
+    ops = w['d'].ops
+    statements = []
+    ops.db.set_trace_callback(statements.append)
+    try:
+        pm_result_requirements.read(ops, OWNER, w['workspace_id'], local['child']['operation_id'], local['candidate'], 'verified')
+    finally:
+        ops.db.set_trace_callback(None)
+    queries = [sql for sql in statements if 'SELECT operation_id FROM operations' in sql]
+    assert 1 <= len(queries) <= pm_result_requirements.READINESS_LIMIT
+    routed_queries = [sql for sql in statements if 'FROM work_attempts a' in sql]
+    assert len(queries) + len(routed_queries) <= 2 * pm_result_requirements.READINESS_LIMIT
+    for sql in routed_queries:
+        plan = ' '.join(row['detail'] for row in ops.db.execute('EXPLAIN QUERY PLAN ' + sql))
+        assert 'SEARCH a USING INDEX work_attempts_by_work' in plan
+    for sql in queries:
+        plan = ' '.join(row['detail'] for row in ops.db.execute('EXPLAIN QUERY PLAN ' + sql))
+        assert 'SEARCH operations USING' in plan and 'INDEX pm_handoff_package ' in plan
+    assert child['status'] == 'succeeded'
