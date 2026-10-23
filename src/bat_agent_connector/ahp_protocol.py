@@ -1,4 +1,4 @@
-"""Offline owned-work wire subset; no transport, authorization or production caller.
+"""Pure owned-work wire subset; no transport, authorization or write caller.
 
 Sources: microsoft/agent-host-protocol@5f16d81bb7045b66d7bc768d244feab75002d943,
 types/{common,channels-session,channels-chat}; microsoft/vscode@
