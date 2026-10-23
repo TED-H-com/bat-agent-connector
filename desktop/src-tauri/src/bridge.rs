@@ -528,6 +528,15 @@ pub(crate) struct FileScope {
     pub actor: String,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct CreationScope {
+    pub generation: u64,
+    pub managed: bool,
+    pub actor: String,
+    pub identity: Identity,
+}
+
 #[derive(Clone)]
 struct Active {
     config: Config,
@@ -590,6 +599,48 @@ fn get(path: &str) -> ConnectorRequest {
 }
 
 impl Bridge {
+    #[allow(dead_code)]
+    pub(crate) fn creation_scope(&self) -> bat_fleet_core::Result<CreationScope> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "CREATION_EVIDENCE_UNPROVEN")?;
+        let active = state.active.as_ref().ok_or("CREATION_EVIDENCE_UNPROVEN")?;
+        if state.startup_pending
+            || state.recovery_error.is_some()
+            || state.config.as_ref().map(binding).ok().as_ref() != Some(&active.record.binding)
+            || binding(&active.config) != active.record.binding
+            || (state.managed
+                && state.environment_identity.as_ref() != Some(&active.record.identity))
+        {
+            return Err("CREATION_EVIDENCE_UNPROVEN");
+        }
+        Ok(CreationScope {
+            generation: state.generation,
+            managed: state.managed,
+            actor: active.config.expected_actor.clone(),
+            identity: active.record.identity.clone(),
+        })
+    }
+    #[cfg(test)]
+    pub(crate) fn creation_fixture(launch: &crate::managed::Launch) -> Self {
+        let bridge = Self::managed(
+            Path::new("fixture"),
+            launch.config(),
+            launch.token.clone(),
+            launch.identity(),
+        );
+        bridge.state.lock().unwrap().active = Some(Active {
+            config: launch.config(),
+            record: Record {
+                version: 1,
+                binding: binding(&launch.config()),
+                token: launch.token.clone(),
+                identity: launch.identity(),
+            },
+        });
+        bridge
+    }
     #[cfg(test)]
     pub(crate) fn file_fixture(endpoint: &str, token: &str) -> Self {
         let config = Config {

@@ -36,6 +36,10 @@ pub trait Security {
     fn unpublished(&self, journal: &Path) -> Result<()>;
     fn validate_path(&self, path: &Path) -> Result<()>;
     fn login(&self) -> Result<LoginIdentity>;
+    /// Fresh native manifest/service/Bridge observation, under the caller's guards.
+    fn managed_identity(&self) -> Result<Option<ManagedIdentity>> {
+        Ok(None)
+    }
     fn held(&self) -> Result<()>;
     fn effect_held(&self) -> Result<()> {
         Err(UNSUPPORTED)
@@ -111,9 +115,8 @@ fn checked_read<S: Security>(
 impl<S: Security> Reader<S> {
     fn new(expected: ProvisioningReceipt, security: S) -> Result<Self> {
         Record::Provisioning(Box::new(expected.clone())).encode()?;
-        // Managed identity requires its native manifest/service attestation.
-        // The observation-only boundary cannot establish that binding yet.
-        if expected.managed_connector.is_some() {
+        // Existing observers provide no attestation and still refuse managed receipts.
+        if security.managed_identity()? != expected.managed_connector {
             return Err(UNSUPPORTED);
         }
         let login = security.login()?;
@@ -179,6 +182,9 @@ impl<S: Security> Reader<S> {
             return Err("OTHER_LOGIN_OWNER");
         }
         let r = &self.expected;
+        if self.security.managed_identity()? != r.managed_connector {
+            return Err(UNPROVEN);
+        }
         if self.identity(&r.scope.state_root)? != r.scope.state_identity {
             return Err(UNPROVEN);
         }
