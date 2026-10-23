@@ -210,3 +210,134 @@ fn fixture_mutex_excludes_other_threads_before_spawn() {
     acquired_rx.recv_timeout(Duration::from_secs(5)).unwrap();
     worker.join().unwrap();
 }
+
+fn panic_message(run: impl FnOnce()) -> String {
+    let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(run))
+        .expect_err("the original deadline must still fail");
+    error
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| error.downcast_ref::<&str>().map(|s| s.to_string()))
+        .expect("fixture panic must contain the diagnostic message")
+}
+
+#[test]
+fn deadline_diagnostics_distinguish_running_child_and_closed_stdout() {
+    let fixture = Fixture::new();
+    for closed in [false, true] {
+        let temp = Temp::new();
+        let code = format!(
+            "{}{}time.sleep(30)",
+            ready(),
+            if closed { "os.close(1)\n" } else { "" }
+        );
+        let report = panic_message(|| {
+            fixture.run(&mut temp.command(&code), Duration::from_millis(300));
+        });
+        temp.assert_reaped();
+        assert!(report.contains("PowerShell fixture exceeded its work deadline"));
+        assert!(report.contains("READY=Some("), "{report}");
+        assert!(
+            report.contains(if closed {
+                "stdout_EOF=Some("
+            } else {
+                "stdout_EOF=None"
+            }),
+            "{report}"
+        );
+        assert!(report.contains("process_exit=None"), "{report}");
+        assert!(
+            report.contains("child_cpu=unavailable (non-Windows)"),
+            "{report}"
+        );
+    }
+}
+
+#[test]
+fn deadline_diagnostics_report_exit_without_stdout_eof_and_stop_the_reader() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    // Transfer a duplicate stdout writer to another owned synthetic process.
+    // This models an inherited pipe without leaving an orphaned grandchild.
+    let mut holder = Owned {
+        child: Command::new("python3")
+            .args(["-c", "import array,os,select,socket,sys\ns=socket.socket(socket.AF_UNIX)\ns.bind('s');s.listen(1);s.settimeout(5)\nopen('holder-ready','w').close()\nc,_=s.accept()\n_,ancillary,_,_=c.recvmsg(1,socket.CMSG_SPACE(array.array('i').itemsize))\nfds=array.array('i');fds.frombytes(ancillary[0][2][:fds.itemsize])\nc.sendall(b'k')\nselect.select([sys.stdin],[],[],10)\nos.close(fds[0])"])
+            .current_dir(&temp.0)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap(),
+        reader: None,
+    };
+    let began = Instant::now();
+    while !temp.0.join("holder-ready").exists() {
+        assert!(began.elapsed() < Duration::from_secs(5));
+        thread::sleep(Duration::from_millis(10));
+    }
+    let mut command = temp.command(&format!(
+        "{}import socket,array\ns=socket.socket(socket.AF_UNIX);s.connect('s')\ns.sendmsg([b'x'],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,array.array('i',[1]))])\nassert s.recv(1)==b'k'\ns.close()",
+        ready()
+    ));
+    command.current_dir(&temp.0);
+    let report = panic_message(|| {
+        fixture.run(&mut command, Duration::from_millis(300));
+    });
+    let holder_still_live = holder.child.try_wait().unwrap().is_none();
+    drop(holder); // Always kill/reap the writer holder before assertions.
+    temp.assert_reaped();
+    assert!(report.contains("READY=Some("), "{report}");
+    assert!(report.contains("process_exit=Some("), "{report}");
+    assert!(report.contains("stdout_EOF=None"), "{report}");
+    assert!(
+        holder_still_live,
+        "runner waited for the unrelated pipe holder"
+    );
+}
+
+#[test]
+fn startup_breach_is_captured_before_cleanup_and_cleared_before_the_next_run() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    let error = fixture
+        .run_with_deadlines(
+            &mut temp.command("time.sleep(30)"),
+            Duration::from_millis(300),
+            Duration::from_secs(5),
+        )
+        .unwrap_err();
+    let report = fixture.failure_message(error);
+    assert!(report.contains("PowerShell fixture did not start within 60 s"));
+    for point in ["READY=None", "stdout_EOF=None", "process_exit=None"] {
+        assert!(report.contains(point), "{report}");
+    }
+    temp.assert_reaped();
+    let next = Temp::new();
+    let error = fixture
+        .run_with_deadlines(
+            &mut Command::new(next.0.join("missing")),
+            Duration::from_secs(5),
+            Duration::from_secs(5),
+        )
+        .unwrap_err();
+    assert_eq!(
+        fixture.failure_message(error),
+        "PowerShell fixture spawn failed"
+    );
+}
+
+#[test]
+fn lifecycle_observation_preserves_binary_output_exactly() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    let expected: Vec<u8> = (0..=255).cycle().take(768).collect();
+    let code = format!(
+        "{}sys.stdout.buffer.write(bytes(range(256))*3);sys.stdout.buffer.flush()",
+        ready()
+    );
+    assert_eq!(
+        fixture.run(&mut temp.command(&code), Duration::from_secs(5)),
+        expected
+    );
+    temp.assert_reaped();
+}
