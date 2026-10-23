@@ -192,13 +192,17 @@ def record_created(journal, resource_id, evidence):
 def bind_chat(journal, resource_id, snapshot):
     receipt = get(journal, resource_id, 'created')
     controller_authority.require_entry(receipt)
-    if not isinstance(snapshot, dict) or not isinstance(snapshot.get('state'), dict):
+    if (not isinstance(snapshot, dict) or not isinstance(snapshot.get('state'), dict)
+            or not isinstance(snapshot.get('resource'), str) or not snapshot['resource']
+            or snapshot['resource'] != snapshot['state'].get('resource')):
         refuse('AHP_CHAT_UNPROVEN')
     old = get(journal, resource_id, 'chat_bound')
-    if old is not None and snapshot.get('resource') != old['chat_uri']:
-        refuse('AHP_EVIDENCE_CONFLICT')
-    if (snapshot.get('resource') != receipt['binding']['chat_uri']
-            or snapshot.get('state', {}).get('resource') != receipt['binding']['chat_uri']):
+    if old is not None:
+        if (old['created_digest'] != digest(receipt) or old['chat_uri'] != receipt['binding']['chat_uri']
+                or snapshot['resource'] != old['chat_uri']):
+            refuse('AHP_EVIDENCE_CONFLICT')
+        return old
+    if snapshot['resource'] != receipt['binding']['chat_uri']:
         refuse('AHP_CHAT_UNPROVEN')
     return _append(journal, resource_id, 'chat_bound', {'created_digest': digest(receipt),
         'chat_uri': receipt['binding']['chat_uri'], 'snapshot_digest': digest(snapshot)})

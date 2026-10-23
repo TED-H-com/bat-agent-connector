@@ -259,12 +259,14 @@ prevents another send even if the reply was lost; observation alone cannot clear
 An exact same-connection ACK and ready session snapshot establish creation.
 The advertised default chat, or sole advertised chat, is then bound in a separate
 append-only record referencing that creation receipt. Turns require this record.
-A different chat or changed evidence conflicts without replacing the original.
+A rebind validates the fresh snapshot and preserves the first record for the same
+creation and chat. A different creation or chat conflicts without replacing it.
 No createChat, route, action, API, UI or production write caller is installed.
 
 繁體中文：create grant 與 turn grant 分型，均只能由中央政策鑄造，不可互換。
 create 只授權原 Work／Attempt／handoff child 的未送出預留；不是 session 所有權。
 原 carrier 在鑄造及最後送出前都須查回，absence 須完整、即時且同 connection。
 共用 guard 依型別選擇既有 create／turn fence，提交後才送出；未知結果不重送。
-session 建立證據成立後，另行追加其宣告 chat 的綁定；不同 chat 為衝突，沒有綁定
+session 建立證據成立後，另行追加其宣告 chat 的綁定；重綁須驗證新 snapshot，
+相同建立與 chat 保留首筆記錄，不同身分為衝突；沒有綁定
 不能 turn。此增量仍無正式 create route、action、API 或 UI。
