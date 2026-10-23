@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 import time
 
 from . import dashboard_sync, pm_access, pm_source_lineage, pm_source_reads, pm_workspace, repository_sync
@@ -96,7 +97,7 @@ def _visible(ops, principal, kind, row):
         if oid:
             return pm_access.visible(ops.db, principal, ops.get(oid, steps=False))
         return True
-    except OperationError:
+    except (OperationError, sqlite3.Error):
         return False
 
 

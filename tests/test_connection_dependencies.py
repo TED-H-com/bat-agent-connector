@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import sqlite3
 import uuid
 
 import pytest
@@ -113,12 +114,15 @@ async def test_visible_shared_and_completed_history_is_informative(connected):
     saved = await profile(w, wid)
     pid = (await act(w["d"], OWNER, "project.create", params={"name": "Shared", "repositories": ["o/r"]}))["result"]["project_id"]
     work = (await act(w["d"], OWNER, "work_item.create", {"project_id": pid}, {"title": "Completed"}))["result"]["work_item_id"]
+    await act(w["d"], OWNER, "work_item.link", {"work_item_id": work},
+        {"kind": "operation", "ref": w["connection"]["operation_id"]})
     await act(w["d"], OWNER, "work_item.update", {"work_item_id": work}, {"state": "done"}, {"expected_version": 1})
     await act(w["d"], OWNER, "work_item.update", {"work_item_id": work}, {"archived": True}, {"expected_version": 2})
     result = w["read"]()
     assert wid in refs(result, "pm_workspace") and work in refs(result, "work_item")
     assert saved["profile_id"] + "/1" in refs(result, "work_profile")
     assert refs(result, "repository") == {"o/r"}
+    assert refs(result, "work_link")
     assert all(row["disposition"] == "informative" for row in result["impacts"])
     assert result["server_complete"] and not result["complete"]
     for domain in ("native_selection", "native_resources"):
@@ -288,3 +292,25 @@ async def test_checkpoint_continuation_follows_recorded_source(connected, mock):
     op, _ = ops.create(OWNER, action="checkpoint.continue", target={"checkpoint_id": checkpoint["checkpoint_id"]},
         params={"instructions": "Continue from recorded source"}, idempotency_key="continue")
     assert op["operation_id"] in refs(w["read"](), "operation")
+
+
+async def test_unavailable_work_link_source_cannot_claim_complete_history(connected, mock, monkeypatch):
+    from bat_agent_connector import pm_source_lineage
+    from tests.test_checkpoints import MANUAL, bat_git_status, make_checkpoint
+    w = connected
+    mock.metas[MANUAL]["cwd"] = str(w["human"])
+    mock.handlers["git:status"] = bat_git_status
+    checkpoint = await make_checkpoint(w["d"])
+    pid = (await act(w["d"], OWNER, "project.create", params={"name": "Linked", "repositories": ["o/r"]}))["result"]["project_id"]
+    work = (await act(w["d"], OWNER, "work_item.create", {"project_id": pid}, {"title": "History"}))["result"]["work_item_id"]
+    await act(w["d"], OWNER, "work_item.link", {"work_item_id": work},
+        {"kind": "checkpoint", "ref": checkpoint["checkpoint_id"]})
+    original = pm_source_lineage.visible
+    def unavailable(db, principal, kind, identity):
+        if kind == "checkpoint":
+            raise sqlite3.OperationalError("Source reader unavailable")
+        return original(db, principal, kind, identity)
+    monkeypatch.setattr(pm_source_lineage, "visible", unavailable)
+    result = w["read"]()
+    assert result["domains"]["work_history"]["reason"] == "REFERENCES_UNAVAILABLE"
+    assert not result["server_complete"] and not refs(result, "work_link")
