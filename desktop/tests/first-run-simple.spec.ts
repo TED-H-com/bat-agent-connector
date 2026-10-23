@@ -88,21 +88,19 @@ for (const language of ['zh-TW', 'zh-Hant', 'zh-HK', 'zh-MO', 'zh-CN', 'en-US'])
   await context.close();
 });
 
-for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`${locale} ${native ? 'native' : 'web'} Setup reports observation evidence rather than an idle write socket`, async ({page}) => {
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`${locale} ${native ? 'native' : 'web'} legacy connection fields without matching observations stay unknown`, async ({page}) => {
   const state = await managedSetupFixture(page, native, locale); state.saved = true; state.connected = false;
-  state.connectionStatus = 'connected'; // Writer pool empty, current session inventory succeeds.
+  state.connectionStatus = 'connected';
   await page.goto('/dashboard/#/settings');
-  const status = page.locator('[data-setup-host-status]');
-  await expect(status).toHaveText(locale === 'en' ? 'demo · Connected' : 'demo · 已連線');
+  const status = page.locator('[data-setup-facet="connection"] [data-setup-fact-value]');
+  const unknown = locale === 'en' ? 'Not verified yet · Checking' : '尚未驗證 · 檢查中';
+  await expect(status).toHaveText(unknown);
   const refresh = page.locator('#main > .ui-page-header button');
-  state.connectionStatus = 'checking'; await refresh.click();
-  await expect(status).toContainText(locale === 'en' ? 'Checking…' : '確認連線中…');
-  await expect(status).not.toContainText(locale === 'en' ? 'Can’t reach' : '無法連線');
-  state.connectionStatus = 'unreachable'; await refresh.click();
-  await expect(status).toContainText(locale === 'en' ? 'Can’t reach this connection' : '目前無法連線');
-  await expect(status).toContainText(locale === 'en' ? 'Make sure BAT is open, then select Refresh.' : '請確認 BAT 已開啟，再按「重新整理」。');
-  state.connectionStatus = 'connected'; await refresh.click();
-  await expect(status.locator('.muted')).toHaveCount(0);
+  for (const connected of [false, true]) for (const connectionStatus of ['checking', 'unreachable', 'connected']) {
+    Object.assign(state, {connected, connectionStatus}); await refresh.click();
+    await expect(status).toHaveText(unknown);
+    await expect(page.locator('[data-setup-progress]')).toBeHidden();
+  }
   expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
 });
 
