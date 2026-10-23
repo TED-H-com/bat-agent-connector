@@ -254,6 +254,7 @@ pub(crate) fn checked_handle(
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION};
     struct Temp(std::path::PathBuf);
     impl Temp {
         fn new() -> Self {
@@ -309,9 +310,15 @@ mod tests {
             std::fs::rename(&directory, &moved).unwrap_err().kind(),
             PermissionDenied
         );
-        assert_eq!(
-            std::fs::remove_dir(&directory).unwrap_err().kind(),
-            PermissionDenied
+        let delete_error = std::fs::remove_dir(&directory).unwrap_err().raw_os_error();
+        // Deletion may report ERROR_ACCESS_DENIED or ERROR_SHARING_VIOLATION.
+        assert!(
+            [
+                Some(ERROR_ACCESS_DENIED as i32),
+                Some(ERROR_SHARING_VIOLATION as i32),
+            ]
+            .contains(&delete_error),
+            "unexpected held-directory delete error: {delete_error:?}"
         );
         assert!(held.metadata().unwrap().is_dir());
         drop(held);
@@ -329,8 +336,8 @@ mod tests {
                 .write(true)
                 .open(&path)
                 .unwrap_err()
-                .kind(),
-            std::io::ErrorKind::PermissionDenied
+                .raw_os_error(),
+            Some(ERROR_SHARING_VIOLATION as i32)
         );
         drop(held);
         drop(std::fs::OpenOptions::new().write(true).open(&path).unwrap());
