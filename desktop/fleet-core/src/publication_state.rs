@@ -224,6 +224,19 @@ pub(crate) fn create_file(path: &Path) -> Result<std::fs::File> {
     windows::create_file(path)
 }
 
+/// Open without reparse traversal, verify the handle ACL, and retain exclusion
+/// against directory replacement. This proves security, never creation authority.
+#[cfg(windows)]
+pub(crate) fn checked_handle(
+    path: &Path,
+    private: bool,
+    child_absent: bool,
+) -> Result<std::fs::File> {
+    let file = windows::open_no_follow(path, true).map_err(|_| UNPROVEN)?;
+    windows::acl_file(&file, private, child_absent)?;
+    Ok(file)
+}
+
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;

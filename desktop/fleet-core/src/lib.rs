@@ -43,6 +43,8 @@ pub mod windows;
 #[cfg(windows)]
 pub mod windows_bootstrap;
 #[cfg(any(windows, test))]
+pub mod windows_creation;
+#[cfg(any(windows, test))]
 pub mod windows_detach;
 #[cfg(windows)]
 pub mod windows_launcher;
