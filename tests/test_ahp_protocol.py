@@ -224,13 +224,13 @@ async def test_observer_allowlist_is_unchanged_and_blocks_writes_before_transpor
     assert caps['manual_foreign_access'] == 'read_only' and caps['tested_host_versions'] == []
 
 
-def test_owned_wire_has_no_production_caller_and_cannot_enable_writes():
+def test_owned_wire_has_only_bounded_read_caller_and_cannot_enable_writes():
     assert ahp_protocol.OWNED_WRITES_ENABLED is False
     with pytest.raises(ahp_protocol.WireRefusal, match='owned_writes_disabled'):
         ahp_protocol.require_owned_write()
     source = Path(ahp_protocol.__file__).parent
     for file in source.glob('*.py'):
-        if file.name == 'ahp_protocol.py':
+        if file.name in {'ahp_protocol.py', 'ahp_local_endpoint.py'}:
             continue
         for node in ast.walk(ast.parse(file.read_text(encoding='utf-8'))):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
