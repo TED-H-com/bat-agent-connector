@@ -237,7 +237,7 @@ class BatClient:
         self._device_id = device_id
         self._label = client_label
         self._max_frame = max_frame
-        self._connect_timeout = host.connect_timeout_s if connect_timeout is None else connect_timeout
+        self._connect_timeout = getattr(host, "connect_timeout_s", 10.0) if connect_timeout is None else connect_timeout
         self._clock = clock
         self._backoff = ReconnectBackoff(clock=clock)
         self._recovery: asyncio.Task | None = None
@@ -271,14 +271,22 @@ class BatClient:
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
 
-    async def connect(self) -> None:
+    async def connect(self, *, _recover: bool = False) -> None:
         async with self._conn_lock:
             if self.connected:
                 return
             self._closing = False
-            until = self._clock() + self.host.reconnect_grace_s
+            if not _recover:
+                await self._connect_locked()
+                self._disconnected_at = None
+                self._backoff.connected()
+                for sub in self._subs:
+                    sub.reopen()
+                return
+            grace = getattr(self.host, "reconnect_grace_s", 120.0)
+            until = self._clock() + grace
             if self._disconnected_at is not None:
-                until = min(until, self._disconnected_at + self.host.reconnect_grace_s)
+                until = min(until, self._disconnected_at + grace)
                 await _retry_pause(min(self._backoff.next_delay(), max(0.0, until - self._clock())))
             while True:
                 remaining = until - self._clock()
@@ -450,6 +458,9 @@ class BatClient:
                     fut.set_exception(err)
             self._pending.clear()
             self._backoff.disconnected()
+            # Notify waiters now; retain subscriptions for background recovery.
+            for sub in list(self._subs):
+                sub.close(err)
             if not self._closing:
                 self._disconnected_at = self._clock()
                 if self._subs and (self._recovery is None or self._recovery.done()):
@@ -457,7 +468,7 @@ class BatClient:
 
     async def _recover_subscriptions(self, error: ConnectionLost) -> None:
         try:
-            await self.connect()
+            await self.connect(_recover=True)
         except (ConnectionLost, AuthError, FingerprintMismatch, ConfigError) as failure:
             self._log_failure("reconnect", failure)
             for sub in list(self._subs):
@@ -540,7 +551,7 @@ class BatClient:
         canonical = check_allowed(channel, allow_writes=False, allow_orchestrate=False)
         frame = {"type": "invoke", "id": f"batc-{next(self._ids)}",
                  "channel": canonical, "params": params}
-        reply = await self._roundtrip(frame, max(timeout_for(canonical), self.host.invoke_timeout_s))
+        reply = await self._roundtrip(frame, max(timeout_for(canonical), getattr(self.host, "invoke_timeout_s", None) or 0.0))
         if reply.get("type") == "invoke-error":
             self._log_failure(canonical, reply.get("error"))
             raise InvokeError(f"{self.host.name}: {canonical}: {redact(reply.get('error'))}")
@@ -586,7 +597,7 @@ class BatClient:
                               frame_guard: Callable[[dict], None] | None = None,
                               on_transport: Callable[[], None] | None = None) -> Any:
         write = is_write(canonical)
-        timeout = timeout if timeout is not None else max(timeout_for(canonical), self.host.invoke_timeout_s)
+        timeout = timeout if timeout is not None else max(timeout_for(canonical), getattr(self.host, "invoke_timeout_s", None) or 0.0)
         attempts = 1 if write and (canonical != "claude:send-message" or not retry_on_disconnect) else 3
         last_exc: Exception | None = None
         for attempt in range(attempts):
@@ -625,7 +636,7 @@ class BatClient:
                 # Codex ignores that field and callers disable this retry.
                 last_exc = e
                 if attempt + 1 < attempts:
-                    await _retry_pause(self._backoff.next_delay())
+                    await _retry_pause(random.uniform(0.0, min(4.0, 0.5 * 2**attempt)))
                     continue
                 raise
         raise last_exc or ConnectionLost(f"{self.host.name}: failed")  # pragma: no cover
