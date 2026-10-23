@@ -17,6 +17,9 @@ mod fleet_readiness;
 mod managed;
 mod managed_login;
 mod managed_recovery;
+#[cfg(test)]
+#[path = "../../fleet-core/tests/support/powershell_guard.rs"]
+mod powershell_guard;
 mod startup_role;
 mod tailscale_control;
 mod updates;

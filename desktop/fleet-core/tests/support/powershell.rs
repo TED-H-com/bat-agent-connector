@@ -2,14 +2,16 @@
 use std::{
     io::Read,
     process::{Child, Command, Stdio},
-    sync::{mpsc, Mutex, MutexGuard},
+    sync::{mpsc, MutexGuard},
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
 
 const READY: &[u8] = b"BATC_POWERSHELL_FIXTURE_READY_V1\n";
 const MAX_OUTPUT: u64 = 32_768;
-static FIXTURES: Mutex<()> = Mutex::new(());
+
+#[path = "powershell_guard.rs"]
+mod guard;
 
 #[cfg(windows)]
 pub const READY_SCRIPT: &str =
@@ -37,7 +39,7 @@ pub fn command() -> Command {
 pub struct Fixture(MutexGuard<'static, ()>);
 impl Fixture {
     pub fn new() -> Self {
-        Self(FIXTURES.lock().unwrap_or_else(|poison| poison.into_inner()))
+        Self(guard::acquire())
     }
 
     #[cfg(windows)]

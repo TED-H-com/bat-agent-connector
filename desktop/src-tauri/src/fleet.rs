@@ -1114,8 +1114,19 @@ mod tests {
         );
     }
     #[cfg(windows)]
-    #[tokio::test]
-    async fn windows_contract_fixture_uses_actual_system_powershell() {
+    #[test]
+    fn windows_contract_fixture_uses_actual_system_powershell() {
+        // Acquire outside the private current-thread runtime. No other test or
+        // gate waiter is driven by this runtime; diagnostics share this guard.
+        let _guard = crate::powershell_guard::acquire();
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(windows_contract_fixture());
+    }
+    #[cfg(windows)]
+    async fn windows_contract_fixture() {
         let temp = Temp::new();
         let root = temp.0.join("kit with spaces ' 雪 $value");
         std::fs::create_dir_all(root.join("client")).unwrap();
