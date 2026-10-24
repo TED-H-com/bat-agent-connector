@@ -24,6 +24,7 @@ READONLY_TARGETS = frozenset({'/runtime', '/toolchain', '/lib/x86_64-linux-gnu',
 NAMESPACES = ('--unshare-user', '--unshare-pid', '--unshare-net', '--unshare-ipc', '--unshare-uts',
               '--disable-userns', '--assert-userns-disabled', '--die-with-parent', '--new-session', '--cap-drop', 'ALL')
 SPAWN = {'close_fds': True, 'pass_fds': (), 'start_new_session': True, 'env': {}}
+DISK_KINDS = frozenset({'ext2', 'ext3', 'ext4', 'xfs', 'btrfs'})
 
 
 @dataclass(frozen=True)
@@ -48,10 +49,13 @@ class IsolationPlan:
     cwd: str
     quota_bytes: int
     bindings: tuple = ()
+    writable_storage: tuple = ()
 
     def manifest(self):
         return {'argv': list(self.argv), 'mounts': [asdict(m) for m in self.mounts],
-                'spawn': {**SPAWN, 'pass_fds': []}, 'quota_bytes': self.quota_bytes}
+                'spawn': {**SPAWN, 'pass_fds': []}, 'quota_bytes': self.quota_bytes,
+                'writable_storage': [{'target': target, 'device': device, 'capacity_bytes': capacity}
+                                     for target, device, capacity in self.writable_storage]}
 
 
 def _overlap(a, b):
@@ -78,6 +82,22 @@ def _disk_info(path):
     mount, kind = max(((p, k) for p, k in _mounts() if p == path or p in path.parents), key=lambda v: len(v[0].parts))
     usage = os.statvfs(path)
     return kind, usage.f_blocks * usage.f_frsize
+
+
+def _device(path):
+    return path.stat().st_dev
+
+
+def _bounded_volume(paths, quota_bytes, spool):
+    try:
+        observations = [(_device(path), *_disk_info(path)) for path in paths]
+        _require(len(set(observations)) == 1, QUOTA_UNPROVEN)
+        device, kind, capacity = observations[0]
+        _require(kind in DISK_KINDS and 0 < capacity <= quota_bytes <= 1024**3, QUOTA_UNPROVEN)
+        _require(_disk_info(spool)[0] in DISK_KINDS, QUOTA_UNPROVEN)
+    except (OSError, ValueError, TypeError):
+        _require(False, QUOTA_UNPROVEN)
+    return device, capacity
 
 
 def _tree(root):
@@ -118,6 +138,8 @@ async def build_plan(ctx, receipt, *, readonly, areas, protected, command, check
     carrier = _real(saved['clone']['path'])
     roots = [carrier, *(_real(p) for p in (areas.scratch, areas.state, areas.spool))]
     _require(all(not _overlap(a, b) for i, a in enumerate(roots) for b in roots[i + 1:]), MOUNT_UNPROVEN)
+    volume_paths = [Path(saved[name]['path']) for name in ('clone', 'worktree', 'git_dir')]
+    device, capacity = _bounded_volume([*volume_paths, areas.scratch, areas.state], areas.quota_bytes, areas.spool)
     forbidden = (*protected, areas.spool, Path.home() / '.ssh', Path.home() / '.config',
                  Path.home() / '.codex', Path.home() / '.claude')
     journal = getattr(ctx.service, 'journal', None)
@@ -134,10 +156,6 @@ async def build_plan(ctx, receipt, *, readonly, areas, protected, command, check
         if mount.writable:
             _tree(source)
             _require(not any(_overlap(source, ro.source) for ro in readonly), MOUNT_UNPROVEN)
-    kind, capacity = _disk_info(areas.scratch)
-    _require(kind in {'ext2', 'ext3', 'ext4', 'xfs', 'btrfs'} and 0 < capacity <= areas.quota_bytes <= 1024**3, QUOTA_UNPROVEN)
-    _require(areas.scratch.stat().st_dev == areas.state.stat().st_dev, QUOTA_UNPROVEN)
-    _require(all(_disk_info(p)[0] in {'ext2', 'ext3', 'ext4', 'xfs', 'btrfs'} for p in roots), QUOTA_UNPROVEN)
     _require(command and any(Path(command[0]).is_relative_to(m.target) for m in readonly if m.target in {'/runtime', '/toolchain'}), MOUNT_UNPROVEN)
     argv = [bwrap, *NAMESPACES, '--clearenv', '--proc', '/proc']
     for mount in mounts:
@@ -147,7 +165,8 @@ async def build_plan(ctx, receipt, *, readonly, areas, protected, command, check
         argv.extend(('--setenv', key, value))
     argv.extend(('--remount-ro', '/', '--chdir', saved['cwd'], '--', *command))
     bindings = tuple((m.source, os.stat(m.source).st_dev, os.stat(m.source).st_ino, os.stat(m.source).st_ctime_ns) for m in mounts)
-    return IsolationPlan(tuple(argv), mounts, saved['cwd'], areas.quota_bytes, bindings)
+    storage = tuple((m.target, device, capacity) for m in mounts if m.writable)
+    return IsolationPlan(tuple(argv), mounts, saved['cwd'], areas.quota_bytes, bindings, storage)
 
 
 async def probe(plan):

@@ -15,15 +15,24 @@ identities on that same host, and emits comparable plan data.
 | `/runtime`, optional `/toolchain` | Read-only | Explicit fixed runtime/toolchain directories |
 | `/lib/x86_64-linux-gnu`, `/lib64/ld-linux-x86-64.so.2` | Read-only | Explicit libraries and ELF loader |
 | `/etc/ssl/certs/ca-certificates.crt` | Read-only | Explicit CA bundle |
-| Original carrier path | Read-write | Receipt's isolated clone, worktree and own Git metadata |
-| `/scratch` (also HOME/TMPDIR), `/state` | Read-write | Separate Attempt directories on a bounded disk filesystem |
+| Original carrier path | Read-write | Receipt's isolated clone, worktree and own Git metadata, created on the bounded volume |
+| `/scratch` (also HOME/TMPDIR), `/state` | Read-write | Separate Attempt directories on that same bounded disk volume |
 | `/proc` | Private procfs | New PID namespace; never host procfs |
 
 The root is empty except these entries and read-only namespace scaffolding.
-Scratch/state are never tmpfs: total filesystem capacity must fit the declared
-quota (at most 1 GiB); both share that kernel-enforced aggregate storage ceiling.
-The operator provisions the volume, not this policy. No per-file limit or polling
-loop is represented as a directory quota. Carrier and spool also require disk.
+Carrier, scratch and state are never tmpfs. After receipt readback, `build_plan`
+requires the clone, worktree and Git directory to share the device of scratch/state.
+Total filesystem capacity, not free space, must fit the declared quota; 1 GiB is
+the provisional ceiling pending owner policy. Every writable mount records its
+device and capacity once in the plan's `writable_storage` manifest. A missing or
+inconsistent capacity observation refuses with `NATIVE_ISOLATION_QUOTA_UNPROVEN`.
+Nested mounts inside the clone remain refused, even on the same device.
+
+The operator provisions the volume, not this policy. The existing
+`native_carrier.prepare(..., managed_root=...)` creates the carrier directly on it;
+no carrier is moved or copied, and no configuration setting is added. The volume
+enforces one aggregate ceiling, not a per-file limit or polling-based directory
+quota. Spool remains outside the sandbox and requires disk.
 
 Overlapping protected paths, symlink mount roots, escaping carrier links,
 pre-existing hardlinks, sockets/devices and nested host mounts are refused.
@@ -46,6 +55,11 @@ with bubblewrap, e2fsprogs, sudo and the development environment. It creates a
 No model runs. The dedicated CI job temporarily disables Ubuntu's AppArmor
 user-namespace restriction on its disposable runner only; the host script does
 not change that setting. `BAC_REQUIRE_BWRAP=1` makes missing prerequisites fail.
+The canary fills a file in the carrier worktree until `ENOSPC`, checks the actual
+target and bytes written against the observed capacity, removes the fill file,
+and checks byte-identical sentinels outside the volume. Its numeric observations
+are printed in the test output. A provisioned volume and permitted namespaces are
+required for this real-kernel check; a policy fixture is not equivalent evidence.
 See [bubblewrap](https://github.com/containers/bubblewrap/blob/v0.9.0/bwrap.xml)
 and [Ubuntu's release notes](https://documentation.ubuntu.com/release-notes/24.04/).
 
@@ -76,7 +90,13 @@ BAC_ISOLATION_QUOTA_ROOT="/path/to/isolation-volume" bash scripts/check_native_i
 )
 ```
 With that variable set, the script neither creates nor mounts/unmounts a volume.
-Policy checks still apply. The 1 GiB ceiling is provisional owner policy; carrier
-capacity remains unbounded pending a follow-up, so coding readiness remains off.
+Policy checks still apply. Carrier capacity now shares the bounded volume with
+scratch/state. Coding readiness stays off: model access, network, credentials,
+native routes, the product launcher, API and UI integration are not implemented.
 控制檔以唯讀 overlays 保護；一般物件、refs 與 index 仍可寫。預先配置的磁碟區不需
-每次 sudo，但 carrier 容量缺口尚未修正，不能宣稱 coding 隔離已完成。
+每次 sudo。carrier 由既有 prepare 直接建於該磁碟區，不搬移、不複製；readback 後核對
+clone、worktree、Git directory 與 scratch/state 同裝置，共用總容量上限，並拒絕巢狀掛載。
+manifest 為每個可寫掛載記錄一次 device 與 capacity；觀測不可得即拒絕，不退回無上限。
+1 GiB 仍是待 owner 確認的暫定政策。真實 canary 須取得 ENOSPC，且磁碟區外 sentinel
+位元組不變；本機仍需預先配置磁碟區與可用 namespaces。模型存取、網路、憑證、原生
+路由、產品 launcher、API 與 UI 尚未接上，coding readiness 保持關閉。
