@@ -54,6 +54,8 @@ const ACTIONS = {
   'github.pr.update': 'action_github_pr_update',
   'integration.preview': 'action_integration_preview',
   'pm.ahp.observe': 'action_pm_ahp_observe',
+  'pm.history.link': 'action_pm_history_link',
+  'pm.history.unlink': 'action_pm_history_unlink',
   'pm.backlog.revise': 'action_pm_backlog_revise',
   'pm.conversation.adopt': 'action_pm_conversation_adopt',
   'pm.overview.assess': 'action_pm_overview_assess',

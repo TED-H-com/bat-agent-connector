@@ -525,6 +525,18 @@
         "allowed": false
       },
       {
+        "action": "pm.history.link",
+        "scope": "manage",
+        "summary": "Record an external reference without execution",
+        "allowed": false
+      },
+      {
+        "action": "pm.history.unlink",
+        "scope": "manage",
+        "summary": "Record an external reference without execution",
+        "allowed": false
+      },
+      {
         "action": "project.github.configure",
         "scope": "manage",
         "summary": "Import or synchronize a GitHub project board",
@@ -1029,7 +1041,20 @@
         "start_owned": false,
         "send_owned": false,
         "read_results": false,
-        "cross_adapter_alias": false
+        "cross_adapter_alias": false,
+        "relationships": {
+          "version": 1,
+          "refs": [
+            "external_history_ref/v1"
+          ],
+          "max_codepoints": 16000,
+          "max_preview_bytes": 131072,
+          "actions": [
+            "pm.history.link",
+            "pm.history.unlink"
+          ],
+          "derive_ready": false
+        }
       },
       "pm_schedule": {
         "version": 1,
@@ -1312,6 +1337,8 @@
             "pm.execution.runtime.observe",
             "pm.github.observe",
             "pm.governance.adoption.link",
+            "pm.history.link",
+            "pm.history.unlink",
             "pm.input.record",
             "pm.maintenance.repair.evidence.record",
             "pm.maintenance.repair.runtime.observe",

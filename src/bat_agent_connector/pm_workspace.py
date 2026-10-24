@@ -114,6 +114,9 @@ def get_workspace(db, principal: Principal, workspace_id: str) -> dict:
 
 def operation_visible(db, principal: Principal, op: dict) -> bool:
     """Read filter for all PM actions; callers retain their ordinary scope checks."""
+    if op.get("action") in {"pm.history.link", "pm.history.unlink"}:
+        from .pm_external_history_links import operation_visible as history_visible
+        return history_visible(db, principal, op)
     if op.get("action") == "work.adopt_and_start":
         from .pm_work_adopt_and_start import operation_visible as adopt_start_visible
         return adopt_start_visible(db, principal, op)

@@ -71,8 +71,8 @@ tables, or a grant table that shadows a main object, still disable memo reuse.
 
 ## Fixed retained references
 
-`pm_external_history.preview` is an internal read-only resolver, without an HTTP,
-RPC/MCP route or UI action. It accepts a workspace, source ID, entry ID, expected
+`pm_external_history.preview` is a read-only resolver shared by HTTP, daemon and
+MCP reads. It accepts a workspace, source ID, entry ID, expected
 retained content digest and one selection. `resolve` verifies a previously returned
 reference. Neither function collects, opens the original file, starts a session or
 writes a record. History entry reads now also expose their retained `content_digest`.
@@ -108,6 +108,51 @@ Refusals are `PM_HISTORY_SOURCE_UNAVAILABLE` (404),
 `PM_HISTORY_REFERENCE_CHANGED` (409) and `PM_HISTORY_REFERENCE_INVALID` (422);
 a caller without observe scope receives `FORBIDDEN` (403). Unauthorized sources
 never receive a digest comparison that would disclose their contents.
+
+## Explicit relationships to existing Work
+
+`pm.history.link` and `pm.history.unlink` are registered record actions submitted
+through `POST /api/v1/operations` or MCP `operation_submit`, with the original
+idempotency key. Link requires manage/observe, owner or contributor membership,
+an explicit source grant and the current Work binding/version. An optional Attempt
+must pass its existing reader and belong to that Work. Administrators have no
+source or membership override. Admission and the local effect recheck access.
+
+Link targets exactly `workspace_id` and `work_item_id`; params contain `fixed_ref`
+and optionally `attempt_id`. Preconditions are `expected_work_version` and
+`expected_binding_id`. Unlink adds `link_id` to the same target, takes no params,
+and requires `expected_link_version`. Replace adds `replaces_link_id` and
+`expected_old_link_version` to the link params; both Works must be in that workspace.
+
+Excerpts store only the canonical reference, digests and original source binding.
+Links have an immutable purpose, an active-tuple uniqueness constraint and CAS
+versions. Append-only events and the local receipt commit with the relationship
+in `ctx.effect`. A different key for the same active tuple returns its existing
+receipt without another event. `replaces_link_id` with `expected_old_link_version`
+withdraws the old relation and creates or reuses the new one atomically. Creators
+and workspace owners can withdraw known opaque links after source revocation;
+that receipt contains only `link_id`, `state` and `version`.
+
+All paths below are relative to `/api/v1/pm/workspaces/{workspace_id}`. Reads use
+observe and the same current-grant decision; list pages accept `after` and `limit`
+(1–50), retain their cursor across hidden rows, and never return source text.
+
+| HTTP read | Daemon / MCP |
+|---|---|
+| POST `/history-excerpt-preview` (pure read selection body) | `pm_history_excerpt_preview` |
+| GET `/history-excerpts/{excerpt_id}` | `pm_history_excerpt_get` |
+| GET `/work/{work_item_id}/external-links` | `pm_history_links_list` |
+| GET `/external-links/{link_id}` | `pm_history_link_get` |
+| GET `/history/{source_id}/associations?entry_id=...` | `pm_history_associations_list` |
+
+`PM_HISTORY_LINK_CHANGED` and `PM_HISTORY_ATTEMPT_MISMATCH` are 409 refusals only
+for visible records. Unavailable and unauthorized material share the source 404.
+Global operation/event reads also enforce source access. Relationships add
+reviewable material; they change no Work/Attempt state, approval, ownership,
+fingerprint or Overview progress. The source remains `external_read_only`.
+`features.external_history.relationships` is additive and has `derive_ready=false`;
+it grants no admission authority. There is no relationship UI, derive, search,
+automatic suggestion or native route yet.
 
 ## Narrow format profiles
 
@@ -188,8 +233,10 @@ readers and native full work routes remain E06–E08 work.
 
 Real disk journals and TEMP schemas also cover connection isolation, atomic grant
 activation, response-boundary withdrawal, fixed digests, Unicode selection and
-preview size refusals using synthetic Codex/Claude records. These internal readers
-add no linking, derivation or suggestion capability.
+preview size refusals using synthetic Codex/Claude records. Relationship tests use
+the real operation service, producer payloads and Attempt reader, including local
+rollback, committed receipt recovery, grant withdrawal and HTTP/daemon/MCP parity.
+They do not prove a relationship UI, derivation or suggestion capability.
 
 Synthetic local transcripts cover grant withdrawal, config activation during
 collection, owner-lease loss, cursor replay, conflict/replace/truncate failures,
