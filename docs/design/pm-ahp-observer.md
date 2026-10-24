@@ -425,3 +425,17 @@ no production route installs them, and `require_owned_write()` still refuses.
 須具備同 Attempt 的 carrier 查回與即時完整 absence，並不授予 turn 所有權。
 共用 guard 先提交 create fence 再送出；失去回覆或 SessionAlreadyExists 都不重送。
 建立後另記 session 宣告的 chat 與其不可變綁定。正式路由尚未安裝，observer 與寫入拒絕不變。
+
+The optional Work profile `adapter: "ahp"` now names an explicitly installed
+handoff route. Installation registers the internal `ahp.work.create` action;
+direct submission/replay refuses `AHP_HANDOFF_REQUIRED`. Without installation,
+profile writes and Work admission refuse `PM_WORK_ROUTE_UNAVAILABLE`.
+Creation remains unavailable (`AHP_CREATE_UNAVAILABLE`); no daemon installs this
+route and the handler performs no external effect. Missing same-host SSH Git
+evidence reports `GIT_RUNNER_UNAVAILABLE` rather than selecting another transport.
+The bounded observer and `require_owned_write()` remain unchanged.
+
+繁體中文：Work profile 可用 `adapter: "ahp"` 指定明確安裝的 handoff route；
+內部 child 不接受直接提交或重播，未安裝時 profile 寫入與 Work admission 都拒絕。
+目前 create handler 尚未實作，回報 `AHP_CREATE_UNAVAILABLE`；缺少同 host 的
+SSH Git 證據為 `GIT_RUNNER_UNAVAILABLE`。沒有 daemon 安裝或外部效果，observer 不變。
