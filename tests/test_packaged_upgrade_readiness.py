@@ -15,6 +15,8 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from bat_agent_connector import platform_files
+
 
 @pytest.fixture
 def upgrade(monkeypatch):
@@ -24,8 +26,28 @@ def upgrade(monkeypatch):
 
 
 def put_pointer(root, pid, endpoint='http://127.0.0.1:45123/rpc'):
-    (root / 'state').mkdir(exist_ok=True)
-    (root / 'state/task-service.json').write_text(json.dumps({'pid': pid, 'endpoint': endpoint}))
+    platform_files.ensure_private_directory(root / 'state')
+    platform_files.atomic_write(root / 'state/task-service.json', json.dumps({'pid': pid, 'endpoint': endpoint}).encode())
+
+
+@pytest.mark.parametrize('code', [5, 32])
+def test_pointer_refusal_uses_production_reader_once_with_winerror(upgrade, tmp_path, monkeypatch, code):
+    put_pointer(tmp_path, 42)
+    calls = []
+    error = PermissionError(13, 'native pointer refusal')
+    error.winerror = code
+
+    def read(path):
+        calls.append(path)
+        raise error
+
+    monkeypatch.setattr(platform_files, 'read_private', read)
+    monkeypatch.setitem(upgrade['owned_launch'].__globals__, 'request',
+                        lambda *_a, **_kw: pytest.fail('Unreadable pointer must not contact a service'))
+    with pytest.raises(OSError, match=f'winerror={code}') as caught:
+        upgrade['wait_owned_launch'](tmp_path, SimpleNamespace(pid=42, poll=lambda: None), {}, timeout=45)
+    assert caught.value.__cause__ is error
+    assert calls == [tmp_path / 'state/task-service.json']
 
 
 def test_owned_launch_accepts_the_bootloaders_python_child(upgrade, tmp_path, monkeypatch):
