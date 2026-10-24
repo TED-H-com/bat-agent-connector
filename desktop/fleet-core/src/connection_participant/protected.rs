@@ -17,6 +17,10 @@ use std::{
     rc::Rc,
 };
 mod authority;
+#[cfg(any(windows, test))]
+pub mod native;
+#[cfg(test)]
+mod publish_tests;
 use authority::{decode, encode, DirectoryRecord, RootReceipt};
 pub use authority::{Context, Level, LEVEL_LIMIT, ROOT_LIMIT};
 const UNPROVEN: &str = "PARTICIPANT_UNPROVEN";
