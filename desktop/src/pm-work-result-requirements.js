@@ -13,8 +13,8 @@ export function resultRequirements({h, t, section, open = new Set()}) {
   }, h('summary', {'data-work-result-focus': `requirement:${key}`}, title), ...body);
   const record = (key, value) => details(key, t('wres_req_sources'),
     h('pre', {class: 'pm-note-text'}, JSON.stringify(value, null, 2)));
-  const operation = id => /^op_[0-9a-f]{32}$/.test(id || '')
-    ? h('a', {href: `#/op/${id}`, 'data-work-result-focus': `requirement:operation:${id}`}, t('wres_view_operation')) : null;
+  const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || '')
+    ? h('a', {href: `#/op/${id}`, 'data-work-result-focus': `requirement:operation:${key}`}, t('wres_view_operation')) : null;
   const element = h('section', {'data-result-requirements': '', class: 'pm-work-result-requirements'},
     h('h4', {}, t('wres_req_heading')));
   if (section.relation !== 'explicit') {
@@ -58,7 +58,7 @@ export function resultRequirements({h, t, section, open = new Set()}) {
         note(t(assessment.qualified === true ? 'wres_req_qualified' : 'wres_req_not_qualified')),
         ...reasons, note(original.rationale), ...criteria,
         assessment.revocation ? note(t('wres_req_revoked')) : null,
-        operation(ref.operation_id), record(`${assessmentKey}:source`, assessment)));
+        operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment)));
     }
     element.append(row);
   }
@@ -73,7 +73,7 @@ export function resultRequirements({h, t, section, open = new Set()}) {
       for (const selected of work.selections || []) {
         body.append(details(`${key}:${selected.execution_operation_id}`,
           `${t('wres_req_original_selection')}: ${readiness(selected.readiness)}`,
-          operation(selected.execution_operation_id), record(`${key}:${selected.execution_operation_id}:source`, selected)));
+          operation(selected.execution_operation_id, `${key}:${selected.execution_operation_id}`), record(`${key}:${selected.execution_operation_id}:source`, selected)));
       }
       body.append(record(`${key}:source`, {work_item_id: work.work_item_id, package_id: work.package_id,
         document_digest: work.document_digest, prerequisite_ids: work.prerequisite_ids, readiness: work.readiness, link: work.link}));

@@ -159,3 +159,23 @@ test('a late result from the previous Work cannot restore its requirement eviden
     expect(f.state.writes).toEqual([]);
   } finally {release(); f.state.holdResult = null;}
 });
+
+test('one assessment covering two requirements retains focus on the selected requirement', async ({page}) => {
+  const f = workResultFixture(), data = requirements();
+  data.items.push({...structuredClone(data.items[0]), requirement_id: 'member.recovery', text: 'Recover an account',
+    source_input_id: 'input.recovery.requirement', acceptance_input_ids: ['input.recovery']});
+  f.state.currentEnvelope = buildResultEnvelope({requirements: data});
+  await open(page, f);
+  for (const id of ['member.login', 'member.recovery']) {
+    await page.locator(`[data-result-requirement="${id}"] > details > summary`)
+      .filter({hasText: 'Original conclusion: accepted ·'}).click();
+  }
+  const link = page.locator(`[data-result-requirement="member.recovery"] a[href="#/op/${op(3)}"]`);
+  await link.focus();
+  const next = structuredClone(data);
+  next.coverage.reviews_partial = true;
+  f.emitResultRecorded(attemptId, buildResultEnvelope({requirements: next}));
+  await expect(page.getByText(workResultStrings.en.wres_req_reviews_partial, {exact: true})).toBeVisible();
+  await expect(link).toBeFocused();
+  expect(f.state.writes).toEqual([]);
+});

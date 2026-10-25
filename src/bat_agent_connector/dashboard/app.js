@@ -21649,9 +21649,9 @@ function resultRequirements({ h, t, section, open = new Set() }) {
 		...open.has(key) ? { open: true } : {}
 	}, h("summary", { "data-work-result-focus": `requirement:${key}` }, title), ...body);
 	const record = (key, value) => details(key, t("wres_req_sources"), h("pre", { class: "pm-note-text" }, JSON.stringify(value, null, 2)));
-	const operation = (id) => /^op_[0-9a-f]{32}$/.test(id || "") ? h("a", {
+	const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || "") ? h("a", {
 		href: `#/op/${id}`,
-		"data-work-result-focus": `requirement:operation:${id}`
+		"data-work-result-focus": `requirement:operation:${key}`
 	}, t("wres_view_operation")) : null;
 	const element = h("section", {
 		"data-result-requirements": "",
@@ -21717,7 +21717,7 @@ function resultRequirements({ h, t, section, open = new Set() }) {
 					verification: entry.verification
 				}));
 			});
-			row.append(details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), note(t(assessment.qualified === true ? "wres_req_qualified" : "wres_req_not_qualified")), ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id), record(`${assessmentKey}:source`, assessment)));
+			row.append(details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), note(t(assessment.qualified === true ? "wres_req_qualified" : "wres_req_not_qualified")), ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment)));
 		}
 		element.append(row);
 	}
@@ -21738,7 +21738,7 @@ function resultRequirements({ h, t, section, open = new Set() }) {
 			]);
 			const body = h("article", { "data-result-dependent": work.package_id }, h("h5", {}, text(work.title)), line("wres_req_without_selection", readiness(work.readiness)));
 			if (!work.selections_complete) body.append(note(t("wres_req_selections_partial")));
-			for (const selected of work.selections || []) body.append(details(`${key}:${selected.execution_operation_id}`, `${t("wres_req_original_selection")}: ${readiness(selected.readiness)}`, operation(selected.execution_operation_id), record(`${key}:${selected.execution_operation_id}:source`, selected)));
+			for (const selected of work.selections || []) body.append(details(`${key}:${selected.execution_operation_id}`, `${t("wres_req_original_selection")}: ${readiness(selected.readiness)}`, operation(selected.execution_operation_id, `${key}:${selected.execution_operation_id}`), record(`${key}:${selected.execution_operation_id}:source`, selected)));
 			body.append(record(`${key}:source`, {
 				work_item_id: work.work_item_id,
 				package_id: work.package_id,
