@@ -1897,6 +1897,8 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_blockers: "Blockers",
 			ov_decisions: "Open decisions",
 			ov_recent_decisions: "Recently decided",
+			ov_original_assessment: "Original assessment",
+			ov_assessment_source: "This delivery cites this exact assessment.",
 			ov_accepted: "{accepted} of {total} accepted",
 			ov_requirements: "{n} requirements",
 			ov_adopted: "adopted {date}",
@@ -1962,6 +1964,8 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_blockers: "阻礙",
 			ov_decisions: "待決事項",
 			ov_recent_decisions: "近期決策",
+			ov_original_assessment: "原始評估",
+			ov_assessment_source: "此交付引用這筆原始評估。",
 			ov_accepted: "{total} 項中 {accepted} 項已驗收",
 			ov_requirements: "{n} 項需求",
 			ov_adopted: "{date}採用",
@@ -29040,13 +29044,13 @@ function workspaceOverview(options) {
 			body: h("div", {}, ...data.recent_deliveries.map((row) => h("div", {
 				class: "pm-overview-delivery",
 				"data-overview-delivery": row.work_item_id
-			}, itemLink({
+			}, h("div", { class: "pm-overview-delivery-body" }, itemLink({
 				...row,
 				ref: {
 					kind: "work_item",
 					id: row.work_item_id
 				}
-			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
+			}, "deliveries"), deliveryAssessment(row)), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
 				"work",
 				"quality",
 				"deliveries",
@@ -29054,6 +29058,43 @@ function workspaceOverview(options) {
 			]) : null)
 		});
 		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
+	}
+	function deliveryAssessment(row) {
+		const reference = row.assessment_ref;
+		if (row.state !== "accepted" || !reference || typeof reference !== "object" || Array.isArray(reference)) return null;
+		const ref = {
+			kind: "quality_assessment",
+			id: reference.operation_id,
+			review_id: reference.review_id,
+			document_digest: reference.document_digest
+		};
+		const key = JSON.stringify([
+			"delivery-assessment",
+			row.work_item_id,
+			reference.review_id,
+			reference.operation_id,
+			reference.version,
+			reference.document_digest,
+			reference.candidate_commit
+		]);
+		const controls = isContextRef(ref) ? h("div", { class: "pm-overview-progress-actions" }, h("a", {
+			class: "ui-button secondary ui-sm",
+			href: `#/op/${reference.operation_id}`,
+			"data-overview-link": `${key}:operation`
+		}, t("pm_operation")), discussLink({
+			workspaceId,
+			refs: [ref],
+			title: row.title,
+			from: "overview"
+		}, { "data-overview-link": `${key}:discuss` })) : null;
+		const node = disclosure({
+			label: t("ov_original_assessment"),
+			key: `${namespace}:${workspaceId}:${key}`,
+			body: h("div", {}, h("p", { class: "ui-meta" }, t("ov_assessment_source")), controls, h("pre", { class: "pm-brief-proof" }, JSON.stringify(reference, null, 2)))
+		});
+		node.dataset.overviewAssessment = reference.operation_id || "";
+		node.querySelector("summary").dataset.overviewLink = `${key}:source`;
+		return node;
 	}
 	function closeReader() {
 		reader?.close();

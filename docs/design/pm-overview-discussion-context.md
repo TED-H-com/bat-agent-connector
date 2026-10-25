@@ -30,6 +30,13 @@
 | `coverage` | `{complete, sources, basis, network_checked: false}`；每一 source 有 `complete`、`next_cursor` |
 | `unknown` | `[{field, reason}]`；缺資料保留 null 與機器可讀原因，不補零 |
 
+已驗收的 recent delivery 可附原始 `assessment_ref`（review、operation、version、
+document digest、candidate commit）。共用 Web／Tauri 介面以英文與繁體中文展開
+該引用，提供原操作與固定 quality_assessment 討論來源；不另取最新 review、不推導
+新驗收，也不以引用補齊未知涵蓋。舊服務未提供時不顯示該區塊。重新整理以完整原始
+引用維持焦點／展開狀態，換一筆評估時不沿用舊狀態；來源撤回移除內容，固定報告
+不使用即時交付引用。單純展開不新增讀取或寫入。
+
 Goal 的唯一取值規則：只使用已採用文件的 `selected_inputs`，依固定優先序 **`governance.goal` →
 `goal` → `value` → `problem`** 取值；每個 slot 只考慮 status 為 `user_confirmed` 或 `repo_evidence` 的 input。
 同一 slot 有多筆時，保留文件 `selected_inputs` 的原順序，取第一筆符合狀態者。

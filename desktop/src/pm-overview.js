@@ -4,7 +4,7 @@ import {proof} from './pm-brief.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {workspaceCharter, charterSections} from './pm-charter.js';
 import {planDocument} from './pm-plans.js';
-import {discussHref} from './pm-discuss-link.js';
+import {discussHref, isContextRef} from './pm-discuss-link.js';
 import {discussLink, button, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
@@ -216,9 +216,26 @@ export function workspaceOverview(options) {
     const deliveriesComplete = data.recent_deliveries_complete === true && data.coverage?.sources?.attention_references?.complete !== false;
     const deliveries = sectionCard({title: t(deliveriesComplete ? 'ov_deliveries' : 'ov_deliveries_loaded'), body: h('div', {},
       ...data.recent_deliveries.map(row => h('div', {class: 'pm-overview-delivery', 'data-overview-delivery': row.work_item_id},
-        itemLink({...row, ref: {kind: 'work_item', id: row.work_item_id}}, 'deliveries'), statusPill(row.state))),
+        h('div', {class: 'pm-overview-delivery-body'},
+          itemLink({...row, ref: {kind: 'work_item', id: row.work_item_id}}, 'deliveries'), deliveryAssessment(row)), statusPill(row.state))),
       !data.recent_deliveries.length ? emptyField(data, 'recent_deliveries', deliveriesComplete, ['work', 'quality', 'deliveries', 'attention_references']) : null)});
     return h('div', {class: 'pm-overview-side'}, milestones, deliveries);
+  }
+  function deliveryAssessment(row) {
+    const reference = row.assessment_ref;
+    if (row.state !== 'accepted' || !reference || typeof reference !== 'object' || Array.isArray(reference)) return null;
+    const ref = {kind: 'quality_assessment', id: reference.operation_id, review_id: reference.review_id, document_digest: reference.document_digest};
+    const key = JSON.stringify(['delivery-assessment', row.work_item_id, reference.review_id,
+      reference.operation_id, reference.version, reference.document_digest, reference.candidate_commit]);
+    const controls = isContextRef(ref) ? h('div', {class: 'pm-overview-progress-actions'},
+      h('a', {class: 'ui-button secondary ui-sm', href: `#/op/${reference.operation_id}`, 'data-overview-link': `${key}:operation`}, t('pm_operation')),
+      discussLink({workspaceId, refs: [ref], title: row.title, from: 'overview'}, {'data-overview-link': `${key}:discuss`})) : null;
+    const node = disclosure({label: t('ov_original_assessment'), key: `${namespace}:${workspaceId}:${key}`,
+      body: h('div', {}, h('p', {class: 'ui-meta'}, t('ov_assessment_source')), controls,
+        h('pre', {class: 'pm-brief-proof'}, JSON.stringify(reference, null, 2)))});
+    node.dataset.overviewAssessment = reference.operation_id || '';
+    node.querySelector('summary').dataset.overviewLink = `${key}:source`;
+    return node;
   }
   function closeReader() {reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}
   function openRelated(row, host, returnFocus) {

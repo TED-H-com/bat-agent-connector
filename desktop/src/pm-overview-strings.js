@@ -2,6 +2,7 @@ export const overviewStrings = {
   en: {
     ov_live: 'Live', ov_goal: 'Goal', ov_progress: 'Progress', ov_blockers: 'Blockers', ov_decisions: 'Open decisions',
     ov_recent_decisions: 'Recently decided',
+    ov_original_assessment: 'Original assessment', ov_assessment_source: 'This delivery cites this exact assessment.',
     ov_accepted: '{accepted} of {total} accepted', ov_requirements: '{n} requirements', ov_adopted: 'adopted {date}',
     ov_acceptance_gap: "Work was delivered; acceptance against this round's criteria is still missing.", ov_see_unaccepted: 'See unaccepted', ov_ask_pm: 'Ask PM',
     ov_attention: 'Needs attention', ov_milestones: 'Milestones', ov_deliveries: 'Recent deliveries', ov_deliveries_loaded: 'Recent deliveries (loaded)',
@@ -25,6 +26,7 @@ export const overviewStrings = {
   'zh-TW': {
     ov_live: '即時', ov_goal: '目標', ov_progress: '進度', ov_blockers: '阻礙', ov_decisions: '待決事項',
     ov_recent_decisions: '近期決策',
+    ov_original_assessment: '原始評估', ov_assessment_source: '此交付引用這筆原始評估。',
     ov_accepted: '{total} 項中 {accepted} 項已驗收', ov_requirements: '{n} 項需求', ov_adopted: '{date}採用',
     ov_acceptance_gap: '已有交付紀錄，尚缺對應本輪接受條件的驗收。', ov_see_unaccepted: '查看待驗收需求', ov_ask_pm: '詢問 PM',
     ov_attention: '需要關注', ov_milestones: '里程碑', ov_deliveries: '近期交付', ov_deliveries_loaded: '近期交付（已載入）',

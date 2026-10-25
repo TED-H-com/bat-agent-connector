@@ -31,17 +31,17 @@ Result panel now displays them in English and Traditional Chinese:
 - Explicit incomplete coverage; no empty-relation claim for older servers.
 - Existing permission withdrawal and late-response handling, plus stable disclosure
   and focus identities. Merely opening this section performs no extra reads or writes.
+- Overview's exact original assessment reference, original operation and existing
+  discussion context, with stable refresh and no live references in fixed reports.
 
 ## Remaining opportunities
 
-1. Render Overview's existing exact `assessment_ref` through the same original
-   evidence vocabulary; do not synthesize acceptance from a Result summary.
-2. Extend PM's comparison of two fixed Results with original requirement and criterion
+1. Extend PM's comparison of two fixed Results with original requirement and criterion
    references, unresolved disagreements and coverage. Reuse the existing discussion
    sources and continuation, not an independent orchestration/store layer.
-3. Keep bounded evidence and explicit source coverage in longer discussion exports.
+2. Keep bounded evidence and explicit source coverage in longer discussion exports.
    A transcript or digest must not acquire another thread's provenance.
-4. Continue the existing native/AHP Work routes and Fleet participant integration
+3. Continue the existing native/AHP Work routes and Fleet participant integration
    against their own contracts. These reference patterns do not supply the missing
    credential, ownership or live acceptance evidence.
 
