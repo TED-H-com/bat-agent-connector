@@ -2,7 +2,9 @@
   "schema_version": 1,
   "fleet_version": "3.2.5",
   "direct_probe_ms": 600,
-  "cloudflare_access_hosts": [],
+  "cloudflare_access_hosts": [
+    "home.example.invalid"
+  ],
   "credentials": {
     "connector-observe": {
       "kind": "windows-dpapi",
@@ -24,14 +26,29 @@
       "name": "example-host",
       "profile": "example-profile",
       "label": "Example BAT host",
+      "direct_probe_ms": 600,
       "local": "127.0.0.2:19001",
       "target": "127.0.0.1:9000",
-      "probe": null,
+      "probe": "100.64.0.10:22",
+      "prefer_lan": true,
       "routes": [
         {
           "kind": "lan",
           "alias": "bat-example",
-          "probe": "192.0.2.10:22"
+          "probe": "192.0.2.10:22",
+          "direct_probe_ms": 1500
+        },
+        {
+          "kind": "direct",
+          "alias": "bat-example-direct",
+          "probe": "100.64.0.10:22",
+          "direct_probe_ms": 600,
+          "allow_tailscale_relay": true
+        },
+        {
+          "kind": "cf",
+          "alias": "bat-example-cf",
+          "access_host": "home.example.invalid"
         }
       ],
       "provision_route": "lan",

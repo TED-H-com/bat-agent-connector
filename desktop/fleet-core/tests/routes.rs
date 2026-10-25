@@ -995,3 +995,311 @@ async fn direct_observation_resets_cooldown_and_unstarted_generation_intent_is_c
     );
     assert!(!policy.waking());
 }
+
+#[tokio::test(start_paused = true)]
+async fn route_relay_requires_explicit_opt_in_and_tcp() {
+    let mut doc: Value = serde_json::from_slice(include_bytes!("fixtures/inventory.json")).unwrap();
+    let mut probe = Mock::new(false, true, false);
+    let status = json!({"Peer":{"id":{"TailscaleIPs":["100.64.0.1"],
+        "Online":true,"Active":true,"Relay":"example-derp","CurAddr":""}}});
+    let bytes = serde_json::to_vec(&status).unwrap();
+    assert_eq!(tailscale_peer(&bytes, "100.64.0.1"), TailscalePeer::Relay);
+    assert!(!tailscale_direct(&bytes, "100.64.0.1"));
+    probe.peer = Some(tailscale_peer(&bytes, "100.64.0.1"));
+    for (host, route, tcp, expected) in [
+        (false, None, true, RouteKind::Cf),
+        (true, None, true, RouteKind::Direct),
+        (true, Some(false), true, RouteKind::Cf),
+        (false, Some(true), true, RouteKind::Direct),
+        (true, None, false, RouteKind::Cf),
+    ] {
+        doc["hosts"][0]["allow_tailscale_relay"] = json!(host);
+        doc["hosts"][0]["routes"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("allow_tailscale_relay");
+        if let Some(value) = route {
+            doc["hosts"][0]["routes"][0]["allow_tailscale_relay"] = json!(value);
+        }
+        probe.direct_tcp = tcp;
+        let routes = Routes::from_inventory(
+            &Inventory::parse(&serde_json::to_vec(&doc).unwrap()).unwrap(),
+            "node-1",
+        )
+        .unwrap();
+        let policy = HostPolicy::new(&routes, generation());
+        assert_eq!(choice(&routes, &policy, &probe, 0).await.kind(), expected);
+    }
+    for (key, value) in [
+        ("Online", json!(false)),
+        ("Active", json!(false)),
+        ("Relay", json!("")),
+        ("CurAddr", Value::Null),
+    ] {
+        let mut invalid = status.clone();
+        invalid["Peer"]["id"][key] = value;
+        assert_ne!(
+            tailscale_peer(&serde_json::to_vec(&invalid).unwrap(), "100.64.0.1"),
+            TailscalePeer::Relay
+        );
+    }
+}
+
+#[test]
+fn route_policy_strict_validation() {
+    let original: Value =
+        serde_json::from_slice(include_bytes!("fixtures/inventory.json")).unwrap();
+    for route in [false, true] {
+        for (key, values) in [
+            (
+                "direct_probe_ms",
+                vec![
+                    json!(0),
+                    json!(5001),
+                    json!(true),
+                    json!(150.5),
+                    json!("600"),
+                    Value::Null,
+                ],
+            ),
+            (
+                "allow_tailscale_relay",
+                vec![json!(1), json!("true"), Value::Null],
+            ),
+            ("allow_tailscale_relai", vec![json!(true)]),
+        ] {
+            for value in values {
+                let mut doc = original.clone();
+                let host = &mut doc["hosts"][0];
+                let target = if route { &mut host["routes"][0] } else { host };
+                target[key] = value;
+                assert!(Inventory::parse(&serde_json::to_vec(&doc).unwrap()).is_err());
+            }
+        }
+    }
+}
+
+struct BudgetProbe(u64);
+impl RouteProbe for BudgetProbe {
+    fn tailscale_direct<'a>(&'a self, _: &'a str, until: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            assert_eq!(until - Instant::now(), Duration::from_millis(self.0));
+            true
+        })
+    }
+    fn tcp<'a>(&'a self, _: &'a Endpoint, until: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            assert_eq!(until - Instant::now(), Duration::from_millis(self.0));
+            true
+        })
+    }
+}
+#[tokio::test(start_paused = true)]
+async fn route_probe_budget_route_over_host_over_global() {
+    for (host, route, expected) in [
+        (None, None, 150),
+        (Some(600), None, 600),
+        (Some(600), Some(1500), 1500),
+        (None, Some(1500), 1500),
+    ] {
+        let mut doc: Value =
+            serde_json::from_slice(include_bytes!("fixtures/inventory.json")).unwrap();
+        doc["direct_probe_ms"] = json!(150);
+        doc["hosts"][0]["routes"]
+            .as_array_mut()
+            .unwrap()
+            .truncate(1);
+        doc["hosts"][0]["provision_route"] = json!("direct");
+        if let Some(value) = host {
+            doc["hosts"][0]["direct_probe_ms"] = json!(value);
+        }
+        if let Some(value) = route {
+            doc["hosts"][0]["routes"][0]["direct_probe_ms"] = json!(value);
+        }
+        let routes = Routes::from_inventory(
+            &Inventory::parse(&serde_json::to_vec(&doc).unwrap()).unwrap(),
+            "node-1",
+        )
+        .unwrap();
+        let policy = HostPolicy::new(&routes, generation());
+        assert_eq!(
+            select(
+                &routes,
+                &policy,
+                &BudgetProbe(expected),
+                generation(),
+                0,
+                Duration::from_secs(2)
+            )
+            .await
+            .ok()
+            .unwrap()
+            .kind(),
+            RouteKind::Direct
+        );
+    }
+}
+
+struct HomeProbe {
+    peer: TailscalePeer,
+    lan_ok: bool,
+    tcp_ok: bool,
+}
+impl RouteProbe for HomeProbe {
+    fn tailscale_direct<'a>(&'a self, _: &'a str, _: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move { self.peer == TailscalePeer::Direct })
+    }
+    fn tailscale_peer<'a>(&'a self, _: &'a str, _: Instant) -> PeerFuture<'a> {
+        Box::pin(async move { self.peer })
+    }
+    fn tcp<'a>(&'a self, ep: &'a Endpoint, until: Instant) -> ProbeFuture<'a> {
+        Box::pin(async move {
+            if ep.address.starts_with("100.") {
+                assert_eq!(until - Instant::now(), Duration::from_millis(600));
+                self.tcp_ok
+            } else {
+                assert_eq!(until - Instant::now(), Duration::from_millis(1500));
+                tokio::time::sleep(Duration::from_millis(1200)).await;
+                self.lan_ok
+            }
+        })
+    }
+}
+#[tokio::test(start_paused = true)]
+async fn home_lan_precedes_direct_and_relay_with_cf_fallback() {
+    for prefer_lan in [None, Some(false), Some(true)] {
+        for (peer, allow, lan_ok, tcp_ok, expected) in [
+            (TailscalePeer::Relay, true, true, true, RouteKind::Lan),
+            (TailscalePeer::Direct, true, true, true, RouteKind::Lan),
+            (TailscalePeer::Direct, false, false, true, RouteKind::Direct),
+            (TailscalePeer::Relay, true, false, true, RouteKind::Direct),
+            (TailscalePeer::Relay, false, false, true, RouteKind::Cf),
+            (TailscalePeer::Relay, true, false, false, RouteKind::Cf),
+        ] {
+            let mut doc: Value =
+                serde_json::from_slice(include_bytes!("fixtures/inventory.json")).unwrap();
+            if let Some(value) = prefer_lan {
+                doc["hosts"][0]["prefer_lan"] = json!(value);
+            }
+            doc["hosts"][0]["routes"] = json!([
+                {"kind":"lan","alias":"fixture-lan","probe":"192.0.2.1:22","direct_probe_ms":1500},
+                {"kind":"direct","alias":"fixture-direct","probe":"100.64.0.1:22",
+                 "allow_tailscale_relay":allow,"direct_probe_ms":600},
+                {"kind":"cf","alias":"fixture-cf","access_host":"node-1.example.invalid"}
+            ]);
+            if prefer_lan != Some(true) {
+                doc["hosts"][0]["routes"].as_array_mut().unwrap().swap(0, 1);
+            }
+            let routes = Routes::from_inventory(
+                &Inventory::parse(&serde_json::to_vec(&doc).unwrap()).unwrap(),
+                "node-1",
+            )
+            .unwrap();
+            let policy = HostPolicy::new(&routes, generation());
+            let result = select(
+                &routes,
+                &policy,
+                &HomeProbe {
+                    peer,
+                    lan_ok,
+                    tcp_ok,
+                },
+                generation(),
+                0,
+                Duration::from_secs(2),
+            )
+            .await
+            .unwrap();
+            let expected =
+                if prefer_lan != Some(true) && tcp_ok && (peer == TailscalePeer::Direct || allow) {
+                    RouteKind::Direct
+                } else {
+                    expected
+                };
+            assert_eq!(result.kind(), expected);
+        }
+    }
+}
+
+#[test]
+fn home_example_inventory_is_valid() {
+    Inventory::parse(include_bytes!(
+        "../../fleet.example/client/fleet-inventory.json"
+    ))
+    .unwrap();
+}
+
+#[test]
+fn home_inventory_still_rejects_duplicate_and_unknown_route_kinds() {
+    let doc: Value = serde_json::from_slice(include_bytes!(
+        "../../fleet.example/client/fleet-inventory.json"
+    ))
+    .unwrap();
+    for kind in ["lan", "direct", "cf", "unknown"] {
+        let mut invalid = doc.clone();
+        let mut route = invalid["hosts"][0]["routes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|route| route["kind"] == kind)
+            .unwrap_or(&invalid["hosts"][0]["routes"][0])
+            .clone();
+        route["kind"] = kind.into();
+        invalid["hosts"][0]["routes"]
+            .as_array_mut()
+            .unwrap()
+            .push(route);
+        assert!(matches!(
+            Inventory::parse(&serde_json::to_vec(&invalid).unwrap()),
+            Err("INVENTORY_INVALID")
+        ));
+    }
+}
+
+#[test]
+fn prefer_lan_is_strict_host_only_and_controls_route_order() {
+    let doc: Value = serde_json::from_slice(include_bytes!(
+        "../../fleet.example/client/fleet-inventory.json"
+    ))
+    .unwrap();
+    for value in [
+        Value::Null,
+        json!("true"),
+        json!(1),
+        json!([]),
+        json!({}),
+        json!(false),
+    ] {
+        let mut invalid = doc.clone();
+        invalid["hosts"][0]["prefer_lan"] = value;
+        assert!(Inventory::parse(&serde_json::to_vec(&invalid).unwrap()).is_err());
+    }
+    let mut default = doc.clone();
+    default["hosts"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("prefer_lan");
+    assert!(Inventory::parse(&serde_json::to_vec(&default).unwrap()).is_err());
+    default["hosts"][0]["routes"]
+        .as_array_mut()
+        .unwrap()
+        .swap(0, 1);
+    Inventory::parse(&serde_json::to_vec(&default).unwrap()).unwrap();
+    default["hosts"][0]["prefer_lan"] = json!(false);
+    Inventory::parse(&serde_json::to_vec(&default).unwrap()).unwrap();
+    default["hosts"][0]["routes"][0]["prefer_lan"] = json!(true);
+    assert!(Inventory::parse(&serde_json::to_vec(&default).unwrap()).is_err());
+    let mut invalid = doc.clone();
+    invalid["hosts"][0]["routes"]
+        .as_array_mut()
+        .unwrap()
+        .swap(1, 2);
+    assert!(Inventory::parse(&serde_json::to_vec(&invalid).unwrap()).is_err());
+    let bytes = String::from_utf8(serde_json::to_vec(&doc).unwrap())
+        .unwrap()
+        .replace(
+            "\"prefer_lan\":true",
+            "\"prefer_lan\":true,\"prefer_lan\":true",
+        );
+    assert!(Inventory::parse(bytes.as_bytes()).is_err());
+}

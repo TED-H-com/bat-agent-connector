@@ -6,3 +6,20 @@ Host bat-example
     BatchMode yes
     IdentitiesOnly yes
     IdentityFile ~/.ssh/id_ed25519
+
+Host bat-example-direct
+    HostName 100.64.0.10
+    User REPLACE_WITH_SSH_USER
+    StrictHostKeyChecking yes
+    BatchMode yes
+    IdentitiesOnly yes
+    IdentityFile ~/.ssh/id_ed25519
+
+Host bat-example-cf
+    HostName home.example.invalid
+    ProxyCommand cloudflared access ssh --hostname %h
+    User REPLACE_WITH_SSH_USER
+    StrictHostKeyChecking yes
+    BatchMode yes
+    IdentitiesOnly yes
+    IdentityFile ~/.ssh/id_ed25519

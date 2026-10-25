@@ -67,7 +67,8 @@ Each `hosts` entry has these fields:
 | --- | --- |
 | `name`, `profile`, `label` | Stable logical host ID, BAT profile ID and display label. Host names/profile IDs are unique ignoring case; `connector`/`default` are reserved. |
 | `local`, `target` | Client IPv4 loopback `address:port` and the BAT endpoint reached from the SSH server. Each BAT host needs a distinct local loopback address. |
-| `probe`, `routes`, `provision_route` | Optional top-level probe (`null` allowed); ordered routes (`direct`, `lan`, `cf`) with a literal SSH `alias`; and one configured route kind. `lan` needs a probe endpoint. `direct` is the Tailscale route, requires a `100.64.0.0/10` IPv4 probe, and must match the top-level probe. `cf` needs `access_host` listed in `cloudflare_access_hosts`; configure its SSH ProxyCommand separately. No fallback route is invented. |
+| `probe`, `routes`, `provision_route` | Optional top-level probe (`null` allowed); unique ordered route kinds (`direct`, `lan`, `cf`) with a literal SSH `alias`; and one configured route kind. Default order and preference are direct, LAN, then Cloudflare; host-only boolean `prefer_lan: true` changes both to LAN, direct, then Cloudflare (default false). `lan` needs a probe endpoint. `direct` is the Tailscale route, requires a `100.64.0.0/10` IPv4 probe, and must match the top-level probe. `cf` needs `access_host` listed in `cloudflare_access_hosts`; configure its SSH ProxyCommand separately. No fallback route is invented. |
+| `direct_probe_ms`, `allow_tailscale_relay` | Optional on each host or route. Probe budget is an integer 1–5000 ms: route → host → global. Relay permission is boolean: route → host → false. Office/home/DERP starting budgets: 150/600/1500 ms. See [route eligibility and client recovery](fleet-routes.md). These are inventory keys, not `fleet.json` or `central.json` keys. |
 | `bat` | `remote_profile_id`, `credential_ref`, `fingerprint_ref`, `protocol: "bat-remote/v2"`, and `min_version`. Credential/pin references must resolve to the same BAT profile. |
 | `workspace_bindings` | Array of `{id, workspace_id, required}` using actual BAT workspace IDs; empty is allowed. |
 | `connector_endpoint` | Optional additional BAT endpoint metadata (`null` in the example); when present requires `endpoint`, `remote_profile_id`, `credential_ref`, `fingerprint_ref`. This is separate from the central HTTP connector below. |
@@ -1252,3 +1253,9 @@ revision 恰增一，無變更不回新 bytes。超限或溢位拒絕，不裁�
 `Change`；目錄不記錄收據或 operation ID，讓檢閱能預先算出 bytes。中斷關聯的 receipt refs
 只附加於伺服器 `connection_bindings` row；participant store 已提供 v1 Fleet Apply 的逐操作紀錄，
 綁定目錄變更前後 digest 的 v2 關聯紀錄仍未實作。
+
+Home hosts: opt in with host-only `prefer_lan: true` to use LAN (`direct_probe_ms: 1500`), Tailscale direct
+(`direct_probe_ms: 600`, `allow_tailscale_relay: true`), then a configured `cf` fallback.
+See the [complete route example](fleet-routes.md) and
+[sample inventory](../../desktop/fleet.example/client/fleet-inventory.json).
+Dual-WAN load balancing and changing public addresses/ports per connection are expected home conditions.
