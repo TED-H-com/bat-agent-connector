@@ -73,6 +73,7 @@ export const workResultStrings = {
     // Checks and delivery
     wres_check_verification: '驗證',
     wres_verification_unverified: '未驗證',
+    wres_verification_unknown: '未知',
     wres_verification_running: '驗證中',
     wres_verification_verified: '已驗證',
     wres_verification_failed: '驗證失敗',
@@ -272,6 +273,7 @@ export const workResultStrings = {
     // Checks and delivery
     wres_check_verification: 'Verification',
     wres_verification_unverified: 'Not verified',
+    wres_verification_unknown: 'Unknown',
     wres_verification_running: 'Verifying',
     wres_verification_verified: 'Verified',
     wres_verification_failed: 'Verification failed',

@@ -179,3 +179,20 @@ test('one assessment covering two requirements retains focus on the selected req
   await expect(link).toBeFocused();
   expect(f.state.writes).toEqual([]);
 });
+
+for (const locale of ['en', 'zh-TW'] as const) {
+  test(`unknown verification is localized in both result and requirement facts: ${locale}`, async ({browser}) => {
+    const context = await browser.newContext({locale});
+    const page = await context.newPage(), f = workResultFixture(), data = requirements('no_conclusion');
+    data.verification = 'unknown';
+    f.state.currentEnvelope = buildResultEnvelope({verification_status: 'unknown', requirements: data});
+    try {
+      await open(page, f);
+      const strings = workResultStrings[locale];
+      await expect(page.locator('[data-check="verification"]')).toHaveText(strings.wres_unknown);
+      await expect(page.locator('[data-result-requirements]')).toContainText(`${strings.wres_check_verification}: ${strings.wres_unknown}`);
+      await expect(page.locator('[data-work-result]')).not.toContainText('wres_verification_unknown');
+      expect(f.state.writes).toEqual([]);
+    } finally {await context.close();}
+  });
+}
