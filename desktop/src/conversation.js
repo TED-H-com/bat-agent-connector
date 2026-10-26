@@ -264,9 +264,17 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
       } else if (tool && !completed && row.pill !== pillKey) row.toolDetails.open = true;
       // Errors, pending and unknown open when they first appear or change state; afterwards the reader's toggle wins.
       row.pill = pillKey;
+      // Source-local completion only: idle, archive coverage and reading receipts
+      // do not establish that a message has finished generating.
+      const quoteCopyAllowed = message.status === "completed" && !message.denied && !message.deferred;
+      const updateQuoteCopy = row.text !== text || row.quoteCopyAllowed !== quoteCopyAllowed;
+      row.quoteCopyAllowed = quoteCopyAllowed;
       if (row.text !== text) {
         if (row.text !== null) added += 1; // a streamed revision is new content too
-        (folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy)); row.text = text;
+        row.text = text;
+        (folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy, {
+          canCopyQuote: () => row.quoteCopyAllowed && row.text === text && row.node.isConnected,
+        }));
         if (folded && row.toolDetails) {
           const line = text.split("\n").find(item => item.trim())?.trim() || "";
           const label = line || t(tool ? "message_tool_details" : "message_system");
@@ -274,6 +282,8 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
           row.toolDetails.querySelector("summary").title = Array.from(label).slice(0, 200).join("");
         }
       }
+      // A status-only refresh must preserve selection/focus in the quoted text.
+      if (updateQuoteCopy) for (const button of row.body.querySelectorAll(".message-quote-copy")) button.hidden = !row.quoteCopyAllowed;
       next.set(key, row);
     }
     // Keep unchanged nodes in place so refresh does not erase focus or selected text.

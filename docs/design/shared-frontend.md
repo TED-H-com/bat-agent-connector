@@ -62,6 +62,19 @@ reference, not a new dependency or copied runtime.
   Construct DOM nodes with text content, never HTML, external links or remote images.
   Unclosed streamed fences remain code, and code copying preserves original line endings.
   Bound formatting work; large inputs remain fully available as plain text.
+- Explicit consecutive quote lines (`>` with up to three leading spaces) form one
+  quote block. Copy removes exactly one outer marker and at most its next space/tab;
+  nested markers, Markdown, spacing and LF/CRLF remain intact. Unmarked lines end
+  the block; quotes inside fenced code remain code. This is limited formatting,
+  not a recursive Markdown parser.
+  Quote copy appears only with source-local `status=completed` and no denied/deferred
+  flag. Missing, running, failed and unknown status do not enable it; session idle,
+  archive coverage and reading receipts never substitute for message completion.
+  Status-only refresh changes copy availability without replacing selected text.
+  Whole-message/code copy retain their existing behavior and source-size limits.
+  This independently written interaction follows the
+  [Project Hub reference](https://github.com/kieiken/project-hub/blob/cfe3ab221f03f84d334ae7b97608dd31f3e643be/hub/public/app-messages.js);
+  no upstream code or dependency is imported.
 - Keep the existing latest-30 read contract. A scrollable conversation follows new
   output only when the reader is near its bottom. An explicit latest button resumes
   following. Refresh captures the reading position when applying the result, not

@@ -11125,6 +11125,7 @@ var init_i18n = __esmMin((() => {
 			message_table: "訊息表格",
 			message_copy_code: "複製程式碼",
 			message_copy: "複製原文",
+			message_copy_quote: "複製引用",
 			message_copied: "已複製。",
 			message_copy_source: "要複製的原文",
 			message_copy_manual: "無法自動複製，請選取並複製以下原文。",
@@ -12887,6 +12888,7 @@ var init_i18n = __esmMin((() => {
 			message_table: "Message table",
 			message_copy_code: "Copy code",
 			message_copy: "Copy original",
+			message_copy_quote: "Copy quote",
 			message_copied: "Copied.",
 			message_copy_source: "Original text to copy",
 			message_copy_manual: "Automatic copy is unavailable. Select and copy the original text below.",
@@ -27516,6 +27518,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 //#endregion
 //#region src/message-format.js
 var lineText = (line) => line.replace(/\r?\n$/, "");
+var quotePrefix = /^ {0,3}>[ \t]?/;
 function tableCells(line) {
 	let text = line.trim(), cell = "", ticks = 0, separators = 0;
 	const cells = [];
@@ -27579,12 +27582,23 @@ function messageBlocks(source) {
 			});
 			continue;
 		}
+		if (quotePrefix.test(lines[i])) {
+			flush();
+			const body = [];
+			while (i < lines.length && quotePrefix.test(lines[i])) body.push(lines[i++].replace(quotePrefix, ""));
+			blocks.push({
+				kind: "quote",
+				text: body.join("")
+			});
+			continue;
+		}
 		const header = tableCells(lineText(lines[i])), divider = i + 1 < lines.length ? tableCells(lineText(lines[i + 1])) : null;
 		if (header?.length && header.length <= 40 && divider?.length === header.length && divider.every((cell) => /^:?-{3,}:?$/.test(cell))) {
 			flush();
 			const rows = [];
 			i += 2;
 			while (i < lines.length && rows.length < 100) {
+				if (quotePrefix.test(lines[i])) break;
 				const cells = tableCells(lineText(lines[i]));
 				if (!cells || cells.length !== header.length) break;
 				rows.push(cells);
@@ -27613,8 +27627,16 @@ function inline(h, text) {
 	nodes.push(text.slice(from));
 	return nodes;
 }
-function renderMessage(h, t, source, copy) {
+function renderMessage(h, t, source, copy, { canCopyQuote = () => false } = {}) {
 	return messageBlocks(source).map((block) => {
+		if (block.kind === "quote") return h("blockquote", { class: "message-quote" }, h("div", { class: "message-quote-bar" }, h("button", {
+			class: "mini message-quote-copy",
+			type: "button",
+			hidden: !canCopyQuote(),
+			onclick: () => {
+				if (canCopyQuote()) copy(block.text);
+			}
+		}, t("message_copy_quote"))), h("div", { class: "message-text" }, ...inline(h, block.text)));
 		if (block.kind === "code") return h("div", { class: "message-code" }, h("div", { class: "message-code-bar" }, h("span", { class: "muted" }, block.language || t("message_code")), h("button", {
 			class: "mini",
 			type: "button",
@@ -60158,16 +60180,20 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.body.append(row.toolDetails);
 			} else if (tool && !completed && row.pill !== pillKey) row.toolDetails.open = true;
 			row.pill = pillKey;
+			const quoteCopyAllowed = message.status === "completed" && !message.denied && !message.deferred;
+			const updateQuoteCopy = row.text !== text || row.quoteCopyAllowed !== quoteCopyAllowed;
+			row.quoteCopyAllowed = quoteCopyAllowed;
 			if (row.text !== text) {
 				if (row.text !== null) added += 1;
-				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy));
 				row.text = text;
+				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy, { canCopyQuote: () => row.quoteCopyAllowed && row.text === text && row.node.isConnected }));
 				if (folded && row.toolDetails) {
 					const label = text.split("\n").find((item) => item.trim())?.trim() || t(tool ? "message_tool_details" : "message_system");
 					row.toolLabel.textContent = label;
 					row.toolDetails.querySelector("summary").title = Array.from(label).slice(0, 200).join("");
 				}
 			}
+			if (updateQuoteCopy) for (const button of row.body.querySelectorAll(".message-quote-copy")) button.hidden = !row.quoteCopyAllowed;
 			next.set(key, row);
 		}
 		const retained = new Set([...next.values()].map((row) => row.node));
