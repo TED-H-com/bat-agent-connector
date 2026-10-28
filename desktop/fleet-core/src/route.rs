@@ -255,6 +255,7 @@ pub struct HostPolicy {
     aliases: HashMap<String, Failures>,
     active: Option<Active>,
     recovery: Option<Recovery>,
+    continuous: bool,
     wake: Arc<Mutex<WakeBackoff>>,
     wake_progress: Arc<Notify>,
 }
@@ -282,6 +283,7 @@ impl HostPolicy {
                 .collect(),
             active: None,
             recovery: None,
+            continuous: false,
             wake: Arc::default(),
             wake_progress: Arc::default(),
         }
@@ -372,11 +374,27 @@ impl HostPolicy {
         }
         Ok(())
     }
+    pub fn untracked_exit(&mut self, now: u64) {
+        let recovery = self.recovery.get_or_insert_with(|| Recovery::new(now));
+        if self.continuous {
+            recovery.continuous_failed(now);
+        }
+    }
+    pub fn continuous_recovery(&mut self) {
+        self.continuous = true;
+    }
     pub fn recovery_due(&self, now: u64) -> bool {
-        self.active.is_none() && self.recovery.as_ref().is_none_or(|r| r.due(now))
+        self.active.is_none()
+            && self.recovery.as_ref().is_none_or(|r| {
+                if self.continuous {
+                    r.continuous_due(now)
+                } else {
+                    r.due(now)
+                }
+            })
     }
     pub fn recovery_exhausted(&self) -> bool {
-        self.recovery.as_ref().is_some_and(Recovery::exhausted)
+        !self.continuous && self.recovery.as_ref().is_some_and(Recovery::exhausted)
     }
     /// Consume only immediately before an explicitly permitted launch attempt.
     pub fn take_recovery_attempt(&mut self, now: u64) -> Result<()> {
@@ -384,7 +402,11 @@ impl HostPolicy {
             return Err("ROUTE_RUN_ACTIVE");
         }
         if let Some(recovery) = &mut self.recovery {
-            recovery.attempt(now)?;
+            if self.continuous {
+                recovery.continuous_attempt(now)?;
+            } else {
+                recovery.attempt(now)?;
+            }
         }
         Ok(())
     }
@@ -462,7 +484,10 @@ impl HostPolicy {
         if deliberate {
             return Ok(Exit::Deliberate);
         }
-        self.recovery.get_or_insert_with(|| Recovery::new(now));
+        let recovery = self.recovery.get_or_insert_with(|| Recovery::new(now));
+        if self.continuous {
+            recovery.continuous_failed(now);
+        }
         let failures = self
             .aliases
             .get_mut(&active.alias)

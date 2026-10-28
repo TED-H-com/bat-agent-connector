@@ -18,6 +18,7 @@ pub mod inventory;
 pub mod migration;
 mod migration_io;
 pub mod monitor_launch;
+pub mod monitor_log;
 pub mod ownership;
 #[cfg(test)]
 #[path = "../tests/support/powershell.rs"]

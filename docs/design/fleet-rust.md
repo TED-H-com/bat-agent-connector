@@ -18,7 +18,7 @@ tracked private inventory, profile index, token files, fingerprints, service pat
 | Selection | Connections, BAT profiles and Dashboard choices remain independent; stable logical IDs, known-host migration, explicit added prerequisites, cancel keeps prior preferences |
 | Readiness | Tunnel, TLS pin, BAT v2/auth/version/workspace and observe-only Connector capabilities; generation and age fences, bounded independent host probes |
 | Ownership | Same `Global\\BatFleetMonitor_<SID>` exclusion across implementations and login sessions; PID plus creation time, SID/session, executable, exact argv, inventory/index and monitor epoch |
-| Recovery | Only proven owned processes, bounded attempts (initial 5 seconds, then 15/45/45; at most three), unknown listener or unknown owner blocks, no port/substring-based killing |
+| Recovery | Only proven owned processes, bounded backoff (Windows supervisor: 5/10/20/40/60 seconds, continuously capped at 60; other callers retain the three-attempt policy), unknown listener or unknown owner blocks, no port/substring-based killing |
 | Lifecycle | Existing app focus remains separate from supervisor ownership; close-to-tray, exit and client crash do not stop central tasks or remote BAT sessions |
 | Migration | Explicit PS/Rust selection, exact old owner exit proof before acquiring ownership, reviewed autostart state and rollback receipt; neither installation nor a stale record proves transfer |
 | Bootstrap | Fixed configured service/SSH recipe only, bounded query/ensure/requery, local receipt before central is online; no empty journal or substitute daemon |
@@ -74,7 +74,7 @@ reported as occupied and never cleared. Configuration/selection changes invalida
 Native state must preserve the facade's distinction between desired selection revision, applied revision,
 monitor epoch, configuration binding and timestamped readiness. No TCP-only ready inference. Long-running
 local control is separate from the WebView window lifecycle; central offline never triggers replacement
-business services. Each route/host has independent finite recovery; one slow host does not block central
+business services. Each route/host has independent recovery backoff; one slow host does not block central
 authentication or other readiness.
 
 ## Probe and migration acceptance

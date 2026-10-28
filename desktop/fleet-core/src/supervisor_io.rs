@@ -188,13 +188,13 @@ impl MonitorLease {
             }
             Ok(())
         };
+        let status = read(&directory.join("fleet-desktop-status.json"))?;
         replace(
             &directory.join("fleet-monitor.json"),
             expected,
             &bytes,
             validate,
         )?;
-        let status = read(&directory.join("fleet-desktop-status.json"))?;
         Ok(Self {
             directory,
             record,
@@ -256,6 +256,20 @@ impl MonitorLease {
         )?;
         self.status = Some(bytes);
         Ok(())
+    }
+    /// Startup has not launched any children. Restore the exact prior parent evidence
+    /// so retrying preparation cannot discard legacy orphan lineage.
+    pub(crate) fn abandon_start(&self, verify: impl FnMut() -> Result<()>) -> Result<()> {
+        let path = self.directory.join("fleet-monitor.json");
+        let prior = self
+            .previous
+            .iter()
+            .find(|(dir, _)| dir == &self.directory)
+            .and_then(|(_, bytes)| bytes.as_deref());
+        match prior {
+            Some(bytes) => replace(&path, Some(&self.bytes), bytes, verify),
+            None => remove(&path, &self.bytes),
+        }
     }
     pub(crate) fn finish(&self) -> Result<()> {
         remove(&self.directory.join("fleet-monitor.json"), &self.bytes)

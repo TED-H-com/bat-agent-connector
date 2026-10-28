@@ -488,17 +488,17 @@ impl crate::discovery::Observation for WindowsMonitorObservation {
         let owner = current_login()?;
         let mut result = Vec::new();
         for pid in powershell_pids()? {
-            let Some(process) = WindowsProcess::open(pid, false)? else {
-                continue;
-            };
-            let identity = login(process.handle.0)?;
-            if identity.owner_sid != owner.owner_sid {
-                continue;
-            }
-            match process.snapshot() {
-                Ok(snapshot) => result.push(snapshot),
-                Err(_) if !running(process.handle.0)? => continue,
-                Err(error) => return Err(error),
+            let snapshot = (|| {
+                let Some(process) = WindowsProcess::open(pid, false)? else {
+                    return Ok(None);
+                };
+                if login(process.handle.0)?.owner_sid != owner.owner_sid {
+                    return Ok(None);
+                }
+                process.snapshot().map(Some)
+            })();
+            if let Some(snapshot) = crate::discovery::candidate(snapshot) {
+                result.push(snapshot);
             }
             if result.len() > 1024 {
                 return Err("OWNER_UNPROVEN");

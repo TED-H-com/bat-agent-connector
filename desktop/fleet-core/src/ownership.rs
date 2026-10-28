@@ -121,6 +121,26 @@ impl Recovery {
     pub fn due(&self, now_ms: u64) -> bool {
         self.attempts < 3 && now_ms >= self.next_ms
     }
+    pub fn continuous_failed(&mut self, now_ms: u64) {
+        let delay = 5000u64
+            .saturating_mul(1u64 << self.attempts.min(4))
+            .min(60000);
+        self.next_ms = now_ms.saturating_add(delay);
+    }
+    pub fn continuous_due(&self, now_ms: u64) -> bool {
+        now_ms >= self.next_ms
+    }
+    pub fn continuous_attempt(&mut self, now_ms: u64) -> Result<()> {
+        if !self.continuous_due(now_ms) {
+            return Err("RECOVERY_NOT_DUE");
+        }
+        self.attempts = self.attempts.saturating_add(1);
+        let delay = 5000u64
+            .saturating_mul(1u64 << self.attempts.min(4))
+            .min(60000);
+        self.next_ms = now_ms.saturating_add(delay);
+        Ok(())
+    }
     pub fn exhausted(&self) -> bool {
         self.attempts >= 3
     }
