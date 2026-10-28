@@ -26,11 +26,11 @@ are refused.
 
 Records are bounded strict JSON. Missing files differ from unreadable, malformed or nonregular
 files. All records are checked, including the older directory even when the newer one has a live
-owner. Proven dead/reused incarnations are stale observations; unknown incarnation is never stale.
+owner. Proven dead/reused incarnations are stale observations; unknown incarnation is skipped and logged, never evidence permitting process cleanup.
 Multiple live identities or epochs conflict. The same proven identity recorded twice is one owner.
-A matching account in another login remains visible/read-only. Legacy enumeration is complete and
-uses native process/token/argv reads, with no shell invocation. Inaccessible potential PowerShell
-candidates fail closed; positively different-account processes can be excluded.
+A matching account in another login remains visible/read-only. Legacy enumeration uses native process/token/argv reads, with no shell invocation.
+Inaccessible potential PowerShell candidates are skipped and logged; only complete
+positive observations can establish a same-account monitor or another login owner.
 
 Discovery rechecks record bytes and returned process identity before publication. This bounds
 ordinary races but is not an atomic OS/filesystem snapshot and cannot authorize future effects.
