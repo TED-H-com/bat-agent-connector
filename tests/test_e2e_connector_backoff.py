@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from bat_agent_connector import service
 from tests.test_client import client_for
 
@@ -47,8 +45,6 @@ async def test_e2e_reconnect_backoff_bounds(mock, monkeypatch):
 
     # Cause the mock server to always close the connection upon receiving 'app:get-version'.
     # This will trigger the retry loop in `_invoke_checked`.
-    original_handle = mock.handlers.get("app:get-version")
-
     async def dropping_handler(params):
         await mock.drop_all()
 
