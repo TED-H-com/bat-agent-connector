@@ -23,7 +23,10 @@ pub fn redact(text: &str) -> String {
     let mut result = text.to_owned();
     static REDACTION: std::sync::OnceLock<Vec<Regex>> = std::sync::OnceLock::new();
     let rules = REDACTION.get_or_init(|| {
-        patterns()["redaction"].as_array().unwrap().iter()
+        patterns()["redaction"]
+            .as_array()
+            .unwrap()
+            .iter()
             .map(|p| Regex::new(p.as_str().unwrap()).expect("static redaction"))
             .collect()
     });
@@ -51,11 +54,22 @@ fn clean(value: &Value) -> Value {
         Value::String(s) => json!(redact(s)),
         Value::Array(a) => Value::Array(a.iter().map(clean).collect()),
         Value::Object(o) => Value::Object(
-            o.iter().map(|(k, v)| {
-                let sensitive = Regex::new("(?i)token|password|passwd|secret|authorization|api.?key")
-                    .unwrap().is_match(k);
-                (redact(k), if sensitive { json!("[REDACTED]") } else { clean(v) })
-            }).collect(),
+            o.iter()
+                .map(|(k, v)| {
+                    let sensitive =
+                        Regex::new("(?i)token|password|passwd|secret|authorization|api.?key")
+                            .unwrap()
+                            .is_match(k);
+                    (
+                        redact(k),
+                        if sensitive {
+                            json!("[REDACTED]")
+                        } else {
+                            clean(v)
+                        },
+                    )
+                })
+                .collect(),
         ),
         other => other.clone(),
     }
@@ -100,7 +114,8 @@ fn file_lock(path: &Path) -> std::io::Result<std::fs::File> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let name = path.file_name()
+    let name = path
+        .file_name()
         .ok_or(std::io::ErrorKind::InvalidInput)?
         .to_string_lossy();
     let mut options = OpenOptions::new();
@@ -115,7 +130,8 @@ fn file_lock(path: &Path) -> std::io::Result<std::fs::File> {
     Ok(file)
 }
 fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let name = path.file_name()
+    let name = path
+        .file_name()
         .ok_or(std::io::ErrorKind::InvalidInput)?
         .to_string_lossy();
     let temporary = path.with_file_name(format!(".{name}.{:032x}", rand::random::<u128>()));
@@ -134,7 +150,12 @@ fn replace(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     result
 }
 
-fn append(path: &Path, record: Value, now: time::OffsetDateTime, limit: u64) -> std::io::Result<()> {
+fn append(
+    path: &Path,
+    record: Value,
+    now: time::OffsetDateTime,
+    limit: u64,
+) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -150,8 +171,14 @@ fn append(path: &Path, record: Value, now: time::OffsetDateTime, limit: u64) -> 
             }
         }
     }
-    let mut lines: Vec<String> = if fs::metadata(path).map(|m| m.len() <= limit).unwrap_or(false) {
-        fs::read_to_string(path)?.lines().map(str::to_owned).collect()
+    let mut lines: Vec<String> = if fs::metadata(path)
+        .map(|m| m.len() <= limit)
+        .unwrap_or(false)
+    {
+        fs::read_to_string(path)?
+            .lines()
+            .map(str::to_owned)
+            .collect()
     } else {
         vec![]
     };
@@ -209,16 +236,27 @@ mod tests {
     use super::*;
     #[test]
     fn shared_contract() {
-        let fixture: Value = serde_json::from_str(include_str!("../../../tests/fixtures/errlog.json")).unwrap();
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../tests/fixtures/errlog.json")).unwrap();
         for secret in fixture["secrets"].as_array().unwrap() {
             let s = secret.as_str().unwrap();
             assert_ne!(redact(s), s);
         }
         for case in fixture["redaction_cases"].as_array().unwrap() {
-            assert_eq!(redact(case["msg"].as_str().unwrap()), case["expected"].as_str().unwrap());
+            assert_eq!(
+                redact(case["msg"].as_str().unwrap()),
+                case["expected"].as_str().unwrap()
+            );
         }
         for case in fixture["fingerprints"].as_array().unwrap() {
-            assert_eq!(fingerprint(case["component"].as_str().unwrap(),case["code"].as_str().unwrap(),case["msg"].as_str().unwrap()),case["fingerprint"].as_str().unwrap());
+            assert_eq!(
+                fingerprint(
+                    case["component"].as_str().unwrap(),
+                    case["code"].as_str().unwrap(),
+                    case["msg"].as_str().unwrap()
+                ),
+                case["fingerprint"].as_str().unwrap()
+            );
         }
         assert_eq!(clean(&json!({"password":"tiny"}))["password"], "[REDACTED]");
     }
@@ -236,7 +274,13 @@ mod tests {
         append(&path, record, now + time::Duration::seconds(60), 1).unwrap();
         assert!(dir.join("errors.jsonl.1").exists());
         for i in 0..7 {
-            append(&path, json!({"fingerprint": format!("case-{i}"), "count": 1}), now, 1).unwrap();
+            append(
+                &path,
+                json!({"fingerprint": format!("case-{i}"), "count": 1}),
+                now,
+                1,
+            )
+            .unwrap();
         }
         assert!(dir.join("errors.jsonl.4").exists());
         assert!(!dir.join("errors.jsonl.5").exists());
