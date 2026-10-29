@@ -55,6 +55,16 @@ fn append(path: &Path, code: &str) -> std::io::Result<()> {
     writeln!(file, "{now} {code}")
 }
 pub fn event(code: &str) {
+    // Successful adoption is informational, not an error record.
+    if code != "TUNNEL_ADOPTED" {
+        let component = if code.starts_with("TUNNEL_") {
+            "bat-tunnel"
+        } else {
+            "fleet-monitor"
+        };
+        let dotted = format!("fleet.{}", code.to_ascii_lowercase().replace('_', "."));
+        crate::errlog::event(component, &dotted, code, serde_json::json!({}));
+    }
     if let Some(log) = LOG.get() {
         if let Ok(path) = log.lock() {
             let _ = append(&path, code);

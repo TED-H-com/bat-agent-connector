@@ -1,0 +1,32 @@
+{
+  "redaction": [
+    "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)",
+    "(?i)\\b(?:authorization[\\x22\\x27]?\\s*[:=]\\s*|bearer\\s+)[^\\r\\n,;]+",
+    "(?i)\\b(?:[a-z_]*(?:token|password|passwd|secret|api_key|apikey)[a-z_]*|cloudflare_api_key)[\\x22\\x27]?\\s*[=:]\\s*(?:\"[^\"\\r\\n]*\"|'[^'\\r\\n]*'|[^\\s&;,\"'}]+)",
+    "[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/@]+@",
+    "\\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|cfut_[A-Za-z0-9_-]+|tskey-[A-Za-z0-9_-]+|(?:eyJ[A-Za-z0-9_-]*|[A-Za-z0-9_-]{10,})\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)",
+    "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+  ],
+  "normalization": [
+    [
+      "(?i)\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b",
+      "<uuid>"
+    ],
+    [
+      "(?:[A-Za-z]:\\\\|/)[^\\s\\x22\\x27,;]+",
+      "<path>"
+    ],
+    [
+      "(?i)\\b(?:0x[0-9a-f]+|[0-9a-f]{8,})\\b",
+      "<hex>"
+    ],
+    [
+      ":\\d+\\b",
+      ":<port>"
+    ],
+    [
+      "\\b\\d+\\b",
+      "<n>"
+    ]
+  ]
+}

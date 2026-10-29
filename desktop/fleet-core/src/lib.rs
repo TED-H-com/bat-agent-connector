@@ -13,6 +13,7 @@ pub mod connection_setup;
 pub mod creation_evidence;
 pub mod credential;
 pub mod discovery;
+pub mod errlog;
 pub mod installation;
 pub mod inventory;
 pub mod migration;

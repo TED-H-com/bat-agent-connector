@@ -903,6 +903,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                                 host.next_probe = 0;
                             }
                             Err("TUNNEL_START_FAILED") => {
+                                crate::errlog::event(
+                                    "bat-tunnel",
+                                    "tunnel.respawn.failed",
+                                    "TUNNEL_START_FAILED",
+                                    serde_json::json!({}),
+                                );
                                 host.policy.launch_failed(&choice, &host.generation, now)?;
                                 host.failure = Some(("TUNNEL_DOWN", Layer::Tunnel));
                                 return Ok(());
