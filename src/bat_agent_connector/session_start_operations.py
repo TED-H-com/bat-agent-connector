@@ -8,6 +8,7 @@ import re
 import uuid
 
 from . import confinement, registry, resource_policy, service, task_control
+from .errlog import log_error
 from .errors import BatError, ResourceReadOnly
 from .operations import (
     RERUN,
@@ -230,6 +231,7 @@ async def _invoke(ctx, plan, name, client, channel, params, grant, *, before_fra
     except Cancelled:
         raise StepFailed('CANCELLED', 'cancelled before the next transport frame') from None
     except (BatError, OSError, asyncio.TimeoutError) as exc:
+        log_error('bat-session', 'session.start.failed', exc)
         audit.record(**base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
         if sent:
             raise AmbiguousOutcome(f'{channel} reached transport; outcome requires read-back') from exc
