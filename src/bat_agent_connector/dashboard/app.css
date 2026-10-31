@@ -2243,6 +2243,9 @@ body.pm-mode #main { padding: 0; }
 .pm-overview-attention-actions { margin-left: var(--space-2); display: inline-flex; flex: none; align-items: center; gap: var(--space-1); white-space: nowrap; color: var(--text-3); }
 .pm-overview-milestone, .pm-overview-delivery { display: flex; justify-content: space-between; align-items: start; gap: var(--space-2); padding-block: var(--space-2); border-top: 1px solid var(--line); }
 .pm-overview-milestone:first-child, .pm-overview-delivery:first-child { border-top: 0; padding-top: 0; }
+.pm-overview-delivery-body { min-width: 0; flex: 1; }
+.pm-overview-delivery-body > .ui-disclosure { margin-top: var(--space-2); }
+.pm-overview-delivery > .ui-pill { align-self: flex-start; }
 .pm-overview-milestone .ui-meta { display: block; margin-top: var(--space-1); }
 .pm-overview-milestone .pm-overview-date-range { display: flex; flex-wrap: wrap; column-gap: var(--space-1); }
 .pm-overview-date-range > span { white-space: nowrap; }

@@ -1897,6 +1897,8 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_blockers: "Blockers",
 			ov_decisions: "Open decisions",
 			ov_recent_decisions: "Recently decided",
+			ov_original_assessment: "Original assessment",
+			ov_assessment_source: "This delivery cites this exact assessment.",
 			ov_accepted: "{accepted} of {total} accepted",
 			ov_requirements: "{n} requirements",
 			ov_adopted: "adopted {date}",
@@ -1962,6 +1964,8 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_blockers: "阻礙",
 			ov_decisions: "待決事項",
 			ov_recent_decisions: "近期決策",
+			ov_original_assessment: "原始評估",
+			ov_assessment_source: "此交付引用這筆原始評估。",
 			ov_accepted: "{total} 項中 {accepted} 項已驗收",
 			ov_requirements: "{n} 項需求",
 			ov_adopted: "{date}採用",
@@ -10008,6 +10012,38 @@ var workResultStrings;
 var init_pm_work_result_strings = __esmMin((() => {
 	workResultStrings = {
 		"zh-TW": {
+			wres_req_heading: "成果對應的需求",
+			wres_req_none: "沒有可見的明確需求關聯；這不表示成果不需要驗收。",
+			wres_req_selection: "以下列出原始評估；驗收或解除依賴需有明確選定的評估。",
+			wres_req_sources: "原始來源與證據",
+			wres_req_no_conclusion: "尚無驗收結論",
+			wres_req_verified_no_conclusion: "已驗證，尚無驗收結論",
+			wres_req_assessments_recorded: "已有評估紀錄，尚未選定",
+			wres_req_unavailable: "目前無法完整確認",
+			wres_req_accepted: "原結論：接受",
+			wres_req_rejected: "原結論：拒絕",
+			wres_req_unassessed: "原結論：未評估",
+			wres_req_not_defined: "未定義",
+			wres_req_applicable: "仍適用",
+			wres_req_no_longer_applies: "不再適用",
+			wres_req_applicability_changed: "來源或評估版本已變更，請查看原始證據。",
+			wres_req_assessed_by: "評估者",
+			wres_req_dod: "完成定義",
+			wres_req_criterion: "驗收條件",
+			wres_req_qualified: "符合原品質要求",
+			wres_req_not_qualified: "目前未符合原品質要求",
+			wres_req_revoked: "此審閱已撤回；原結論保留供追溯。",
+			wres_req_reviews_partial: "評估紀錄未完整涵蓋，不能據此判定沒有其他結論。",
+			wres_req_packages_partial: "相依工作未完整涵蓋，不能據此判定沒有其他依賴。",
+			wres_req_dependencies: "相依工作的就緒狀態",
+			wres_req_without_selection: "尚未選定評估",
+			wres_req_original_selection: "交接時明確選定的評估",
+			wres_req_selections_partial: "交接時選定的評估紀錄未完整涵蓋。",
+			wres_req_ready: "已就緒",
+			wres_req_blocked: "尚未就緒",
+			wres_req_passed: "通過",
+			wres_req_failed: "未通過",
+			wres_req_unknown: "未知",
 			wres_heading: "成果",
 			wres_invalid_envelope: "無法讀取這份成果。",
 			wres_state_accepted: "已受理",
@@ -10036,6 +10072,7 @@ var init_pm_work_result_strings = __esmMin((() => {
 			wres_pill_claimed_done: "代理表示已完成",
 			wres_check_verification: "驗證",
 			wres_verification_unverified: "未驗證",
+			wres_verification_unknown: "未知",
 			wres_verification_running: "驗證中",
 			wres_verification_verified: "已驗證",
 			wres_verification_failed: "驗證失敗",
@@ -10150,6 +10187,38 @@ var init_pm_work_result_strings = __esmMin((() => {
 			error_code_PM_DIFF_UNAVAILABLE: "無法自 BAT 讀取工作樹差異。"
 		},
 		en: {
+			wres_req_heading: "Requirements for this result",
+			wres_req_none: "No visible explicit requirement relation. This does not mean acceptance is unnecessary.",
+			wres_req_selection: "Original assessments are kept separately. No assessment has been selected here for acceptance or dependencies.",
+			wres_req_sources: "Original sources and evidence",
+			wres_req_no_conclusion: "No acceptance conclusion",
+			wres_req_verified_no_conclusion: "Verified, without an acceptance conclusion",
+			wres_req_assessments_recorded: "Assessments recorded, none selected",
+			wres_req_unavailable: "Could not fully establish the current state",
+			wres_req_accepted: "Original conclusion: accepted",
+			wres_req_rejected: "Original conclusion: rejected",
+			wres_req_unassessed: "Original conclusion: unassessed",
+			wres_req_not_defined: "Not defined",
+			wres_req_applicable: "Still applies",
+			wres_req_no_longer_applies: "No longer applies",
+			wres_req_applicability_changed: "The source or assessment version changed. Inspect the original evidence.",
+			wres_req_assessed_by: "Assessed by",
+			wres_req_dod: "Definition of Done",
+			wres_req_criterion: "Acceptance criterion",
+			wres_req_qualified: "Meets the original quality requirements",
+			wres_req_not_qualified: "Does not currently meet the original quality requirements",
+			wres_req_revoked: "This review was revoked. Its original conclusion remains in the history.",
+			wres_req_reviews_partial: "Assessment coverage is incomplete; other conclusions may exist.",
+			wres_req_packages_partial: "Dependent work coverage is incomplete; other dependencies may exist.",
+			wres_req_dependencies: "Dependent work readiness",
+			wres_req_without_selection: "Without a selected assessment",
+			wres_req_original_selection: "Assessment explicitly selected at handoff",
+			wres_req_selections_partial: "Coverage of original handoff selections is incomplete.",
+			wres_req_ready: "Ready",
+			wres_req_blocked: "Blocked",
+			wres_req_passed: "Passed",
+			wres_req_failed: "Failed",
+			wres_req_unknown: "Unknown",
 			wres_heading: "Result",
 			wres_invalid_envelope: "This result could not be read.",
 			wres_state_accepted: "Accepted",
@@ -10178,6 +10247,7 @@ var init_pm_work_result_strings = __esmMin((() => {
 			wres_pill_claimed_done: "The agent says it is done",
 			wres_check_verification: "Verification",
 			wres_verification_unverified: "Not verified",
+			wres_verification_unknown: "Unknown",
 			wres_verification_running: "Verifying",
 			wres_verification_verified: "Verified",
 			wres_verification_failed: "Verification failed",
@@ -21566,6 +21636,131 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 	};
 }
 //#endregion
+//#region src/pm-work-result-requirements.js
+function resultRequirements({ h, t, section, open = new Set() }) {
+	if (!section) return null;
+	const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t("wres_unknown");
+	const verdict = (value) => label(value, [
+		"accepted",
+		"rejected",
+		"unassessed",
+		"not_defined"
+	]);
+	const text = (value) => typeof value === "string" ? value : "";
+	const note = (value) => h("p", { class: "pm-note-text" }, text(value));
+	const source = (value) => h("code", { class: "pm-source" }, text(value));
+	const line = (key, value) => h("p", {}, t(key), ": ", value);
+	const details = (key, title, ...body) => h("details", {
+		"data-result-requirement-details": key,
+		...open.has(key) ? { open: true } : {}
+	}, h("summary", { "data-work-result-focus": `requirement:${key}` }, title), ...body);
+	const record = (key, value) => details(key, t("wres_req_sources"), h("pre", { class: "pm-note-text" }, JSON.stringify(value, null, 2)));
+	const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || "") ? h("a", {
+		href: `#/op/${id}`,
+		"data-work-result-focus": `requirement:operation:${key}`
+	}, t("wres_view_operation")) : null;
+	const element = h("section", {
+		"data-result-requirements": "",
+		class: "pm-work-result-requirements"
+	}, h("h4", {}, t("wres_req_heading")));
+	if (section.relation !== "explicit") {
+		element.append(note(t(section.relation === "none" ? "wres_req_none" : "wres_req_unavailable")));
+		return element;
+	}
+	element.append(note(t("wres_req_selection")), line("wres_check_verification", [
+		"unverified",
+		"running",
+		"verified",
+		"failed",
+		"stale",
+		"unknown"
+	].includes(section.verification) ? t(`wres_verification_${section.verification}`) : t("wres_unknown")));
+	if (section.coverage?.reviews_partial) element.append(note(t("wres_req_reviews_partial")));
+	if (section.coverage?.packages_partial) element.append(note(t("wres_req_packages_partial")));
+	element.append(record("binding", {
+		package_ref: section.package_ref,
+		plan_ref: section.plan_ref,
+		dod_ref: section.dod_ref,
+		candidate_commit: section.candidate_commit,
+		verification_evidence: section.verification_evidence
+	}));
+	for (const item of section.items || []) {
+		const key = JSON.stringify(["requirement", item.requirement_id]);
+		const row = h("article", { "data-result-requirement": item.requirement_id }, h("h5", {}, text(item.text)), source(item.requirement_id), note(label(item.state, [
+			"no_conclusion",
+			"verified_no_conclusion",
+			"assessments_recorded",
+			"unavailable"
+		])), record(`${key}:inputs`, {
+			source_input_id: item.source_input_id,
+			acceptance_input_ids: item.acceptance_input_ids,
+			link: item.link
+		}));
+		for (const assessment of item.assessments || []) {
+			const ref = assessment.reference || {}, original = assessment.original || {};
+			const assessmentKey = JSON.stringify([
+				key,
+				ref.review_id,
+				ref.operation_id,
+				ref.version,
+				ref.document_digest
+			]);
+			const summary = `${verdict(assessment.conclusion)} · ${t(assessment.applicable === true ? "wres_req_applicable" : "wres_req_no_longer_applies")}`;
+			const reasons = (assessment.applicability_reasons || []).map((reason) => {
+				const translated = t(`pmq_reason_${reason}`);
+				return note(translated === `pmq_reason_${reason}` ? t("wres_req_applicability_changed") : translated);
+			});
+			const criteria = (original.criteria || []).filter((entry) => entry.criterion?.kind === "dod" || entry.criterion?.requirement_id === item.requirement_id).map((entry, index) => {
+				const criterion = entry.criterion || {};
+				return details(`${assessmentKey}:criterion:${index}`, `${t(criterion.kind === "dod" ? "wres_req_dod" : "wres_req_criterion")}: ${text(criterion.input_id || criterion.criterion_id)} · ${verdict(entry.status)}`, note(entry.rationale), line("wres_check_verification", label(entry.verification?.status, [
+					"passed",
+					"failed",
+					"unavailable",
+					"unknown"
+				])), record(`${assessmentKey}:proof:${index}`, {
+					criterion,
+					reference: entry.reference,
+					verification: entry.verification
+				}));
+			});
+			row.append(details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), note(t(assessment.qualified === true ? "wres_req_qualified" : "wres_req_not_qualified")), ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment)));
+		}
+		element.append(row);
+	}
+	if (section.dependent_work?.length) {
+		const dependencies = details("dependencies", t("wres_req_dependencies"));
+		for (const work of section.dependent_work) {
+			const key = JSON.stringify([
+				"dependent",
+				work.work_item_id,
+				work.package_id,
+				work.document_digest
+			]);
+			const readiness = (value) => label(value?.status, [
+				"ready",
+				"blocked",
+				"unavailable",
+				"unknown"
+			]);
+			const body = h("article", { "data-result-dependent": work.package_id }, h("h5", {}, text(work.title)), line("wres_req_without_selection", readiness(work.readiness)));
+			if (!work.selections_complete) body.append(note(t("wres_req_selections_partial")));
+			for (const selected of work.selections || []) body.append(details(`${key}:${selected.execution_operation_id}`, `${t("wres_req_original_selection")}: ${readiness(selected.readiness)}`, operation(selected.execution_operation_id, `${key}:${selected.execution_operation_id}`), record(`${key}:${selected.execution_operation_id}:source`, selected)));
+			body.append(record(`${key}:source`, {
+				work_item_id: work.work_item_id,
+				package_id: work.package_id,
+				document_digest: work.document_digest,
+				prerequisite_ids: work.prerequisite_ids,
+				readiness: work.readiness,
+				link: work.link
+			}));
+			dependencies.append(body);
+		}
+		element.append(dependencies);
+	}
+	if (section.related?.length) element.append(record("related", section.related));
+	return element;
+}
+//#endregion
 //#region src/pm-work-result.js
 var KNOWN_STATES = new Set([
 	"accepted",
@@ -21886,6 +22081,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	}
 	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
 		const focusToken = saveFocus();
+		const requirementOpen = new Set(Array.from(panelElement.querySelectorAll("[data-result-requirement-details][open]"), (node) => node.getAttribute("data-result-requirement-details")));
 		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
 		if (existingTurns) turnsOpen = existingTurns.open;
 		const existingDetails = panelElement.querySelector("[data-work-result-details]");
@@ -22079,6 +22275,13 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
 		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
 		sections.push(dl);
+		const requirements = resultRequirements({
+			h,
+			t,
+			section: envelope.requirements,
+			open: requirementOpen
+		});
+		if (requirements) sections.push(requirements);
 		const changesBox = h("div", { class: "pm-work-result-changes" });
 		const ch = envelope.changes || {};
 		const summary = ch.summary || {};
@@ -28841,13 +29044,13 @@ function workspaceOverview(options) {
 			body: h("div", {}, ...data.recent_deliveries.map((row) => h("div", {
 				class: "pm-overview-delivery",
 				"data-overview-delivery": row.work_item_id
-			}, itemLink({
+			}, h("div", { class: "pm-overview-delivery-body" }, itemLink({
 				...row,
 				ref: {
 					kind: "work_item",
 					id: row.work_item_id
 				}
-			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
+			}, "deliveries"), deliveryAssessment(row)), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
 				"work",
 				"quality",
 				"deliveries",
@@ -28855,6 +29058,43 @@ function workspaceOverview(options) {
 			]) : null)
 		});
 		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
+	}
+	function deliveryAssessment(row) {
+		const reference = row.assessment_ref;
+		if (row.state !== "accepted" || !reference || typeof reference !== "object" || Array.isArray(reference)) return null;
+		const ref = {
+			kind: "quality_assessment",
+			id: reference.operation_id,
+			review_id: reference.review_id,
+			document_digest: reference.document_digest
+		};
+		const key = JSON.stringify([
+			"delivery-assessment",
+			row.work_item_id,
+			reference.review_id,
+			reference.operation_id,
+			reference.version,
+			reference.document_digest,
+			reference.candidate_commit
+		]);
+		const controls = isContextRef(ref) ? h("div", { class: "pm-overview-progress-actions" }, h("a", {
+			class: "ui-button secondary ui-sm",
+			href: `#/op/${reference.operation_id}`,
+			"data-overview-link": `${key}:operation`
+		}, t("pm_operation")), discussLink({
+			workspaceId,
+			refs: [ref],
+			title: row.title,
+			from: "overview"
+		}, { "data-overview-link": `${key}:discuss` })) : null;
+		const node = disclosure({
+			label: t("ov_original_assessment"),
+			key: `${namespace}:${workspaceId}:${key}`,
+			body: h("div", {}, h("p", { class: "ui-meta" }, t("ov_assessment_source")), controls, h("pre", { class: "pm-brief-proof" }, JSON.stringify(reference, null, 2)))
+		});
+		node.dataset.overviewAssessment = reference.operation_id || "";
+		node.querySelector("summary").dataset.overviewLink = `${key}:source`;
+		return node;
 	}
 	function closeReader() {
 		reader?.close();

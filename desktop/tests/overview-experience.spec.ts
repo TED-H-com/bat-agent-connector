@@ -57,6 +57,81 @@ async function report(page: Page, id: string) {
   await expect(page.locator('[data-overview-discuss]')).toHaveAttribute('href', new RegExp(id));
 }
 
+function assessedDelivery(f: ReturnType<typeof fixture>, seed = 'a') {
+  const row = f.state.data.recent_deliveries.find((item: any) => item.state === 'accepted');
+  row.assessment_ref = {review_id: 'pmqr_' + seed.repeat(32), operation_id: 'op_' + seed.repeat(32),
+    version: 2, document_digest: seed.repeat(64), candidate_commit: seed.repeat(40)};
+  return row;
+}
+
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`delivery preserves its original assessment source ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({browser, baseURL}, testInfo) => {
+  const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width: native ? 390 : 1440, height: 900}});
+  const page = await context.newPage(), f = fixture(locale), row = assessedDelivery(f);
+  await boot(page, f, native);
+  const card = root(page).locator(`[data-overview-delivery="${row.work_item_id}"]`), source = card.locator('[data-overview-assessment]');
+  await source.locator('summary').click();
+  await expect(source.locator('summary')).toHaveText(locale === 'en' ? 'Original assessment' : '原始評估');
+  expect(JSON.parse(await source.locator('pre').innerText())).toEqual(row.assessment_ref);
+  const links = source.locator('a'), operation = links.first(), discuss = links.last();
+  await expect(operation).toHaveAttribute('href', `#/op/${row.assessment_ref.operation_id}`);
+  const href = await discuss.getAttribute('href');
+  expect(parseDiscussRefs(href!.split('?')[1]).refs).toEqual([{kind: 'quality_assessment', id: row.assessment_ref.operation_id,
+    review_id: row.assessment_ref.review_id, document_digest: row.assessment_ref.document_digest}]);
+  expect(parseDiscussRefs(href!.split('?')[1]).from).toBe('overview');
+  await operation.focus();
+  f.state.data.milestones[0].status = 'in_progress'; f.state.cursor++;
+  await expect(root(page).locator('[data-overview-milestone]').first().locator('[data-status=in_progress]')).toBeVisible();
+  await expect(source).toHaveAttribute('open', ''); await expect(operation).toBeFocused();
+  await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '3 of 8 accepted' : '8 項中 3 項已驗收');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await card.screenshot({path: testInfo.outputPath(`original-assessment-${locale}-${native ? 'ipc' : 'http'}.png`)});
+  expect(f.state.reads.some(path => path.includes('/quality-reviews/'))).toBe(false);
+  expect(f.state.writes).toEqual([]); await context.close();
+});
+
+test('changed delivery assessment never inherits another original source disclosure or focus', async ({page}) => {
+  const f = fixture(), row = assessedDelivery(f); await boot(page, f);
+  const source = root(page).locator('[data-overview-assessment]');
+  await source.locator('summary').click(); await source.locator('a').first().focus();
+  const original = structuredClone(row.assessment_ref);
+  assessedDelivery(f, 'b'); f.state.cursor++;
+  await expect(source).toHaveAttribute('data-overview-assessment', row.assessment_ref.operation_id);
+  await expect(source).not.toHaveAttribute('open', '');
+  await expect(source.locator('a').first()).not.toBeFocused();
+  await source.locator('summary').click();
+  await expect(source).not.toContainText(original.operation_id);
+  expect(JSON.parse(await source.locator('pre').innerText())).toEqual(row.assessment_ref);
+  delete row.assessment_ref; await refresh(page);
+  await expect(source).toHaveCount(0); // Older servers do not provide this reference.
+  await expect(root(page).locator(`[data-overview-delivery="${row.work_item_id}"] [data-status=accepted]`)).toBeVisible();
+  expect(f.state.writes).toEqual([]);
+});
+
+test('fixed reports and withdrawn overview cannot retain a live delivery assessment', async ({page}) => {
+  const f = fixture(), row = assessedDelivery(f); await boot(page, f);
+  await root(page).locator('[data-overview-assessment] summary').click();
+  await report(page, f.ids.snap1);
+  await expect(root(page).locator('[data-overview-assessment]')).toHaveCount(0);
+  await expect(root(page)).not.toContainText(row.assessment_ref.operation_id);
+  await root(page).getByRole('button', {name: 'Back to live', exact: true}).click();
+  await expect(root(page).locator('[data-overview-assessment]')).toHaveCount(1);
+  f.state.denied = true; await refresh(page);
+  await expect(root(page).locator('[data-overview-assessment]')).toHaveCount(0);
+  await expect(root(page)).not.toContainText(row.assessment_ref.operation_id);
+  expect(f.state.writes).toEqual([]);
+});
+
+test('delivery assessment references render literal text and invalid identities have no actions', async ({page}) => {
+  const f = fixture(), row = assessedDelivery(f);
+  row.assessment_ref.review_id = '<img src=x onerror="window.injected=true">';
+  await boot(page, f); const source = root(page).locator('[data-overview-assessment]');
+  await source.locator('summary').click();
+  expect(JSON.parse(await source.locator('pre').innerText()).review_id).toBe(row.assessment_ref.review_id);
+  await expect(source.locator('img, a')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).injected)).toBeUndefined();
+  expect(f.state.writes).toEqual([]);
+});
+
 function decided(f: ReturnType<typeof fixture>) {
   const row = {key: `plan_revision.${f.ids.planV3}`, title: f.state.data.plan.title, decided_at: f.state.data.as_of - 3600,
     actor: f.ids.actor, status: 'adopted', ref: {kind: 'plan_revision', id: f.ids.planV3}, operation_id: 'op_' + 'd'.repeat(32)};
