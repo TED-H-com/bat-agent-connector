@@ -5,6 +5,7 @@ import {button, iconButton, menu, trapFocus} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {lastWorkspace, lastProjectView, rememberWorkspace, forgetWorkspace, availableProjectViews} from './pm-workbench.js';
 import {projectNavigation} from './project-navigation.js';
+import {setupSidebarResizer, calcSidebarBounds} from './workspace-layout.js';
 
 export function dashboardShell({navigation, namespace, caps, api, guard, onEvents, errorBox}) {
   const candidate = layoutDecision.layout === 'workbench';
@@ -22,7 +23,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   const boardLink = h('a', {class: 'ui-button ghost', hidden: true}, t('wc_board'));
   const listHeader = h('header', {class: 'wc-list-header'}, listTitle, boardLink);
   const listScroll = {page: 0, rail: 0};
-  let listPlacement = null;
+  let listPlacement = null, listResizer = null;
   contextList.addEventListener('scroll', () => {
     if (listPlacement && contextList.getClientRects().length) listScroll[listPlacement] = contextList.scrollTop;
   });
@@ -47,6 +48,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     for (const node of contextNodes) if (node.parentElement !== contextList) contextList.append(node);
     if (placement !== listPlacement && placement) contextList.scrollTop = listScroll[placement];
     listPlacement = placement;
+    if (listResizer) {listResizer.resizer.hidden = placement !== 'rail'; listResizer.refresh();}
     const workEntry = daily.querySelector('[data-daily=work]');
     if (workEntry) workEntry.href = !media.matches ? '#/work-list' : workEntry.dataset.desktopHref;
   }
@@ -55,6 +57,20 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   let menus = [], creator = null, phase = null;
   let drawerOpener = toggle;
   const media = matchMedia('(min-width: 1000px)');
+  if (candidate) {
+    const workspaceElement = document.getElementById('workspace');
+    const defaultWidth = () => window.innerWidth < 1280 ? 220 : 256;
+    listResizer = setupSidebarResizer({aside: contextList, workspace: workspaceElement, t, layout: {
+      storageKey: 'batc.workbench.list.width', property: '--wc-list-width', defaultWidth, resetWidth: defaultWidth,
+      label: 'wc_list_resizer', help: 'wc_list_resizer_help', enabled: () => listPlacement === 'rail',
+      bounds: () => calcSidebarBounds(workspaceElement.clientWidth - aside.getBoundingClientRect().width - 8),
+    }});
+    listResizer.resizer.classList.add('wc-list-resizer');
+    listResizer.resizer.setAttribute('aria-controls', 'workbench-context-list');
+    contextList.id = 'workbench-context-list';
+    listResizer.resizer.hidden = true;
+    contextList.after(listResizer.resizer);
+  }
   const scrim = h('div', {class: 'shell-scrim', hidden: true, onclick: () => closeDrawer()});
   aside.before(scrim);
   toggle.replaceChildren(icon('menu', {size: 20})); toggle.setAttribute('aria-label', t('ui_menu')); toggle.title = t('ui_menu');
@@ -200,6 +216,8 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   return {update, refresh, setRoute(name) {currentRoute = name;
       if (name === 'pm') {const routeView = location.hash.split('?')[0].split('/')[3]; currentView = routeView === 'discussions' ? 'discussions' : availableProjectViews(caps()).includes(routeView) ? routeView : lastProjectView(namespace, location.hash.split('/')[2]);}
       serial++; closeDrawer(false); navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === 'projects'); render();
+      // The first route mounts before has-workspace enables the final grid.
+      listResizer?.refresh();
       if (candidate && name === 'work-list') listTitle.focus({preventScroll: true});},
     pending({count, partial} = {}) {for (const badge of pendingCounts) {
       const known = Number.isSafeInteger(count) && count > 0;
@@ -208,6 +226,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     }},
     withdraw() {serial++; update({workspace: null, workspaces: [], threadCount: null, phase: null});},
     dispose() {disposed = true; serial++; off(); menus.forEach(control => control.dispose()); tools.dispose(); closeDrawer(false);
+      listResizer?.dispose();
       document.removeEventListener('keydown', keydown, true); media.removeEventListener('change', resize); scrim.remove();
       // The static connection control belongs to the application, not this namespace.
       top.append(document.getElementById('central-service-status')); right.remove(); listLink.remove(); creator = null; contextList.remove(); document.body.classList.remove('workbench-preview', 'wc-has-list', 'wc-list-page');},

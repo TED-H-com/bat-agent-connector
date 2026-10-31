@@ -1309,6 +1309,8 @@ var init_workbench_strings = __esmMin((() => {
 			wc_details: "Evidence and details",
 			wc_list: "Work list",
 			wc_list_help: "Choose work from the project list.",
+			wc_list_resizer: "Resize work list",
+			wc_list_resizer_help: "Drag or use arrow keys to resize the work list. Double-click to reset.",
 			wc_board: "Board",
 			wc_session: "Session",
 			wc_project: "Project",
@@ -1370,6 +1372,8 @@ var init_workbench_strings = __esmMin((() => {
 			wc_details: "證據與詳情",
 			wc_list: "工作清單",
 			wc_list_help: "從專案清單選擇工作。",
+			wc_list_resizer: "調整工作清單寬度",
+			wc_list_resizer_help: "拖曳或使用方向鍵調整工作清單寬度，連按兩下恢復預設。",
 			wc_board: "看板",
 			wc_session: "工作階段",
 			wc_project: "專案",
@@ -18529,6 +18533,338 @@ function projectNavigation({ t, namespace, workspaceId, views, current, discussi
 	}
 	return nav;
 }
+var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
+var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
+function isMobileLayout() {
+	if (typeof window === "undefined") return false;
+	return (window.innerWidth || document.documentElement?.clientWidth || 0) < 1e3;
+}
+function calcSidebarBounds(windowWidth = window.innerWidth) {
+	return {
+		minAllowed: 200,
+		maxAllowed: Math.min(500, Math.max(200, (windowWidth || 1024) - 360))
+	};
+}
+function setupSidebarResizer({ aside, workspace, t, layout = {} }) {
+	if (!aside || !workspace) return { dispose() {} };
+	const storageKey = layout.storageKey || "batc.sidebar.width";
+	const property = layout.property || "--workspace-sidebar-width";
+	const bounds = layout.bounds || calcSidebarBounds;
+	const defaultWidth = layout.defaultWidth || (() => window.innerWidth < 1200 ? 232 : 248);
+	const resetWidth = layout.resetWidth || (() => 248);
+	const enabled = () => !isMobileLayout() && (!layout.enabled || layout.enabled());
+	let savedWidth = defaultWidth(), customWidth = false;
+	try {
+		const raw = localStorage.getItem(storageKey);
+		if (raw !== null) {
+			const parsed = Number(raw);
+			if (Number.isFinite(parsed) && parsed >= 200) {
+				savedWidth = parsed;
+				customWidth = true;
+			}
+		}
+	} catch {}
+	const resizer = document.createElement("div");
+	resizer.className = "workspace-resizer";
+	resizer.setAttribute("role", "separator");
+	resizer.setAttribute("aria-orientation", "vertical");
+	resizer.setAttribute("tabindex", "0");
+	resizer.setAttribute("aria-label", t(layout.label || "workspace_resizer"));
+	resizer.title = t(layout.help || "workspace_resizer_help");
+	const applyWidth = (requestedWidth, persist = true) => {
+		if (!enabled()) {
+			resizer.removeAttribute("aria-valuenow");
+			return requestedWidth;
+		}
+		const { minAllowed, maxAllowed } = bounds();
+		const clamped = Math.max(minAllowed, Math.min(maxAllowed, requestedWidth));
+		workspace.style.setProperty(property, `${clamped}px`);
+		resizer.setAttribute("aria-valuenow", String(clamped));
+		resizer.setAttribute("aria-valuemin", String(minAllowed));
+		resizer.setAttribute("aria-valuemax", String(maxAllowed));
+		if (persist) {
+			customWidth = true;
+			savedWidth = clamped;
+			try {
+				localStorage.setItem(storageKey, String(clamped));
+			} catch {}
+		}
+		return clamped;
+	};
+	let currentWidth = applyWidth(savedWidth, false);
+	let isDragging = false;
+	let startX = 0;
+	let startWidth = currentWidth;
+	let activePointerId = null;
+	const onGlobalKeyDown = (event) => {
+		if (event.key === "Escape" && isDragging) {
+			cancelDrag();
+			event.preventDefault();
+		}
+	};
+	const cancelDrag = () => {
+		if (!isDragging) return;
+		window.removeEventListener("keydown", onGlobalKeyDown);
+		isDragging = false;
+		currentWidth = applyWidth(startWidth, false);
+		resizer.classList.remove("is-resizing");
+		document.body.classList.remove("workspace-resizing");
+		document.body.style.removeProperty("user-select");
+		if (activePointerId !== null) {
+			try {
+				resizer.releasePointerCapture(activePointerId);
+			} catch {}
+			activePointerId = null;
+		}
+	};
+	const onPointerDown = (event) => {
+		if (event.button !== 0 || !enabled()) return;
+		isDragging = true;
+		activePointerId = event.pointerId;
+		startX = event.clientX;
+		startWidth = currentWidth;
+		resizer.classList.add("is-resizing");
+		document.body.classList.add("workspace-resizing");
+		document.body.style.userSelect = "none";
+		window.addEventListener("keydown", onGlobalKeyDown);
+		try {
+			resizer.setPointerCapture(event.pointerId);
+		} catch {}
+		event.preventDefault();
+	};
+	const onPointerMove = (event) => {
+		if (!isDragging || event.pointerId !== activePointerId) return;
+		const delta = event.clientX - startX;
+		currentWidth = applyWidth(startWidth + delta, false);
+	};
+	const onPointerUp = (event) => {
+		if (!isDragging || event.pointerId !== activePointerId) return;
+		window.removeEventListener("keydown", onGlobalKeyDown);
+		const delta = event.clientX - startX;
+		currentWidth = applyWidth(startWidth + delta, true);
+		isDragging = false;
+		resizer.classList.remove("is-resizing");
+		document.body.classList.remove("workspace-resizing");
+		document.body.style.removeProperty("user-select");
+		if (activePointerId !== null) {
+			try {
+				resizer.releasePointerCapture(activePointerId);
+			} catch {}
+			activePointerId = null;
+		}
+	};
+	const onPointerCancel = () => {
+		cancelDrag();
+	};
+	const onKeyDown = (event) => {
+		if (event.key === "Escape") {
+			if (isDragging) {
+				cancelDrag();
+				event.preventDefault();
+			}
+			return;
+		}
+		if (!enabled()) return;
+		const { minAllowed, maxAllowed } = bounds();
+		let handled = false;
+		if (event.key === "ArrowLeft") {
+			currentWidth = applyWidth(currentWidth - (event.shiftKey ? 48 : 16), true);
+			handled = true;
+		} else if (event.key === "ArrowRight") {
+			currentWidth = applyWidth(currentWidth + (event.shiftKey ? 48 : 16), true);
+			handled = true;
+		} else if (event.key === "PageDown") {
+			currentWidth = applyWidth(currentWidth - 48, true);
+			handled = true;
+		} else if (event.key === "PageUp") {
+			currentWidth = applyWidth(currentWidth + 48, true);
+			handled = true;
+		} else if (event.key === "Home") {
+			currentWidth = applyWidth(minAllowed, true);
+			handled = true;
+		} else if (event.key === "End") {
+			currentWidth = applyWidth(maxAllowed, true);
+			handled = true;
+		}
+		if (handled) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	};
+	const onDblClick = () => {
+		if (enabled()) currentWidth = applyWidth(resetWidth(), true);
+	};
+	const refresh = () => {
+		if (!enabled()) cancelDrag();
+		if (!isDragging) currentWidth = applyWidth(customWidth ? savedWidth : defaultWidth(), false);
+	};
+	const onWindowResize = () => {
+		cancelDrag();
+		refresh();
+	};
+	resizer.addEventListener("pointerdown", onPointerDown);
+	resizer.addEventListener("pointermove", onPointerMove);
+	resizer.addEventListener("pointerup", onPointerUp);
+	resizer.addEventListener("pointercancel", onPointerCancel);
+	resizer.addEventListener("lostpointercapture", onPointerCancel);
+	resizer.addEventListener("keydown", onKeyDown);
+	resizer.addEventListener("dblclick", onDblClick);
+	window.addEventListener("resize", onWindowResize);
+	aside.appendChild(resizer);
+	return {
+		resizer,
+		refresh,
+		getWidth: () => currentWidth,
+		setWidth: (w) => {
+			currentWidth = applyWidth(w, true);
+			return currentWidth;
+		},
+		dispose() {
+			cancelDrag();
+			resizer.removeEventListener("pointerdown", onPointerDown);
+			resizer.removeEventListener("pointermove", onPointerMove);
+			resizer.removeEventListener("pointerup", onPointerUp);
+			resizer.removeEventListener("pointercancel", onPointerCancel);
+			resizer.removeEventListener("lostpointercapture", onPointerCancel);
+			resizer.removeEventListener("keydown", onKeyDown);
+			resizer.removeEventListener("dblclick", onDblClick);
+			window.removeEventListener("resize", onWindowResize);
+			resizer.remove();
+		}
+	};
+}
+function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
+	if (!head || !composer) return {
+		updateInfo() {},
+		updateDraft() {},
+		dispose() {}
+	};
+	let isDisposed = false;
+	const alive = () => {
+		if (isDisposed) return false;
+		try {
+			guard?.();
+			return true;
+		} catch {
+			return false;
+		}
+	};
+	let isInfoCollapsed = false;
+	try {
+		isInfoCollapsed = localStorage.getItem(KEY_MOBILE_INFO_COLLAPSED) === "true";
+	} catch {}
+	const infoToggle = document.createElement("button");
+	infoToggle.type = "button";
+	infoToggle.className = "mini workspace-info-toggle";
+	const renderInfoToggle = () => {
+		if (!alive()) return;
+		head.classList.toggle("workspace-info-collapsed", isInfoCollapsed);
+		infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
+		const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
+		infoToggle.setAttribute("aria-label", label);
+		infoToggle.replaceChildren(icon("info"));
+	};
+	infoToggle.addEventListener("click", () => {
+		if (!alive()) return;
+		isInfoCollapsed = !isInfoCollapsed;
+		try {
+			localStorage.setItem(KEY_MOBILE_INFO_COLLAPSED, String(isInfoCollapsed));
+		} catch {}
+		renderInfoToggle();
+	});
+	const updateInfo = () => {
+		if (!alive()) return;
+		if (infoRow) {
+			if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
+		} else if (!head.contains(infoToggle)) head.append(infoToggle);
+		renderInfoToggle();
+	};
+	let isComposerCollapsed = false;
+	try {
+		isComposerCollapsed = localStorage.getItem(KEY_MOBILE_COMPOSER_COLLAPSED) === "true";
+	} catch {}
+	const composerToggle = document.createElement("button");
+	composerToggle.type = "button";
+	composerToggle.className = "mini workspace-composer-toggle";
+	composerToggle.setAttribute("aria-controls", "workspace-message-input");
+	let boundArea = textarea || null;
+	let boundComposer = composer;
+	let boundRow = composerRow || null;
+	const renderComposerToggle = () => {
+		if (!alive()) return;
+		const hasDraft = (boundArea?.value || "").trim().length > 0;
+		boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
+		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
+		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
+		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
+		composerToggle.replaceChildren(icon("pencil"));
+		composerToggle.setAttribute("aria-label", baseText + draftSuffix);
+		composerToggle.classList.toggle("has-draft", hasDraft);
+	};
+	composerToggle.addEventListener("click", () => {
+		if (!alive()) return;
+		isComposerCollapsed = !isComposerCollapsed;
+		try {
+			localStorage.setItem(KEY_MOBILE_COMPOSER_COLLAPSED, String(isComposerCollapsed));
+		} catch {}
+		renderComposerToggle();
+		if (!isComposerCollapsed) boundArea?.focus({ preventScroll: true });
+		else composerToggle.focus({ preventScroll: true });
+	});
+	const onTextareaInput = () => {
+		renderComposerToggle();
+	};
+	const unbindArea = (node) => {
+		node?.removeEventListener("input", onTextareaInput);
+		node?.removeEventListener("change", onTextareaInput);
+	};
+	const bindArea = (node) => {
+		node?.addEventListener("input", onTextareaInput);
+		node?.addEventListener("change", onTextareaInput);
+	};
+	if (boundRow) {
+		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
+	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+	bindArea(boundArea);
+	updateInfo();
+	renderComposerToggle();
+	return {
+		infoToggle,
+		composerToggle,
+		updateInfo,
+		updateDraft: renderComposerToggle,
+		retarget({ textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = "" } = {}) {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			boundArea = nextArea;
+			if (nextComposer) boundComposer = nextComposer;
+			boundRow = nextRow;
+			if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
+			bindArea(boundArea);
+			composerToggle.remove();
+			if (boundRow) boundRow.append(composerToggle);
+			else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+			renderComposerToggle();
+		},
+		detachComposer() {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundArea = null;
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			composerToggle.remove();
+		},
+		dispose() {
+			isDisposed = true;
+			unbindArea(boundArea);
+			infoToggle.remove();
+			composerToggle.remove();
+			head.classList.remove("workspace-info-collapsed");
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			composer.classList.remove("workspace-composer-collapsed");
+		}
+	};
+}
 //#endregion
 //#region src/shell.js
 init_i18n();
@@ -18576,7 +18912,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		page: 0,
 		rail: 0
 	};
-	let listPlacement = null;
+	let listPlacement = null, listResizer = null;
 	contextList.addEventListener("scroll", () => {
 		if (listPlacement && contextList.getClientRects().length) listScroll[listPlacement] = contextList.scrollTop;
 	});
@@ -18614,6 +18950,10 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		for (const node of contextNodes) if (node.parentElement !== contextList) contextList.append(node);
 		if (placement !== listPlacement && placement) contextList.scrollTop = listScroll[placement];
 		listPlacement = placement;
+		if (listResizer) {
+			listResizer.resizer.hidden = placement !== "rail";
+			listResizer.refresh();
+		}
 		const workEntry = daily.querySelector("[data-daily=work]");
 		if (workEntry) workEntry.href = !media.matches ? "#/work-list" : workEntry.dataset.desktopHref;
 	}
@@ -18622,6 +18962,30 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	let menus = [], creator = null, phase = null;
 	let drawerOpener = toggle;
 	const media = matchMedia("(min-width: 1000px)");
+	if (candidate) {
+		const workspaceElement = document.getElementById("workspace");
+		const defaultWidth = () => window.innerWidth < 1280 ? 220 : 256;
+		listResizer = setupSidebarResizer({
+			aside: contextList,
+			workspace: workspaceElement,
+			t,
+			layout: {
+				storageKey: "batc.workbench.list.width",
+				property: "--wc-list-width",
+				defaultWidth,
+				resetWidth: defaultWidth,
+				label: "wc_list_resizer",
+				help: "wc_list_resizer_help",
+				enabled: () => listPlacement === "rail",
+				bounds: () => calcSidebarBounds(workspaceElement.clientWidth - aside.getBoundingClientRect().width - 8)
+			}
+		});
+		listResizer.resizer.classList.add("wc-list-resizer");
+		listResizer.resizer.setAttribute("aria-controls", "workbench-context-list");
+		contextList.id = "workbench-context-list";
+		listResizer.resizer.hidden = true;
+		contextList.after(listResizer.resizer);
+	}
 	const scrim = h$1("div", {
 		class: "shell-scrim",
 		hidden: true,
@@ -19025,6 +19389,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			closeDrawer(false);
 			navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === "projects");
 			render();
+			listResizer?.refresh();
 			if (candidate && name === "work-list") listTitle.focus({ preventScroll: true });
 		},
 		pending({ count, partial } = {}) {
@@ -19054,6 +19419,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			menus.forEach((control) => control.dispose());
 			tools.dispose();
 			closeDrawer(false);
+			listResizer?.dispose();
 			document.removeEventListener("keydown", keydown, true);
 			media.removeEventListener("change", resize);
 			scrim.remove();
@@ -58646,328 +59012,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				"bat_secret",
 				"github_secret"
 			]) fields.get(name).value = "";
-		}
-	};
-}
-var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
-var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
-var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
-function isMobileLayout() {
-	if (typeof window === "undefined") return false;
-	return (window.innerWidth || document.documentElement?.clientWidth || 0) < 1e3;
-}
-function calcSidebarBounds(windowWidth = window.innerWidth) {
-	return {
-		minAllowed: 200,
-		maxAllowed: Math.min(500, Math.max(200, (windowWidth || 1024) - 360))
-	};
-}
-function setupSidebarResizer({ aside, workspace, t }) {
-	if (!aside || !workspace) return { dispose() {} };
-	let savedWidth = window.innerWidth < 1200 ? 232 : 248, customWidth = false;
-	try {
-		const raw = localStorage.getItem(KEY_SIDEBAR_WIDTH);
-		if (raw !== null) {
-			const parsed = parseInt(raw, 10);
-			if (!Number.isNaN(parsed) && parsed >= 200) {
-				savedWidth = parsed;
-				customWidth = true;
-			}
-		}
-	} catch {}
-	const resizer = document.createElement("div");
-	resizer.className = "workspace-resizer";
-	resizer.setAttribute("role", "separator");
-	resizer.setAttribute("aria-orientation", "vertical");
-	resizer.setAttribute("tabindex", "0");
-	resizer.setAttribute("aria-label", t("workspace_resizer"));
-	resizer.title = t("workspace_resizer_help");
-	const applyWidth = (requestedWidth, persist = true) => {
-		if (isMobileLayout()) {
-			resizer.removeAttribute("aria-valuenow");
-			return requestedWidth;
-		}
-		const { minAllowed, maxAllowed } = calcSidebarBounds();
-		const clamped = Math.max(minAllowed, Math.min(maxAllowed, requestedWidth));
-		workspace.style.setProperty("--workspace-sidebar-width", `${clamped}px`);
-		resizer.setAttribute("aria-valuenow", String(clamped));
-		resizer.setAttribute("aria-valuemin", String(minAllowed));
-		resizer.setAttribute("aria-valuemax", String(maxAllowed));
-		if (persist) {
-			customWidth = true;
-			try {
-				localStorage.setItem(KEY_SIDEBAR_WIDTH, String(clamped));
-			} catch {}
-		}
-		return clamped;
-	};
-	let currentWidth = applyWidth(savedWidth, false);
-	let isDragging = false;
-	let startX = 0;
-	let startWidth = currentWidth;
-	let activePointerId = null;
-	const onGlobalKeyDown = (event) => {
-		if (event.key === "Escape" && isDragging) {
-			cancelDrag();
-			event.preventDefault();
-		}
-	};
-	const cancelDrag = () => {
-		if (!isDragging) return;
-		window.removeEventListener("keydown", onGlobalKeyDown);
-		isDragging = false;
-		currentWidth = applyWidth(startWidth, false);
-		resizer.classList.remove("is-resizing");
-		document.body.classList.remove("workspace-resizing");
-		document.body.style.removeProperty("user-select");
-		if (activePointerId !== null) {
-			try {
-				resizer.releasePointerCapture(activePointerId);
-			} catch {}
-			activePointerId = null;
-		}
-	};
-	const onPointerDown = (event) => {
-		if (event.button !== 0 || isMobileLayout()) return;
-		isDragging = true;
-		activePointerId = event.pointerId;
-		startX = event.clientX;
-		startWidth = currentWidth;
-		resizer.classList.add("is-resizing");
-		document.body.classList.add("workspace-resizing");
-		document.body.style.userSelect = "none";
-		window.addEventListener("keydown", onGlobalKeyDown);
-		try {
-			resizer.setPointerCapture(event.pointerId);
-		} catch {}
-		event.preventDefault();
-	};
-	const onPointerMove = (event) => {
-		if (!isDragging || event.pointerId !== activePointerId) return;
-		const delta = event.clientX - startX;
-		currentWidth = applyWidth(startWidth + delta, false);
-	};
-	const onPointerUp = (event) => {
-		if (!isDragging || event.pointerId !== activePointerId) return;
-		window.removeEventListener("keydown", onGlobalKeyDown);
-		const delta = event.clientX - startX;
-		currentWidth = applyWidth(startWidth + delta, true);
-		isDragging = false;
-		resizer.classList.remove("is-resizing");
-		document.body.classList.remove("workspace-resizing");
-		document.body.style.removeProperty("user-select");
-		if (activePointerId !== null) {
-			try {
-				resizer.releasePointerCapture(activePointerId);
-			} catch {}
-			activePointerId = null;
-		}
-	};
-	const onPointerCancel = () => {
-		cancelDrag();
-	};
-	const onKeyDown = (event) => {
-		if (event.key === "Escape") {
-			if (isDragging) {
-				cancelDrag();
-				event.preventDefault();
-			}
-			return;
-		}
-		if (isMobileLayout()) return;
-		const { minAllowed, maxAllowed } = calcSidebarBounds();
-		let handled = false;
-		if (event.key === "ArrowLeft") {
-			currentWidth = applyWidth(currentWidth - (event.shiftKey ? 48 : 16), true);
-			handled = true;
-		} else if (event.key === "ArrowRight") {
-			currentWidth = applyWidth(currentWidth + (event.shiftKey ? 48 : 16), true);
-			handled = true;
-		} else if (event.key === "PageDown") {
-			currentWidth = applyWidth(currentWidth - 48, true);
-			handled = true;
-		} else if (event.key === "PageUp") {
-			currentWidth = applyWidth(currentWidth + 48, true);
-			handled = true;
-		} else if (event.key === "Home") {
-			currentWidth = applyWidth(minAllowed, true);
-			handled = true;
-		} else if (event.key === "End") {
-			currentWidth = applyWidth(maxAllowed, true);
-			handled = true;
-		}
-		if (handled) {
-			event.preventDefault();
-			event.stopPropagation();
-		}
-	};
-	const onDblClick = () => {
-		if (!isMobileLayout()) currentWidth = applyWidth(248, true);
-	};
-	const onWindowResize = () => {
-		if (!customWidth) currentWidth = window.innerWidth < 1200 ? 232 : 248;
-		if (isMobileLayout()) cancelDrag();
-		if (!isMobileLayout()) currentWidth = applyWidth(currentWidth, false);
-	};
-	resizer.addEventListener("pointerdown", onPointerDown);
-	resizer.addEventListener("pointermove", onPointerMove);
-	resizer.addEventListener("pointerup", onPointerUp);
-	resizer.addEventListener("pointercancel", onPointerCancel);
-	resizer.addEventListener("lostpointercapture", onPointerCancel);
-	resizer.addEventListener("keydown", onKeyDown);
-	resizer.addEventListener("dblclick", onDblClick);
-	window.addEventListener("resize", onWindowResize);
-	aside.appendChild(resizer);
-	return {
-		resizer,
-		getWidth: () => currentWidth,
-		setWidth: (w) => {
-			currentWidth = applyWidth(w, true);
-			return currentWidth;
-		},
-		dispose() {
-			cancelDrag();
-			resizer.removeEventListener("pointerdown", onPointerDown);
-			resizer.removeEventListener("pointermove", onPointerMove);
-			resizer.removeEventListener("pointerup", onPointerUp);
-			resizer.removeEventListener("pointercancel", onPointerCancel);
-			resizer.removeEventListener("lostpointercapture", onPointerCancel);
-			resizer.removeEventListener("keydown", onKeyDown);
-			resizer.removeEventListener("dblclick", onDblClick);
-			window.removeEventListener("resize", onWindowResize);
-			resizer.remove();
-		}
-	};
-}
-function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
-	if (!head || !composer) return {
-		updateInfo() {},
-		updateDraft() {},
-		dispose() {}
-	};
-	let isDisposed = false;
-	const alive = () => {
-		if (isDisposed) return false;
-		try {
-			guard?.();
-			return true;
-		} catch {
-			return false;
-		}
-	};
-	let isInfoCollapsed = false;
-	try {
-		isInfoCollapsed = localStorage.getItem(KEY_MOBILE_INFO_COLLAPSED) === "true";
-	} catch {}
-	const infoToggle = document.createElement("button");
-	infoToggle.type = "button";
-	infoToggle.className = "mini workspace-info-toggle";
-	const renderInfoToggle = () => {
-		if (!alive()) return;
-		head.classList.toggle("workspace-info-collapsed", isInfoCollapsed);
-		infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
-		const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
-		infoToggle.setAttribute("aria-label", label);
-		infoToggle.replaceChildren(icon("info"));
-	};
-	infoToggle.addEventListener("click", () => {
-		if (!alive()) return;
-		isInfoCollapsed = !isInfoCollapsed;
-		try {
-			localStorage.setItem(KEY_MOBILE_INFO_COLLAPSED, String(isInfoCollapsed));
-		} catch {}
-		renderInfoToggle();
-	});
-	const updateInfo = () => {
-		if (!alive()) return;
-		if (infoRow) {
-			if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
-		} else if (!head.contains(infoToggle)) head.append(infoToggle);
-		renderInfoToggle();
-	};
-	let isComposerCollapsed = false;
-	try {
-		isComposerCollapsed = localStorage.getItem(KEY_MOBILE_COMPOSER_COLLAPSED) === "true";
-	} catch {}
-	const composerToggle = document.createElement("button");
-	composerToggle.type = "button";
-	composerToggle.className = "mini workspace-composer-toggle";
-	composerToggle.setAttribute("aria-controls", "workspace-message-input");
-	let boundArea = textarea || null;
-	let boundComposer = composer;
-	let boundRow = composerRow || null;
-	const renderComposerToggle = () => {
-		if (!alive()) return;
-		const hasDraft = (boundArea?.value || "").trim().length > 0;
-		boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
-		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
-		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
-		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
-		composerToggle.replaceChildren(icon("pencil"));
-		composerToggle.setAttribute("aria-label", baseText + draftSuffix);
-		composerToggle.classList.toggle("has-draft", hasDraft);
-	};
-	composerToggle.addEventListener("click", () => {
-		if (!alive()) return;
-		isComposerCollapsed = !isComposerCollapsed;
-		try {
-			localStorage.setItem(KEY_MOBILE_COMPOSER_COLLAPSED, String(isComposerCollapsed));
-		} catch {}
-		renderComposerToggle();
-		if (!isComposerCollapsed) boundArea?.focus({ preventScroll: true });
-		else composerToggle.focus({ preventScroll: true });
-	});
-	const onTextareaInput = () => {
-		renderComposerToggle();
-	};
-	const unbindArea = (node) => {
-		node?.removeEventListener("input", onTextareaInput);
-		node?.removeEventListener("change", onTextareaInput);
-	};
-	const bindArea = (node) => {
-		node?.addEventListener("input", onTextareaInput);
-		node?.addEventListener("change", onTextareaInput);
-	};
-	if (boundRow) {
-		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
-	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
-	bindArea(boundArea);
-	updateInfo();
-	renderComposerToggle();
-	return {
-		infoToggle,
-		composerToggle,
-		updateInfo,
-		updateDraft: renderComposerToggle,
-		retarget({ textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = "" } = {}) {
-			if (!alive()) return;
-			unbindArea(boundArea);
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			boundArea = nextArea;
-			if (nextComposer) boundComposer = nextComposer;
-			boundRow = nextRow;
-			if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
-			bindArea(boundArea);
-			composerToggle.remove();
-			if (boundRow) boundRow.append(composerToggle);
-			else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
-			renderComposerToggle();
-		},
-		detachComposer() {
-			if (!alive()) return;
-			unbindArea(boundArea);
-			boundArea = null;
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			composerToggle.remove();
-		},
-		dispose() {
-			isDisposed = true;
-			unbindArea(boundArea);
-			infoToggle.remove();
-			composerToggle.remove();
-			head.classList.remove("workspace-info-collapsed");
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			composer.classList.remove("workspace-composer-collapsed");
 		}
 	};
 }

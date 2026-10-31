@@ -66,6 +66,19 @@ column has its own scroll so rotation cannot overwrite the list-page position.
 No second catalog or search cache is created. The original
 workspace binding, partial-source and permission rules still select its rows.
 
+The desktop context column can be resized with its labelled separator. It reuses
+the Classic sidebar's pointer, keyboard, Escape/capture-loss cancellation and
+storage-failure handling. Width is a browser preference (`batc.workbench.list.width`),
+separate from Classic; it does not belong to project state or authorize an action.
+Bounds reserve 360px for the main view after navigation and the separator, with
+a 200–500px list. A narrow window clamps the rendered width without losing the
+saved preference. Defaults/reset are 256px, or 220px below 1280px. The separator
+is absent from mobile and full-screen list navigation, has a 44px coarse-pointer
+target, and is disposed with the shell. Reflow moves no composer or conversation
+nodes and retains the existing search, selection, drafts and list scroll. The
+Work heading's actions wrap with available content width so widening the list
+does not squeeze the title into a few characters per line.
+
 The preview project list joins an execution to its existing Work only when the
 project response supplies a caller-visible `work_identity`. This projection checks
 both recorded start-child links, the Attempt, the exact session and source visibility;

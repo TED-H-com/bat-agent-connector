@@ -24,15 +24,21 @@ export function calcSidebarBounds(windowWidth = window.innerWidth) {
   return { minAllowed: MIN_SIDEBAR_WIDTH, maxAllowed };
 }
 
-export function setupSidebarResizer({ aside, workspace, t }) {
+export function setupSidebarResizer({ aside, workspace, t, layout = {} }) {
   if (!aside || !workspace) return { dispose() {} };
 
-  let savedWidth = window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH, customWidth = false;
+  const storageKey = layout.storageKey || KEY_SIDEBAR_WIDTH;
+  const property = layout.property || "--workspace-sidebar-width";
+  const bounds = layout.bounds || calcSidebarBounds;
+  const defaultWidth = layout.defaultWidth || (() => window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH);
+  const resetWidth = layout.resetWidth || (() => DEFAULT_SIDEBAR_WIDTH);
+  const enabled = () => !isMobileLayout() && (!layout.enabled || layout.enabled());
+  let savedWidth = defaultWidth(), customWidth = false;
   try {
-    const raw = localStorage.getItem(KEY_SIDEBAR_WIDTH);
+    const raw = localStorage.getItem(storageKey);
     if (raw !== null) {
-      const parsed = parseInt(raw, 10);
-      if (!Number.isNaN(parsed) && parsed >= MIN_SIDEBAR_WIDTH) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed) && parsed >= MIN_SIDEBAR_WIDTH) {
         savedWidth = parsed; customWidth = true;
       }
     }
@@ -45,24 +51,25 @@ export function setupSidebarResizer({ aside, workspace, t }) {
   resizer.setAttribute("role", "separator");
   resizer.setAttribute("aria-orientation", "vertical");
   resizer.setAttribute("tabindex", "0");
-  resizer.setAttribute("aria-label", t("workspace_resizer"));
-  resizer.title = t("workspace_resizer_help");
+  resizer.setAttribute("aria-label", t(layout.label || "workspace_resizer"));
+  resizer.title = t(layout.help || "workspace_resizer_help");
 
   const applyWidth = (requestedWidth, persist = true) => {
-    if (isMobileLayout()) {
+    if (!enabled()) {
       resizer.removeAttribute("aria-valuenow");
       return requestedWidth;
     }
-    const { minAllowed, maxAllowed } = calcSidebarBounds();
+    const { minAllowed, maxAllowed } = bounds();
     const clamped = Math.max(minAllowed, Math.min(maxAllowed, requestedWidth));
-    workspace.style.setProperty("--workspace-sidebar-width", `${clamped}px`);
+    workspace.style.setProperty(property, `${clamped}px`);
     resizer.setAttribute("aria-valuenow", String(clamped));
     resizer.setAttribute("aria-valuemin", String(minAllowed));
     resizer.setAttribute("aria-valuemax", String(maxAllowed));
     if (persist) {
       customWidth = true;
+      savedWidth = clamped;
       try {
-        localStorage.setItem(KEY_SIDEBAR_WIDTH, String(clamped));
+        localStorage.setItem(storageKey, String(clamped));
       } catch {
         /* storage unavailable */
       }
@@ -103,7 +110,7 @@ export function setupSidebarResizer({ aside, workspace, t }) {
   };
 
   const onPointerDown = event => {
-    if (event.button !== 0 || isMobileLayout()) return;
+    if (event.button !== 0 || !enabled()) return;
     isDragging = true;
     activePointerId = event.pointerId;
     startX = event.clientX;
@@ -157,8 +164,8 @@ export function setupSidebarResizer({ aside, workspace, t }) {
       }
       return;
     }
-    if (isMobileLayout()) return;
-    const { minAllowed, maxAllowed } = calcSidebarBounds();
+    if (!enabled()) return;
+    const { minAllowed, maxAllowed } = bounds();
     let handled = false;
     if (event.key === "ArrowLeft") {
       currentWidth = applyWidth(currentWidth - (event.shiftKey ? 48 : 16), true);
@@ -186,18 +193,16 @@ export function setupSidebarResizer({ aside, workspace, t }) {
   };
 
   const onDblClick = () => {
-    if (!isMobileLayout()) {
-      currentWidth = applyWidth(DEFAULT_SIDEBAR_WIDTH, true);
+    if (enabled()) {
+      currentWidth = applyWidth(resetWidth(), true);
     }
   };
 
-  const onWindowResize = () => {
-    if (!customWidth) currentWidth = window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH;
-    if (isMobileLayout()) cancelDrag();
-    if (!isMobileLayout()) {
-      currentWidth = applyWidth(currentWidth, false);
-    }
+  const refresh = () => {
+    if (!enabled()) cancelDrag();
+    if (!isDragging) currentWidth = applyWidth(customWidth ? savedWidth : defaultWidth(), false);
   };
+  const onWindowResize = () => {cancelDrag(); refresh();};
 
   resizer.addEventListener("pointerdown", onPointerDown);
   resizer.addEventListener("pointermove", onPointerMove);
@@ -212,6 +217,7 @@ export function setupSidebarResizer({ aside, workspace, t }) {
 
   return {
     resizer,
+    refresh,
     getWidth: () => currentWidth,
     setWidth: w => {
       currentWidth = applyWidth(w, true);
