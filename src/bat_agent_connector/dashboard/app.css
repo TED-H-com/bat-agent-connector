@@ -620,6 +620,9 @@ textarea { width: 100%; min-height: 80px; resize: vertical; }
 .conversation .msg { white-space: normal; min-width: 0; }
 .message-meta { margin-bottom: var(--space-2); }
 .message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-quote { margin: var(--space-2) 0; padding-inline-start: 12px; border-inline-start: 3px solid var(--line); min-width: 0; }
+.message-quote-bar { display: flex; justify-content: flex-end; }
+.message-quote-copy { min-height: 44px; margin-bottom: var(--space-1); }
 .message-body { min-width: 0; }
 .message-code { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); margin: var(--space-2) 0; overflow: hidden; }
 .message-code-bar { padding: 6px 10px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
