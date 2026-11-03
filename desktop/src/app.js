@@ -65,6 +65,7 @@ import { groupedSessions, matchesSession, runtimeStale, sessionActivity, session
 import { capturePanel } from "./capture.js";
 import { taskControlsPanel } from "./task-controls.js";
 import { operationList } from "./operation-list.js";
+import {connectionOperationRecovery, connectionOperationNotice} from './connection-operation.js';
 import { permissionsPanel } from "./permissions.js";
 import { approvalsPanel } from "./approvals.js";
 import { sessionStartPanel } from "./session-start.js";
@@ -3496,14 +3497,56 @@ async function viewOperations(main, filter = "all") {
 async function viewOperation(main, id) {
   freshPage();
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  let repair;
+  let repair, connectionRecovery, controlBusy = false, needsReadback = false, readSerial = 0;
   const panel = h("div", { class: "panel" });
   main.append(panel);
+  const focusedControl = () => connectionRecovery && panel.contains(document.activeElement)
+    ? document.activeElement.getAttribute('data-operation-control') : null;
+  const restoreControl = key => {
+    if (!key) return;
+    const controls = [...panel.querySelectorAll('[data-operation-control]')];
+    (controls.find(node => node.dataset.operationControl === key)
+      || controls.find(node => node.dataset.operationControl === 'refresh'))?.focus();
+  };
+  const paintControls = () => {
+    for (const node of panel.querySelectorAll('[data-operation-control]')) {
+      const blocked = controlBusy || (needsReadback && node.dataset.operationControl !== 'refresh');
+      if (blocked) node.setAttribute('aria-disabled', 'true');
+      else node.removeAttribute('aria-disabled');
+    }
+    const notice = panel.querySelector('[data-connection-readback]');
+    if (notice) notice.hidden = !needsReadback;
+  };
+  const readOriginal = async () => {
+    if (controlBusy || !panel.isConnected) return;
+    try { assertView(connection); } catch { return; }
+    controlBusy = true; paintControls();
+    try { await render(); }
+    finally { controlBusy = false; paintControls(); }
+  };
+  const control = async verb => {
+    if (controlBusy || needsReadback || !panel.isConnected) return;
+    controlBusy = true; readSerial++; paintControls();
+    try {
+      assertView(connection);
+      await api('POST', `/operations/${id}/${verb}`, {});
+      assertView(connection);
+      await render();
+    } catch (e) {
+      if (!panel.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+      needsReadback = !!connectionRecovery;
+      panel.append(errorBox(e, {sourceRefresh:false, within:panel}));
+    } finally { controlBusy = false; paintControls(); }
+  };
   const render = async (fromEvent = false) => {
+    const request = ++readSerial;
     const opens = drawerOpens;
     try {
       const { operation: op, work_items: linked, cleanup_receipts: cleanupReceipts } = await api("GET", `/operations/${id}`);
       assertView(connection);
+      if (request !== readSerial || !panel.isConnected) return;
+      connectionRecovery = connectionOperationRecovery(op);
+      needsReadback = false;
       if (!repair && state.caps?.features?.managed_repairs?.version === 1 &&
           ["cleanup.apply", "task.verify", "session.record_verification"].includes(op.action) && ["failed", "needs_attention"].includes(op.status)) {
         repair = repairPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection), namespace: connection.namespace,
@@ -3528,9 +3571,8 @@ async function viewOperation(main, id) {
         } }, t("retry_deploy")) : null;
       const needsConfirm = op.action === "checkpoint.continue" && ["SOURCE_MOVED", "SOURCE_UNAVAILABLE"].includes(op.error_code);
       const resume = op.status === "needs_attention" && !needsConfirm
-        ? h("button", { class: "primary", title: t("resume_help"), onclick: async () => {
-          try { await api("POST", `/operations/${id}/resume`, {}); render(); } catch (e) { panel.append(errorBox(e, {sourceRefresh:false, within:panel})); }
-        } }, t(op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume")) : null;
+        ? h("button", { class: "primary", title: t("resume_help"), 'data-operation-control': 'resume',
+          onclick: () => control('resume') }, t(connectionRecovery?.resumeKey || (op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume"))) : null;
       const confirmSource = op.status === "needs_attention" && needsConfirm ? h("button", { class: "primary", onclick: async () => {
         const connection = {epoch: state.epoch, namespace: state.namespace, generation};
         let sourceRefresh = true;
@@ -3555,16 +3597,17 @@ async function viewOperation(main, id) {
             r.conflict_files ? h("span", { class: "error" }, " ", r.conflict_files.join(", ")) : null),
           chip(r.method || "-"), chip(t("receipt_" + r.effective_status), r.effective_status === "delivered" ? "ok" : "")))];
       }
-      const cancel = !TERMINAL.includes(op.status)
-        ? h("button", { class: "danger", onclick: async () => {
-          try { await api("POST", `/operations/${id}/cancel`, {}); render(); } catch (e) { panel.append(errorBox(e, {sourceRefresh:false, within:panel})); }
-        } }, t("cancel"))
+      const cancel = !TERMINAL.includes(op.status) && !connectionRecovery?.cancelBlocked
+        ? h("button", { class: "danger", 'data-operation-control': 'cancel', onclick: () => control('cancel') },
+          t(connectionRecovery?.cancelKey || "cancel"))
         : null;
       if (!panel.isConnected) return;
       if (holdRender(fromEvent, opens)) { idleReload = () => render(true); return; }
+      const focus = focusedControl();
       freshPage();
       fill(panel, pageHeader({title: actionLabel(op.action), pill: statusPill(operationStatusKey(op.status))}),
         h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText(op.error_code) || t("reason_unavailable"), "bad") : null),
+        connectionOperationNotice(connectionRecovery, {h, t, refresh: readOriginal, busy: controlBusy, readback: needsReadback}),
         ...(linked?.length ? [linkedItems(linked)] : []),
         h("dl", { class: "kv" },
           h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")),
@@ -3611,11 +3654,21 @@ async function viewOperation(main, id) {
           state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op)
             ? h("a", {href: `#/artifact-review/operation/${op.operation_id}`}, t("ar_open")) : null,
           confirmSource, resume, retry, cancel));
-    } catch (e) { fill(panel, errorBox(e, {within:panel})); }
+      paintControls();
+      restoreControl(focus);
+    } catch (e) {
+      if (request !== readSerial || !panel.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+      const focus = focusedControl();
+      needsReadback = !!connectionRecovery;
+      fill(panel, errorBox(e, {within:panel}), connectionRecovery ? connectionOperationNotice(
+        {...connectionRecovery, kind: 'original'}, {h, t, refresh: readOriginal, busy: controlBusy, readback: needsReadback}) : null);
+      paintControls();
+      restoreControl(focus);
+    }
   };
   await render();
   const off = liveReload(render, ["operation", "integration", "cleanup"]);
-  return () => {off(); repair?.dispose();};
+  return () => {readSerial++; off(); repair?.dispose();};
 }
 
 function mergeRecovery(op) {

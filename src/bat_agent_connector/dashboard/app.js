@@ -448,6 +448,47 @@ var init_health_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/connection-operation-strings.js
+var connectionOperationStrings;
+var init_connection_operation_strings = __esmMin((() => {
+	connectionOperationStrings = {
+		en: {
+			cop_title: "Connection operation recovery",
+			cop_original: "Check this original operation for its current result. Reading it does not submit another connection change.",
+			cop_waiting: "This operation is waiting for the desktop to claim its local step. This record does not establish that the desktop can apply the change.",
+			cop_dispatched: "The local step has been dispatched. Its result is not yet confirmed here. Read the original operation before deciding what to do next.",
+			cop_unknown: "The local result is still unknown. Closing this operation records that the result was never proven; it does not establish whether the local change happened.",
+			cop_unknown_closed: "This operation was closed with an unproven local result. The local change still needs to be checked.",
+			cop_projection_conflict: "The local step completed, but the shared connection record changed before this operation could save it. Closing keeps the current connection record and records that this operation did not save its association.",
+			cop_projection_closed: "This operation was closed without saving its shared connection association. Its completed local step remains recorded.",
+			cop_completion_pending: "The completed local step is recorded. The original operation still needs to finish saving its result. Continue the original operation when recovery is available.",
+			cop_preserved: "Closing preserves the existing effects, history and receipt references. It does not undo local changes, stop services or revoke credentials.",
+			cop_close_unknown: "Close with result unproven",
+			cop_close_projection: "Close without saving association",
+			cop_resume: "Continue original operation",
+			cop_refresh: "Read original operation",
+			cop_readback: "Read the original operation before another recovery action. The previous reply did not establish the final result."
+		},
+		"zh-TW": {
+			cop_title: "連線操作恢復",
+			cop_original: "讀取原操作以確認目前結果；讀取不會再次提交連線變更。",
+			cop_waiting: "此操作正在等待桌面程式接手本機步驟。這份紀錄不代表桌面已具備套用能力。",
+			cop_dispatched: "本機步驟已派送，目前尚未確認結果。請先讀取原操作，再決定下一步。",
+			cop_unknown: "本機結果仍未知。結束此操作會記錄「結果未獲證實」，不代表本機變更已發生或未發生。",
+			cop_unknown_closed: "此操作已以「本機結果未獲證實」結束。本機變更仍須查明。",
+			cop_projection_conflict: "本機步驟已完成，但儲存前共用連線紀錄已變更。結束此操作會保留目前的連線紀錄，並記錄本次關聯未儲存。",
+			cop_projection_closed: "此操作已結束，本次共用連線關聯未儲存；已完成的本機步驟仍保留在紀錄中。",
+			cop_completion_pending: "已記錄完成的本機步驟，原操作仍須完成結果儲存。可恢復時，請繼續原操作。",
+			cop_preserved: "結束會保留既有效果、歷史與回執引用，不會撤銷本機變更、停止服務或撤銷憑證。",
+			cop_close_unknown: "以結果未證實結束",
+			cop_close_projection: "結束並記錄關聯未儲存",
+			cop_resume: "繼續原操作",
+			cop_refresh: "讀取原操作",
+			cop_readback: "再次執行恢復操作前，請先讀取原操作；前次回覆未能確認最終結果。"
+		}
+	};
+}));
+//#endregion
 //#region src/setup-observation-strings.js
 var setupObservationStrings;
 var init_setup_observation_strings = __esmMin((() => {
@@ -10706,6 +10747,7 @@ function t(key, vars = {}) {
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
 	init_health_strings();
+	init_connection_operation_strings();
 	init_setup_observation_strings();
 	init_relative_age();
 	init_result_sources_strings();
@@ -10748,6 +10790,7 @@ var init_i18n = __esmMin((() => {
 	init_fleet_strings();
 	STRINGS = {
 		"zh-TW": {
+			...connectionOperationStrings["zh-TW"],
 			...relativeAgeStrings["zh-TW"],
 			...healthStrings["zh-TW"],
 			...setupObservationStrings["zh-TW"],
@@ -12509,6 +12552,7 @@ var init_i18n = __esmMin((() => {
 			integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 		},
 		en: {
+			...connectionOperationStrings.en,
 			...relativeAgeStrings.en,
 			...healthStrings.en,
 			...setupObservationStrings.en,
@@ -65264,6 +65308,56 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 	};
 }
 //#endregion
+//#region src/connection-operation.js
+function connectionOperationRecovery(op) {
+	if (!["setup.connection.apply", "connection.reference.detach"].includes(op.action)) return null;
+	const steps = op.steps || [], refs = op.external_refs || {};
+	const native = steps.find((step) => step.name === "native_effects");
+	const open = steps.filter((step) => ["started", "uncertain"].includes(step.status)).at(-1);
+	const terminal = [
+		"succeeded",
+		"failed",
+		"cancelled"
+	].includes(op.status);
+	let kind;
+	if (op.status === "cancelled" && native?.error?.code === "LOCAL_EFFECT_NEVER_PROVEN") kind = "unknown_closed";
+	else if (op.status === "cancelled" && refs.projection_decision?.code === "CONNECTION_PROJECTION_NOT_SAVED") kind = "projection_closed";
+	else if (op.status === "needs_attention" && op.error_code === "CONNECTION_PROJECTION_CHANGED" && native?.status === "succeeded") kind = "projection_conflict";
+	else if (!terminal && native?.status === "succeeded") kind = "completion_pending";
+	else if (op.status === "needs_attention" && open?.name === "native_effects") kind = "unknown";
+	else if (!terminal && refs.native_effects_sent === true) kind = "dispatched";
+	else if (!terminal && open?.name === "native_effects" && refs.native_effects_sent === false) kind = "waiting";
+	else kind = "original";
+	return {
+		kind,
+		terminal,
+		cancelKey: kind === "unknown" ? "cop_close_unknown" : kind === "projection_conflict" ? "cop_close_projection" : "cancel",
+		cancelBlocked: ["dispatched", "completion_pending"].includes(kind),
+		resumeKey: "cop_resume"
+	};
+}
+function connectionOperationNotice(recovery, { h, t, refresh, busy, readback }) {
+	if (!recovery) return null;
+	return h("section", {
+		class: "note",
+		"data-connection-recovery": recovery.kind
+	}, h("h2", {}, t("cop_title")), h("p", {}, t("cop_" + recovery.kind)), [
+		"unknown",
+		"unknown_closed",
+		"projection_conflict",
+		"projection_closed"
+	].includes(recovery.kind) ? h("p", {}, t("cop_preserved")) : null, h("p", {
+		role: "status",
+		"data-connection-readback": "",
+		hidden: !readback
+	}, t("cop_readback")), h("button", {
+		class: "secondary",
+		"data-operation-control": "refresh",
+		"aria-disabled": busy ? "true" : null,
+		onclick: refresh
+	}, t("cop_refresh")));
+}
+//#endregion
 //#region src/permissions.js
 var record$2 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var modeValue = (value) => ["default", "allow_all"].includes(value);
@@ -75083,14 +75177,68 @@ async function viewOperation(main, id) {
 		namespace: state.namespace,
 		generation
 	};
-	let repair;
+	let repair, connectionRecovery, controlBusy = false, needsReadback = false, readSerial = 0;
 	const panel = h("div", { class: "panel" });
 	main.append(panel);
+	const focusedControl = () => connectionRecovery && panel.contains(document.activeElement) ? document.activeElement.getAttribute("data-operation-control") : null;
+	const restoreControl = (key) => {
+		if (!key) return;
+		const controls = [...panel.querySelectorAll("[data-operation-control]")];
+		(controls.find((node) => node.dataset.operationControl === key) || controls.find((node) => node.dataset.operationControl === "refresh"))?.focus();
+	};
+	const paintControls = () => {
+		for (const node of panel.querySelectorAll("[data-operation-control]")) if (controlBusy || needsReadback && node.dataset.operationControl !== "refresh") node.setAttribute("aria-disabled", "true");
+		else node.removeAttribute("aria-disabled");
+		const notice = panel.querySelector("[data-connection-readback]");
+		if (notice) notice.hidden = !needsReadback;
+	};
+	const readOriginal = async () => {
+		if (controlBusy || !panel.isConnected) return;
+		try {
+			assertView(connection);
+		} catch {
+			return;
+		}
+		controlBusy = true;
+		paintControls();
+		try {
+			await render();
+		} finally {
+			controlBusy = false;
+			paintControls();
+		}
+	};
+	const control = async (verb) => {
+		if (controlBusy || needsReadback || !panel.isConnected) return;
+		controlBusy = true;
+		readSerial++;
+		paintControls();
+		try {
+			assertView(connection);
+			await api("POST", `/operations/${id}/${verb}`, {});
+			assertView(connection);
+			await render();
+		} catch (e) {
+			if (!panel.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+			needsReadback = !!connectionRecovery;
+			panel.append(errorBox(e, {
+				sourceRefresh: false,
+				within: panel
+			}));
+		} finally {
+			controlBusy = false;
+			paintControls();
+		}
+	};
 	const render = async (fromEvent = false) => {
+		const request = ++readSerial;
 		const opens = drawerOpens;
 		try {
 			const { operation: op, work_items: linked, cleanup_receipts: cleanupReceipts } = await api("GET", `/operations/${id}`);
 			assertView(connection);
+			if (request !== readSerial || !panel.isConnected) return;
+			connectionRecovery = connectionOperationRecovery(op);
+			needsReadback = false;
 			if (!repair && state.caps?.features?.managed_repairs?.version === 1 && [
 				"cleanup.apply",
 				"task.verify",
@@ -75136,18 +75284,9 @@ async function viewOperation(main, id) {
 			const resume = op.status === "needs_attention" && !needsConfirm ? h("button", {
 				class: "primary",
 				title: t("resume_help"),
-				onclick: async () => {
-					try {
-						await api("POST", `/operations/${id}/resume`, {});
-						render();
-					} catch (e) {
-						panel.append(errorBox(e, {
-							sourceRefresh: false,
-							within: panel
-						}));
-					}
-				}
-			}, t(op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume")) : null;
+				"data-operation-control": "resume",
+				onclick: () => control("resume")
+			}, t(connectionRecovery?.resumeKey || (op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume"))) : null;
 			const confirmSource = op.status === "needs_attention" && needsConfirm ? h("button", {
 				class: "primary",
 				onclick: async () => {
@@ -75182,30 +75321,28 @@ async function viewOperation(main, id) {
 				const rows = (await api("GET", `/integrations/${id}`)).receipts;
 				receipts = [h("h2", {}, t("receipts")), ...rows.map((r) => h("div", { class: "row" }, h("div", { class: "grow" }, `${r.seq}. ${t("kind_" + r.source_kind)} `, h("code", {}, r.source_id.slice(0, 15)), " ", h("code", {}, `${r.pinned_sha.slice(0, 10)} → ${(r.integrated_sha || "").slice(0, 10)}`), r.conflict_files ? h("span", { class: "error" }, " ", r.conflict_files.join(", ")) : null), chip(r.method || "-"), chip(t("receipt_" + r.effective_status), r.effective_status === "delivered" ? "ok" : "")))];
 			}
-			const cancel = !TERMINAL.includes(op.status) ? h("button", {
+			const cancel = !TERMINAL.includes(op.status) && !connectionRecovery?.cancelBlocked ? h("button", {
 				class: "danger",
-				onclick: async () => {
-					try {
-						await api("POST", `/operations/${id}/cancel`, {});
-						render();
-					} catch (e) {
-						panel.append(errorBox(e, {
-							sourceRefresh: false,
-							within: panel
-						}));
-					}
-				}
-			}, t("cancel")) : null;
+				"data-operation-control": "cancel",
+				onclick: () => control("cancel")
+			}, t(connectionRecovery?.cancelKey || "cancel")) : null;
 			if (!panel.isConnected) return;
 			if (holdRender(fromEvent, opens)) {
 				idleReload = () => render(true);
 				return;
 			}
+			const focus = focusedControl();
 			freshPage();
 			fill(panel, pageHeader({
 				title: actionLabel$1(op.action),
 				pill: statusPill(operationStatusKey(op.status))
-			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), reason ? [h("dt", {}, t("reason")), h("dd", {}, reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), retainedCheckpoint ? h("div", {
+			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), connectionOperationNotice(connectionRecovery, {
+				h,
+				t,
+				refresh: readOriginal,
+				busy: controlBusy,
+				readback: needsReadback
+			}), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), reason ? [h("dt", {}, t("reason")), h("dd", {}, reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), retainedCheckpoint ? h("div", {
 				class: "note warn",
 				"data-checkpoint-retained": ""
 			}, h("dl", { class: "kv" }, typeof refs.retained_staging_path === "string" ? [h("dt", {}, t("checkpoint_retained_path")), h("dd", {}, h("code", {}, refs.retained_staging_path))] : null, op.error_code === "CHECKPOINT_DESTINATION_APPEARED" && typeof refs.clone_path === "string" ? [h("dt", {}, t("checkpoint_destination_path")), h("dd", {}, h("code", {}, refs.clone_path))] : null), h("p", {}, t("checkpoint_retained_why")), h("p", {}, t(op.error_code === "CHECKPOINT_DESTINATION_APPEARED" ? "checkpoint_destination_next" : "checkpoint_retained_next")), typeof refs.source_host === "string" && refs.source_host && typeof refs.source_session_id === "string" && refs.source_session_id ? h("a", { href: sessionHref$1({
@@ -75215,8 +75352,24 @@ async function viewOperation(main, id) {
 				refs,
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
+			paintControls();
+			restoreControl(focus);
 		} catch (e) {
-			fill(panel, errorBox(e, { within: panel }));
+			if (request !== readSerial || !panel.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+			const focus = focusedControl();
+			needsReadback = !!connectionRecovery;
+			fill(panel, errorBox(e, { within: panel }), connectionRecovery ? connectionOperationNotice({
+				...connectionRecovery,
+				kind: "original"
+			}, {
+				h,
+				t,
+				refresh: readOriginal,
+				busy: controlBusy,
+				readback: needsReadback
+			}) : null);
+			paintControls();
+			restoreControl(focus);
 		}
 	};
 	await render();
@@ -75226,6 +75379,7 @@ async function viewOperation(main, id) {
 		"cleanup"
 	]);
 	return () => {
+		readSerial++;
 		off();
 		repair?.dispose();
 	};
