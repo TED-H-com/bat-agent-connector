@@ -1,5 +1,43 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-03 續作：原連線操作的恢復說明（分支）
+
+從主線 `4986c7e4` 接續 EC-1.1 首次使用與恢復穩定化。
+`fix/connection-operation-recovery-20261103` 在既有操作頁區分本機結果未知、
+本機步驟完成及共用關聯儲存衝突，提供雙語說明與符合原取消語義的結束按鈕。
+查詢與恢復使用原 operation ID；連點只送一次，回覆未確認時先讀回，讀取失敗移除舊控制，
+離頁後的晚到回覆不恢復原畫面。原 key、回執、已知設定效果與中央授權均保留。
+契約及限制見 [原操作恢復](../design/fleet-configuration.md#original-operation-recovery-in-the-shared-ui)。
+
+本項是 E03／E11 的恢復介面增量；HTTP／IPC fixtures 對應 A29／A30 的查回與重開原則，
+不宣告 A01–A40 或 R0–R5 驗收完成。E00–E11 其餘缺口及 PM v1.2 未完成範圍仍保留。
+本分支未合併、未發布、未安裝、未實機驗收；沒有新增 Apply／detach 入口，
+正式 participant 儲存、執行與首次設定接線仍待完成。下方保留既有歷史紀錄。
+
+This branch continues first-use and recovery stabilization from `4986c7e4`. The shared
+operation page explains unknown local results and completed effects whose association
+was not saved, using the original read/resume/cancel endpoints. It preserves evidence
+and prevents repeated in-flight recovery requests. This is an E03/E11 UI increment,
+not R0–R5 acceptance or completion of A01–A40. It is not merged, released, installed or
+live-tested; production Fleet Apply/detach activation and the remaining v1.2 work stay open.
+
+驗證來源為 `4bcfa791`：Node 572、相關瀏覽器案例 53（最後修改後新案例另跑 28）、
+相關 Python 案例 169 均通過；兩種前端建置、產物同步、Ruff、公開內容與秘密掃描通過。
+完整 Python 3.13 回歸為 **9723 passed、82 skipped、14 failed**，不是整輪全綠。
+14 個失敗均在 `test_fleet_bootstrap.py`：磁碟暫存目錄的祖先目錄原為 0775，
+因此既有安全檢查拒絕 fixture；暫時收緊為 0755 後，完整回歸結束再整檔重跑 **44 passed**。
+沒有修改後端、安全檢查、測試斷言或等待條件；原權限已還原，任務測試暫存已清除。
+更早一次完整執行因 Unix socket 暫存路徑過長而中止，改用短的磁碟 basetemp 後重跑；
+原中止與失敗輸出均保留於本機驗證紀錄。這些本機結果不代表 native／實機驗收。
+
+Validation at `4bcfa791`: Node 572, related browser 53 (28 new cases rerun after the
+final change), and related Python 169 passed; builds, generated assets, Ruff, public
+content and secret checks passed. Full Python 3.13 finished with 9723 passed, 82 skipped
+and 14 bootstrap failures caused by group-writable scratch ancestors. The entire affected
+file passed all 44 tests after temporarily correcting those permissions; original modes
+were restored and test scratch removed. The full run remains recorded as failed, and the
+earlier Unix-socket path-length interruption is retained. No backend or test rules changed.
+
 2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `5f49e712` 的 55 個新增合併 PR，
 並列出 Fleet Apply 與本機參與者尚缺的能力。沒有新發布；預覽版仍為 Connector 0.2.13／desktop 0.1.9
 （`437ee6a7`），穩定版仍為 0.2.12／0.1.8。新增合併均未發布、安裝或實機驗收；下方保留歷史紀錄。
