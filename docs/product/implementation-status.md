@@ -21,6 +21,23 @@ and prevents repeated in-flight recovery requests. This is an E03/E11 UI increme
 not R0–R5 acceptance or completion of A01–A40. It is not merged, released, installed or
 live-tested; production Fleet Apply/detach activation and the remaining v1.2 work stay open.
 
+驗證來源為 `4bcfa791`：Node 572、相關瀏覽器案例 53（最後修改後新案例另跑 28）、
+相關 Python 案例 169 均通過；兩種前端建置、產物同步、Ruff、公開內容與秘密掃描通過。
+完整 Python 3.13 回歸為 **9723 passed、82 skipped、14 failed**，不是整輪全綠。
+14 個失敗均在 `test_fleet_bootstrap.py`：磁碟暫存目錄的祖先目錄原為 0775，
+因此既有安全檢查拒絕 fixture；暫時收緊為 0755 後，完整回歸結束再整檔重跑 **44 passed**。
+沒有修改後端、安全檢查、測試斷言或等待條件；原權限已還原，任務測試暫存已清除。
+更早一次完整執行因 Unix socket 暫存路徑過長而中止，改用短的磁碟 basetemp 後重跑；
+原中止與失敗輸出均保留於本機驗證紀錄。這些本機結果不代表 native／實機驗收。
+
+Validation at `4bcfa791`: Node 572, related browser 53 (28 new cases rerun after the
+final change), and related Python 169 passed; builds, generated assets, Ruff, public
+content and secret checks passed. Full Python 3.13 finished with 9723 passed, 82 skipped
+and 14 bootstrap failures caused by group-writable scratch ancestors. The entire affected
+file passed all 44 tests after temporarily correcting those permissions; original modes
+were restored and test scratch removed. The full run remains recorded as failed, and the
+earlier Unix-socket path-length interruption is retained. No backend or test rules changed.
+
 2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `5f49e712` 的 55 個新增合併 PR，
 並列出 Fleet Apply 與本機參與者尚缺的能力。沒有新發布；預覽版仍為 Connector 0.2.13／desktop 0.1.9
 （`437ee6a7`），穩定版仍為 0.2.12／0.1.8。新增合併均未發布、安裝或實機驗收；下方保留歷史紀錄。
