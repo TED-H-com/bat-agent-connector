@@ -16,6 +16,7 @@ from tests.test_api_v1 import daemon, http  # noqa: F401
 
 @pytest.fixture
 def binding(tmp_path):
+    (tmp_path / '.git').mkdir()
     return dict(alias='fixture-alias', deploy_dirs=[str(tmp_path)], unit_patterns=['custom*'])
 
 
@@ -99,11 +100,21 @@ def test_config(binding):
             central.parse_deploy_status(raw, {'worker'})
 
 
-def test_read_only_allowlist():
+def test_read_only_allowlist(binding):
     for argv in (['docker', 'exec', 'x'], ['systemctl', 'restart', 'bat'], ['git', '-C', '/tmp', 'pull'], ['sh', '-c', 'anything']):
         assert not helper.allowed(argv)
         with pytest.raises(ValueError):
             helper.run(argv)
+    from pathlib import Path
+    nested = Path(binding['deploy_dirs'][0]) / 'not-a-repository'
+    nested.mkdir()
+    binding['deploy_dirs'] = [str(nested)]
+
+    def no_git(argv):
+        assert argv[0] != 'git', 'Never search ancestors of a configured non-repository'
+        return fixture_run(argv)
+    row = helper.collect(binding, no_git)['deploys'][0]
+    assert row['error'] == 'missing' and row['sha'] == ''
 
 
 class Stream:

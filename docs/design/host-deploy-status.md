@@ -31,7 +31,9 @@ of container environment. Container health comes from status text. Only compose
 project/service and directory/config basenames survive label projection; raw
 labels, environment and stderr are discarded. Commit subjects and other strings
 are printable and truncated to 256 characters. Deploy rows carry configuration
-index and basename, never the configured absolute path.
+index and basename, never the configured absolute path. A directory must have its
+own `.git` marker (directory or worktree file); a missing marker reports missing
+without running Git, preventing ancestor-repository discovery.
 
 Version 1 returns collected_at, hostname, containers, compose_projects (state
 counts), systemd, deploys and errors. Bounds: 500 containers/projects total,

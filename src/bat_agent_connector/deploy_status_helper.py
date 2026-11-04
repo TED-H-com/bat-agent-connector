@@ -158,6 +158,8 @@ def collect(binding, execute=run):
         try:
             prefix = ['git', '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-C', directory]
             row['mtime'] = datetime.fromtimestamp(Path(directory).stat().st_mtime, timezone.utc).isoformat()
+            if not (Path(directory) / '.git').exists():
+                raise ReadError('missing')
             row['sha'] = clean(execute(prefix + ['rev-parse', '--short=12', 'HEAD']).strip())
             row['branch'] = clean(execute(prefix + ['rev-parse', '--abbrev-ref', 'HEAD']).strip())
             log = execute(prefix + ['log', '-1', '--format=%cI%n%s']).splitlines()
