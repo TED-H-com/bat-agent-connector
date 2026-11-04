@@ -626,10 +626,10 @@ jobs:
         working-directory: .
         timeout-minutes: 8
         run: uv run --locked --extra desktop-build python desktop/tests/managed-runtime-fixture.py
-      - name: Check out the fixed earlier core upgrade baseline (0.2.6)
+      - name: Check out the latest stable core upgrade baseline (0.2.12)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: f31e7964c627e4b6d3af2e2370e7a38c64a20e25
+          ref: 14c62830240148b14a4d28a9c428f7f8b5ba8bf3
           path: .upgrade-baseline
           persist-credentials: false
       - name: Build the original earlier core from its own locked environment
