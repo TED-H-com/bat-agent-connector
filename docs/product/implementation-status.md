@@ -1,5 +1,42 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-04 續作：操作紀錄完整續頁（分支）
+
+從主線 `dfefdbfc` 接續；前項原操作恢復已由
+[#489](https://github.com/TED-H-com/bat-agent-connector/pull/489) 合併為 `8878efc8`，
+該來源 PR 與主線 CI 通過。下方 11 月 3 日的分支與本機失敗紀錄保留為當時證據。
+
+`fix/operation-history-cursors-20261104` 修正共用操作紀錄只傳時間續頁、
+因而跳過同時間操作的問題，沿用後端已有的時間／ID 配對。
+可見結果為空仍保留明確續頁；無效或倒退游標保留已載入結果，等使用者重新整理。
+背景刷新保留分頁深度、搜尋、篩選與原操作選取，舊版僅時間的中央服務仍相容。
+設計見 [操作紀錄](../design/shared-frontend.md#attention-and-work-updates)。
+
+本項是 E03／E11 的唯讀查找與恢復增量，HTTP／IPC fixtures 涵蓋 A29／A30
+原操作查回的介面路徑；E00–E11 其餘工作、A01–A40 驗收、R0–R5 及 PM v1.2
+未完成項目仍開放。本分支尚未合併、發布、安裝或實機驗收；正式 Fleet
+Apply／detach、本機 participant 與首次設定完整接線不在本項內。
+
+This branch continues from `dfefdbfc`, after original-operation recovery merged in
+#489 (`8878efc8`, PR and main CI passed). Shared history now preserves the server's
+timestamp/ID cursor and explicit continuation through empty visible pages. Refresh
+retains loaded depth, search, filters and a selected original still in the window;
+invalid cursors keep prior rows with an error. Timestamp-only servers remain compatible.
+This E03/E11 read/recovery increment is not completion of E00–E11, A01–A40, R0–R5 or
+open PM v1.2 requirements. It is not merged, released, installed or live-tested.
+
+本機驗證：Node 579、相關瀏覽器／IPC 97、既有後端游標與隔離案例 9 通過；
+兩種前端建置、Ruff、公開內容與 staged 秘密掃描通過。完整回歸以固定 PR 來源 CI
+另行記錄。首次 UI 執行找出續頁焦點遺失並修正；選取視窗的刷新案例改用正常事件
+刷新，避免對手機已被 inspector 遮住的按鈕發送點擊。原失敗／中止紀錄仍保留。
+
+Local validation: Node 579, related browser/IPC 97 and existing backend cursor/
+confinement checks 9 passed, along with both frontend builds, Ruff, public content
+and staged secret checks. Full regression is recorded separately against the PR head.
+Initial UI failures exposed lost pagination focus, now fixed; selected-inspector
+refresh is exercised through events, including the mobile modal. Initial failures
+and interrupted runs remain in the local logs.
+
 ## 2026-11-03 續作：原連線操作的恢復說明（分支）
 
 從主線 `4986c7e4` 接續 EC-1.1 首次使用與恢復穩定化。

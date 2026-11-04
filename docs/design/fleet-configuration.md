@@ -1062,6 +1062,9 @@ created time then operation ID. Follow paired `next_before` / `next_before_id` a
 Timestamp-only cursors retain strict less-than behavior. This read capability does
 not imply that a native participant is available. 本機操作清單須成對使用兩個續頁值；
 可見結果為空仍可能有下一頁，不能當作已讀完或 native 已可用。
+The shared [operation history](shared-frontend.md#attention-and-work-updates) follows
+the same cursor contract to find and reopen original connection operations. It does
+not activate a native participant or submit another connection operation.
 
 Lost acceptance replies are read back with the identical request/key; known IDs use
 pure GET. A claimed uncertain effect is never resent and never rotates its epoch.

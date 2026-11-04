@@ -11339,6 +11339,7 @@ var init_i18n = __esmMin((() => {
 			operations_all: "全部操作",
 			operations_empty: "這個範圍尚無操作。",
 			operations_invalid_page: "分頁回應無效；保留已載入的操作。",
+			operations_empty_page: "已載入的分頁沒有可顯示的操作。請載入較早的操作以繼續查找。",
 			operations_view_attention: "查看需要處理的操作",
 			operations_view_active: "查看執行中操作",
 			orch_waiting_children: "正在查回原有子操作",
@@ -13102,6 +13103,7 @@ var init_i18n = __esmMin((() => {
 			operations_all: "All operations",
 			operations_empty: "No operations in this scope.",
 			operations_invalid_page: "Invalid page response; loaded operations are retained.",
+			operations_empty_page: "No visible operations in the loaded pages. Load earlier operations to continue.",
 			operations_view_attention: "View operations needing attention",
 			operations_view_active: "View active operations",
 			orch_waiting_children: "Waiting for original child operations",
@@ -17936,7 +17938,7 @@ var action = (value) => typeof value === "string" && /^(?:session|checkpoint|int
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
 var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
-var operationId$5 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var operationId$6 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var select = (value, values) => values.includes(value) ? value : null;
 var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
 var resourceNames = {
@@ -17978,7 +17980,7 @@ function failedCall({ at, method, path, status, code: errorCode, admissionRefuse
 		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
 		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
 		admission_refused: admissionRefused === true,
-		operation_id: operationId$5(operation?.operation_id)
+		operation_id: operationId$6(operation?.operation_id)
 	};
 }
 function errorRing(limit = 50) {
@@ -18065,7 +18067,7 @@ function scrubDiagnostics(text) {
 		} catch {}
 		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
 		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
-		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$5(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$6(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
 	}));
 }
 function sessionFacts(session) {
@@ -18210,7 +18212,7 @@ function buildDiagnostics(input) {
 			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
 		},
 		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
-			id: operationId$5(op.operation_id),
+			id: operationId$6(op.operation_id),
 			action: action(op.action),
 			status: op.status,
 			error_code: code(op.error_code ?? op.error?.code),
@@ -19839,12 +19841,12 @@ function sourceSentence(t, envelope, candidate) {
 	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
 	return t("wpub_commit_from_result");
 }
-function operationId$4(value) {
+function operationId$5(value) {
 	return typeof value === "string" && OP_ID.test(value) ? value : "";
 }
 function publicationPrLine(h, t, pr) {
 	if (!pr || typeof pr !== "object") return null;
-	const opId = operationId$4(pr.publication_operation_id);
+	const opId = operationId$5(pr.publication_operation_id);
 	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
 	const repo = text$5(pr.repository) ? pr.repository : "";
 	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
@@ -19861,7 +19863,7 @@ function publicationPrLine(h, t, pr) {
 	return item;
 }
 function publicationDeliveryLine(h, t, pr, envelope, attempt) {
-	if (!operationId$4(pr?.publication_operation_id)) return null;
+	if (!operationId$5(pr?.publication_operation_id)) return null;
 	const host = text$5(attempt?.session?.host) ? attempt.session.host : text$5(attempt?.native_session?.host) ? attempt.native_session.host : "";
 	const source = text$5(pr.child_operation_id) ? pr.child_operation_id : text$5(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
 	const repo = text$5(pr.repository) ? pr.repository : "";
@@ -64297,7 +64299,7 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 //#region src/capture.js
 var record$3 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var digest$2 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var previewId = (value) => typeof value === "string" && /^acpv_[0-9a-f]{32}$/.test(value);
 var previewToken = (value) => typeof value === "string" && value.length > 0 && value.length <= 24576;
 var validPreview$3 = (doc) => record$3(doc) && record$3(doc.source) && record$3(doc.evidence) && [
@@ -64324,10 +64326,10 @@ function restore$2(value, source) {
 	if (validPreview$3(value.preview)) saved.preview = value.preview;
 	const intent = value.intent, request = intent?.request;
 	const usable = request?.action === "artifact.capture" && previewId(request.target?.preview_id) && previewToken(request.params?.preview_token) && digest$2(request.preconditions?.expected_fingerprint) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
-	if (usable || operationId$3(intent?.operation_id)) saved.intent = {
+	if (usable || operationId$4(intent?.operation_id)) saved.intent = {
 		key: usable ? intent.key : null,
 		request: usable ? request : null,
-		operation_id: operationId$3(intent.operation_id) ? intent.operation_id : null,
+		operation_id: operationId$4(intent.operation_id) ? intent.operation_id : null,
 		reviewed_digest: digest$2(intent.reviewed_digest) ? intent.reviewed_digest : saved.preview?.evidence.digest
 	};
 	return saved;
@@ -64440,7 +64442,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	const accept = async (operation) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !operationId$3(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
+		if (!intent || !operationId$4(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
 		saved.operation = operation;
 		saved.intent.operation_id = operation.operation_id;
 		persist();
@@ -65032,6 +65034,27 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	};
 }
 //#endregion
+//#region src/operation-page.js
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+function operationPage(result, previous = null) {
+	if (!Array.isArray(result?.operations) || result.operations.some((op) => !operationId$3(op?.operation_id))) return null;
+	const time = result.next_before ?? null, id = result.next_before_id ?? null;
+	if (time === null) return id === null ? {
+		operations: result.operations,
+		next: null
+	} : null;
+	const paired = Object.hasOwn(result, "next_before_id");
+	if (typeof time !== "number" || !Number.isFinite(time) || time <= 0 || paired && !operationId$3(id)) return null;
+	if (previous && !(time < previous.time || time === previous.time && previous.id !== null && id !== null && id < previous.id)) return null;
+	return {
+		operations: result.operations,
+		next: {
+			time,
+			id
+		}
+	};
+}
+//#endregion
 //#region src/operation-list.js
 function operationList({ h, t, api, guard, statuses, namespace }) {
 	const memory = viewState(namespace || "", "", "operations:" + (statuses || "all"));
@@ -65207,7 +65230,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		}
 		const focus = list.contains(document.activeElement) ? document.activeElement.closest("[data-row-key]")?.dataset.rowKey : null;
 		const shown = visible();
-		if (!rows.length) list.replaceChildren(emptyState({ title: t("operations_empty") }));
+		if (!rows.length) list.replaceChildren(emptyState({ title: t(before === null ? "operations_empty" : "operations_empty_page") }));
 		else if (!shown.length) list.replaceChildren(emptyState({ title: t("global_no_match") }));
 		else list.replaceChildren(dataTable({
 			columns,
@@ -65228,6 +65251,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		}
 	}
 	function load(append = false) {
+		const restoreMore = append && document.activeElement === more;
 		pending++;
 		update();
 		const job = queue.catch(() => {}).then(async () => {
@@ -65241,13 +65265,17 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			for (let i = 0; i < targetPages; i++) {
 				const params = new URLSearchParams({ limit: "100" });
 				if (statuses) params.set("status", statuses);
-				if (next !== null) params.set("before", String(next));
+				if (next !== null) {
+					params.set("before", String(next.time));
+					if (next.id !== null) params.set("before_id", next.id);
+				}
 				const result = await api("GET", "/operations?" + params);
 				guard();
-				if (!Array.isArray(result.operations) || result.operations.some((op) => !/^op_[0-9a-f]{32}$/.test(op?.operation_id)) || result.next_before !== null && result.next_before !== void 0 && (typeof result.next_before !== "number" || !Number.isFinite(result.next_before) || result.next_before <= 0 || next !== null && result.next_before >= next || result.operations.length === 0)) throw new Error(t("operations_invalid_page"));
-				candidate.push(...result.operations);
+				const page = operationPage(result, next);
+				if (!page) throw new Error(t("operations_invalid_page"));
+				candidate.push(...page.operations);
 				read++;
-				next = result.next_before ?? null;
+				next = page.next;
 				if (next === null) break;
 			}
 			guard();
@@ -65289,7 +65317,10 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			throw error;
 		}).finally(() => {
 			pending--;
-			if (current()) update();
+			if (current()) {
+				update();
+				if (restoreMore && !more.hidden && !more.disabled && document.activeElement === document.body) more.focus({ preventScroll: true });
+			}
 		});
 		queue = job;
 		return job;
