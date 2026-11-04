@@ -1,5 +1,5 @@
 import {eventDelivery, httpEventDelivery} from './event-delivery.mjs';
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createInterface} from 'node:readline';
 import {resolve, delimiter} from 'node:path';
 import {once} from 'node:events';

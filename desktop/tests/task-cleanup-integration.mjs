@@ -1,6 +1,6 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 // Task UI and recovery against real central cleanup; temporary Git and MockBat only.
-import {spawn} from "node:child_process";
+import {spawn} from "../../scripts/hidden-child-process.mjs";
 import {createInterface} from "node:readline";
 import {readFile} from "node:fs/promises";
 import {delimiter, resolve} from "node:path";

@@ -1,6 +1,6 @@
 // Installs only on a disposable GitHub-hosted Windows runner. No live BAT/central.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn } from "../../scripts/hidden-child-process.mjs";
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -43,7 +43,7 @@ await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 let diagnostic = "";
 const harness = { status: "running", processes: [], error: null, evidence_errors: [] };
 async function runPowerShell(name, script, args, timeoutMs) {
-  const child = spawn("pwsh", ["-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+  const child = spawn("pwsh", ["-NoLogo", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-File",
     resolve(script), ...args], { stdio: ["ignore", "pipe", "pipe"] });
   const outcome = { name, exit_code: null, signal: null, timed_out: false, spawn_error: null,
     exit_unconfirmed: false, output_drain_incomplete: false };

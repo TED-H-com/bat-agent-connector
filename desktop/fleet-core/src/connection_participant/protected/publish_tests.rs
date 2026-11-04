@@ -290,12 +290,12 @@ fn process_kill_stage_child() {
 #[test]
 fn process_kill_before_and_after_move_never_adopts_residue() {
     use std::{
-        process::{Command, Stdio},
+        process::Stdio,
         time::{Duration, Instant},
     };
     for phase in ["Flushed", "Published"] {
         let d = Disk::new();
-        let mut child = Command::new(std::env::current_exe().unwrap())
+        let mut child = crate::hidden_process::hidden_command(std::env::current_exe().unwrap())
             .args([
                 "--exact",
                 "connection_participant::protected::publish_tests::process_kill_stage_child",

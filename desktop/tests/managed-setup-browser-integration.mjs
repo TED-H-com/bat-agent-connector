@@ -2,7 +2,7 @@
 import {testScratchRoot} from './test-scratch.mjs';
 // No live host/provider writes. All tokens travel through anonymous pipes or HTTP.
 import assert from "node:assert/strict";
-import {spawn, spawnSync} from "node:child_process";
+import {spawn, spawnSync} from "../../scripts/hidden-child-process.mjs";
 import {createHash} from "node:crypto";
 import {once} from "node:events";
 import {chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile} from "node:fs/promises";

@@ -3,7 +3,7 @@ use bat_fleet_core::credential::AdmissionStore;
 
 #[test]
 fn admission_unicode_table_measurement() {
-    let compiler = std::process::Command::new("rustc")
+    let compiler = bat_fleet_core::hidden_process::hidden_command("rustc")
         .arg("--version")
         .output()
         .expect("the native test runner provides its compiler");
@@ -45,7 +45,6 @@ fn foreign_owned_store_is_refused_by_both_readers_while_legacy_resolves() {
         fs,
         os::unix::fs::{MetadataExt, PermissionsExt},
         path::PathBuf,
-        process::Command,
     };
 
     struct Temporary(PathBuf);
@@ -76,7 +75,7 @@ fn foreign_owned_store_is_refused_by_both_readers_while_legacy_resolves() {
         eprintln!("SKIP foreign-owned file: runner lacks chown privileges; held-file uid predicates remain covered in fleet-core");
         return;
     }
-    let changed = Command::new("chown")
+    let changed = bat_fleet_core::hidden_process::hidden_command("chown")
         .arg(original_uid.wrapping_add(1).to_string())
         .arg(&store)
         .output()
@@ -111,7 +110,7 @@ fn foreign_owned_store_is_refused_by_both_readers_while_legacy_resolves() {
         .unwrap()
         .to_owned();
     let python = repo.join(".venv/bin/python");
-    let result = Command::new(python).args(["-c", "from pathlib import Path; import sys; from bat_agent_connector.connection_sources import read_token_store,TokenMode; r=read_token_store(Path(sys.argv[1]),mode=TokenMode.ADMISSION).lookup('profile-1'); print(r.state+'/'+r.reason)"]).arg(&profiles).output().unwrap();
+    let result = bat_fleet_core::hidden_process::hidden_command(python).args(["-c", "from pathlib import Path; import sys; from bat_agent_connector.connection_sources import read_token_store,TokenMode; r=read_token_store(Path(sys.argv[1]),mode=TokenMode.ADMISSION).lookup('profile-1'); print(r.state+'/'+r.reason)"]).arg(&profiles).output().unwrap();
     assert!(result.status.success());
     assert_eq!(result.stdout, b"unavailable/TOKEN_STORE_UNREADABLE\n");
     eprintln!("foreign-owned disk store: Python unavailable/TOKEN_STORE_UNREADABLE; native catalog and policy reference TOKEN_STORE_UNREADABLE; legacy resolved");

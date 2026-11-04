@@ -222,7 +222,7 @@ fn windows_writer_refuses_existing_broad_dacl_without_repair() {
     let kit = f.reader.expected.scope.kit_root.clone();
     crate::publication_state::create_new_directory(&kit).unwrap();
     assert!(
-        std::process::Command::new("icacls.exe")
+        crate::hidden_process::hidden_command("icacls.exe")
             .arg(&kit)
             .args(["/grant", "*S-1-1-0:(OI)(CI)F"])
             .status()
@@ -251,7 +251,7 @@ fn windows_writer_refuses_junction_parent_without_touching_target() {
     crate::publication_state::create_new_directory(&target).unwrap();
     write_private(&target.join("preserved"), b"preserved");
     assert!(
-        std::process::Command::new("cmd.exe")
+        crate::hidden_process::hidden_command("cmd.exe")
             .args(["/C", "mklink", "/J"])
             .arg(kit.join("client"))
             .arg(&target)

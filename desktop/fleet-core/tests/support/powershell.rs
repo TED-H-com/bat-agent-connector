@@ -50,9 +50,9 @@ pub fn command() -> Command {
     let base = std::path::Path::new(&system).join("System32/WindowsPowerShell/v1.0");
     let executable = base.join("powershell.exe");
     assert!(executable.is_absolute());
-    let mut command = Command::new(executable);
+    let mut command = bat_fleet_core::hidden_process::hidden_command(executable);
     command
-        .args(["-NoProfile", "-NonInteractive"])
+        .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden"])
         .env("PSModulePath", base.join("Modules"));
     command
 }

@@ -7,6 +7,8 @@ import json
 import shlex
 from pathlib import Path
 
+from bat_agent_connector import hidden_process
+
 from .operations import AmbiguousOutcome, OperationError
 
 HELPER = Path(__file__).with_name("artifact_host_helper.py").read_text()
@@ -29,7 +31,7 @@ class ArtifactHost:
                 "python3 -c " + shlex.quote(HELPER))
 
     async def call(self, host, request, content=b""):
-        process = await asyncio.create_subprocess_exec(*self.argv(host), stdin=asyncio.subprocess.PIPE,
+        process = await hidden_process.create_subprocess_exec(*self.argv(host), stdin=asyncio.subprocess.PIPE,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
 
         async def write():
@@ -87,7 +89,7 @@ class ArtifactHost:
 
     async def capture(self, host, request):
         """Only the fixed read helper; bounded JSON evidence followed by bounded binary content."""
-        process = await asyncio.create_subprocess_exec(*self.capture_argv(host), stdin=asyncio.subprocess.PIPE,
+        process = await hidden_process.create_subprocess_exec(*self.capture_argv(host), stdin=asyncio.subprocess.PIPE,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
 
         async def exchange():

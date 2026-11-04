@@ -15,6 +15,8 @@ import shlex
 import time
 from pathlib import Path
 
+from bat_agent_connector import hidden_process
+
 from . import catalog_sources, service, work_items
 from .operations import ActionDef, OperationError
 
@@ -35,7 +37,7 @@ class SkillHost:
                 "python3 -I -S -B -c " + shlex.quote(HELPER))
 
     async def scan(self, host, workspace):
-        process = await asyncio.create_subprocess_exec(*self.argv(host), stdin=asyncio.subprocess.PIPE,
+        process = await hidden_process.create_subprocess_exec(*self.argv(host), stdin=asyncio.subprocess.PIPE,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         async def exchange():
             process.stdin.write(json.dumps({"workspace": workspace}).encode() + b"\n")

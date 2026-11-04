@@ -1,6 +1,6 @@
 import {eventDelivery, httpEventDelivery} from './event-delivery.mjs';
 // Shared project composer against actual central receipts and temporary Git/artifact bytes.
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
 import {once} from 'node:events';

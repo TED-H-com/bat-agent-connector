@@ -1,7 +1,7 @@
 // Real DMG -> installed .app -> WKWebView. Only disposable GitHub-hosted Macs.
 import {testScratchRoot} from './test-scratch.mjs';
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, execFileSync } from "../../scripts/hidden-child-process.mjs";
 import { createServer } from "node:http";
 import { access, lstat, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";

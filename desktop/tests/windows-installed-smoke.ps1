@@ -45,7 +45,7 @@ function Wait-Until([scriptblock]$Condition, [string]$Failure, [int]$Seconds = 3
     Wait-FixtureUntil $Condition $Failure $Seconds
 }
 function Run-Installer([string]$Path, [string]$Arguments) {
-    $process = Start-Process -FilePath $Path -ArgumentList $Arguments -PassThru
+    $process = Start-Process -WindowStyle Hidden -FilePath $Path -ArgumentList $Arguments -PassThru
     if (-not $process.WaitForExit(60000)) {
         $process.Kill()
         throw 'Owned installer exceeded its deadline'
@@ -55,6 +55,7 @@ function Run-Installer([string]$Path, [string]$Arguments) {
 function Start-Dashboard([bool]$Managed = $false) {
     $info = [Diagnostics.ProcessStartInfo]::new($binary)
     $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
     $info.WorkingDirectory = $installDir
     if ($Managed) { $null = $info.Environment.Remove('BATC_DESKTOP_TOKEN') }
     else { $info.Environment['BATC_DESKTOP_TOKEN'] = 'fixture-native-token' }

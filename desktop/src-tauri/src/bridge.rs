@@ -5915,7 +5915,7 @@ mod tests {
             "Prepare the dev Python environment before native integration tests"
         );
         let mut peer = Peer(
-            std::process::Command::new(python)
+            bat_fleet_core::hidden_process::hidden_command(python)
                 .arg(repository.join("desktop/tests/updater-credentials-fixture.py"))
                 .arg("--data-dir")
                 .arg(directory.path())

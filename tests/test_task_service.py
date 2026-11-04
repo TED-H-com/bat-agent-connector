@@ -3455,7 +3455,7 @@ async def test_failover_full_original_archive_verified_and_restart(task_controll
         assert not called
         monkeypatch.setenv("BATC_TASK_ARCHIVE_VERIFY_SSH_HOST", "bat-local-user")
 
-        monkeypatch.setattr(task_bat.subprocess, "run", lambda command, **kwargs:
+        monkeypatch.setattr(task_bat.hidden_process, "run", lambda command, **kwargs:
                             subprocess.CompletedProcess(command, 1, "", "unreadable"))
         with pytest.raises(ValueError, match="cannot verify"):
             await daemon.adapter.failover(task, "old", "successor",
@@ -3469,7 +3469,7 @@ async def test_failover_full_original_archive_verified_and_restart(task_controll
             return subprocess.CompletedProcess(command, 0,
                                                hashlib.sha256(archive.read_bytes()).hexdigest() + "  file\n", "")
 
-        monkeypatch.setattr(task_bat.subprocess, "run", fake_ssh)
+        monkeypatch.setattr(task_bat.hidden_process, "run", fake_ssh)
         result = await daemon.adapter.failover(task, "old", "successor",
                                                handoff_message_id=handoff["message_id"],
                                                handoff_command_id=handoff["command_id"])

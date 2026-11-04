@@ -1,7 +1,7 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 import {openPmPanel, openThreadTab, openThreadBrief, revealPmView} from './pm-navigation.ts';
 // One browser flow against actual PM HTTP actions; the central has no BAT hosts.
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
 import {mkdtemp, readFile, rm} from 'node:fs/promises';

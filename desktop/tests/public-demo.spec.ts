@@ -1,5 +1,5 @@
 import {revealPmView} from './pm-navigation.ts';
-import {execFile} from 'node:child_process';
+import {execFile} from '../../scripts/hidden-child-process.mjs';
 import {promisify} from 'node:util';
 import {mkdirSync} from 'node:fs';
 import {expect, test} from '@playwright/test';

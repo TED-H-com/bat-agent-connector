@@ -17,6 +17,8 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlencode, urlsplit
 
+from bat_agent_connector import hidden_process
+
 from . import __version__
 from .errors import TokenUnavailable
 from .github import _NoReadRedirect, _rate_limited
@@ -50,7 +52,7 @@ def access_token(config):
         executable = shutil.which('gh')
         if executable is None:
             return None
-        result = subprocess.run([executable, 'auth', 'token', '--hostname', 'github.com'],  # noqa: S603 - resolved gh, fixed argv
+        result = hidden_process.run([executable, 'auth', 'token', '--hostname', 'github.com'],  # noqa: S603 - resolved gh, fixed argv
             capture_output=True, timeout=5, check=False)
         if result.returncode == 0 and 0 < len(result.stdout) < 16_384:
             token = result.stdout.decode().strip()

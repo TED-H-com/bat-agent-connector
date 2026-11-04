@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { execFile } from 'node:child_process';
+import { execFile } from '../../scripts/hidden-child-process.mjs';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';

@@ -12,7 +12,7 @@ impl Temp {
         Self(path)
     }
     fn command(&self, code: &str) -> Command {
-        let mut command = Command::new("python3");
+        let mut command = bat_fleet_core::hidden_process::hidden_command("python3");
         command.args([
             "-c",
             &format!(
@@ -80,7 +80,7 @@ fn cold_start_has_its_own_budget_and_marker_is_removed_from_output() {
 fn startup_and_work_timeouts_are_distinct_and_kill_only_the_one_owned_child() {
     let fixture = Fixture::new();
     let mut unrelated = Owned {
-        child: Command::new("python3")
+        child: bat_fleet_core::hidden_process::hidden_command("python3")
             .args(["-c", "import time;time.sleep(30)"])
             .spawn()
             .unwrap(),
@@ -167,7 +167,7 @@ fn invalid_missing_or_partial_markers_nonzero_exit_and_output_overflow_fail_and_
     let temp = Temp::new();
     assert_eq!(
         fixture.run_with_deadlines(
-            &mut Command::new(temp.0.join("missing")),
+            &mut bat_fleet_core::hidden_process::hidden_command(temp.0.join("missing")),
             Duration::from_secs(5),
             Duration::from_secs(5)
         ),
@@ -260,7 +260,7 @@ fn deadline_diagnostics_report_exit_without_stdout_eof_and_stop_the_reader() {
     // Transfer a duplicate stdout writer to another owned synthetic process.
     // This models an inherited pipe without leaving an orphaned grandchild.
     let mut holder = Owned {
-        child: Command::new("python3")
+        child: bat_fleet_core::hidden_process::hidden_command("python3")
             .args(["-c", "import array,os,select,socket,sys\ns=socket.socket(socket.AF_UNIX)\ns.bind('s');s.listen(1);s.settimeout(5)\nopen('holder-ready','w').close()\nc,_=s.accept()\n_,ancillary,_,_=c.recvmsg(1,socket.CMSG_SPACE(array.array('i').itemsize))\nfds=array.array('i');fds.frombytes(ancillary[0][2][:fds.itemsize])\nc.sendall(b'k')\nselect.select([sys.stdin],[],[],10)\nos.close(fds[0])"])
             .current_dir(&temp.0)
             .stdin(std::process::Stdio::piped())
@@ -315,7 +315,7 @@ fn startup_breach_is_captured_before_cleanup_and_cleared_before_the_next_run() {
     let next = Temp::new();
     let error = fixture
         .run_with_deadlines(
-            &mut Command::new(next.0.join("missing")),
+            &mut bat_fleet_core::hidden_process::hidden_command(next.0.join("missing")),
             Duration::from_secs(5),
             Duration::from_secs(5),
         )

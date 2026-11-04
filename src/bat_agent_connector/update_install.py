@@ -13,6 +13,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from bat_agent_connector import hidden_process
+
 try:
     import tomllib
 except ModuleNotFoundError:  # Python 3.10
@@ -55,7 +57,7 @@ def run(args, *, env, cwd=None, timeout=180):
     logs = Path(env["HOME"]) / ".cache/batc-update"
     files.ensure_private_directory(logs)
     with tempfile.TemporaryFile(dir=logs) as output:
-        process = subprocess.Popen(args, cwd=cwd, env=env, stdout=output, stderr=output,  # noqa: S603
+        process = hidden_process.popen(args, cwd=cwd, env=env, stdout=output, stderr=output,  # noqa: S603
                                    stdin=subprocess.DEVNULL, start_new_session=True)
         try:
             deadline = time.monotonic() + timeout
