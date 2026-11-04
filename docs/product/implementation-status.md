@@ -5,7 +5,8 @@
 `fix/disconnected-startup-diagnostics-20261104` 從 `a3204616` 接續。
 診斷匯出在尚無前端憑證時不再自行新增 capabilities 401；來源標為未嘗試，
 真正 HTTP 拒絕仍保留。桌面匯出新增唯讀 native／managed 狀態、錯誤碼與各自讀取時間，
-並提供 Python `central/service.log` 的固定位置範本；不匯出私人路徑、身分或錯誤全文。
+並提供 Python `managed-central/service.log` 的固定位置範本；不匯出私人路徑、身分或錯誤全文。
+同時依原生安裝器修正既有診斷與雙語指南的資料庫目錄：`central` 改為 `managed-central`。
 首次連線設定尚未完成時，已設定且支援的本機 Fleet 仍能從設定頁讀取與接續原轉換。
 重新開啟只查回原紀錄，需使用者按既有按鈕才推進；未設定的 Fleet 維持原首次設定畫面。
 本項是 E03／E11 恢復與診斷增量，不代表實機 Fleet 轉換、Connector 啟動或 BAT 連線已恢復，
@@ -17,6 +18,8 @@ read-only and fenced by connection epoch. Real HTTP 401 responses remain visible
 Existing configured Fleet also remains reachable during incomplete Connector setup,
 with explicit continuation of the original migration and no automatic start.
 Node 581 and related browser/IPC 138 checks pass (4 declared skips), with both builds and Ruff.
+The corrected managed installation paths also pass 32 diagnostic Node checks and
+43 diagnostic browser/IPC checks after rebuilding both frontends.
 The initial new UI cases used an ambiguous export-button locator; the corrected
 cases pass in both locales. Full Python regression was interrupted to include the
 subsequently confirmed Fleet recovery fix; its replacement run is in progress. This branch is not

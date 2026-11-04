@@ -22,7 +22,7 @@ for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
    expect(bundle.desktop_connection).toMatchObject({configuration_source:'managed',connected:false,credential_available:false,error_code:'MANAGED_RUNTIME_START_FAILED',
     status_read:{status:'available',http_status:null},managed_runtime:{mode:'managed',ready:false,error_code:'MANAGED_RUNTIME_START_FAILED'}});
    expect(bundle.client.app_version).toBe('0.1.1');
-   expect(bundle.log_locations.managed_service_log.windows).toBe('%LOCALAPPDATA%\\io.betteragent.dashboard\\central\\service.log');
+   expect(bundle.log_locations.managed_service_log.windows).toBe('%LOCALAPPDATA%\\io.betteragent.dashboard\\managed-central\\service.log');
    expect(JSON.stringify(bundle)).not.toMatch(/Example Person|private-box|192\.0\.2\.8|batc_secret/);
    await page.getByRole('dialog').getByRole('button',{name:locale==='en'?'Close':'關閉',exact:true}).click();
   }

@@ -60,7 +60,8 @@ export function buildLine(projection, t) {
 }
 const APP = 'io.betteragent.dashboard';
 export function logLocations(os, managed) {
-  const root = managed ? {linux:`~/.local/share/${APP}/central`,macos:`~/Library/Application Support/${APP}/central`,windows:`%LOCALAPPDATA%\\${APP}\\central`}[os]
+  // Managed::prepare stores the installation under app_local_data_dir()/managed-central.
+  const root = managed ? {linux:`~/.local/share/${APP}/managed-central`,macos:`~/Library/Application Support/${APP}/managed-central`,windows:`%LOCALAPPDATA%\\${APP}\\managed-central`}[os]
     : {linux:'~/.local/state/bat-agent-connector',macos:'~/.local/state/bat-agent-connector',windows:'~\\.local\\state\\bat-agent-connector'}[os];
   return {state_database: root ? root + (os === 'windows' ? '\\' : '/') + (managed ? (os === 'windows' ? 'state\\' : 'state/') : '') + 'tasks.sqlite3' : null,
     service_log: managed && root ? root + (os === 'windows' ? '\\' : '/') + 'service.log' : null,

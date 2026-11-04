@@ -26,9 +26,9 @@ advance Fleet transitions. Connection-epoch fences still reject old reads.
 Endpoints, paths, principals, credentials and free-text recovery advice are omitted.
 
 `log_locations.managed_service_log` supplies fixed templates for Python's
-`central/service.log` on every OS. The older `runtime_stderr` field describes
-discarded native launcher stderr; it does not mean the detached Python service
-has no log. Templates do not establish that a file exists or contains a current
+`managed-central/service.log` on every OS. The older `runtime_stderr` field describes
+stderr discarded from the short-lived Python launcher; it does not mean the
+detached Python service has no log. Templates do not establish that a file exists or contains a current
 failure. The export does not read logs or the state database.
 
 ## Source reads and compatibility

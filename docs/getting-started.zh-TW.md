@@ -401,13 +401,15 @@ MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable �
 
 | 作業系統 | 狀態資料庫 |
 | --- | --- |
-| Linux | `~/.local/share/io.betteragent.dashboard/central/state/tasks.sqlite3` |
-| macOS | `~/Library/Application Support/io.betteragent.dashboard/central/state/tasks.sqlite3` |
-| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\central\state\tasks.sqlite3` |
+| Linux | `~/.local/share/io.betteragent.dashboard/managed-central/state/tasks.sqlite3` |
+| macOS | `~/Library/Application Support/io.betteragent.dashboard/managed-central/state/tasks.sqlite3` |
+| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\managed-central\state\tasks.sqlite3` |
 
-`config/hosts.toml` 與 `installation.json` 也在相同的 `central` 目錄。
-這些是狀態與設定檔，不是匯出的日誌。桌面版目前**不會將 Connector 的標準輸出與
-錯誤輸出寫入日誌檔**；啟動錯誤只保留在記憶體。獨立 CLI 服務的輸出由啟動它的
+`config/hosts.toml` 與 `installation.json` 也在相同的 `managed-central` 目錄。
+這些是狀態與設定檔，不是匯出的日誌。受管理的 Python 服務會把錯誤輸出寫入
+`managed-central/service.log`；服務啟動之前的失敗可能尚未建立日誌。桌面端會丟棄
+短期 Python 啟動程序的錯誤輸出。診斷只匯出固定位置範本，不讀取檔案內容，也不代表日誌
+一定存在。獨立 CLI 服務的輸出由啟動它的
 終端機或服務管理工具接收。診斷資料不會猜測自訂資料庫位置；依目前
 `config.state_dir()`，Linux／macOS 預設為
 `~/.local/state/bat-agent-connector/tasks.sqlite3`，Windows 為

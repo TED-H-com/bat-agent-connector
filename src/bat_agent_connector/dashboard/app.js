@@ -18038,9 +18038,9 @@ function buildLine(projection, t) {
 var APP = "io.betteragent.dashboard";
 function logLocations(os, managed) {
 	const root = managed ? {
-		linux: `~/.local/share/${APP}/central`,
-		macos: `~/Library/Application Support/${APP}/central`,
-		windows: `%LOCALAPPDATA%\\${APP}\\central`
+		linux: `~/.local/share/${APP}/managed-central`,
+		macos: `~/Library/Application Support/${APP}/managed-central`,
+		windows: `%LOCALAPPDATA%\\${APP}\\managed-central`
 	}[os] : {
 		linux: "~/.local/state/bat-agent-connector",
 		macos: "~/.local/state/bat-agent-connector",

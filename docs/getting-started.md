@@ -481,14 +481,17 @@ may differ):
 
 | OS | State database |
 | --- | --- |
-| Linux | `~/.local/share/io.betteragent.dashboard/central/state/tasks.sqlite3` |
-| macOS | `~/Library/Application Support/io.betteragent.dashboard/central/state/tasks.sqlite3` |
-| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\central\state\tasks.sqlite3` |
+| Linux | `~/.local/share/io.betteragent.dashboard/managed-central/state/tasks.sqlite3` |
+| macOS | `~/Library/Application Support/io.betteragent.dashboard/managed-central/state/tasks.sqlite3` |
+| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\managed-central\state\tasks.sqlite3` |
 
-`config/hosts.toml` and `installation.json` are inside the same `central` directory.
-These are state/configuration files, not exported logs. The desktop does **not**
-persist Connector stdout/stderr; startup error lines stay in memory. For a
-standalone CLI service, stdout/stderr go to its launching terminal/service manager;
+`config/hosts.toml` and `installation.json` are inside the same `managed-central`
+directory. These are state/configuration files, not exported logs. The managed
+Python service writes stderr to `managed-central/service.log`; failures before
+that service is launched may leave no log. The desktop discards stderr from the
+short-lived Python launcher. Diagnostics exports fixed location templates, not
+file contents or proof that a log exists. For a standalone CLI service,
+stdout/stderr go to its launching terminal/service manager;
 the configured journal location is not inferred by diagnostics. Default journal
 templates follow `config.state_dir()`: `~/.local/state/bat-agent-connector/tasks.sqlite3`
 on Linux/macOS and `~\.local\state\bat-agent-connector\tasks.sqlite3` on Windows,
