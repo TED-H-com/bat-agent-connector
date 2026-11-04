@@ -4,25 +4,25 @@
 
 ## Choose the matching package
 
-As checked on October 22, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12) remains Connector **0.2.12** / desktop **0.1.8**, from `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
+As checked on November 4, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14) is Connector **0.2.14** / desktop **0.1.10**, with its exact source recorded in `release-manifest.json`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
 
-The stable package predates the route wake-up, managed-service recovery and first-run/status changes now included in the preview. #399–#403 merged after the preview source and are not in that package. See [delivery status](product/implementation-status.md) for merged, published, installed and live-tested evidence. The first-launch steps below describe stable 0.2.12; downloading a newer package does not establish installation or live acceptance.
+This stable package includes managed-service recovery, Windows background-process and Fleet monitor fixes, plus startup-role selection and connection review. The older preview remains available as a historical build. See [delivery status](product/implementation-status.md) for merged, published, installed and live-tested evidence. The first-launch steps below describe stable 0.2.14; downloading a newer package does not establish installation or live acceptance.
 
-| Platform | Stable 0.1.8 asset | Preview 0.1.9 asset | Package |
+| Platform | Stable 0.1.10 asset | Preview 0.1.9 asset | Package |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.10_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.10_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.10_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.10_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 Use the platform asset on the release page. Separate GitHub Actions candidates may require sign-in and expire. Windows packages are unsigned; Mac bundles use ad-hoc signing. Formal signing, Mac notarization, production update channels and a Linux persistent native credential vault are outside this delivery. GitHub's release label does not establish real-device stability.
 
 ## First launch: your local Connector
 
-Install and open the matching package. It contains the Python runtime and prepares one private local central, its data and your personal identity. You do not install Python / uv, enter an actor, edit credential files or copy an API token for this path. With no BAT host configured, the initial Dashboard opens **Settings → Connection**, with **Get ready to work → 1. Connect BAT** expanded.
+Install and open the matching package. On a new installation, choose **Provide a local workspace** or **Both** to prepare the bundled Python Connector, its private data and your personal identity. **Use existing services** joins an existing Connector without creating a local one. Existing installations retain their saved connection and identity. You do not install Python / uv, enter an actor, edit credential files or copy an API token for this path. With no BAT host configured, the initial Dashboard opens **Settings → Connection**, with **Get ready to work → 1. Connect BAT** expanded.
 
 1. Paste the connection URL copied from BAT into the masked field. It fills the connection details locally.
-2. Check the **Host ID**, then choose **Verify and save host**.
+2. Check the **Host ID**, choose **Review connection**, inspect the proposed changes, then choose **Apply connection**.
 3. After success, choose **View sessions**. Human sessions remain read-only.
 
 **Bind a GitHub repository** and **Configure verification commands** start collapsed. They are optional for reading sessions. Set them up when dispatch, Git work or Task Service verification needs them. Managed-work permissions also start collapsed; connecting does not grant them.
@@ -31,7 +31,7 @@ Install and open the matching package. It contains the Python runtime and prepar
 
 ### 1. Connect BAT
 
-In **Settings → Connection → Connect BAT**, use **Paste BAT connection URL**. In BAT v3.2.15, copy it from **Settings → Remote → Remote Access → Connection URL → Copy**. With headless BAT, copy the URL from the startup banner's `connect:` line. The password field clears as soon as the address, credential and certificate fingerprint have been filled locally; a check-mark line confirms the address and abbreviated fingerprint without showing the token. Nothing is sent until **Verify and save host**. Editing the endpoint or fingerprint by hand clears that confirmation.
+In **Settings → Connection → Connect BAT**, use **Paste BAT connection URL**. In BAT v3.2.15, copy it from **Settings → Remote → Remote Access → Connection URL → Copy**. With headless BAT, copy the URL from the startup banner's `connect:` line. The password field clears as soon as the address, credential and certificate fingerprint have been filled locally; a check-mark line confirms the address and abbreviated fingerprint without showing the token. Review does not probe BAT or save configuration; pasted credentials may be privately staged. **Apply connection** verifies and saves the reviewed configuration. Editing the endpoint or fingerprint by hand clears that confirmation.
 
 Enter a **Host ID** starting with a letter or number, using only letters, numbers, `-`, `_` or `.` (for example `local`). On first use, a loopback address suggests `local`; this is a name suggestion and does not establish where BAT runs or grant local execution permissions.
 
@@ -45,7 +45,7 @@ Expand **Allow managed work** when enabling dispatch. Choose the intended conver
 
 The SSH alias is resolved by the central service account on the central computer. For the bundled local central this is the desktop computer; when joining a remote central, prepare SSH access on that central host. The browser or Tauri client does not forward its local SSH keys to central.
 
-**Allow Git worktrees sharing a clone** is an explicit opt-in when a direct BAT start needs shared Git metadata. Leave it off when that is not intended. It does not grant control over manual sessions or worktrees. Click **Verify and save host**; the connection/profile checks are read-only and saving does not dispatch work.
+**Allow Git worktrees sharing a clone** is an explicit opt-in when a direct BAT start needs shared Git metadata. Leave it off when that is not intended. It does not grant control over manual sessions or worktrees. Choose **Review connection**, then **Apply connection**; the connection/profile checks are read-only and saving does not dispatch work.
 
 ### 2. Bind a GitHub repository
 
@@ -243,10 +243,10 @@ It creates a private version directory under
 For an existing uv tool installation, see [adoption and restoration](connector-updates.md#adopting-an-existing-uv-tool-installation).
 
 Both published versions include the installer. Pin the same tag for the bootstrap
-and installation. For stable **v0.2.12**:
+and installation. For stable **v0.2.14**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.12/scripts/install.sh | sh -s -- --tag v0.2.12 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.14/scripts/install.sh | sh -s -- --tag v0.2.14 --channel-check stable
 ```
 
 For prerelease **v0.2.13-preview.20261022**:

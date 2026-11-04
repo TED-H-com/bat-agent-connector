@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.14 / Desktop 0.1.10 (release candidate)
+## 0.2.14 / Desktop 0.1.10 (2026-11-04)
 
 - Ship the accumulated managed-service recovery and Windows background-process fixes,
   including retained installation identity across interrupted startup, private pointer

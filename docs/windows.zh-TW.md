@@ -20,8 +20,8 @@ runtime 或資料後端。
 
 ## 首次啟動與 BAT 存取
 
-1. 安裝相符的 NSIS `.exe` 並開啟 Dashboard。程式會準備私人本機中央與個人身分，不需預裝 Python／uv 或複製中央 API token。
-2. 開啟「連線／Fleet → 準備開始工作」，在「連線至 BAT」選擇可匯入的 profile，或填入實際 BAT 位址、可信指紋、workspace profile ID 與 BAT token。選擇所需 managed 權限與專用遠端管理目錄，再按「驗證並儲存主機」。
+1. 安裝相符的 NSIS `.exe` 並開啟 Dashboard。新安裝先選用途：「提供本機工作區」或「兩者兼有」會準備內附本機 Connector；「使用既有服務」則加入既有 Connector。既有安裝保留原連線與身分。本機流程不需預裝 Python／uv 或複製中央 API token。
+2. 開啟「設定 → 連線 → 準備開始工作」，在「連線至 BAT」選擇可匯入的 profile，或填入實際 BAT 位址、可信指紋、workspace profile ID 與 BAT token。按「預覽連線」檢查變更，再按「套用連線」；受管權限與專用遠端目錄依需要從進階設定選擇。
 3. Git 同步與成果操作使用「此電腦已設定的 SSH alias」。只有預定的直接 BAT 開工需要共用 clone metadata 時，才勾選「允許共享 clone 的 Git worktree」；這些選項都不會接管人工工作。
 4. 在「連結 GitHub 儲存庫」讀取所選主機的 workspaces，綁定精確 repository、Git remote 與 workspace ID，依需求開啟整合／merge／metadata 權限。儲存只驗證存取，不會推送或建立 PR。
 5. 「設定驗證命令」使用精確 Task Service project key，設定執行程式、每行一個完整參數及逾時秒數；儲存不執行。來源選擇、恢復與 Agent 存取詳見[完整設定指南](getting-started.zh-TW.md)。

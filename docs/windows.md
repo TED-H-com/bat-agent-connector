@@ -20,8 +20,8 @@ interaction references; it is not the runtime or data backend.
 
 ## First launch and BAT access
 
-1. Install the matching NSIS `.exe` and launch Dashboard. It prepares its private local central and personal identity; no preinstalled Python / uv or copied central API token is needed.
-2. Open **Connection / Fleet → Get ready to work**. In **Connect BAT**, choose an importable profile or enter the actual BAT endpoint, trusted fingerprint, workspace profile ID and BAT token. Choose the intended managed permissions and dedicated remote directories, then **Verify and save host**.
+1. Install the matching NSIS `.exe` and launch Dashboard. A new installation first asks its role: **Provide a local workspace** or **Both** prepares the bundled local Connector; **Use existing services** joins an existing Connector. Existing installations retain their binding and identity. The local path needs no preinstalled Python / uv or copied central API token.
+2. Open **Settings → Connection → Get ready to work**. In **Connect BAT**, choose an importable profile or enter the actual BAT endpoint, trusted fingerprint, workspace profile ID and BAT token. Choose **Review connection**, inspect the proposed changes, then **Apply connection**. Managed permissions and dedicated remote directories remain optional choices under Advanced.
 3. Git synchronization and artifact work use an existing trusted **SSH alias configured on this computer**. Choose **Allow Git worktrees sharing a clone** only when the intended direct BAT starts need shared clone metadata. Neither setting transfers ownership of human work.
 4. Under **Bind a GitHub repository**, read the selected host's workspaces and bind the exact repository, Git remote and workspace ID. Grant only the intended integration / merge / metadata permissions. Saving verifies access without pushing or opening a PR.
 5. **Configure verification commands** is for exact Task Service project keys: executable, one literal argument per line, and timeout. Saving does not run the command. See the [full setup guide](getting-started.md) for source selection, recovery and agent access.

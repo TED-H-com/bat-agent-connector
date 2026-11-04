@@ -1,5 +1,30 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-04：Connector 0.2.14／Desktop 0.1.10 發布
+
+[穩定版 v0.2.14](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14)
+提供 Connector 0.2.14、Desktop 0.1.10 與八個發布檔案；完整來源、套件 digest
+及對應 CI 見該版 `release-manifest.json`、`SHA256SUMS` 與發布說明。
+#496 整合 #494 的三個修正，並納入主線已累積的 Windows 背景服務、
+本機 Connector 恢復、Fleet 監控及原操作查回改善。
+新版本修正未連線診斷的本機假 401、保留已設定 Fleet 的恢復入口，並修正資料與日誌目錄說明。
+Windows 舊未簽章套件請從系統匣退出後執行新版安裝器，保留既有應用程式資料。
+
+已合併、已發布與使用者安裝分開記錄：本版沒有新增 owner 電腦、真 BAT／模型或
+實體手機驗收證據，也不宣稱已重現或消除某台電腦的舊版故障。
+完整離線組裝檢查仍受 Desktop／demo receipt 缺口與歷史 gallery 來源限制；
+明確的套件子集檢查、原生 CI 與暫存安裝 fixture 各自列明，不混稱完整驗收。
+本項交付 E03／E11 恢復改善；E00–E11、R0–R5、A01–A40 及 PM v1.2
+其餘未完成工作仍依現有計畫接續。下方保留準備階段及失敗紀錄。
+
+Stable v0.2.14 publishes Connector 0.2.14 / Desktop 0.1.10. Its release manifest
+identifies the exact source, asset digests and CI evidence. #496 includes #494
+and the accumulated managed-service, Windows and Fleet recovery changes.
+Publication does not establish installation on an owner's machine or live BAT/model
+and physical-device acceptance. Offline component consistency and native installation
+fixtures retain their stated scopes; historical screenshots remain pinned to 0.1.9.
+Open E/R/A and PM v1.2 work remains open. Earlier preparation and failure records follow.
+
 ## 2026-11-04：Connector 0.2.14／Desktop 0.1.10 發布準備（分支）
 
 依 owner 要求直接推進更新，不再以舊版現場排查作為發布準備的前置條件。

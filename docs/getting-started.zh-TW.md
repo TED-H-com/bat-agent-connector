@@ -4,25 +4,25 @@
 
 ## 選擇相符的安裝包
 
-2026 年 10 月 22 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)仍為 Connector **0.2.12**／desktop **0.1.8**，來源 `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
+2026 年 11 月 4 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14)為 Connector **0.2.14**／desktop **0.1.10**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
-穩定版尚未包含路線喚醒、本機服務復原及首次設定／狀態變更；預覽版已包含。#399–#403 在預覽版來源之後才合併，不在這個套件內。已合併、已發布、已安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.12；下載較新套件不代表已安裝或實機驗收。
+本穩定版已包含本機服務恢復、Windows 背景程序、Fleet 監控修正，以及首次用途選擇與連線預覽。較早的預覽版保留為歷史版本。已合併、已發布、已安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.14；下載較新套件不代表已安裝或實機驗收。
 
-| 平台 | 穩定版 0.1.8 資產 | 預覽版 0.1.9 資產 | 格式 |
+| 平台 | 穩定版 0.1.10 資產 | 預覽版 0.1.9 資產 | 格式 |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.10_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.10_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.10_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.10_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Windows 包未正式簽署，Mac 採 ad-hoc 簽署。正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
 
 ## 首次啟動：你的本機 Connector
 
-安裝並開啟相符套件。包內含 Python runtime，會準備一套私人本機中央、資料與個人身分；這條流程不需先裝 Python／uv、輸入 actor、編輯憑證檔或複製 API token。尚未配置 BAT 主機時，Dashboard 會開啟**設定 → 連線**，並展開**準備開始工作 → 1. 連線至 BAT**。
+安裝並開啟相符套件。新安裝先選「提供本機工作區」或「兩者兼有」，再準備內附的 Python Connector、私人資料與個人身分；選「使用既有服務」則加入既有 Connector，不建立本機服務。既有安裝保留原連線與身分。這條本機流程不需先裝 Python／uv、輸入 actor、編輯憑證檔或複製 API token。尚未配置 BAT 主機時，Dashboard 會開啟**設定 → 連線**，並展開**準備開始工作 → 1. 連線至 BAT**。
 
 1. 將 BAT 複製的連線網址貼入密碼欄位，在本機填好連線資料。
-2. 核對**主機代號**，再按**驗證並儲存主機**。
+2. 核對**主機代號**，按**預覽連線**檢查變更，再按**套用連線**。
 3. 成功後按**查看工作階段**；人工工作階段維持唯讀。
 
 **連結 GitHub 儲存庫**與**設定驗證命令**預設收合，閱讀工作階段不需要先完成。派工、Git 工作或 Task Service 驗證需要時再設定。**允許受管工作**也預設收合，連線不會自動授予這些權限。
@@ -31,7 +31,7 @@
 
 ### 1. 連線至 BAT
 
-開啟「設定 → 連線 → 連線至 BAT」，使用「貼上 BAT 連線網址」。在 BAT v3.2.15 的「設定 → 遠端 → 遠端存取 → 連線網址 → 複製」取得網址；無介面模式可複製啟動訊息 `connect:` 行的網址。密碼欄位會在本機填好位址、權杖與憑證指紋後立即清空，欄位下方會以勾號確認讀取的位址與縮短的憑證指紋，不會顯示權杖。按「驗證並儲存主機」才會送出。手動修改位址或指紋後，確認文字會消失。
+開啟「設定 → 連線 → 連線至 BAT」，使用「貼上 BAT 連線網址」。在 BAT v3.2.15 的「設定 → 遠端 → 遠端存取 → 連線網址 → 複製」取得網址；無介面模式可複製啟動訊息 `connect:` 行的網址。密碼欄位會在本機填好位址、權杖與憑證指紋後立即清空，欄位下方會以勾號確認讀取的位址與縮短的憑證指紋，不會顯示權杖。預覽不會探測 BAT 或儲存設定；貼上的憑證可能先被私下暫存。「套用連線」才會驗證並儲存已預覽的設定。手動修改位址或指紋後，確認文字會消失。
 
 「主機代號」須以英文字母或數字開頭，只能使用英數字、`-`、`_` 或 `.`，例如 `local`。首次設定時，回送位址會建議 `local`；這只是代號建議，不會判定 BAT 與中央在同一台電腦，也不會授予本機執行權限。
 
@@ -45,7 +45,7 @@
 
 SSH 別名由中央所在電腦的服務帳號解析。使用打包本機中央時，就是桌面電腦；若加入遠端中央，須在該中央主機準備 SSH 存取。瀏覽器或 Tauri client 不會將自己的本機 SSH 金鑰轉送給中央。
 
-直接 BAT 開工若需共用 Git 中繼資料，須明確勾選「允許共用 Git 複本的獨立工作目錄」；沒有此需求就保持關閉，也不因此取得人工工作階段與獨立工作目錄的控制權。按「驗證並儲存主機」會做唯讀的連線與設定檔檢查，儲存不會派工。
+直接 BAT 開工若需共用 Git 中繼資料，須明確勾選「允許共用 Git 複本的獨立工作目錄」；沒有此需求就保持關閉，也不因此取得人工工作階段與獨立工作目錄的控制權。先按「預覽連線」，再按「套用連線」；連線與設定檔檢查是唯讀的，儲存不會派工。
 
 ### 2. 連結 GitHub 儲存庫
 
@@ -191,7 +191,7 @@ Dashboard 登入欄位不能填 BAT remote token。
 兩個已發布版本都含驗證安裝器；啟動腳本與安裝須使用同一 tag。穩定版：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.12/scripts/install.sh | sh -s -- --tag v0.2.12 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.14/scripts/install.sh | sh -s -- --tag v0.2.14 --channel-check stable
 ```
 
 預覽版：
