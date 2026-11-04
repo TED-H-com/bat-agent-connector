@@ -25,6 +25,13 @@ tracked private inventory, profile index, token files, fingerprints, service pat
 
 ## Inventory and local authority
 
+An already configured, supported Fleet remains accessible from Settings when
+Connector startup fails or its connection setup is incomplete. The first-connection
+screen must not hide local recovery behind a successful central connection. Opening
+or reloading it only reads availability, overview and original receipts; resuming a
+pending migration still uses the existing explicit action and original migration ID.
+Unconfigured or unsupported installations retain the focused first-setup screen.
+
 The trusted native `fleet.json` identifies the reviewed Kit installation and selected backend. Existing
 configuration defaults to the PowerShell adapter until native parity is enabled through the migration flow.
 WebView requests continue to accept logical IDs, observed revision/epoch and fixed actions only; no path,

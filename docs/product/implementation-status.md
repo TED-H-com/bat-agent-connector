@@ -1,5 +1,46 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-04：Connector 0.2.14／Desktop 0.1.10 發布準備（分支）
+
+依 owner 要求直接推進更新，不再以舊版現場排查作為發布準備的前置條件。
+`release/0.2.14-desktop-0.1.10` 包含 #494 的未連線診斷與 Fleet 恢復入口，
+以及主線已合併的 Windows 背景程序、服務恢復與 Fleet 監控修正。
+Python／桌面版本一起前進；打包升級測試改以正式 0.2.12／0.1.8 的固定來源為起點，
+驗證原身分、資料與操作意圖的保留。新版套件仍走未簽章安裝器的手動更新方式。
+本機兩份實際核心的 0.2.12 → 0.2.14 升級測試通過，含並行啟動、忙碌拒絕、
+原發布操作與資料保留。首次候選 CI 找出 canonical／產生的技能版本尚未同步，
+已更新來源版本並重新產生兩個 adapter；該次失敗不列為通過證據。
+後續 Intel Mac CI 找出測試用共用鎖的等待競爭：釋放後其他 fixture 可先取得鎖，
+原五秒收件期限因而誤判失敗。測試改在既有有界 admission 完成、join waiter 後收件，
+保留持鎖時不得進入的斷言；未增加子程序工作期限或改動產品行為。修正後 CI 另行記錄。
+目前為發布候選：尚未合併、發布、安裝或實機驗證，不能據此宣稱舊版故障已在現場消失。
+E03／E11 的恢復改善不代表 E00–E11、A01–A40、R0–R5 或 PM v1.2 全部驗收。
+
+## 2026-11-04：未連線時的 Fleet 恢復與啟動診斷（分支）
+
+`fix/disconnected-startup-diagnostics-20261104` 從 `a3204616` 接續。
+診斷匯出在尚無前端憑證時不再自行新增 capabilities 401；來源標為未嘗試，
+真正 HTTP 拒絕仍保留。桌面匯出新增唯讀 native／managed 狀態、錯誤碼與各自讀取時間，
+並提供 Python `managed-central/service.log` 的固定位置範本；不匯出私人路徑、身分或錯誤全文。
+同時依原生安裝器修正既有診斷與雙語指南的資料庫目錄：`central` 改為 `managed-central`。
+首次連線設定尚未完成時，已設定且支援的本機 Fleet 仍能從設定頁讀取與接續原轉換。
+重新開啟只查回原紀錄，需使用者按既有按鈕才推進；未設定的 Fleet 維持原首次設定畫面。
+本項是 E03／E11 恢復與診斷增量，不代表實機 Fleet 轉換、Connector 啟動或 BAT 連線已恢復，
+也不代表 E00–E11、A01–A40、R0–R5 或 PM v1.2 未完成項目已驗收。
+
+This branch adds disconnected-startup evidence without making Connector calls
+that cannot leave the client. Native and managed status reads remain independent,
+read-only and fenced by connection epoch. Real HTTP 401 responses remain visible.
+Existing configured Fleet also remains reachable during incomplete Connector setup,
+with explicit continuation of the original migration and no automatic start.
+Node 581 and related browser/IPC 138 checks pass (4 declared skips), with both builds and Ruff.
+The corrected managed installation paths also pass 32 diagnostic Node checks and
+43 diagnostic browser/IPC checks after rebuilding both frontends.
+The initial new UI cases used an ambiguous export-button locator; the corrected
+cases pass in both locales. Full Python regression was interrupted to include the
+subsequently confirmed Fleet recovery fix; its replacement run is in progress. This branch is not
+merged, released, installed or live-tested; no private incident files are committed.
+
 ## 2026-11-04 續作：操作紀錄完整續頁（分支）
 
 從主線 `dfefdbfc` 接續；前項原操作恢復已由

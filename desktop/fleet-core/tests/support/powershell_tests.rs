@@ -201,14 +201,18 @@ fn fixture_mutex_excludes_other_threads_before_spawn() {
         let _fixture = Fixture::new();
         acquired_tx.send(()).unwrap();
     });
-    attempt_rx.recv().unwrap();
-    assert_eq!(
-        acquired_rx.recv_timeout(Duration::from_millis(100)),
-        Err(mpsc::RecvTimeoutError::Timeout)
-    );
+    let attempted = attempt_rx.recv_timeout(Duration::from_secs(5));
+    let while_held = acquired_rx.recv_timeout(Duration::from_millis(100));
     drop(fixture);
-    acquired_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-    worker.join().unwrap();
+    // Other fixtures may acquire this shared gate before the waiter. Admission
+    // has its own bounded queue budget; this test must not replace it with a
+    // five-second deadline that also includes unrelated fixtures' child work.
+    // Always release and join before asserting so a failure leaves no waiter.
+    let joined = worker.join();
+    assert!(attempted.is_ok());
+    assert_eq!(while_held, Err(mpsc::RecvTimeoutError::Timeout));
+    joined.unwrap();
+    acquired_rx.try_recv().unwrap();
 }
 
 fn panic_message(run: impl FnOnce()) -> String {

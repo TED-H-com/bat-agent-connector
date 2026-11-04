@@ -17933,6 +17933,10 @@ function projectionBuild(projection) {
 //#endregion
 //#region src/diagnostics.js
 var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
+function nativeFailureCode(error) {
+	const value = typeof error === "string" ? error : error?.code || error?.message;
+	return typeof value === "string" ? code(value.match(/^([A-Z][A-Z0-9_]{0,79})(?=$|: | \()/)?.[1]) : null;
+}
 var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
 var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
@@ -18034,9 +18038,9 @@ function buildLine(projection, t) {
 var APP = "io.betteragent.dashboard";
 function logLocations(os, managed) {
 	const root = managed ? {
-		linux: `~/.local/share/${APP}/central`,
-		macos: `~/Library/Application Support/${APP}/central`,
-		windows: `%LOCALAPPDATA%\\${APP}\\central`
+		linux: `~/.local/share/${APP}/managed-central`,
+		macos: `~/Library/Application Support/${APP}/managed-central`,
+		windows: `%LOCALAPPDATA%\\${APP}\\managed-central`
 	}[os] : {
 		linux: "~/.local/state/bat-agent-connector",
 		macos: "~/.local/state/bat-agent-connector",
@@ -18044,6 +18048,7 @@ function logLocations(os, managed) {
 	}[os];
 	return {
 		state_database: root ? root + (os === "windows" ? "\\" : "/") + (managed ? os === "windows" ? "state\\" : "state/" : "") + "tasks.sqlite3" : null,
+		service_log: managed && root ? root + (os === "windows" ? "\\" : "/") + "service.log" : null,
 		runtime_stderr: managed ? "not_persisted_by_desktop" : "external_service_configuration",
 		location: "default_template_only"
 	};
@@ -18058,7 +18063,10 @@ function scrubDiagnostics(text) {
 		"linux",
 		"macos",
 		"windows"
-	].flatMap((os) => [false, true].map((managed) => logLocations(os, managed).state_database)));
+	].flatMap((os) => [false, true].flatMap((managed) => {
+		const locations = logLocations(os, managed);
+		return [locations.state_database, locations.service_log];
+	})));
 	return JSON.stringify(JSON.parse(text, (_key, input) => {
 		if (typeof input !== "string") return input;
 		let value = input;
@@ -18136,6 +18144,12 @@ function buildDiagnostics(input) {
 	].map((key) => [key, diagnosticsSource(input.sourceReads?.[key])]));
 	const sources = Object.fromEntries(Object.entries(sourceReads).map(([key, read]) => [key, read.status === "available" ? "available" : "not_available"]));
 	const versions = versionProjection(input);
+	const native = input.nativeConnectionRead?.data;
+	const localRead = (read) => diagnosticsSource({
+		completed: !!read?.data,
+		at: read?.at,
+		error: read?.error
+	});
 	const bundle = {
 		schema: "batc.diagnostics.v1",
 		exported_at: time(input.exportedAt),
@@ -18143,6 +18157,29 @@ function buildDiagnostics(input) {
 		versions,
 		sources,
 		source_reads: sourceReads,
+		desktop_connection: input.desktop ? {
+			status_read: localRead(input.nativeConnectionRead),
+			configuration_source: select(native?.configuration_source, ["managed", "external"]),
+			connected: bool(native?.connected),
+			credential_available: bool(native?.credential_available),
+			error_code: nativeFailureCode(native?.error),
+			managed_runtime: {
+				status_read: localRead(input.managedConnectionRead),
+				mode: select(input.managedRuntime?.mode, [
+					"managed",
+					"external",
+					"role_pending"
+				]),
+				ready: bool(input.managedRuntime?.ready),
+				background: bool(input.managedRuntime?.background),
+				lifecycle: select(input.managedRuntime?.lifecycle?.state, [
+					"running",
+					"stop_pending",
+					"stopped"
+				]),
+				error_code: nativeFailureCode(input.managedRuntime?.error)
+			}
+		} : null,
 		hosts: hosts.map((host, i) => {
 			const policy = input.caps?.hosts?.find((h) => h.host === host.host) || {};
 			const policyFlags = flags(host.policy || policy, [
@@ -18239,6 +18276,11 @@ function buildDiagnostics(input) {
 				managed_desktop: databaseTemplates(true),
 				standalone: databaseTemplates(false)
 			},
+			managed_service_log: Object.fromEntries([
+				"linux",
+				"macos",
+				"windows"
+			].map((os) => [os, logLocations(os, true).service_log])),
 			runtime_stderr: {
 				managed_desktop: "not_persisted_by_desktop",
 				standalone: "external_service_configuration"
@@ -69915,12 +69957,13 @@ var nativeVersionRead = null;
 var paintVersions = () => {
 	for (const paint of [...versionPainters]) paint();
 };
-function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch) {
+function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch, error = null) {
 	if (epoch !== state.epoch) return;
 	if (versionReads.epoch !== epoch) versionReads = { epoch };
 	versionReads[key] = {
 		data,
-		at
+		at,
+		error
 	};
 	if (key === "capabilities" && data && state.health) state.health.currentCaps = data;
 	paintVersions();
@@ -69929,7 +69972,10 @@ async function readNativeVersions() {
 	if (!nativeDesktop) return;
 	if (nativeVersionRead?.epoch === state.epoch) return nativeVersionRead.promise;
 	const epoch = state.epoch;
-	const promise = Promise.allSettled([nativeStatus().then((value) => rememberVersionRead("native", value.app_build, void 0, epoch)), managedControl({ action: "status" }).then((value) => rememberVersionRead("managed", value, void 0, epoch))]).finally(() => {
+	const promise = Promise.allSettled([nativeStatus().then((value) => {
+		rememberVersionRead("native", value.app_build, void 0, epoch);
+		rememberVersionRead("nativeConnection", value, void 0, epoch);
+	}, (error) => rememberVersionRead("nativeConnection", null, void 0, epoch, { code: nativeFailureCode(error) || "NATIVE_STATUS_UNAVAILABLE" })), managedControl({ action: "status" }).then((value) => rememberVersionRead("managed", value, void 0, epoch), (error) => rememberVersionRead("managed", null, void 0, epoch, { code: nativeFailureCode(error) || "MANAGED_STATUS_UNAVAILABLE" }))]).finally(() => {
 		if (nativeVersionRead?.epoch === epoch) nativeVersionRead = null;
 	});
 	nativeVersionRead = {
@@ -69956,6 +70002,8 @@ function diagnosticsClient(caps = versionReads.epoch === state.epoch ? versionRe
 		capabilitiesReadAt: reads.capabilities?.at,
 		managedRuntime: reads.managed?.data,
 		managedReadAt: reads.managed?.at,
+		nativeConnectionRead: reads.nativeConnection,
+		managedConnectionRead: reads.managed,
 		adapterRead: reads.adapter ? {
 			document: reads.adapter.data,
 			at: reads.adapter.at
@@ -70007,7 +70055,7 @@ async function openDiagnostics() {
 					};
 				}
 			};
-			const capabilities = await read("/capabilities");
+			const capabilities = await read("/capabilities", null, true, !!state.token);
 			caps = capabilities.data || null;
 			if (epoch !== state.epoch) throw Error("Connection changed");
 			if (!caps?.scopes?.includes("observe")) withdrawDiagnostics();
@@ -76128,9 +76176,14 @@ async function viewNativeSettings(main) {
 			class: "brand-mark",
 			"aria-hidden": "true"
 		}), h("p", {}, t("global_first_sentence")), h("a", { href: setupGuide() }, t("global_setup_guide")));
-		return () => disposeUpdates?.();
+		const fleet = await fleetAvailability().catch(() => null);
+		if (mine !== generation || !main.isConnected) {
+			disposeUpdates?.();
+			return;
+		}
+		if (fleet?.configured !== true || fleet?.platform_supported !== true) return () => disposeUpdates?.();
 	}
-	frame.show("desktop");
+	if (!firstConnection) frame.show("desktop");
 	const disposeFleet = await mountFleet(fleetRoot, {
 		h,
 		t,

@@ -1,6 +1,21 @@
 # Changelog
 
-## Next release (unreleased)
+## 0.2.14 / Desktop 0.1.10 (release candidate)
+
+- Ship the accumulated managed-service recovery and Windows background-process fixes,
+  including retained installation identity across interrupted startup, private pointer
+  replacement, and Fleet monitor supervision. The packaged upgrade fixture now starts
+  from the actual stable Connector 0.2.12 / Desktop 0.1.8 source.
+- Keep configured Fleet recovery accessible when local Connector setup is incomplete.
+  Reopening Settings reads the original transition; continuing it remains explicit.
+- Export native startup status without adding a synthetic capabilities 401 while
+  disconnected. Correct database and service-log paths to `managed-central` in the
+  diagnostic bundle and both setup guides.
+- Use distinct Connector and Desktop versions so the bundled core can take the
+  existing identity-preserving upgrade path. Package/CI evidence remains separate
+  from installation on a user's Windows machine and real BAT acceptance.
+
+## Development history
 
 - Review an existing BAT connection before applying it. A read-only preview shows the configuration
   changes and source boundary without saving configuration, creating an operation or probing
