@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Add opt-in read-only host deployment observations over pinned SSH, with container,
+  compose, systemd and configured Git deployment metadata in the API, CLI and Dashboard.
+
 - Review an existing BAT connection before applying it. A read-only preview shows the configuration
   changes and source boundary without saving configuration, creating an operation or probing
   BAT/SSH. Apply checks the reviewed revision and digest, and lost replies retain the original
