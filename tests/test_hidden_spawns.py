@@ -11,6 +11,14 @@ GUARD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(GUARD)
 
 
+def test_installer_task_repair_failure_only_logs_warning():
+    hook = (Path(__file__).parents[1] / 'desktop/scripts/windows/installer-hooks.nsh').read_text()
+    failure = hook.split('${If} $0 != 0', 1)[1].split('${EndIf}', 1)[0]
+    assert failure.strip() == 'DetailPrint "Warning: Fleet monitor task update failed (exit code: $0): $1"'
+    assert 'Abort' not in hook
+    assert 'SetErrorLevel' not in hook
+
+
 @pytest.mark.parametrize(('path', 'source'), [
     ('main.rs', 'let child = std::process::Command::new("git").spawn();'),
     ('main.rs', 'command.creation_flags(0);'),

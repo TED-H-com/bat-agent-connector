@@ -245,8 +245,9 @@ current user and whose single action targets this installation's Dashboard execu
 with `--fleet-supervisor`. It preserves arguments, triggers and other settings, creates
 no task when absent and leaves foreign tasks alone. PowerShell runs through NSIS's
 windowless nsExec plugin with `-NoProfile -NonInteractive -WindowStyle Hidden`.
-The hook reports a nonzero repair result as an installer failure rather than silently
-claiming success.
+The hook logs a warning through `DetailPrint` for a nonzero repair result, including
+the exit code and captured output. Repair failure never aborts the install or sets
+an installer error level; ordinary installs and updater installs continue.
 
 Initial SSH tunnels and reconnect/respawn attempts already shared
 `WindowsEffects::launch -> tunnel::launch -> WindowsPlatform::spawn`. Their command

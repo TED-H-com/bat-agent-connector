@@ -7,8 +7,6 @@
   Pop $0
   Pop $1
   ${If} $0 != 0
-    DetailPrint "Fleet monitor task update failed: $1"
-    SetErrorLevel 1
-    Abort
+    DetailPrint "Warning: Fleet monitor task update failed (exit code: $0): $1"
   ${EndIf}
 !macroend
