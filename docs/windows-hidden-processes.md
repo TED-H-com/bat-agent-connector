@@ -95,7 +95,7 @@ Linux checks cannot establish physical Windows visual acceptance.
 | desktop/scripts/check-browser-assets.mjs:11 | `const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", relative], {cwd: root, encoding: "utf8"});` | Shared Node wrapper enforces windowsHide: true; argv, options, callbacks and promisified output retained. |
 | desktop/scripts/windows/install-fleet-monitor-task.ps1:27 | `$action = New-ScheduledTaskAction -Execute $exe -Argument $arguments` | Hidden task setting; GUI Dashboard directly, known console actions via trusted system conhost.exe --headless. |
 | desktop/scripts/windows/install-fleet-monitor-task.ps1:31 | `$settings = New-ScheduledTaskSettingsSet -Hidden -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -R` | Hidden task setting; GUI Dashboard directly, known console actions via trusted system conhost.exe --headless. |
-| desktop/scripts/windows/install-fleet-monitor-task.ps1:32 | `Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force` | Hidden task setting; GUI Dashboard directly, known console actions via trusted system conhost.exe --headless. |
+| desktop/scripts/windows/install-fleet-monitor-task.ps1:35 | `Register-ScheduledTask -TaskName $name -InputObject $definition -Force` | Hidden task setting; GUI Dashboard directly, known console actions via trusted system conhost.exe --headless. |
 | desktop/src-tauri/src/bridge.rs:5918 | `Standard child: bat_fleet_core::hidden_process::hidden_command(python)` | Shared constructor applies CREATE_NO_WINDOW; flag updates OR existing bits through hidden_flags. |
 | desktop/src-tauri/src/credentials_macos.rs:214 | `Standard child: bat_fleet_core::hidden_process::hidden_command(std::env::current_exe().unwrap())` | Shared constructor applies CREATE_NO_WINDOW; flag updates OR existing bits through hidden_flags. |
 | desktop/src-tauri/src/files.rs:2020 | `Standard child: bat_fleet_core::hidden_process::hidden_command(python)` | Shared constructor applies CREATE_NO_WINDOW; flag updates OR existing bits through hidden_flags. |
@@ -226,6 +226,58 @@ Linux checks cannot establish physical Windows visual acceptance.
 | scripts/check-hidden-spawns.py:83 | Git source-file listing for the CI guard | CREATE_NO_WINDOW on Windows; NUL-separated UTF-8 paths preserve Unicode and spaces. |
 | desktop/fleet-core/src/windows_startup.rs:234 | Fleet login shortcut (Dashboard supervisor, or legacy wscript/Open BAT.vbs) | Release Dashboard is GUI-subsystem; legacy login already uses wscript/VBS instead of a console host. Preserve ownership and shortcut matching. |
 | desktop/src-tauri/src/managed_login.rs:17 | Managed Connector per-user Run login entry | Targets the release Dashboard GUI executable with --managed-login; its child runtime uses the shared hidden constructor. |
+
+## Windows field follow-up
+
+The sole maintained registration path is
+`desktop/scripts/windows/install-fleet-monitor-task.ps1`. It builds a task definition
+with `Settings.Hidden=true` and force-registers that definition, including replacement
+of an existing task. `-DefinitionOnly` returns the same definition without registering
+it, for the Windows definition test. There are no Rust/TypeScript task XML generators
+or `schtasks` registration calls in this repository. Interactive logon remains intentional:
+Hidden is independent of the principal's logon type.
+
+Previously, upgrading the desktop did not repair a task installed before the hidden
+setting was added. The NSIS postinstall hook now runs
+`repair-fleet-monitor-task.ps1` during both ordinary installs and updater installs.
+It changes only Hidden on an existing root Fleet Monitor task whose principal is the
+current user and whose single action targets this installation's Dashboard executable
+with `--fleet-supervisor`. It preserves arguments, triggers and other settings, creates
+no task when absent and leaves foreign tasks alone. PowerShell runs through NSIS's
+windowless nsExec plugin with `-NoProfile -NonInteractive -WindowStyle Hidden`.
+The hook reports a nonzero repair result as an installer failure rather than silently
+claiming success.
+
+Initial SSH tunnels and reconnect/respawn attempts already shared
+`WindowsEffects::launch -> tunnel::launch -> WindowsPlatform::spawn`. Their command
+construction is now factored into `tunnel_command`, retaining the shared
+`hidden_process::hidden_command` and its CREATE_NO_WINDOW flag for every attempt.
+A Windows-only test executes the production command builder with a child that checks
+GetConsoleWindow; the existing supervisor recovery fixture exercises capped retries.
+There is no separate unhidden reconnect constructor to repair.
+
+**Sidecar lifetime remains outside this repository.** There is no
+`BAT_SIDECAR_ENTRY_PATH` launcher or Node sidecar runtime here. That variable belongs
+to Better Agent Terminal's `src-tauri/crates/bat-agent-bridge/src/lib.rs`.
+The inspected local BAT source uses `bat_host_support::subprocess::hide_console_window`
+for Node, but its `SidecarHandle` has no Drop implementation despite a comment claiming
+that retaining `Child` kills the process on drop. Rust's standard Child does not do that.
+The requested Windows Job Object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE and explicit
+normal-shutdown kill must be implemented and tested in BAT; this Connector commit
+does not claim to fix the orphan. It must leave non-Windows behavior unchanged.
+
+Follow-up tests cover the real generated task settings without live registration,
+upgrade repair through mocked task reads/writes, installer hook packaging and the
+shared tunnel command. Task Scheduler and child-console tests require Windows;
+Linux results do not establish native or physical-host acceptance.
+
+Follow-up Linux validation: Fleet-core `cargo test` passed, including the supervisor
+recovery fixture; focused Python checks passed 17 tests with two Windows-only tests
+skipped; the desktop fixture-input coverage check also passed. Formatting, focused
+Ruff and `scripts/check-hidden-spawns.py` passed.
+No full Python suite was run for this follow-up, as requested. The NSIS hook and
+Windows-only tests still require execution on Windows. This follow-up remains on the
+branch only: not pushed, merged, installed or live-tested.
 
 ## Validation and delivery status
 

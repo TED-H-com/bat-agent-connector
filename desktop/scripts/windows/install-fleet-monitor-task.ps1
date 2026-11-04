@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string] $ExePath,
-    [Parameter(Mandatory = $true)][string] $ConfigPath
+    [Parameter(Mandatory = $true)][string] $ConfigPath,
+    [switch] $DefinitionOnly
 )
 $ErrorActionPreference = 'Stop'
 $exe = (Resolve-Path -LiteralPath $ExePath).ProviderPath
@@ -10,7 +11,7 @@ if ($exe.Contains('"') -or $config.Contains('"')) { throw 'Invalid path quoting'
 $name = 'BAT-Connector Fleet Monitor'
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
-if ($existing) {
+if ($existing -and !$DefinitionOnly) {
     $backup = Join-Path (Split-Path -Parent $config) ('fleet-monitor-task-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fffffff') + '.xml')
     Export-ScheduledTask -TaskName $name | Set-Content -LiteralPath $backup -Encoding Unicode
 }
@@ -29,4 +30,6 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $trigger.Delay = 'PT45S'
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -Hidden -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
+$definition = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Settings $settings
+if ($DefinitionOnly) { return $definition }
+Register-ScheduledTask -TaskName $name -InputObject $definition -Force
