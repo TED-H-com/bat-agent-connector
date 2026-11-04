@@ -4124,9 +4124,13 @@ async function viewNativeSettings(main) {
     setup.prepend(h("span", {class: "brand-mark", "aria-hidden": "true"}),
       h("p", {}, t("global_first_sentence")),
       h("a", {href: setupGuide()}, t("global_setup_guide")));
-    return () => disposeUpdates?.();
+    // Existing local Fleet recovery must not depend on the Connector booting.
+    // Keep new/unconfigured installations focused on their first setup step.
+    const fleet = await fleetAvailability().catch(() => null);
+    if (mine !== generation || !main.isConnected) {disposeUpdates?.(); return;}
+    if (fleet?.configured !== true || fleet?.platform_supported !== true) return () => disposeUpdates?.();
   }
-  frame.show("desktop");
+  if (!firstConnection) frame.show("desktop");
   const disposeFleet = await mountFleet(fleetRoot, {h, t, onStatus: rememberFleetHealth});
   if (mine !== generation || !main.isConnected) { disposeFleet?.(); disposeUpdates?.(); return; }
   const disposeTailscale = await fleetTailscale(fleetRoot, () => {

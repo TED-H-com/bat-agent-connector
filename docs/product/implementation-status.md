@@ -1,20 +1,25 @@
 # Better Agent Dashboard／Connector 實作狀態
 
-## 2026-11-04：未連線時的啟動診斷（分支）
+## 2026-11-04：未連線時的 Fleet 恢復與啟動診斷（分支）
 
 `fix/disconnected-startup-diagnostics-20261104` 從 `a3204616` 接續。
 診斷匯出在尚無前端憑證時不再自行新增 capabilities 401；來源標為未嘗試，
 真正 HTTP 拒絕仍保留。桌面匯出新增唯讀 native／managed 狀態、錯誤碼與各自讀取時間，
 並提供 Python `central/service.log` 的固定位置範本；不匯出私人路徑、身分或錯誤全文。
-本項是 E11 診斷增量，不代表 Fleet 轉換、Connector 啟動或 BAT 連線已修復，
+首次連線設定尚未完成時，已設定且支援的本機 Fleet 仍能從設定頁讀取與接續原轉換。
+重新開啟只查回原紀錄，需使用者按既有按鈕才推進；未設定的 Fleet 維持原首次設定畫面。
+本項是 E03／E11 恢復與診斷增量，不代表實機 Fleet 轉換、Connector 啟動或 BAT 連線已恢復，
 也不代表 E00–E11、A01–A40、R0–R5 或 PM v1.2 未完成項目已驗收。
 
 This branch adds disconnected-startup evidence without making Connector calls
 that cannot leave the client. Native and managed status reads remain independent,
 read-only and fenced by connection epoch. Real HTTP 401 responses remain visible.
-Node 581 and related browser/IPC 67 checks pass, with both frontend builds and Ruff.
+Existing configured Fleet also remains reachable during incomplete Connector setup,
+with explicit continuation of the original migration and no automatic start.
+Node 581 and related browser/IPC 138 checks pass (4 declared skips), with both builds and Ruff.
 The initial new UI cases used an ambiguous export-button locator; the corrected
-cases pass in both locales. Full Python regression is pending. This branch is not
+cases pass in both locales. Full Python regression was interrupted to include the
+subsequently confirmed Fleet recovery fix; its replacement run is in progress. This branch is not
 merged, released, installed or live-tested; no private incident files are committed.
 
 ## 2026-11-04 續作：操作紀錄完整續頁（分支）

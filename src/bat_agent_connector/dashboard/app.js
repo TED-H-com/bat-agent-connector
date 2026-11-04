@@ -76176,9 +76176,14 @@ async function viewNativeSettings(main) {
 			class: "brand-mark",
 			"aria-hidden": "true"
 		}), h("p", {}, t("global_first_sentence")), h("a", { href: setupGuide() }, t("global_setup_guide")));
-		return () => disposeUpdates?.();
+		const fleet = await fleetAvailability().catch(() => null);
+		if (mine !== generation || !main.isConnected) {
+			disposeUpdates?.();
+			return;
+		}
+		if (fleet?.configured !== true || fleet?.platform_supported !== true) return () => disposeUpdates?.();
 	}
-	frame.show("desktop");
+	if (!firstConnection) frame.show("desktop");
 	const disposeFleet = await mountFleet(fleetRoot, {
 		h,
 		t,
