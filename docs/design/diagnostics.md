@@ -9,6 +9,28 @@ telemetry, credentials fallback or central mutation is introduced.
 All OS templates for managed desktop and standalone installations are included;
 the client's OS does not establish the Connector's OS or actual state directory.
 
+## Disconnected desktop startup
+
+Export is available before a Connector connection succeeds. Without a frontend
+credential, it does not call capabilities or add a local `UNAUTHORIZED` to the
+failure ring; capabilities and dependent reads remain `not_attempted`. Real HTTP
+refusals from attempted reads retain their existing status and code.
+
+The additive `desktop_connection` field is null in the browser. Desktop exports
+read-only native status and managed status independently of the Connector, with
+each read's classification and timestamp. The projection selects configuration
+source, connected/credential-available booleans, managed mode/readiness/background,
+lifecycle state and leading error codes. Failed IPC reads have null HTTP status
+and a code; missing facts stay null. These reads neither start a service nor
+advance Fleet transitions. Connection-epoch fences still reject old reads.
+Endpoints, paths, principals, credentials and free-text recovery advice are omitted.
+
+`log_locations.managed_service_log` supplies fixed templates for Python's
+`central/service.log` on every OS. The older `runtime_stderr` field describes
+discarded native launcher stderr; it does not mean the detached Python service
+has no log. Templates do not establish that a file exists or contains a current
+failure. The export does not read logs or the state database.
+
 ## Source reads and compatibility
 
 `batc.diagnostics.v1` evolves additively. Existing `sources` entries retain the

@@ -7,6 +7,50 @@ const about=(page,locale)=>page.locator('#settings-tab-about');
 const open=async(page,locale,beforeExport=()=>{})=>{await page.goto('/dashboard/#/settings');await about(page,locale).click();beforeExport();await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');};
 for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
  test.use({locale});
+ test('startup failure exports native evidence repeatedly without a synthetic 401',async({page})=>{
+  const state=await diagnosticsFixture(page,true);
+  Object.assign(state.nativeReads.status,{configuration_source:'managed',configuration_setup:true,connected:false,credential_available:false,
+   error:'MANAGED_RUNTIME_START_FAILED: C:\\Users\\Example Person\\private'});
+  Object.assign(state.nativeReads.managed,{mode:'managed',ready:false,background:false,error:'MANAGED_RUNTIME_START_FAILED'});
+  await page.goto('/dashboard/#/settings');await about(page,locale).click();
+  for(let attempt=0;attempt<3;attempt++){
+   const before=state.reads.length;
+   await page.getByRole('button',{name:locale==='en'?'Export diagnostics':'匯出診斷資料',exact:true}).click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+   const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+   expect(bundle.source_reads.capabilities).toMatchObject({status:'not_attempted',http_status:null,code:null});
+   expect(bundle.recent_errors).toEqual([]);expect(state.reads.slice(before)).toEqual([]);
+   expect(bundle.desktop_connection).toMatchObject({configuration_source:'managed',connected:false,credential_available:false,error_code:'MANAGED_RUNTIME_START_FAILED',
+    status_read:{status:'available',http_status:null},managed_runtime:{mode:'managed',ready:false,error_code:'MANAGED_RUNTIME_START_FAILED'}});
+   expect(bundle.client.app_version).toBe('0.1.1');
+   expect(bundle.log_locations.managed_service_log.windows).toBe('%LOCALAPPDATA%\\io.betteragent.dashboard\\central\\service.log');
+   expect(JSON.stringify(bundle)).not.toMatch(/Example Person|private-box|192\.0\.2\.8|batc_secret/);
+   await page.getByRole('dialog').getByRole('button',{name:locale==='en'?'Close':'關閉',exact:true}).click();
+  }
+ });
+ test('native status IPC failure is distinct from unavailable Connector HTTP',async({page})=>{
+  const state=await diagnosticsFixture(page,true);
+  Object.assign(state.nativeReads.status,{connected:false,credential_available:false,error:'MANAGED_RUNTIME_START_FAILED'});
+  await page.goto('/dashboard/#/settings');await about(page,locale).click();
+  state.nativeReads.statusError='private native failure C:\\Users\\Example Person\\private';
+  state.nativeReads.managedError='MANAGED_RUNTIME_UNAVAILABLE: private managed failure';
+  await page.getByRole('button',{name:locale==='en'?'Export diagnostics':'匯出診斷資料',exact:true}).click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+  const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+  expect(bundle.desktop_connection.status_read).toMatchObject({status:'failed',http_status:null,code:'NATIVE_STATUS_UNAVAILABLE'});
+  expect(bundle.desktop_connection.managed_runtime.status_read).toMatchObject({status:'failed',http_status:null,code:'MANAGED_RUNTIME_UNAVAILABLE'});
+  expect(bundle.desktop_connection.connected).toBeNull();expect(bundle.desktop_connection.error_code).toBeNull();
+  expect(bundle.desktop_connection.managed_runtime.ready).toBeNull();
+  expect(bundle.source_reads.capabilities.status).toBe('not_attempted');expect(bundle.recent_errors).toEqual([]);
+  expect(JSON.stringify(bundle)).not.toMatch(/private native|private managed|Example Person/);
+ });
+ test('a real capabilities refusal remains a recorded HTTP 401',async({page})=>{
+  const state=await diagnosticsFixture(page,true);
+  await open(page,locale,()=>{state.producer.capabilitiesStatus=401;});
+  const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+  expect(state.reads).toContain('/capabilities');
+  expect(bundle.source_reads.capabilities).toMatchObject({status:'failed',http_status:401,code:'UNAUTHORIZED'});
+  expect(bundle.recent_errors).toContainEqual(expect.objectContaining({path_template:'/v1/capabilities',status:401,code:'UNAUTHORIZED'}));
+  expect(JSON.stringify(bundle)).not.toContain('private refusal');
+ });
  test('export separates a refused source from missing manage scope',async({page})=>{
   const state=await diagnosticsFixture(page);state.producer.bootstrap=structuredClone(bootstrap);state.operationsStatus=403;
   const posts:string[]=[];page.on('request',request=>{if(request.method()==='POST')posts.push(request.url());});

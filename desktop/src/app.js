@@ -9,7 +9,7 @@ import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
 import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation, connectionReturn} from './work-paths.js';
-import {buildDiagnostics, buildLine, errorRing, sessionFacts} from './diagnostics.js';
+import {buildDiagnostics, buildLine, errorRing, sessionFacts, nativeFailureCode} from './diagnostics.js';
 import {diagnosticsDialog} from './diagnostics-dialog.js';
 import {versionProjection} from './version-projection.js';
 import {versionFacts} from './version-facts.js';
@@ -91,10 +91,10 @@ let diagnosticRevision = 0, diagnosticsPreview = null;
 const versionPainters = new Set();
 let versionReads = {epoch:-1}, nativeVersionRead = null;
 const paintVersions = () => {for(const paint of [...versionPainters])paint();};
-function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch) {
+function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch, error = null) {
   if(epoch !== state.epoch)return;
   if(versionReads.epoch !== epoch)versionReads = {epoch};
-  versionReads[key] = {data,at};
+  versionReads[key] = {data,at,error};
   if (key === 'capabilities' && data && state.health) state.health.currentCaps = data;
   paintVersions();
 }
@@ -103,8 +103,12 @@ async function readNativeVersions() {
   if(nativeVersionRead?.epoch === state.epoch)return nativeVersionRead.promise;
   const epoch = state.epoch;
   const promise = Promise.allSettled([
-    nativeStatus().then(value => rememberVersionRead('native',value.app_build,undefined,epoch)),
-    managedControl({action:'status'}).then(value => rememberVersionRead('managed',value,undefined,epoch)),
+    nativeStatus().then(value => {
+      rememberVersionRead('native',value.app_build,undefined,epoch);
+      rememberVersionRead('nativeConnection',value,undefined,epoch);
+    }, error => rememberVersionRead('nativeConnection',null,undefined,epoch,{code:nativeFailureCode(error) || 'NATIVE_STATUS_UNAVAILABLE'})),
+    managedControl({action:'status'}).then(value => rememberVersionRead('managed',value,undefined,epoch),
+      error => rememberVersionRead('managed',null,undefined,epoch,{code:nativeFailureCode(error) || 'MANAGED_STATUS_UNAVAILABLE'})),
   ]).finally(() => {if(nativeVersionRead?.epoch === epoch)nativeVersionRead=null;});
   nativeVersionRead = {epoch,promise};
   return promise;
@@ -118,6 +122,7 @@ function diagnosticsClient(caps = versionReads.epoch === state.epoch ? versionRe
   return {caps, appBuild:reads.native?.data, desktop:nativeDesktop,
     online:state.online, nativeReadAt:reads.native?.at, capabilitiesReadAt:reads.capabilities?.at,
     managedRuntime:reads.managed?.data, managedReadAt:reads.managed?.at,
+    nativeConnectionRead:reads.nativeConnection, managedConnectionRead:reads.managed,
     adapterRead:reads.adapter ? {document:reads.adapter.data,at:reads.adapter.at} : null,
     adapterRunRead:reads.adapterRun ? {run:reads.adapterRun.data,at:reads.adapterRun.at} : null,
     updater:reads.updater?.data, updaterReadAt:reads.updater?.at,
@@ -135,7 +140,8 @@ async function openDiagnostics() {
       try {return {data:await api('GET',path),completed:true,at:new Date().toISOString()};}
       catch(error){return {error:{status:error.status,code:error.code},at:new Date().toISOString()};}
     };
-    const capabilities=await read('/capabilities');caps=capabilities.data || null;
+    // No credential means no request can reach the Connector. Do not fabricate a server 401.
+    const capabilities=await read('/capabilities',null,true,!!state.token);caps=capabilities.data || null;
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(!caps?.scopes?.includes('observe'))withdrawDiagnostics();
     const revision=diagnosticRevision;
