@@ -37,6 +37,18 @@ Initial UI failures exposed lost pagination focus, now fixed; selected-inspector
 refresh is exercised through events, including the mobile modal. Initial failures
 and interrupted runs remain in the local logs.
 
+PR #492 的首次網站 CI 另發現主線 #490 已更換截圖工具 import，但公開截圖 manifest
+仍記錄舊工具 hash。本分支以同一已發布來源 `437ee6a7` 的獨立 checkout 重新擷取
+16 張圖、48 組雙語響應式檢查，更新真實擷取時間與 digest；671 個連結／靜態資源及
+網站瀏覽器檢查通過。產品來源、版本與實機驗收宣告沒有改變，原 CI 失敗仍保留。
+
+The first #492 website CI found a stale capture-tool hash inherited from #490.
+All 16 screenshots were recaptured from the same published `437ee6a7` source in an
+isolated checkout, with 48 bilingual responsive checks. The refreshed manifest records
+the actual capture and digests; 671 link/asset checks and the website browser checks
+passed. The product source, release and acceptance claims remain unchanged; the initial
+CI failure remains recorded.
+
 ## 2026-11-03 續作：原連線操作的恢復說明（分支）
 
 從主線 `4986c7e4` 接續 EC-1.1 首次使用與恢復穩定化。
