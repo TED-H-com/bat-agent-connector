@@ -13,7 +13,6 @@ use crate::{
 use std::{path::PathBuf, process::Stdio};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
     time::{timeout_at, Instant},
 };
 use zeroize::Zeroizing;
@@ -83,11 +82,11 @@ async fn transport(
     }
     // Store saves its ensure fence before this method. Even positive
     // local spawn failure remains fenced; it is never silently retried.
-    let mut child = Command::new(executable)
+    let mut child = crate::hidden_process::hidden_tokio_command(executable)
         .args(arguments)
         .env_clear()
         .envs(monitor_launch::environment(std::env::vars_os()))
-        .creation_flags(0x0800_0000)
+        .creation_flags(crate::hidden_process::hidden_flags(0x0800_0000))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

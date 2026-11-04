@@ -1,7 +1,7 @@
 // Used only by disposable installed-app fixtures. Never writes or logs credentials.
 import assert from 'node:assert/strict';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync } from '../../scripts/hidden-child-process.mjs';
 import { readFile, readdir, lstat, open, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';

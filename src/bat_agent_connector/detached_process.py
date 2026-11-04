@@ -6,7 +6,8 @@ which proves no child was created, and emit one fixed diagnostic without private
 from __future__ import annotations
 
 import ctypes as c
-import subprocess
+
+from bat_agent_connector import hidden_process
 
 BREAKAWAY = 0x01000000
 WARNING = b"MANAGED_SESSION_LIFETIME: connector may stop when the launching session ends\n"
@@ -48,11 +49,11 @@ def spawn(command, *, windows, **options):
         options["stderr"].write(WARNING)
         options["stderr"].flush()
     try:
-        return subprocess.Popen(command, **options)  # noqa: S603 - caller supplies fixed bundled executable
+        return hidden_process.popen(command, **options)  # noqa: S603 - caller supplies fixed bundled executable
     except OSError as error:
         if not allowed or getattr(error, "winerror", None) != 5:
             raise
         options["creationflags"] &= ~BREAKAWAY
         options["stderr"].write(WARNING)
         options["stderr"].flush()
-        return subprocess.Popen(command, **options)  # noqa: S603
+        return hidden_process.popen(command, **options)  # noqa: S603

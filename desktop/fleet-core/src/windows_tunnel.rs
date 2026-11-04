@@ -137,9 +137,9 @@ impl Platform for WindowsPlatform<'_> {
             return Err(SpawnFailure::NotStarted);
         }
         spawn_owned(
-            Command::new(&self.executable)
+            crate::hidden_process::hidden_command(&self.executable)
                 .args(plan.arguments())
-                .creation_flags(CREATE_NO_WINDOW)
+                .creation_flags(crate::hidden_process::hidden_flags(CREATE_NO_WINDOW))
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null()),
@@ -251,7 +251,7 @@ mod tests {
             "--nocapture",
         ];
         let launch = spawn_owned(
-            Command::new(std::env::current_exe().unwrap())
+            crate::hidden_process::hidden_command(std::env::current_exe().unwrap())
                 .args(args)
                 .env("BAT_FLEET_TUNNEL_FIXTURE", "1")
                 .stdin(Stdio::null())

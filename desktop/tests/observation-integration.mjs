@@ -1,5 +1,5 @@
 // Generated shared UI against actual central history/relations/discovery contracts. All hosts are MockBat.
-import {spawn} from "node:child_process";
+import {spawn} from "../../scripts/hidden-child-process.mjs";
 import {createInterface} from "node:readline";
 import {resolve} from "node:path";
 import assert from "node:assert/strict";

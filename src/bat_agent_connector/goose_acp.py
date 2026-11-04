@@ -11,6 +11,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from bat_agent_connector import hidden_process
+
 from .pm_providers import (
     ProviderCatalog,
     ProviderSetupError,
@@ -69,7 +71,7 @@ class GooseACP:
 
     async def check_pinned_version(self) -> str:
         """Contract preflight for the configured stock Goose executable."""
-        proc = await asyncio.create_subprocess_exec(self.config.command[0], "--version",
+        proc = await hidden_process.create_subprocess_exec(self.config.command[0], "--version",
                                                     stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.DEVNULL)
         try:
@@ -160,7 +162,7 @@ class GooseACP:
 
     async def _run_process(self, task_id: str, cwd: str, prompt: str, capability: str,
                            command: tuple[str, ...], env: dict[str, str], timeout_s: float) -> dict:
-        proc = await asyncio.create_subprocess_exec(*command, stdin=asyncio.subprocess.PIPE,
+        proc = await hidden_process.create_subprocess_exec(*command, stdin=asyncio.subprocess.PIPE,
                                                      stdout=asyncio.subprocess.PIPE,
                                                      stderr=asyncio.subprocess.DEVNULL, env=env)
         assert proc.stdin and proc.stdout

@@ -2,7 +2,7 @@ import {test, expect} from '@playwright/test';
 import {readFile, cp, mkdir, symlink, appendFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
-import {execFile} from 'node:child_process';
+import {execFile} from '../../scripts/hidden-child-process.mjs';
 import {promisify} from 'node:util';
 import {STRINGS} from '../src/i18n.js';
 import {diagnosticsFixture} from './diagnostics-fixture.ts';

@@ -259,7 +259,7 @@ mod tests {
         }"##,
         )
         .unwrap();
-        assert!(std::process::Command::new("rustc")
+        assert!(crate::hidden_process::hidden_command("rustc")
             .arg(&source)
             .arg("-o")
             .arg(&exe)
@@ -273,7 +273,7 @@ mod tests {
             ("large", LoginState::Unknown),
             ("timeout", LoginState::Unknown),
         ] {
-            let mut command = tokio::process::Command::new(&exe);
+            let mut command = crate::hidden_process::hidden_tokio_command(&exe);
             command
                 .arg(mode)
                 .stdin(std::process::Stdio::null())
@@ -290,11 +290,14 @@ mod tests {
             );
             assert!(started.elapsed() < std::time::Duration::from_secs(5));
         }
-        let mut command = tokio::process::Command::new(&exe);
+        let mut command = crate::hidden_process::hidden_tokio_command(&exe);
         command.arg("valid");
         assert_eq!(query_status(command).await, LoginState::NeedsLogin);
         assert_eq!(
-            query_status(tokio::process::Command::new(root.join("missing"))).await,
+            query_status(crate::hidden_process::hidden_tokio_command(
+                root.join("missing")
+            ))
+            .await,
             LoginState::Unknown
         );
         std::fs::remove_dir_all(root).unwrap();

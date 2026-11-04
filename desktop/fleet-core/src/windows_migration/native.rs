@@ -17,7 +17,7 @@ use crate::{
 use std::{
     os::windows::process::CommandExt,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Stdio,
     rc::Rc,
     time::Instant,
 };
@@ -219,7 +219,7 @@ impl WindowsMigration {
         self.verify_launch(current, Backend::Powershell)?;
         self.absence()?;
         let legacy = self.legacy()?;
-        let mut command = Command::new(&legacy.powershell);
+        let mut command = crate::hidden_process::hidden_command(&legacy.powershell);
         command
             .args(ps_arguments(
                 &legacy.script,
@@ -230,7 +230,7 @@ impl WindowsMigration {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW)
+            .creation_flags(crate::hidden_process::hidden_flags(CREATE_NO_WINDOW))
             .env_clear()
             .envs(ps_environment(&self.system, std::env::vars_os()));
         self.verify_launch(current, Backend::Powershell)?;

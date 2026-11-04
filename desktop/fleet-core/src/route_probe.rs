@@ -85,7 +85,7 @@ impl NativeRouteProbe {
     /// All commands share executable trust, process isolation and cancellation.
     fn command(&self) -> Option<Command> {
         let path = self.tailscale.as_ref().filter(|path| path.is_file())?;
-        let mut command = Command::new(path);
+        let mut command = crate::hidden_process::hidden_tokio_command(path);
         command
             .env_clear()
             .stdin(Stdio::null())
@@ -93,7 +93,7 @@ impl NativeRouteProbe {
             .kill_on_drop(true);
         #[cfg(windows)]
         {
-            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+            command.creation_flags(crate::hidden_process::hidden_flags(0x0800_0000)); // CREATE_NO_WINDOW
             for key in ["SystemRoot", "WINDIR"] {
                 if let Some(value) = std::env::var_os(key) {
                     command.env(key, value);

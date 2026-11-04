@@ -1997,7 +1997,7 @@ mod actual_central {
     use super::*;
     use std::{
         io::{BufRead, BufReader},
-        process::{Command, Stdio},
+        process::Stdio,
     };
     struct Fixture(std::process::Child);
     impl Drop for Fixture {
@@ -2017,7 +2017,7 @@ mod actual_central {
             .parent()
             .unwrap();
         let mut fixture = Fixture(
-            Command::new(python)
+            bat_fleet_core::hidden_process::hidden_command(python)
                 .arg(repo.join("desktop/tests/native-files-fixture.py"))
                 .current_dir(repo)
                 .env(

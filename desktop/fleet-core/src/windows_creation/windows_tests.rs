@@ -112,7 +112,7 @@ fn windows_creation_adapter_refuses_junction_ancestor_without_following_target()
     f.reader.directories.borrow_mut().clear();
     std::fs::remove_dir_all(&client).unwrap();
     assert!(
-        std::process::Command::new("cmd.exe")
+        crate::hidden_process::hidden_command("cmd.exe")
             .args(["/C", "mklink", "/J"])
             .arg(&client)
             .arg(&target)

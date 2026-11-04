@@ -1,6 +1,6 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 // Actual central admission and receipts; browser reply loss is injected after its request reached central.
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
 import {once} from 'node:events';

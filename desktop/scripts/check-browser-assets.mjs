@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import { execFileSync } from "../../scripts/hidden-child-process.mjs";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 

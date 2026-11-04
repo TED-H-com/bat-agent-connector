@@ -19,6 +19,8 @@ import sys
 import time
 from pathlib import Path
 
+from bat_agent_connector import hidden_process
+
 MAX_LINE_BYTES = 1024 * 1024
 MAX_STREAM_BYTES = 8 * 1024 * 1024
 
@@ -50,7 +52,7 @@ async def _call(callback, value):
 
 
 async def _spawn(*args, **kwargs):
-    return await asyncio.create_subprocess_exec(*args, **kwargs)
+    return await hidden_process.create_subprocess_exec(*args, **kwargs)
 
 
 def _process_identity(pid: int) -> dict:
