@@ -72651,6 +72651,7 @@ async function viewHostDiscovery(main, host) {
 			assertView(connection);
 			deployBody.replaceChildren(...data.hosts.map((row) => {
 				const box = h("div", {}, h("p", {}, row.error ? t("deploy_code_" + row.error) : `${row.hostname} · ${row.collected_at}`));
+				if (row.error) return box;
 				for (const key of [
 					"containers",
 					"compose_projects",
@@ -72658,7 +72659,7 @@ async function viewHostDiscovery(main, host) {
 					"deploys",
 					"errors"
 				]) {
-					const section = h("details", {}, h("summary", {}, `${t("deploy_" + key)} (${row[key]?.length || 0})`));
+					const section = h("details", { open: key === "errors" && !!row.errors?.length }, h("summary", {}, `${t("deploy_" + key)} (${row[key]?.length || 0})`));
 					for (const item of row[key] || []) section.append(h("p", {}, Object.entries(item).map(([name, value]) => `${t("deploy_field_" + name)}: ${["error", "code"].includes(name) && value ? t("deploy_code_" + value) : typeof value === "object" ? JSON.stringify(value) : value}`).join(" · ")));
 					box.append(section);
 				}
