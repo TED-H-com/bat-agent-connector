@@ -5,6 +5,7 @@ import {joinLabel} from './label-text.js';
 import {actionLabel, formatTime, operationDuration, operationStatusKey, operationStatusLabel, operationTargetText, reasonText} from './global-labels.js';
 import {viewState} from './ui/view-state.js';
 import {errorPresentation} from './error-presentation.js';
+import {operationPage} from './operation-page.js';
 
 export function operationList({h, t, api, guard, statuses, namespace}) {
   const memory = viewState(namespace || '', '', 'operations:' + (statuses || 'all'));
@@ -110,7 +111,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     if (sourceWithdrawn) {list.replaceChildren(emptyState({title:t('global_operations_unavailable')})); count.replaceChildren(); count.hidden = true; return;}
     const focus = list.contains(document.activeElement) ? document.activeElement.closest('[data-row-key]')?.dataset.rowKey : null;
     const shown = visible();
-    if (!rows.length) list.replaceChildren(emptyState({title: t('operations_empty')}));
+    if (!rows.length) list.replaceChildren(emptyState({title: t(before === null ? 'operations_empty' : 'operations_empty_page')}));
     else if (!shown.length) list.replaceChildren(emptyState({title: t('global_no_match')}));
     else list.replaceChildren(dataTable({
       columns, rows: shown, rowKey: 'operation_id', selected: memory.selected,
@@ -128,6 +129,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     }
   }
   function load(append = false) {
+    const restoreMore = append && document.activeElement === more;
     pending++; update();
     const job = queue.catch(() => {}).then(async () => {
       guard(); if (append && before === null) return;
@@ -139,13 +141,14 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
       for (let i = 0; i < targetPages; i++) {
         const params = new URLSearchParams({limit: '100'});
         if (statuses) params.set('status', statuses);
-        if (next !== null) params.set('before', String(next));
+        if (next !== null) {
+          params.set('before', String(next.time));
+          if (next.id !== null) params.set('before_id', next.id);
+        }
         const result = await api('GET', '/operations?' + params); guard();
-        if (!Array.isArray(result.operations) || result.operations.some(op => !/^op_[0-9a-f]{32}$/.test(op?.operation_id)) ||
-            result.next_before !== null && result.next_before !== undefined &&
-            (typeof result.next_before !== 'number' || !Number.isFinite(result.next_before) || result.next_before <= 0 ||
-              next !== null && result.next_before >= next || result.operations.length === 0)) throw new Error(t('operations_invalid_page'));
-        candidate.push(...result.operations); read++; next = result.next_before ?? null;
+        const page = operationPage(result, next);
+        if (!page) throw new Error(t('operations_invalid_page'));
+        candidate.push(...page.operations); read++; next = page.next;
         if (next === null) break;
       }
       guard(); rows = [...new Map(candidate.map(op => [op.operation_id, op])).values()];
@@ -165,7 +168,14 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
         const details = errorDetails(presentation);
         status.replaceChildren(h('p', {class: 'error', 'data-error-summary': ''}, presentation.summary), ...(details ? [details] : []));}
       throw error;
-    }).finally(() => {pending--; if (current()) update();});
+    }).finally(() => {
+      pending--;
+      if (current()) {
+        update();
+        if (restoreMore && !more.hidden && !more.disabled && document.activeElement === document.body)
+          more.focus({preventScroll: true});
+      }
+    });
     queue = job; return job;
   }
   update();
