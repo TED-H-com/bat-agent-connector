@@ -438,14 +438,14 @@ for en, zh, d, dz in [
     (
         "Match the package",
         "核對套件",
-        "Stable: Connector 0.2.12 / desktop 0.1.8, source 14c62830. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
-        "穩定版：Connector 0.2.12／desktop 0.1.8，來源 14c62830。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
+        "Stable: Connector 0.2.14 / desktop 0.1.10, source recorded in release-manifest.json. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
+        "穩定版：Connector 0.2.14／desktop 0.1.10，完整來源見 release-manifest.json。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
     ),
     (
         "Connect your environment",
         "連接環境",
-        "Get ready to work opens 1. Connect BAT. Paste BAT’s connection URL, check Host ID, then Verify and save host. After success, choose View sessions. Repository binding and verification commands stay collapsed until needed.",
-        "準備開始工作會展開「1. 連線至 BAT」。貼上 BAT 連線網址、核對主機代號，再按「驗證並儲存主機」。成功後按「查看工作階段」；儲存庫與驗證命令需要時再展開。",
+        "On a new installation, choose Provide a local workspace for a bundled Connector or Use existing services to join one. In 1. Connect BAT, check the connection details, choose Review connection, then Apply connection. After success, choose View sessions. Repository binding and verification commands stay collapsed until needed.",
+        "新安裝可選「提供本機工作區」準備內附 Connector，或選「使用既有服務」加入現有服務。在「1. 連線至 BAT」核對資料，按「預覽連線」，再按「套用連線」。成功後按「查看工作階段」；儲存庫與驗證命令需要時再展開。",
     ),
     (
         "Follow one result",
@@ -469,7 +469,7 @@ parts.append(
         "p",
     )
     + bi("Stable", "穩定版", "p")
-    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.12 --channel-check stable</code></pre>'
+    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.14 --channel-check stable</code></pre>'
     + bi("Prerelease", "預覽版", "p")
     + '<pre class="install-command" tabindex="0" aria-label="Preview installer arguments / 預覽版安裝器參數"><code>--tag v0.2.13-preview.20261022 --channel-check preview</code></pre>'
     + bi(
@@ -486,9 +486,9 @@ parts.append(
         "button light lang-zh",
     )
     + link(
-        repo + "/releases/tag/v0.2.12",
-        "Download stable 0.2.12 →",
-        "下載穩定版 0.2.12 →",
+        repo + "/releases/tag/v0.2.14",
+        "Download stable 0.2.14 →",
+        "下載穩定版 0.2.14 →",
         "text-link",
     )
     + link(

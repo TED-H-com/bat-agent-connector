@@ -52,7 +52,7 @@ async function checkLayout(page, lang, width) {
     const center = element => (bounds(element).left + bounds(element).right) / 2;
     const steps = [...document.querySelectorAll('.install-steps li')].map(element => bounds(element).width);
     const commandBlocks = [...document.querySelectorAll('#start pre code')];
-    const expectedCommands = ['--tag v0.2.12 --channel-check stable', '--tag v0.2.13-preview.20261022 --channel-check preview'];
+    const expectedCommands = ['--tag v0.2.14 --channel-check stable', '--tag v0.2.13-preview.20261022 --channel-check preview'];
     const tokensUnbroken = commandBlocks.every(code => {
       const text = code.firstChild;
       return text?.nodeType === Node.TEXT_NODE && [...text.textContent.matchAll(/\S+/g)].every(match => {
