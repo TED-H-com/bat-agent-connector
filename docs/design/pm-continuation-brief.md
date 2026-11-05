@@ -7,7 +7,7 @@ conversation replacement, automatic model call or plan adoption.
 
 The explicit action targets one `workspace_id, thread_id`. Parameters are
 `purpose`, optional `model`, `timeout_s`, `max_chars`, `adapter` and
-`previous_brief_ref: {run_id, document_digest}`. The November 5 unmerged increment
+`previous_brief_ref: {run_id, document_digest}`. The November 5 increment merged in #498
 also accepts an optional `retained_session_ref` exported by a saved-conversation
 read: `{version: 1, server_id, host, session_id, binding, snapshot_id}`.
 Preconditions freeze

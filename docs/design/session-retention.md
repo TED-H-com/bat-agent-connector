@@ -1,6 +1,6 @@
 # Connector 保存的 session 對話
 
-2026-11-05，`feat/session-retention-20261105` 的未合併增量契約。
+2026-11-05，#498 已合併的對話保存增量契約；版本交付另見[實作狀態](../product/implementation-status.md)。
 對應既有 E04／E08／E10 與 EC-1.1 T3／T4 的資料保全和歷史閱讀，並沿 T6／E09
 補明確請求的 PM 接續摘要；不代表
 原生 CLI 完整收集、PM 判讀、E00–E11／R0–R5／A01–A40 或 PM v1.2 已完成。

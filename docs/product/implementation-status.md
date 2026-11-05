@@ -1,5 +1,56 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-05：Connector 0.2.15／Desktop 0.1.11 發布
+
+[穩定版 v0.2.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)
+於 2026-11-05 11:26:09 UTC 發布 Connector 0.2.15、Desktop 0.1.11 與八個檔案，固定來源為
+`82584a66dfac19ff8f1beebc1ca8fbb3b11f6aad`。
+該來源的 [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/42013172939) 與
+[desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/42013173068) 全部通過：
+backend 26／26 jobs，Python 3.10–3.13 各 9,940 tests；desktop 18／18 jobs。
+八個公開檔案的大小與 API SHA-256 均核對相符，公開 manifest／checksums 與本機驗證內容一致。
+`release-manifest.json` SHA-256 為 `29fac0c65aaff0fcd688bf4b4d064c78b0a8b015bd7d9da4c004afb4c298d62d`；
+stable updater discovery 也選到此版與相同來源。原始檔案與驗證範圍以發布頁的
+`release-manifest.json`、`SHA256SUMS` 及發布說明為準。
+
+#498（`7681c207`）加入 Connector SQLite 背景文字保存、有界回填、固定版本閱讀與
+有原訊息版本的摘錄，Dashboard 不必保持開啟。PM 可透過既有已設定路徑，明確選擇保存版本
+產生有來源的接續摘要，原 SQL run／receipt 與存取限制繼續適用；不自動呼叫模型、
+採納決策或由不完整對話宣告工作完成。未曾讀取且來源已不存在的文字無法補回。
+#495 另加入選填、按需的 SSH 主機部署唯讀觀察，不會安裝、重啟或更新遠端服務。
+詳見[保存合約](../design/session-retention.md)、[PM 接續](../design/pm-continuation-brief.md)
+與[部署觀察](../design/host-deploy-status.md)。
+
+核心升級 fixture 分別從 Connector 0.2.12 的固定發布來源 `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`
+與 0.2.14 的 `24f76015776cb3bcc46877c11874dc500627fae3` 建置舊核心，再升級至本版，
+核對身分、資料與原操作保留。這是核心升級測試；未執行舊桌面安裝器到新安裝器的完整升級。
+Windows 發布接續情境亦未執行，仍需 POSIX 測試 BAT 主機；本版 Windows／兩種 Mac
+安裝 fixture 的套件 digest 證據另列於 manifest。
+Windows 更新請從系統匣退出後執行 0.1.11 安裝器，保留既有資料。
+Linux／Windows 未簽章，macOS 為 ad-hoc 簽章且未 notarize；不宣稱可使用正式桌面簽章更新。
+
+已合併、已發布與實際安裝分開記錄。本版沒有新增 owner 電腦、真 BAT／模型、
+實體手機驗收，也不宣稱已重現或解決某台電腦的連線失敗。
+圖庫仍固定於 0.2.13／0.1.9 的歷史合成來源，不是新版截圖或實機驗收。
+套件 wheel／sdist／Dashboard／managed runtime 的來源一致性檢查通過；
+完整離線組裝仍受 Desktop／site-demo producer receipt 缺口與歷史圖庫來源限制，
+不能把已驗證的套件子集稱為完整單一候選組裝通過。
+本項沿 E04／E08／E09／E10／E11、EC-1.1 T3／T4／T6 交付；
+PM v1.2、E00–E11、R0–R5、A01–A40 其餘未完成範圍仍保留。
+
+Stable v0.2.15 publishes Connector 0.2.15 / Desktop 0.1.11 from the exact source
+and CI recorded above. #498 adds background saved conversations and explicit PM
+continuation from fixed message versions; #495 adds optional host deployment
+observations. Both exact-source CI workflows passed, and all eight public assets
+matched the verified digests and sizes. Upgrade fixtures build older cores from
+pinned published 0.2.12 and 0.2.14 sources; old-installer upgrade tests and Windows
+publication continuity remain outside that evidence. Package-subset consistency
+passed; missing Desktop/site-demo producer receipts and historical screenshots
+still limit full offline assembly. Publication does not establish user
+installation, real BAT/model or physical-device acceptance. Gallery provenance
+remains at 0.2.13 / 0.1.9; remaining PM lifecycle and E/R/A work stays open.
+Earlier preparation and release entries below retain their historical scope.
+
 ## 2026-11-05：對話保存已合併，0.2.15／0.1.11 發布準備
 
 [#498](https://github.com/TED-H-com/bat-agent-connector/pull/498) 已合併為 `7681c207`，

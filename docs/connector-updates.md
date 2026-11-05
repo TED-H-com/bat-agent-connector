@@ -1,12 +1,22 @@
 # Connector automatic updates / Connector 自動更新
 
-Connector **0.2.14** includes automatic updates (introduced in 0.2.7). Start with the
-[published stable release](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14)
+Connector **0.2.15** includes automatic updates (introduced in 0.2.7). Start with the
+[published stable release](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)
 and its matching source manifest and checksums.
+
+This release adds background saved-conversation retention and explicit PM summaries
+of fixed saved versions (#498), plus optional read-only host deployment observations
+(#495). The enrolled Connector updater applies the new core to future launches;
+it does not replace the desktop application. Desktop 0.1.11 uses the separate manual
+package update described in the [installation guide](getting-started.md#update-an-existing-desktop).
+The release's bundled-core fixtures build older cores from pinned published
+0.2.12 and 0.2.14 sources before upgrading them; old desktop installer upgrades are separate.
+exact source/CI and their validation scope are recorded in [delivery status](product/implementation-status.md).
+Existing processes keep their loaded version until their ordinary restart.
 
 The [verified operator installer](getting-started.md#2-install-connector)
 produces `rollout-receipt.json` in its private version directory after verifying
-the real installation. The v0.2.14 tag contains this installer; the plain `uv tool install` alternative does not
+the real installation. The v0.2.15 tag contains this installer; the plain `uv tool install` alternative does not
 produce an enrollment receipt. On Linux retain this receipt and use its printed
 absolute path below. `--enable-updates` runs enrollment and scheduling for you. Enrollment verifies
 the receipt, installed source, canonical skill and the published release channel.
@@ -78,7 +88,13 @@ application configuration remain unchanged.
 
 ## 發布與使用邊界
 
-Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前穩定版為 0.2.14。
+Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前穩定版為 0.2.15。
+本版加入背景對話保存、明確請求的固定版本 PM 摘要（#498）及選填的主機部署唯讀觀察（#495）。
+Connector 更新供下次啟動使用，不會替換桌面程式；Desktop 0.1.11 另依
+[安裝指南](getting-started.zh-TW.md#更新既有桌面安裝)手動更新。
+bundled-core fixture 先由 0.2.12 與 0.2.14 固定發布來源建置舊核心再升級；
+舊桌面安裝器的完整升級另有範圍。最終來源／CI
+見[交付狀態](product/implementation-status.md)；既有程序仍載入原版，直到正常重啟。
 本版的驗證安裝器會產生 `rollout-receipt.json`。保留收據，再用上方指令
 選擇 `preview` 或 `stable` 並啟用排程。未知或被自行修改的安裝不會被接管。
 

@@ -4,18 +4,24 @@
 
 ## 選擇相符的安裝包
 
-2026 年 11 月 4 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14)為 Connector **0.2.14**／desktop **0.1.10**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
+2026 年 11 月 5 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)為 Connector **0.2.15**／desktop **0.1.11**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
-本穩定版已包含本機服務恢復、Windows 背景程序、Fleet 監控修正，以及首次用途選擇與連線預覽。較早的預覽版保留為歷史版本。已合併、已發布、已安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.14；下載較新套件不代表已安裝或實機驗收。
+本穩定版加入背景對話保存、固定版本閱讀與明確請求的 PM 接續摘要（#498），以及主機部署狀態唯讀觀察（#495），並保留先前的本機服務、Windows 與 Fleet 恢復修正。較早的預覽版保留為歷史版本。最終來源、CI 及各自獨立的合併、發布、安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.15；下載較新套件不代表已安裝或實機驗收。
 
-| 平台 | 穩定版 0.1.10 資產 | 預覽版 0.1.9 資產 | 格式 |
+| 平台 | 穩定版 0.1.11 資產 | 預覽版 0.1.9 資產 | 格式 |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.10_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.10_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.10_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.10_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.11_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.11_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.11_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.11_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Windows 包未正式簽署，Mac 採 ad-hoc 簽署。正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
+
+### 更新既有桌面安裝
+
+Windows 請下載 `better-agent-dashboard_0.1.11_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
+
+發布檢查分別由 Connector 0.2.12 與 0.2.14 的固定發布來源建置舊核心，再升級至 0.2.15，核對原身分、資料與操作保留。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
 
 ## 首次啟動：你的本機 Connector
 
@@ -151,6 +157,18 @@ BAT 分析需要在所選 Linux BAT 主機安裝已審閱的專用 PM runtime；
 以上說明可用的產品操作，不表示已完成完整生命週期的真人驗收。實際 operation、來源、runtime
 與交付收據，需與離線測試和 CI 分開記錄。
 
+### 閱讀已保存的對話與請求 PM 摘要
+
+開啟 session 的**已保存的對話**並按**讀取保存歷史**，選定版本並分頁閱讀 Connector 已保存的文字；後續保存不會替換正在閱讀的版本。Connector 在背景收集已觀察到的 user／assistant 文字，不需要開著 Dashboard，也不呼叫模型。原文摘錄保留訊息版本參照。保存與回填都有上限，從未讀取且來源已不存在的內容無法補回。
+
+需要語意摘要時，在 PM 討論開啟**討論資料 → 脈絡 → 從這裡接續**，展開**已保存的對話（選填）**，按**瀏覽對話**、選取對話，再按**納入此保存版本**。填寫本次整理重點，透過已設定的 PM runtime 按**整理接續摘要**或**更新接續摘要**。摘要保存確切來源與模型判讀，不會採用範圍或接受交付；不完整歷史不能證明全部工作已完成。瀏覽或選取來源本身不呼叫模型。
+
+BAT 離線時，只要 Connector 可連線且目前仍有權限，就可讀先前保存文字。session 消失或已有保存歷史，都不能證明程序停止。文字／容量上限見[保存合約](design/session-retention.md)，來源與 runtime 前提見 [PM 接續合約](design/pm-continuation-brief.md)。
+
+### 查看主機部署狀態
+
+從 session 清單開啟主機，選擇**主機部署狀態（唯讀）**。操作者須先在發出查詢的 Connector 設定選填的 SSH alias 與部署目錄；各 Connector 各自查詢。介面按需讀取 container、systemd 與已設定 Git 部署 metadata，不會安裝、重啟或更新服務。CLI 可用 `batc hosts deploy-status`；設定方式與部分結果限制見[部署觀察指南](design/host-deploy-status.md)。
+
 ### 讀取 AHP 主機 catalog
 
 在 workspace 的 **Agent 資源** 檢視展開 **AHP 觀察**。操作者需先在中央為此 workspace 設定
@@ -191,7 +209,7 @@ Dashboard 登入欄位不能填 BAT remote token。
 兩個已發布版本都含驗證安裝器；啟動腳本與安裝須使用同一 tag。穩定版：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.14/scripts/install.sh | sh -s -- --tag v0.2.14 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.15/scripts/install.sh | sh -s -- --tag v0.2.15 --channel-check stable
 ```
 
 預覽版：
@@ -317,7 +335,6 @@ batc api-token issue --actor mcp-agent --scope observe --scope operate --scope s
 或讓持有專屬權杖的 MCP 代理操作受管工作。檢查點路徑不會改動人工工作階段或原工作目錄。
 啟動與派工表單下的 **派工如何運作**說明工作樹、BAT 工作階段與成果追蹤。
 
-
 CLI 可讀取相同觀測與操作紀錄：
 
 ```bash
@@ -365,7 +382,6 @@ MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable �
 且不可允許群組或其他使用者寫入。確認顯示的路徑後，對該目錄執行提示中的
 指令，再重試安裝或 `--verify-only`。安裝程式不會自動修改權限。
 若目錄擁有者不正確，僅移除寫入權限仍無法解決，請洽系統管理員。
-
 
 | 畫面／情況 | 檢查與處理 |
 | --- | --- |
