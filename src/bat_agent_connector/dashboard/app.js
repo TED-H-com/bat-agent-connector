@@ -448,6 +448,65 @@ var init_health_strings = __esmMin((() => {
 	};
 }));
 //#endregion
+//#region src/session-archive-strings.js
+var sessionArchiveStrings;
+var init_session_archive_strings = __esmMin((() => {
+	sessionArchiveStrings = {
+		en: {
+			archive_title: "Saved conversation",
+			archive_help: "Connector saves observed conversation text in the background. Missing earlier messages cannot be reconstructed. This history does not show current execution status.",
+			archive_read: "Read saved history",
+			archive_older: "Older messages",
+			archive_newer: "Newer messages",
+			archive_latest: "Latest in this version",
+			archive_snapshot: "Saved version",
+			archive_asof: "Saved {time}",
+			archive_partial: "Only observed user and assistant text is retained; tools and unsaved content are excluded.",
+			archive_counts: "Omitted messages: {omitted}; shortened messages: {clipped}.",
+			archive_brief: "Conversation excerpts",
+			archive_latest_request: "Latest saved request",
+			archive_latest_response: "Latest saved response",
+			archive_empty: "No conversation has been saved yet. Connector needs to reach this session at least once.",
+			archive_failure: "Saved history could not be read. Check your connection and access, then try again.",
+			archive_user: "User",
+			archive_assistant: "Assistant",
+			archive_clipped: "Excerpt",
+			archive_source_unavailable: "The last source read failed. Previously saved history is shown.",
+			archive_source_changed: "The conversation source changed. This saved version keeps its original source.",
+			archive_storage_limit: "The retention size limit was reached. Earlier saved versions remain available.",
+			archive_archive_budget: "The source scan reached its limit; earlier history may be missing.",
+			archive_archive_unconfirmed: "The source did not confirm the end of its history.",
+			archive_backfill_pending: "Earlier source pages are still being saved in the background."
+		},
+		"zh-TW": {
+			archive_title: "已保存的對話",
+			archive_help: "Connector 會在背景保存觀察到的對話文字。未曾取得的舊訊息無法還原；保存歷史不代表目前執行狀態。",
+			archive_read: "讀取保存歷史",
+			archive_older: "較早的訊息",
+			archive_newer: "較新的訊息",
+			archive_latest: "此版本的最新訊息",
+			archive_snapshot: "保存版本",
+			archive_asof: "保存於 {time}",
+			archive_partial: "僅保留觀察到的使用者與助理文字，不包含工具紀錄或未取得的內容。",
+			archive_counts: "未保留訊息：{omitted}；截短訊息：{clipped}。",
+			archive_brief: "對話摘錄",
+			archive_latest_request: "最近保存的請求",
+			archive_latest_response: "最近保存的回覆",
+			archive_empty: "目前尚無保存的對話。Connector 需要至少成功讀取這個工作階段一次。",
+			archive_failure: "無法讀取保存歷史。請確認連線與存取權限後重試。",
+			archive_user: "使用者",
+			archive_assistant: "助理",
+			archive_clipped: "摘錄",
+			archive_source_unavailable: "上次來源讀取失敗，目前顯示先前保存的歷史。",
+			archive_source_changed: "對話來源已變更，此保存版本仍保留原本的來源。",
+			archive_storage_limit: "已達保存容量上限，仍可閱讀先前保存的版本。",
+			archive_archive_budget: "來源掃描已達上限，可能缺少更早的歷史。",
+			archive_archive_unconfirmed: "來源尚未確認歷史結尾。",
+			archive_backfill_pending: "較早的來源頁面仍在背景保存中。"
+		}
+	};
+}));
+//#endregion
 //#region src/connection-operation-strings.js
 var connectionOperationStrings;
 var init_connection_operation_strings = __esmMin((() => {
@@ -10747,6 +10806,7 @@ function t(key, vars = {}) {
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
 	init_health_strings();
+	init_session_archive_strings();
 	init_connection_operation_strings();
 	init_setup_observation_strings();
 	init_relative_age();
@@ -10790,6 +10850,7 @@ var init_i18n = __esmMin((() => {
 	init_fleet_strings();
 	STRINGS = {
 		"zh-TW": {
+			...sessionArchiveStrings["zh-TW"],
 			...connectionOperationStrings["zh-TW"],
 			...relativeAgeStrings["zh-TW"],
 			...healthStrings["zh-TW"],
@@ -12553,6 +12614,7 @@ var init_i18n = __esmMin((() => {
 			integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 		},
 		en: {
+			...sessionArchiveStrings.en,
 			...connectionOperationStrings.en,
 			...relativeAgeStrings.en,
 			...healthStrings.en,
@@ -60376,6 +60438,160 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 	};
 }
 //#endregion
+//#region src/session-archive.js
+function sessionArchivePanel({ h, t, api, guard, host, sessionId, when }) {
+	let serial = 0, disposed = false, selected = null, next = null, offset = 0, timer = null;
+	let pages = [0], pageIndex = 0, painted = null;
+	const status = h("div", { role: "status" }), body = h("div", { "data-archive-messages": "" }), summary = h("div");
+	const versions = h("select", {
+		"aria-label": t("archive_snapshot"),
+		hidden: true,
+		onchange: () => void read(0, versions.value)
+	});
+	const newer = h("button", {
+		hidden: true,
+		onclick: () => void read(pages[pageIndex - 1], selected, "newer")
+	}, t("archive_newer"));
+	const latest = h("button", {
+		hidden: true,
+		onclick: () => void read(0, selected)
+	}, t("archive_latest"));
+	const older = h("button", {
+		hidden: true,
+		onclick: () => void read(next, selected, "older")
+	}, t("archive_older"));
+	const load = h("button", { onclick: () => void read() }, t("archive_read"));
+	const controls = [
+		load,
+		older,
+		newer,
+		latest,
+		versions
+	];
+	const box = h("details", {
+		class: "workspace-evidence",
+		"data-session-archive": ""
+	}, h("summary", {}, t("archive_title")), h("p", { class: "ui-meta" }, t("archive_help")), h("div", { class: "actions" }, load, versions), status, summary, body, h("div", { class: "actions" }, newer, latest, older));
+	const busy = (value) => {
+		for (const control of controls) control.disabled = value;
+		box.setAttribute("aria-busy", String(value));
+	};
+	function clear() {
+		serial++;
+		clearTimeout(timer);
+		timer = null;
+		selected = null;
+		next = null;
+		offset = 0;
+		pages = [0];
+		pageIndex = 0;
+		painted = null;
+		body.replaceChildren();
+		summary.replaceChildren();
+		status.replaceChildren();
+		versions.replaceChildren();
+		versions.hidden = older.hidden = newer.hidden = latest.hidden = true;
+		busy(false);
+	}
+	const valid = (ticket) => {
+		if (disposed || box.hidden || ticket !== serial) return false;
+		try {
+			guard();
+			return true;
+		} catch {
+			clear();
+			return false;
+		}
+	};
+	function poll() {
+		clearTimeout(timer);
+		if (box.open && selected && !disposed) timer = setTimeout(() => void read(offset, selected, "refresh"), 3e4);
+	}
+	async function read(page = 0, snapshot = null, direction = "reset") {
+		if (page == null || disposed) return;
+		clearTimeout(timer);
+		timer = null;
+		const ticket = ++serial;
+		busy(true);
+		try {
+			guard();
+			const data = await api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}/messages?source=retained&last_n=30&max_chars=60000&max_message_chars=16000&offset=${page}${snapshot ? "&snapshot_id=" + encodeURIComponent(snapshot) : ""}`);
+			if (!valid(ticket)) return;
+			if (data.host !== host || data.session_id !== sessionId || data.source !== "retained" || !Array.isArray(data.messages) || !/^[a-f0-9]{64}$/.test(data.snapshot_id) || snapshot && data.snapshot_id !== snapshot || !Number.isFinite(data.saved_at) || !(data.next_offset == null || Number.isSafeInteger(data.next_offset) && data.next_offset > page)) throw Error("Saved source changed");
+			if (direction === "older") {
+				pages = pages.slice(0, pageIndex + 1);
+				pages.push(page);
+				pageIndex++;
+			} else if (direction === "newer") pageIndex--;
+			else if (direction !== "refresh") {
+				pages = [page];
+				pageIndex = 0;
+			}
+			selected = data.snapshot_id;
+			offset = page;
+			next = data.next_offset;
+			const sourceStatus = data.source_status || data.status;
+			status.replaceChildren(h("p", {}, timeLabel(t, "archive_asof", { time: when(data.saved_at * 1e3) })), h("p", { class: "ui-meta" }, t("archive_partial")), h("p", { class: "ui-meta" }, t("archive_counts", {
+				omitted: data.coverage?.omitted_messages || 0,
+				clipped: data.coverage?.clipped_messages || 0
+			})), ...[
+				"source_unavailable",
+				"storage_limit",
+				"source_changed"
+			].includes(sourceStatus) ? [h("p", {}, t("archive_" + sourceStatus))] : [], ...[
+				"archive_budget",
+				"archive_unconfirmed",
+				"backfill_pending"
+			].includes(data.coverage?.reason) ? [h("p", {}, t("archive_" + data.coverage.reason))] : []);
+			const pageKey = `${selected}:${page}`;
+			if (painted !== pageKey) {
+				summary.replaceChildren(h("h3", {}, t("archive_brief")), ...(data.brief?.items || []).map((item) => h("div", {}, h("strong", {}, t("archive_" + item.kind)), h("p", { class: "exh-text" }, item.text))));
+				body.replaceChildren(...data.messages.map((message) => h("article", {
+					class: "exh-entry",
+					"data-archive-message": message.id
+				}, h("strong", {}, t(message.role === "user" ? "archive_user" : "archive_assistant")), h("p", { class: "exh-text" }, message.text), message.clipped ? h("small", {}, t("archive_clipped")) : null)));
+				painted = pageKey;
+			}
+			const choices = [...data.snapshots || []];
+			if (!choices.some((s) => s.snapshot_id === selected)) choices.push({
+				snapshot_id: selected,
+				saved_at: data.saved_at
+			});
+			const options = choices.map((s) => {
+				const stamp = when(s.saved_at * 1e3);
+				return h("option", { value: s.snapshot_id }, stamp instanceof Node ? stamp.textContent : stamp);
+			});
+			if (versions.options.length !== options.length || options.some((option, index) => !option.isEqualNode(versions.options[index]))) versions.replaceChildren(...options);
+			versions.value = selected;
+			versions.hidden = versions.options.length < 2;
+			older.hidden = next == null;
+			newer.hidden = pageIndex === 0;
+			latest.hidden = page === 0;
+		} catch (error) {
+			if (!valid(ticket)) return;
+			clear();
+			status.textContent = t(error.code === "ARCHIVE_NOT_FOUND" ? "archive_empty" : "archive_failure");
+		} finally {
+			if (!disposed && ticket === serial) {
+				busy(false);
+				poll();
+			}
+		}
+	}
+	box.addEventListener("toggle", () => {
+		if (box.open) poll();
+		else clear();
+	});
+	return {
+		box,
+		clear,
+		dispose() {
+			disposed = true;
+			clear();
+		}
+	};
+}
+//#endregion
 //#region src/composer-shortcut.js
 function composerShortcut({ h, t, input, button, storageKey, guard }) {
 	const modes = [
@@ -73215,6 +73431,19 @@ async function viewSession(main, host, sid, context = null) {
 	}, lane, results);
 	const withdrawnSlot = h("div", { class: "session-withdrawn" });
 	main.append(head, workspaceNode);
+	const archive = state.caps?.features?.session_archive?.version === 1 ? sessionArchivePanel({
+		h,
+		t,
+		api,
+		host,
+		sessionId: sid,
+		when,
+		guard: () => {
+			assertView(connection);
+			if (disposed) throw new ApiError(410, "VIEW_CHANGED", "View retired");
+		}
+	}) : null;
+	if (archive) main.append(archive.box);
 	const perspectives = isWorkbench ? workbenchViews({
 		main,
 		head,
@@ -73842,6 +74071,7 @@ async function viewSession(main, host, sid, context = null) {
 	const withdraw = (kind, error = null) => {
 		const first = !withdrawn;
 		withdrawn = kind;
+		archive?.clear();
 		followUp?.suspend();
 		fixedResult?.withdraw();
 		perspectives?.withdraw();
@@ -74002,6 +74232,7 @@ async function viewSession(main, host, sid, context = null) {
 	const offFollowOnline = onOnline(syncReady);
 	return () => {
 		disposed = true;
+		archive?.dispose();
 		clearTimeout(followSync);
 		offFollowOnline();
 		followUp?.dispose();

@@ -1,5 +1,15 @@
 # PM v1.2 開發狀態
 
+2026-11-05：`feat/session-retention-20261105` 正在實作未合併的
+[Connector 對話保存](../design/session-retention.md)增量：背景保存已觀察文字、固定版本閱讀，
+及附原訊息版本的確定性摘錄。它補資料保全，不取代 PM 需求、決策、交付與維護；
+語意判讀仍走已設定的 PM 路徑。本增量尚未發布、安裝或實機驗收，也不關閉原有 v1.2 待辦。
+
+November 5: the unmerged `feat/session-retention-20261105` increment adds Connector-owned
+conversation retention, immutable reading snapshots and source-linked extractive briefs.
+It preserves evidence without replacing PM lifecycle work or enabling automatic model spending.
+This increment has no release, installation or live acceptance claim; earlier dated entries remain historical.
+
 2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `5f49e712` 的 55 個新增合併 PR，
 並列出 Fleet Apply 與本機參與者尚缺的能力。沒有新發布；預覽版仍為 Connector 0.2.13／desktop 0.1.9
 （`437ee6a7`），穩定版仍為 0.2.12／0.1.8。新增合併均未發布、安裝或實機驗收；下方保留歷史紀錄。

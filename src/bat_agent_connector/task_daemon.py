@@ -275,6 +275,8 @@ class TaskDaemon:
         from .session_history import HistoryCollector
         self.history_collector = HistoryCollector(self.journal, config.session_history)
         self.ops.context["history_collector"] = self.history_collector
+        from .session_archive import SessionArchive
+        self.session_archive = SessionArchive(self)
         self.api = ApiV1(self, allowed_origins=config.api.allowed_origins)
         from . import task_cleanup
         task_cleanup.backfill(self.ops)
@@ -1250,7 +1252,7 @@ class TaskDaemon:
             requests[task] = writer
             task.add_done_callback(lambda done: requests.pop(done, None))
 
-        worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = history_reads = board_reads = None
+        worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = history_reads = board_reads = archive_reads = None
         try:
             server = await asyncio.start_server(connected, host, port)
             bound_host = server.sockets[0].getsockname()[0]
@@ -1268,6 +1270,7 @@ class TaskDaemon:
             inventory = asyncio.create_task(self.inventory.loop())
             usage_reads = asyncio.create_task(self.usage_collector.loop())
             history_reads = asyncio.create_task(self.history_collector.loop())
+            archive_reads = asyncio.create_task(self.session_archive.loop())
             serving = asyncio.create_task(server.serve_forever())
             # Withdraw discovery before cancellation closes the listening socket.
             await asyncio.shield(serving)
@@ -1291,7 +1294,7 @@ class TaskDaemon:
                 if serving is not None:
                     serving.cancel()
                     await asyncio.gather(serving, return_exceptions=True)
-                for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads, history_reads, board_reads):
+                for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads, history_reads, board_reads, archive_reads):
                     if background is not None:
                         background.cancel()
                         await asyncio.gather(background, return_exceptions=True)

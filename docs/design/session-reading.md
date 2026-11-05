@@ -7,7 +7,9 @@ effective principal（actor／scopes／admin digest）、完整 host／session I
 ## 訊息與閱讀證據
 
 - `session_read` 依 BAT 原有 message ID 與完整文字摘要的 SHA-256 建立 metadata index，
-  中央只存 ID／digest／順序，不複製另一份對話。工具呼叫不計入對話未讀數，也不會取得 human read receipt。
+  **個人閱讀 index** 只存 ID／digest／順序，不保存正文。另由 Connector 背景維護的
+  [對話保存庫](session-retention.md)保存已觀察的文字及不可變版本；兩者的用途與 revision 不混用。
+  工具呼叫不計入對話未讀數，也不會取得 human read receipt。
   `include_tools=true` 時工具佔用頁面 offset；回傳的位置以該次請求的 filter 計算，
   不借用另一個並行請求的頁碼。
 - 同一 ID 的文字改變會有新 revision，舊 receipt 不會清除新版未讀。沒有唯一穩定 ID
@@ -36,6 +38,10 @@ effect 與 receipt 同一交易，其他 principal 不可借同 actor replay／r
 共用介面只有點「標記畫面中的訊息已讀」才送出，當時不在可見 viewport 的訊息不會被包含。
 尚被文字長度截斷的訊息不可標記。畫面讀取、捲動、回到最新、載入較早訊息與事件 ACK
 都不會新增 read receipt，也不解除 pending、完成確認或改動 BAT 資源。
+
+`source=retained` 讀取固定保存版本，不執行 live reading observation，也不更新個人未讀 index、
+receipt 或位置。保存面板的分頁與「此版本的最新訊息」只作用於選定 snapshot；
+不能把它的歷史正文送進即時控制區、清除 pending 或重設 live turn／event cursor。
 
 ## 閱讀位置
 
