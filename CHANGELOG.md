@@ -2,8 +2,9 @@
 
 ## Next release (unreleased)
 
-- Add opt-in read-only host deployment observations over pinned SSH, with container,
-  compose, systemd and configured Git deployment metadata in the API, CLI and Dashboard.
+- Add opt-in read-only host deployment observations over pinned SSH using each
+  querying machine's optional local configuration, with container, compose, systemd
+  and configured Git deployment metadata in the API, CLI and Dashboard.
 
 - Review an existing BAT connection before applying it. A read-only preview shows the configuration
   changes and source boundary without saving configuration, creating an operation or probing

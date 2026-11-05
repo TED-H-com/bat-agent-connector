@@ -96,7 +96,8 @@ timeout_s = 3.0
 # api_key_env = "TYPESAFE_API_KEY"
 
 # Optional read-only, on-demand deployment observations. No installs or remote writes.
-# Requires an administrator-provisioned SSH alias and trusted known-host entry.
+# Configure independently on each querying machine; SSH aliases are machine-local.
+# Requires an administrator-provisioned local SSH alias and trusted known-host entry.
 # [managed_setup.ssh_hosts]
 # buildbox = "example-buildbox-ssh"
 # [[deploy_status.hosts]]

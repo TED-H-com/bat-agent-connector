@@ -9,6 +9,16 @@ Configure `[[deploy_status.hosts]]` with a unique configured Fleet `host`, up to
 globs). The host must have an alias in `[managed_setup.ssh_hosts]`. See
 [the example](../../examples/hosts.example.toml). At most 64 hosts are configured.
 
+BAT uses a multipoint model: each Dashboard/Connector instance independently
+pulls status over SSH, through the CLI or that machine's own Task Service, using
+its own optional `hosts.toml` configuration (`[managed_setup.ssh_hosts]` and
+`[[deploy_status.hosts]]`). On a Windows Dashboard, this is
+`%LOCALAPPDATA%\io.betteragent.dashboard\central\config\hosts.toml`:
+`central` is that Dashboard's own local Connector directory, not a shared server.
+Standalone CLI uses `BATC_CONFIG` or `~/.config/bat-agent-connector/hosts.toml`.
+SSH aliases are machine-local; different machines may use different aliases for
+the same target. No shared fleet collector machine is required.
+
 Use `batc hosts deploy-status [--host NAME] [--json]`, or open a host from the
 Dashboard session list and choose **Host deployment status (read-only)**.
 Collection is explicit, without background polling or persistence. CLI collects
@@ -16,7 +26,7 @@ using its local configuration; the authenticated Task Service serves Dashboard
 reads using its configuration. Unknown/unconfigured hosts are errors.
 
 The self-contained helper follows the unmerged remote-usage proposal's pull
-pattern without importing any of its modules. Central runs `ssh -o BatchMode=yes
+pattern without importing any of its modules. The querying Connector runs `ssh -o BatchMode=yes
 -o StrictHostKeyChecking=yes ALIAS` with a fixed, quoted `python3 -I -S -B -c`
 in-memory source bundle. Aliases allow only letters, numbers, dot, underscore and
 hyphen, beginning with a letter or number. No SSH trust enrollment, installation,
@@ -38,17 +48,17 @@ without running Git, preventing ancestor-repository discovery.
 Version 1 returns collected_at, hostname, containers, compose_projects (state
 counts), systemd, deploys and errors. Bounds: 500 containers/projects total,
 200 units total, 20 deploy rows, four engine/systemd errors. Per-command output
-is at most 2 MiB with 8 KiB discarded stderr and a three-second timeout. Central
+is at most 2 MiB with 8 KiB discarded stderr and a three-second timeout. The querying Connector
 caps replies at 2 MiB and stderr at 8 KiB, with a 30-second SSH deadline; overflow,
 timeout and cancellation kill and join the local SSH process and cancel/join
-readers. One daemon collector serializes requests to bound concurrent SSH load.
+readers. Each local Task Service serializes its requests to bound concurrent SSH load.
 A multi-host request collects sequentially and can take 30 seconds per host.
 
 Fixed per-source codes: missing, permission_denied, command_failed, timeout,
-output_limit, invalid_output. Central failures: host_unreachable or invalid_reply;
+output_limit, invalid_output. Local SSH/query failures: host_unreachable or invalid_reply;
 SSH diagnostics are never logged or returned. An absent engine or inaccessible
 user service manager is partial evidence, not an empty successful host. The
-central validator rejects extra keys, wrong types, excessive counts, unknown
+local validator rejects extra keys, wrong types, excessive counts, unknown
 codes and mismatched deployment indices before returning observations.
 
 Names, image references, descriptions and commit subjects are operator-visible

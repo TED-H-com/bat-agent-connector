@@ -167,7 +167,7 @@ class DeployStatus:
             raise ConfigError('host deployment status is not configured for this host')
         bindings = self.bindings
         selected = [host] if host is not None else list(bindings)
-        # One collector per daemon; concurrent requests cannot multiply SSH fan-out.
+        # Each local daemon serializes its own queries to bound concurrent SSH load.
         async with self.lock:
             rows = []
             for name in selected:

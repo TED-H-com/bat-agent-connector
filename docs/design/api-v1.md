@@ -377,7 +377,9 @@ a timestamp and a bounded operation ID; invalid pairs return `422 INVALID_FILTER
 
 `GET /api/v1/hosts/deploy-status[?host=NAME]` requires the existing `observe`
 scope and bearer/Origin/loopback protections. No operation or confirmation is
-created. Omitting host collects all deployment-status-configured hosts; no
+created. The querying Task Service independently pulls over SSH using its own
+optional local `hosts.toml` (`[managed_setup.ssh_hosts]` and `[[deploy_status.hosts]]`);
+SSH aliases are machine-local. Omitting host collects all hosts configured there; no
 configuration yields `{version:1, hosts:[]}`. Unknown/unconfigured hosts or unknown
 query parameters return 422. Each host row contains `host` plus either the
 strict version-1 helper observation or `{error:"host_unreachable"}` /
