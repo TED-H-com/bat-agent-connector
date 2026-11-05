@@ -1879,6 +1879,28 @@ async function viewHostDiscovery(main, host) {
     caps: () => state.caps, guard: () => assertView(connection), namespace: connection.namespace,
     source: {kind: "discovery", host, profile_id: profile}, errorBox, opStatus}) : null;
   if (repair) main.append(repair.box);
+  const deployBox = h("section", {class: "panel"});
+  const deployBody = h("div", {"aria-live": "polite"});
+  const deployButton = h("button", {type: "button"}, t("deploy_status"));
+  deployButton.addEventListener("click", async () => {
+    deployButton.disabled = true;
+    try {
+      const data = await api("GET", `/hosts/deploy-status?host=${encodeURIComponent(host)}`); assertView(connection);
+      deployBody.replaceChildren(...data.hosts.map(row => {
+        const box = h("div", {}, h("p", {}, row.error ? t("deploy_code_" + row.error) : `${row.hostname} · ${row.collected_at}`));
+        if (row.error) return box;
+        for (const key of ["containers", "compose_projects", "systemd", "deploys", "errors"]) {
+          const section = h("details", {open: key === "errors" && !!row.errors?.length}, h("summary", {}, `${t("deploy_" + key)} (${row[key]?.length || 0})`));
+          for (const item of row[key] || []) section.append(h("p", {}, Object.entries(item).map(([name, value]) => `${t("deploy_field_" + name)}: ${["error", "code"].includes(name) && value ? t("deploy_code_" + value) : typeof value === "object" ? JSON.stringify(value) : value}`).join(" · ")));
+          box.append(section);
+        }
+        return box;
+      }));
+    } catch (error) {
+      if (connection.generation === generation && connection.epoch === state.epoch) deployBody.replaceChildren(errorBox(error, {within: deployBody}));
+    } finally {deployButton.disabled = false;}
+  });
+  deployBox.append(deployButton, deployBody); main.append(deployBox);
   const load = async () => {
     try {const data = await api("GET", `/hosts/${encodeURIComponent(host)}/discovery`); assertView(connection); head.replaceChildren(discoveryEvidence(data.scopes));}
     catch (error) {head.append(errorBox(error, {within:head}));}

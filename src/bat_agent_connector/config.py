@@ -52,6 +52,7 @@ from .connection_sources import (
     DEFAULT_BAT_PROFILES_DIR as DEFAULT_BAT_PROFILES_DIR,
 )
 from .connection_sources import SourceUnavailable, TokenMode, read_token_store, select_profiles_directory
+from .deploy_status import parse_deploy_status
 from .errors import ConfigError, TokenUnavailable
 from .redact import register_secret
 from .session_history_config import HistoryConfig, parse_history
@@ -591,6 +592,7 @@ class Config:
     cleanup: CleanupConfig = field(default_factory=CleanupConfig)
     github: GitHubConfig = field(default_factory=GitHubConfig)
     ahp: dict = field(default_factory=dict)
+    deploy_status: dict = field(default_factory=dict)
     usage: UsageConfig = field(default_factory=UsageConfig)
     session_history: HistoryConfig = field(default_factory=HistoryConfig)
     client_label: str = "BAT Agent Connector"
@@ -755,7 +757,7 @@ def parse_config(data: dict, path: Path | None = None) -> Config:
     if relay_name and not re.fullmatch(r"[A-Za-z0-9 ._-]{1,40}", relay_name):
         raise ConfigError("[client] relay_name must be 1-40 letters/digits/spaces")
     from .ahp_config import parse_ahp
-    return Config(hosts=hosts, safety=safety, jev=jev, api=api, github=parse_github(data), ahp=parse_ahp(data), usage=parse_usage(data), session_history=parse_history(data), client_label=label,
+    return Config(hosts=hosts, deploy_status=parse_deploy_status(data, hosts), safety=safety, jev=jev, api=api, github=parse_github(data), ahp=parse_ahp(data), usage=parse_usage(data), session_history=parse_history(data), client_label=label,
                   path=path, human_name=human, relay_name=relay_name)
 
 

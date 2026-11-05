@@ -372,3 +372,18 @@ a timestamp and a bounded operation ID; invalid pairs return `422 INVALID_FILTER
 繁體中文：清單以時間、操作 ID 遞減排序；請成對使用兩個續頁值，避免同時刻的操作
 漏頁。可見清單為空時仍須依 cursor 續頁；單獨的時間 cursor 維持原本嚴格小於行為。
 這只修正既有讀取，不新增操作、意圖帳本或執行權限。
+
+### Read-only host deployment observations
+
+`GET /api/v1/hosts/deploy-status[?host=NAME]` requires the existing `observe`
+scope and bearer/Origin/loopback protections. No operation or confirmation is
+created. The querying Task Service independently pulls over SSH using its own
+optional local `hosts.toml` (`[managed_setup.ssh_hosts]` and `[[deploy_status.hosts]]`);
+SSH aliases are machine-local. Omitting host collects all hosts configured there; no
+configuration yields `{version:1, hosts:[]}`. Unknown/unconfigured hosts or unknown
+query parameters return 422. Each host row contains `host` plus either the
+strict version-1 helper observation or `{error:"host_unreachable"}` /
+`{error:"invalid_reply"}`. Partial engine/systemd failures remain in `errors`.
+No SSH alias or absolute deployment path is returned. This read runs on demand
+and can take 30 seconds per configured host. Limits and the configuration/schema
+are described in [host deployment status](host-deploy-status.md).

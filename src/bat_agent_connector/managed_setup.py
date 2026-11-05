@@ -640,6 +640,7 @@ def _activate(daemon, config, document, revision=None, *, runner=None):
         fleet._clients = {}
         fleet.config = config
     daemon._config = config
+    daemon.deploy_status.bindings = config.deploy_status
     daemon.usage_collector.config = config.usage
     daemon.history_collector.config = config.session_history
     daemon.inventory.config = config
