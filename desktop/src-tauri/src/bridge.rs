@@ -2558,6 +2558,25 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             }
             continue;
         }
+        if path.starts_with("/sessions/")
+            && path.ends_with("/messages")
+            && matches!(key.as_ref(), "source" | "snapshot_id")
+        {
+            let valid = match key.as_ref() {
+                "source" => matches!(value.as_ref(), "live" | "retained"),
+                "snapshot_id" => {
+                    value.len() == 64
+                        && value
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                }
+                _ => false,
+            };
+            if input.method != "GET" || !valid || !query_keys.insert(key.to_string()) {
+                return Err("Saved conversation query is invalid".into());
+            }
+            continue;
+        }
         if key == "max_message_chars" {
             if input.method != "GET"
                 || !path.starts_with("/sessions/")
@@ -2751,6 +2770,14 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Central query parameter is not allowed".into());
         }
     }
+    if path.starts_with("/sessions/") && path.ends_with("/messages") {
+        let retained = url::form_urlencoded::parse(query.as_bytes())
+            .any(|(key, value)| key == "source" && value == "retained");
+        let after = url::form_urlencoded::parse(query.as_bytes()).any(|(key, _)| key == "after");
+        if (query_keys.contains("snapshot_id") && !retained) || (retained && after) {
+            return Err("Saved history cannot be used as a live turn observation".into());
+        }
+    }
     if pm && path.ends_with("/dependencies/impact") && !query_keys.contains("dependency") {
         return Err(
             "Dependency impact requires a captured dependency key / 相依影響需要已擷取的相依識別碼"
@@ -2828,6 +2855,45 @@ mod tests {
         sync::mpsc,
         thread,
     };
+    #[test]
+    fn retained_session_reads_use_fixed_snapshot_selectors() {
+        let root = "/sessions/demo/session-full-id/messages";
+        let snapshot = "a".repeat(64);
+        for query in [
+            "source=retained".into(),
+            "source=live&after=batc-original-turn".into(),
+            format!("source=retained&snapshot_id={snapshot}&last_n=30&offset=60&max_chars=60000&max_message_chars=16000"),
+            format!("snapshot_id={snapshot}&source=retained"),
+        ] {
+            let path = format!("{root}?{query}");
+            assert!(validate_request(&request("GET", &path)).is_ok(), "{path}");
+            assert!(validate_request(&request("POST", &path)).is_err(), "{path}");
+        }
+        for query in [
+            "source=other".into(),
+            "source=retained&source=retained".into(),
+            "source=retained&snapshot_id=short".into(),
+            format!("source=retained&snapshot_id={}", "A".repeat(64)),
+            format!("source=retained&snapshot_id={snapshot}&snapshot_id={snapshot}"),
+            format!("snapshot_id={snapshot}"),
+            format!("source=live&snapshot_id={snapshot}"),
+            "source=retained&after=batc-original-turn".into(),
+            "after=batc-original-turn&source=retained".into(),
+        ] {
+            let path = format!("{root}?{query}");
+            assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
+        }
+        assert!(validate_request(&request(
+            "GET",
+            "/sessions/demo/session-full-id?source=retained"
+        ))
+        .is_err());
+        assert!(validate_request(&request(
+            "GET",
+            &format!("/hosts?source=retained&snapshot_id={snapshot}")
+        ))
+        .is_err());
+    }
     #[test]
     fn managed_setup_has_only_typed_private_staging_and_fixed_routes() {
         assert!(validate_request(&request("GET", "/managed/setup")).is_ok());

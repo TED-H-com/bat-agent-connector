@@ -1900,6 +1900,12 @@
       "cleanup_task": true,
       "inventory": true,
       "session_history": true,
+      "session_archive": {
+        "version": 1,
+        "background": true,
+        "summary": "extractive",
+        "pm_continuation": true
+      },
       "session_observation": {
         "read": true,
         "wait": true,

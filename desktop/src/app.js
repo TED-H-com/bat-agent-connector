@@ -43,6 +43,7 @@ import {parsePullRequest} from "./delivery-input.js";
 import {sessionLabelsPanel, validLabels} from "./session-labels.js";
 import {readArtifactContent} from "./transport/artifact-content.ts";
 import {conversationPanel, readingSummary} from "./conversation.js";
+import {sessionArchivePanel} from './session-archive.js';
 import {composerShortcut} from "./composer-shortcut.js";
 import {treeInteractions} from "./tree-interactions.js";
 import {modelPreferencesPanel} from "./model-preferences.js";
@@ -2197,6 +2198,11 @@ async function viewSession(main, host, sid, context = null) {
   const workspaceNode = h("div", {class: "workspace-session session-workspace", "data-session-view": ""}, lane, results);
   const withdrawnSlot = h("div", {class: "session-withdrawn"});
   main.append(head, workspaceNode);
+  // The live workspace may be gone while retained text is still independently authorized.
+  // Its old contents are withdrawn too; a new explicit read rechecks retained-source access.
+  const archive = state.caps?.features?.session_archive?.version === 1 ? sessionArchivePanel({h, t, api, host, sessionId:sid, when,
+    guard: () => {assertView(connection); if (disposed) throw new ApiError(410, 'VIEW_CHANGED', 'View retired');}}) : null;
+  if (archive) main.append(archive.box);
   const perspectives = isWorkbench ? workbenchViews({main, head, work: workspaceNode, results, namespace: connection.namespace,
     workspace: sessionWorkspace || host, host, sessionId: sid, workId: workRecord?.work_item?.work_item_id, t}) : null;
   const originHref = () => {
@@ -2608,6 +2614,7 @@ async function viewSession(main, host, sid, context = null) {
   const withdraw = (kind, error = null) => {
     const first = !withdrawn;
     withdrawn = kind;
+    archive?.clear();
     followUp?.suspend();
     fixedResult?.withdraw();
     perspectives?.withdraw();
@@ -2681,6 +2688,9 @@ async function viewSession(main, host, sid, context = null) {
   // Keep the subscription after a partial initial failure. The view already contains controls;
   // returning here would let later journal pages be acknowledged without refreshing them.
   try { await refresh(); if (!withdrawn) await settleRefreshes([cps.load(), labels.refresh()]); } catch { /* retain the failure and drafts */ }
+  // A citation is an explicit saved read. Start it after initial live withdrawal
+  // so a missing live session cannot cancel that independent authorization.
+  archive?.openSnapshot(params.get('retained_snapshot'));
   const reload = debounceRefresh(() => refresh(true), 500), reloadCps = debounceRefresh(cps.load, 500);
   const off = onEvents(ev => {
     observations.changed(ev);
@@ -2707,7 +2717,7 @@ async function viewSession(main, host, sid, context = null) {
   const syncReady = () => {try {assertView(connection); if (!disposed) updateControls();} catch { /* the view already left */ }};
   const followSync = setTimeout(syncReady, 0);
   const offFollowOnline = onOnline(syncReady);
-  return () => {disposed = true; clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); fixedResult?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
+  return () => {disposed = true; archive?.dispose(); clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); fixedResult?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
     cps.clear(); results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
 }
 

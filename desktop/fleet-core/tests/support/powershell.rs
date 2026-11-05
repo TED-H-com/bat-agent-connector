@@ -68,6 +68,8 @@ pub struct Fixture {
     breach: RefCell<Option<Breach>>,
     stderr: RefCell<Option<Arc<Mutex<stderr::Evidence>>>>,
     ready_snapshot: RefCell<Option<snapshot::Sample>>,
+    #[cfg(all(test, unix))]
+    spawned_pids: RefCell<Vec<u32>>,
 }
 impl Fixture {
     pub fn new() -> Self {
@@ -76,6 +78,8 @@ impl Fixture {
             breach: RefCell::new(None),
             stderr: RefCell::new(None),
             ready_snapshot: RefCell::new(None),
+            #[cfg(all(test, unix))]
+            spawned_pids: RefCell::new(Vec::new()),
         }
     }
 
@@ -146,6 +150,8 @@ impl Fixture {
         self.breach.replace(None);
         self.stderr.replace(None);
         self.ready_snapshot.replace(None);
+        #[cfg(all(test, unix))]
+        self.spawned_pids.borrow_mut().clear();
         let began = Instant::now();
         let mut owned = Owned {
             child: command
@@ -156,6 +162,10 @@ impl Fixture {
                 .map_err(|_| "PowerShell fixture spawn failed")?,
             reader: None,
         };
+        // A startup deadline can expire before the child runs any user code.
+        // The cleanup oracle must observe ownership in the spawning process.
+        #[cfg(all(test, unix))]
+        self.spawned_pids.borrow_mut().push(owned.child.id());
         let lifecycle = Arc::new(Mutex::new(Lifecycle::default()));
         let stop = Arc::new(AtomicBool::new(false));
         let mut stdout = reader::Pipe::new(
