@@ -118,6 +118,14 @@ def digest_files(values):
 
 def verify_source_package(source, package, commit):
     expected, actual = package_files(source), package_files(package)
+    embedded = package / "skill/build-info.json"
+    if embedded.exists():
+        require(not embedded.is_symlink(), "package_symlink_refused")
+        try:
+            info = json.loads(embedded.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            info = None
+        require(info == {"commit": commit}, "installed_identity_mismatch")
     if "build-info.json" in actual:
         try:
             info = json.loads((package / "build-info.json").read_text(encoding="utf-8"))
