@@ -12,6 +12,34 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / 'desktop/tests/managed-upgrade-fixture.py'
 
 
+@pytest.mark.parametrize('latest_fails', [False, True])
+def test_upgrade_baselines_keep_separate_diagnostics(tmp_path, monkeypatch, latest_fails):
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))
+    fixture = runpy.run_path(str(SCRIPT))
+
+    def produce(_previous, _current, _source, root, _env, **_kwargs):
+        for name in ('publication-seed.log', 'publication-core.log'):
+            (root / name).write_text(root.name + ' baseline evidence\n')
+        if latest_fails and root.name == 'latest':
+            raise ValueError('latest baseline failed')
+        return {'status': 'passed'}
+
+    monkeypatch.setitem(fixture['publication_upgrade'].__globals__, '_publication_upgrade', produce)
+    evidence = tmp_path / 'evidence'
+    for baseline in ('earlier', 'latest'):
+        root = tmp_path / baseline
+        root.mkdir()
+        arguments = (Path('previous'), Path('current'), Path('source'), root, {})
+        if baseline == 'latest' and latest_fails:
+            with pytest.raises(AssertionError, match='latest baseline failed'):
+                fixture['publication_upgrade'](*arguments, diagnostics_dir=evidence / baseline)
+        else:
+            assert fixture['publication_upgrade'](*arguments, diagnostics_dir=evidence / baseline) == {'status': 'passed'}
+    for baseline in ('earlier', 'latest'):
+        for name in ('publication-seed.log', 'publication-core.log'):
+            assert (evidence / baseline / name).read_text() == baseline + ' baseline evidence\n'
+
+
 def test_publication_seed_conftest_defers_package_build_imports():
     child = subprocess.run([
         sys.executable, '-c',

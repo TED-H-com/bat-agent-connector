@@ -626,7 +626,7 @@ jobs:
         working-directory: .
         timeout-minutes: 8
         run: uv run --locked --extra desktop-build python desktop/tests/managed-runtime-fixture.py
-      - name: Check out the latest stable core upgrade baseline (0.2.12)
+      - name: Check out the earlier stable core upgrade baseline (0.2.12)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: 14c62830240148b14a4d28a9c428f7f8b5ba8bf3
@@ -635,11 +635,29 @@ jobs:
       - name: Build the original earlier core from its own locked environment
         working-directory: .upgrade-baseline
         timeout-minutes: 8
+        env:
+          BATC_BUILD_COMMIT: 14c62830240148b14a4d28a9c428f7f8b5ba8bf3
         run: uv run --python 3.13 --locked --extra desktop-build python desktop/scripts/build-managed-runtime.py
       - name: Distinct packaged core upgrade retains identity, workspace and original intents
         working-directory: .
         timeout-minutes: 8
         run: uv run --locked --extra dev --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --previous-source .upgrade-baseline --receipt desktop/test-results/packaged-core-upgrade.json
+      - name: Check out the latest stable core upgrade baseline (0.2.14)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 24f76015776cb3bcc46877c11874dc500627fae3
+          path: .upgrade-current-stable
+          persist-credentials: false
+      - name: Build the latest stable core from its own locked environment
+        working-directory: .upgrade-current-stable
+        timeout-minutes: 8
+        env:
+          BATC_BUILD_COMMIT: 24f76015776cb3bcc46877c11874dc500627fae3
+        run: uv run --python 3.13 --locked --extra desktop-build python desktop/scripts/build-managed-runtime.py
+      - name: Latest stable packaged core upgrade retains identity, workspace and original intents
+        working-directory: .
+        timeout-minutes: 8
+        run: uv run --locked --extra dev --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-current-stable/desktop/managed-runtime --current-resources desktop/managed-runtime --previous-source .upgrade-current-stable --receipt desktop/test-results/packaged-core-upgrade-current-stable.json
       - name: Preserve packaged core upgrade evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -648,6 +666,8 @@ jobs:
           path: |
             desktop/test-results/packaged-core-upgrade.json
             desktop/test-results/packaged-core-upgrade/
+            desktop/test-results/packaged-core-upgrade-current-stable.json
+            desktop/test-results/packaged-core-upgrade-current-stable/
           if-no-files-found: ignore
           retention-days: 7
       - name: Packaged managed setup with real browser and MockBAT

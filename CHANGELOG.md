@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.15 / Desktop 0.1.11 (2026-11-05)
+
+- Retain observed BAT user/assistant conversations in the Connector SQLite journal,
+  independently of open Dashboard pages. Bounded background backfill preserves
+  immutable message revisions, fixed snapshots and source-linked excerpts.
+- Read saved conversation versions in the shared Web/Desktop UI and the existing
+  HTTP/MCP session-read path, including after the BAT session becomes unavailable.
+  Coverage and missing-source limits remain visible; never-read deleted text cannot
+  be reconstructed, and retained history does not establish execution completion.
+- Let the existing PM continuation action summarize an explicitly selected saved
+  version through the configured PM adapter. Source citations, immutable receipts,
+  current access checks and original operation-key recovery remain intact.
+- Include opt-in read-only host deployment observations (#495) and preserve the
+  existing connection recovery fixes. This release does not enable new live writes.
+- Advance both package versions and validate the actual stable 0.2.14 core upgrade
+  without replacing retained identities, workspaces or original operation history.
+- Correct a Unix fixture cleanup assertion to observe child PIDs in the parent,
+  without relying on Python initialization before its unchanged startup deadline.
+
 ## 0.2.14 / Desktop 0.1.10 (2026-11-04)
 
 - Ship the accumulated managed-service recovery and Windows background-process fixes,
