@@ -88,7 +88,7 @@ def packages(tmp_path_factory):
         assert direct["vcs_info"]["commit_id"] == sha
         build_info = Path(json.loads(run([str(interpreter), "-I", "-c",
             "import json;from pathlib import Path;from bat_agent_connector import build_identity;"
-            "print(json.dumps(str(Path(build_identity.__file__).with_name('build-info.json'))))"],
+            "print(json.dumps(str(Path(build_identity.__file__).with_name('skill').joinpath('build-info.json'))))"],
             env=env, cwd=scratch)))
         assert json.loads(build_info.read_text())["commit"] == sha
         installed[candidate] = {"python": str(interpreter), "commit": sha, "metadata": metadata,

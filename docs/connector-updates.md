@@ -142,3 +142,28 @@ enrollment, upgrade, launchers and rollback. An already loaded interpreter keeps
 its original identity while a new launch gets the new version; a journal sentinel
 stays unchanged. A repeated stage uses the verified installation without fetching.
 It does not contact BAT, run a model, or modify an existing installation.
+
+## Repairing an update-managed install
+
+On v0.2.12 hosts after v0.2.14, the `batc-update` journal can report
+`{"status": "failed", "code": "installed_source_mismatch"}` each hour. The wheel
+added generated provenance at `bat_agent_connector/build-info.json`, which the
+older updater compares against the source tree. v0.2.16+ puts wheel provenance
+under `bat_agent_connector/skill/build-info.json`, excluded by the legacy source
+comparison, so these hosts heal automatically on the next hourly timer once that
+release is published on their channel.
+
+Ordinary reinstall refuses an enrolled install with `already_update_managed`.
+For explicit manual repair, download `install_connector.py` from the requested
+release and use its actual tag in place of `vX`:
+
+```sh
+python3 install_connector.py --tag vX --repair-managed --dry-run
+python3 install_connector.py --tag vX --repair-managed
+```
+
+Repair requires Linux, private valid updater state, and a uv tool Git installation
+from this repository. The dry run validates state, installation provenance and
+release metadata without writes. Activation uses the existing updater transaction;
+the previous current release remains available for rollback. Pending updater
+transactions must finish before repair. Existing sessions are not restarted.
