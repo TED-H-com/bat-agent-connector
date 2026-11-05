@@ -397,6 +397,7 @@ class ApiV1:
             ("GET", r"/api/v1/artifacts", self.artifacts, "observe"),
             ("GET", r"/api/v1/artifacts/(?P<aid>art_[0-9a-f]{32})/revisions/(?P<revision>[1-9][0-9]*)", self.artifact, "observe"),
             ("GET", r"/api/v1/bootstrap", self.bootstrap, "observe"),
+            ("GET", r"/api/v1/hosts/deploy-status", self.host_deploy_status, "observe"),
             ("GET", r"/api/v1/hosts", self.hosts, "observe"),
             ("GET", r"/api/v1/hosts/(?P<host>[^/]+)/preferences", self.host_preferences, "observe"),
             ("GET", r"/api/v1/sessions", self.sessions, "observe"),
@@ -596,7 +597,7 @@ class ApiV1:
                 query = parse_qs(parts.query, keep_blank_values=True)
                 kwargs.update(reader=reader, writer=writer,
                               check_authorization=authorizer(self.daemon, token, principal, browser_session=browser_session))
-            if fn in {self.connections, self.operation, self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
+            if fn in {self.host_deploy_status, self.connections, self.operation, self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
                       self.host_preferences, self.project_skills, self.work_item_results,
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
@@ -1511,6 +1512,14 @@ class ApiV1:
         fleet = self.daemon.fleet
         return bool(runner and runner.available(host) and fleet.writes_enabled(host)
                     and fleet.orchestrate_enabled(host) and fleet.config.host(host).managed_roots)
+
+    async def host_deploy_status(self, query, **_):
+        from .errors import ConfigError
+        self._exact_query(query, {"host"})
+        try:
+            return 200, await self.daemon.deploy_status.document(self._q(query, "host"))
+        except ConfigError:
+            raise ApiError(422, "INVALID_REQUEST", "Host deployment status is not configured") from None
 
     async def hosts(self, query, **_):
         return 200, self.daemon.inventory.hosts_document(host=self._q(query, "host"), discovery=bool(self._bool(query, "discovery")), after=self._int(query, "after", 0), limit=self._int(query, "limit", 20))

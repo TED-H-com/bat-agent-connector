@@ -10887,6 +10887,48 @@ var init_i18n = __esmMin((() => {
 	STRINGS = {
 		"zh-TW": {
 			...sessionArchiveStrings["zh-TW"],
+			deploy_field_engine: "引擎",
+			deploy_field_name: "名稱",
+			deploy_field_image: "映像檔",
+			deploy_field_state: "狀態",
+			deploy_field_status: "狀態說明",
+			deploy_field_health: "健康",
+			deploy_field_created: "建立時間",
+			deploy_field_ports: "連接埠",
+			deploy_field_project: "專案",
+			deploy_field_service: "服務",
+			deploy_field_working_dir: "目錄",
+			deploy_field_config_files: "設定檔",
+			deploy_field_counts: "狀態數量",
+			deploy_field_scope: "範圍",
+			deploy_field_load: "載入",
+			deploy_field_active: "啟用狀態",
+			deploy_field_sub: "子狀態",
+			deploy_field_description: "說明",
+			deploy_field_index: "設定順序",
+			deploy_field_sha: "提交",
+			deploy_field_branch: "分支",
+			deploy_field_commit_time: "提交時間",
+			deploy_field_subject: "摘要",
+			deploy_field_dirty_count: "變更數",
+			deploy_field_mtime: "目錄修改時間",
+			deploy_field_error: "錯誤",
+			deploy_field_source: "來源",
+			deploy_field_code: "原因",
+			deploy_code_missing: "未安裝或不存在",
+			deploy_code_permission_denied: "權限不足",
+			deploy_code_command_failed: "指令無法完成",
+			deploy_code_timeout: "讀取逾時",
+			deploy_code_output_limit: "輸出超過上限",
+			deploy_code_invalid_output: "輸出無法解析",
+			deploy_code_host_unreachable: "主機無法連線",
+			deploy_code_invalid_reply: "回覆無法驗證",
+			deploy_status: "主機部署狀態（唯讀）",
+			deploy_containers: "容器",
+			deploy_compose_projects: "Compose 專案",
+			deploy_systemd: "服務",
+			deploy_deploys: "部署目錄",
+			deploy_errors: "無法讀取",
 			...connectionOperationStrings["zh-TW"],
 			...relativeAgeStrings["zh-TW"],
 			...healthStrings["zh-TW"],
@@ -12651,6 +12693,48 @@ var init_i18n = __esmMin((() => {
 		},
 		en: {
 			...sessionArchiveStrings.en,
+			deploy_field_engine: "engine",
+			deploy_field_name: "name",
+			deploy_field_image: "image",
+			deploy_field_state: "state",
+			deploy_field_status: "status",
+			deploy_field_health: "health",
+			deploy_field_created: "created",
+			deploy_field_ports: "ports",
+			deploy_field_project: "project",
+			deploy_field_service: "service",
+			deploy_field_working_dir: "working dir",
+			deploy_field_config_files: "config files",
+			deploy_field_counts: "counts",
+			deploy_field_scope: "scope",
+			deploy_field_load: "load",
+			deploy_field_active: "active",
+			deploy_field_sub: "sub",
+			deploy_field_description: "description",
+			deploy_field_index: "index",
+			deploy_field_sha: "sha",
+			deploy_field_branch: "branch",
+			deploy_field_commit_time: "commit time",
+			deploy_field_subject: "subject",
+			deploy_field_dirty_count: "dirty count",
+			deploy_field_mtime: "mtime",
+			deploy_field_error: "error",
+			deploy_field_source: "source",
+			deploy_field_code: "code",
+			deploy_code_missing: "missing",
+			deploy_code_permission_denied: "permission denied",
+			deploy_code_command_failed: "command failed",
+			deploy_code_timeout: "timeout",
+			deploy_code_output_limit: "output limit",
+			deploy_code_invalid_output: "invalid output",
+			deploy_code_host_unreachable: "host unreachable",
+			deploy_code_invalid_reply: "invalid reply",
+			deploy_status: "Host deployment status (read-only)",
+			deploy_containers: "Containers",
+			deploy_compose_projects: "Compose projects",
+			deploy_systemd: "Services",
+			deploy_deploys: "Deploy directories",
+			deploy_errors: "Unavailable",
 			...connectionOperationStrings.en,
 			...relativeAgeStrings.en,
 			...healthStrings.en,
@@ -73141,6 +73225,38 @@ async function viewHostDiscovery(main, host) {
 		opStatus
 	}) : null;
 	if (repair) main.append(repair.box);
+	const deployBox = h("section", { class: "panel" });
+	const deployBody = h("div", { "aria-live": "polite" });
+	const deployButton = h("button", { type: "button" }, t("deploy_status"));
+	deployButton.addEventListener("click", async () => {
+		deployButton.disabled = true;
+		try {
+			const data = await api("GET", `/hosts/deploy-status?host=${encodeURIComponent(host)}`);
+			assertView(connection);
+			deployBody.replaceChildren(...data.hosts.map((row) => {
+				const box = h("div", {}, h("p", {}, row.error ? t("deploy_code_" + row.error) : `${row.hostname} · ${row.collected_at}`));
+				if (row.error) return box;
+				for (const key of [
+					"containers",
+					"compose_projects",
+					"systemd",
+					"deploys",
+					"errors"
+				]) {
+					const section = h("details", { open: key === "errors" && !!row.errors?.length }, h("summary", {}, `${t("deploy_" + key)} (${row[key]?.length || 0})`));
+					for (const item of row[key] || []) section.append(h("p", {}, Object.entries(item).map(([name, value]) => `${t("deploy_field_" + name)}: ${["error", "code"].includes(name) && value ? t("deploy_code_" + value) : typeof value === "object" ? JSON.stringify(value) : value}`).join(" · ")));
+					box.append(section);
+				}
+				return box;
+			}));
+		} catch (error) {
+			if (connection.generation === generation && connection.epoch === state.epoch) deployBody.replaceChildren(errorBox(error, { within: deployBody }));
+		} finally {
+			deployButton.disabled = false;
+		}
+	});
+	deployBox.append(deployButton, deployBody);
+	main.append(deployBox);
 	const load = async () => {
 		try {
 			const data = await api("GET", `/hosts/${encodeURIComponent(host)}/discovery`);

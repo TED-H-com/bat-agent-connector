@@ -167,7 +167,7 @@ class TaskDaemon:
         self._initialized = False
         self._endpoint: str | None = None
 
-    _lazy_attributes = {"journal", "fleet", "adapter", "coordinator", "ops", "api", "inventory",
+    _lazy_attributes = {"deploy_status", "journal", "fleet", "adapter", "coordinator", "ops", "api", "inventory",
                         "result_collector",
                         "goose", "jev", "router", "_admin_token", "admin_token_path", "pusher",
                         "minimal_router", "minimal_review_gate", "default_task_path", "_submit_lock",
@@ -269,7 +269,9 @@ class TaskDaemon:
         self.result_collector = AttemptResultCollector(self.ops)
         self.inventory.after_refresh.append(self.result_collector.after_refresh)
         self.ops.context["attempt_result_collector"] = self.result_collector
+        from .deploy_status import DeployStatus
         from .usage_collector import UsageCollector
+        self.deploy_status = DeployStatus(config.deploy_status)
         self.usage_collector = UsageCollector(self.journal, config.usage)
         self.ops.context["usage_collector"] = self.usage_collector
         from .session_history import HistoryCollector
