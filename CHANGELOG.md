@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.16 / Desktop 0.1.12 (2026-11-05)
+
+- Fix hourly `installed_source_mismatch` on v0.2.12-managed hosts by moving
+  wheel provenance to `bat_agent_connector/skill/build-info.json` (#502).
+  Hosts on v0.2.12 auto-update on the next hourly timer.
+- Add `install_connector.py --repair-managed [--dry-run]` for update-managed
+  installs refused with `already_update_managed` (#502).
+- Advance both package versions and validate the actual stable 0.2.15 core upgrade,
+  retaining the earlier 0.2.12 baseline and existing identities, workspaces and history.
+
 ## 0.2.15 / Desktop 0.1.11 (2026-11-05)
 
 - Retain observed BAT user/assistant conversations in the Connector SQLite journal,

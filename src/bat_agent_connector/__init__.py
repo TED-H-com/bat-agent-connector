@@ -4,5 +4,5 @@ BAT is by TonyQ (tony1223): https://github.com/tony1223/better-agent-terminal
 This project is not affiliated with or endorsed by the BAT authors.
 """
 
-__version__ = "0.2.15"
+__version__ = "0.2.16"
 PROTOCOL = "bat-remote/v2"

@@ -1,5 +1,20 @@
 # PM v1.2 開發狀態
 
+2026-11-05：#502 已合併為 `53171768`；`release/0.2.16` 正準備 Connector 0.2.16／Desktop 0.1.12 發布。
+修正 v0.2.12 受管理主機每小時更新的 `installed_source_mismatch`，將 wheel 來源證明移至
+`bat_agent_connector/skill/build-info.json`，並加入 `install_connector.py --repair-managed [--dry-run]`
+修復遭 `already_update_managed` 拒絕的受管理安裝。v0.2.12 主機將於下一次每小時計時器自動更新。
+發布來源與 CI 以 `release-manifest.json` 記錄為準；發布前仍需核對最終來源、CI 與套件 digest。
+本次僅為發布準備，尚未發布、安裝或新增實機驗收；已發布穩定版仍為 0.2.15／0.1.11。
+PM v1.2、E00–E11、R0–R5、A01–A40 其餘未完成範圍維持開放。
+
+November 5: #502 is merged as `53171768`; `release/0.2.16` is preparing Connector 0.2.16 / Desktop 0.1.12.
+It fixes hourly managed-update provenance checks on v0.2.12 hosts and adds explicit managed-install repair.
+Hosts on v0.2.12 auto-update on the next hourly timer. Release source and CI are recorded in
+`release-manifest.json`; final source, CI and package digests remain publication gates.
+This preparation claims no publication, installation or live acceptance. Stable remains 0.2.15 / 0.1.11;
+open PM v1.2 and E00–E11 / R0–R5 / A01–A40 requirements remain unchanged.
+
 2026-11-05：
 [穩定版 v0.2.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)
 交付 Connector 0.2.15／Desktop 0.1.11；#498 保存已觀察對話並透過既有明確 PM 操作
