@@ -14,7 +14,8 @@
   current access checks and original operation-key recovery remain intact.
 - Include opt-in read-only host deployment observations (#495) and preserve the
   existing connection recovery fixes. This release does not enable new live writes.
-- Advance both package versions and validate the actual stable 0.2.14 core upgrade
+- Advance both package versions and validate upgrades of cores built from pinned
+  published 0.2.12 and 0.2.14 sources,
   without replacing retained identities, workspaces or original operation history.
 - Correct a Unix fixture cleanup assertion to observe child PIDs in the parent,
   without relying on Python initialization before its unchanged startup deadline.

@@ -2,9 +2,9 @@
 
 **English** · [繁體中文](windows.zh-TW.md) · [Product overview](../README.md)
 
-Windows Fleet is the local connection and startup layer inside Tauri. Python Connector / Task Service authorizes and dispatches work; BAT executes it on the selected host. The candidate desktop package includes a local Python central runtime. Joining an existing central, including one on Linux, remains an advanced option.
+Windows Fleet is the local connection and startup layer inside Tauri. Python Connector / Task Service authorizes and dispatches work; BAT executes it on the selected host. The desktop package includes a local Python central runtime. Joining an existing central, including one on Linux, remains an advanced option.
 
-Open the [desktop workflow on `main`](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and select a successful run from the current public history. Match the source commit and Windows installed-fixture records, then download `desktop-Windows-unsigned` from its successful Windows package job. Wait if that job is still building. Historical PR artifacts and earlier release assets are not the current download source.
+Use the [stable 0.2.15 release](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15): Connector 0.2.15 / Desktop 0.1.11. Download `better-agent-dashboard_0.1.11_windows_x64.exe` and check its `release-manifest.json` and `SHA256SUMS`. To update, quit Dashboard through its tray menu and run the installer while preserving application data. Existing unsigned test packages do not support in-app signed updates. The package's source/CI, upgrade fixtures using cores built from pinned published 0.2.12 and 0.2.14 sources, and separate live-acceptance limits are recorded in [delivery status](product/implementation-status.md). Later development candidates remain available from successful [desktop workflows on `main`](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain); match their source and Windows installed-fixture records, and note that Actions artifacts can expire.
 
 ## What runs where
 

@@ -1,5 +1,18 @@
 # PM v1.2 開發狀態
 
+2026-11-05：
+[穩定版 v0.2.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)
+交付 Connector 0.2.15／Desktop 0.1.11；#498 保存已觀察對話並透過既有明確 PM 操作
+整理固定版本，#495 提供按需主機部署唯讀觀察。來源 `82584a66dfac19ff8f1beebc1ca8fbb3b11f6aad`、
+已通過的最終 CI 與由 0.2.12／0.2.14 固定發布來源建置核心的升級檢查見[最新交付狀態](implementation-status.md)。
+本增量不把摘要當作決策或完整 PM，不新增 owner 安裝、真模型或實體裝置驗收，原 v1.2 待辦保留。
+
+November 5: Connector 0.2.15 / Desktop 0.1.11 includes
+#498 saved conversations and explicit PM continuation, plus #495 deployment observations.
+See delivery status for the fixed source, passed CI/artifact verification and both core-upgrade baselines built from pinned published sources.
+PM lifecycle work remains open; publication adds no owner installation or live acceptance evidence.
+Earlier entries below describe their own stages.
+
 2026-11-05：#498 已合併為 `7681c207`，正在準備 0.2.15／0.1.11 發布的
 [Connector 對話保存](../design/session-retention.md)增量：背景保存已觀察文字、固定版本閱讀，
 及附原訊息版本的確定性摘錄；接續增量讓既有 `pm.continuation.prepare` 明確選取

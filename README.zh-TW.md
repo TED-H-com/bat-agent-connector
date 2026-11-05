@@ -71,9 +71,11 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 ## 安裝與連線
 
-最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14)是 Connector **0.2.14**／desktop **0.1.10**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，固定於 `437ee6a7143a82e32eae1d6a008203b2df072aaf`（`437ee6a7`）。每版各有八個檔案：Python wheel 與 sdist、Linux deb、兩個 macOS DMG、Windows 安裝器、`release-manifest.json` 及 `SHA256SUMS`。從發布頁選擇桌面套件，並核對來源清單與校驗碼。這些仍是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道。
+Connector 0.2.15 加入[對話保存](docs/design/session-retention.md)與明確請求的固定版本 PM 摘要（#498），以及[主機部署狀態唯讀觀察](docs/design/host-deploy-status.md)（#495）。Dashboard 關閉時仍可背景保存文字；模型摘要須明確透過已設定的 PM runtime 請求。從未讀取且來源已不存在的文字無法補回，摘要不會採用決策或證明工作完成。
 
-Connector 請依[驗證安裝器說明](docs/getting-started.zh-TW.md#2-安裝-connector)操作。穩定版使用 `--tag v0.2.14 --channel-check stable`；本預覽版使用 `--tag v0.2.13-preview.20261022 --channel-check preview`，啟動安裝腳本也取自同一 tag。安裝器必須指定 tag，通道檢查預設為 `preview`，可接受穩定版與預覽版；`stable` 會拒絕預覽版。Linux 加上 `--enable-updates` 才會登記同一通道並啟用排程；單純安裝不會啟用更新。依據見[安裝器原始碼](scripts/install_connector.py)與[更新指南](docs/connector-updates.md)。
+最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)是 Connector **0.2.15**／desktop **0.1.11**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，固定於 `437ee6a7143a82e32eae1d6a008203b2df072aaf`（`437ee6a7`）。每版各有八個檔案：Python wheel 與 sdist、Linux deb、兩個 macOS DMG、Windows 安裝器、`release-manifest.json` 及 `SHA256SUMS`。從發布頁選擇桌面套件，並核對來源清單與校驗碼。這些仍是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道。
+
+Connector 請依[驗證安裝器說明](docs/getting-started.zh-TW.md#2-安裝-connector)操作。穩定版使用 `--tag v0.2.15 --channel-check stable`；本預覽版使用 `--tag v0.2.13-preview.20261022 --channel-check preview`，啟動安裝腳本也取自同一 tag。安裝器必須指定 tag，通道檢查預設為 `preview`，可接受穩定版與預覽版；`stable` 會拒絕預覽版。Linux 加上 `--enable-updates` 才會登記同一通道並啟用排程；單純安裝不會啟用更新。依據見[安裝器原始碼](scripts/install_connector.py)與[更新指南](docs/connector-updates.md)。
 
 已登記的更新器在 `stable` 提供符合條件的較新穩定版，在 `preview` 提供符合條件的較新穩定版或預覽版；穩定通道不會提供本預覽版。後續開發包可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對成功的平台 job 與來源；Actions artifacts 可能到期。
 

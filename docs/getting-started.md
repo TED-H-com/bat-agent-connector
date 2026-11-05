@@ -4,18 +4,24 @@
 
 ## Choose the matching package
 
-As checked on November 4, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14) is Connector **0.2.14** / desktop **0.1.10**, with its exact source recorded in `release-manifest.json`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
+As checked on November 5, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15) is Connector **0.2.15** / desktop **0.1.11**, with its exact source recorded in `release-manifest.json`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
 
-This stable package includes managed-service recovery, Windows background-process and Fleet monitor fixes, plus startup-role selection and connection review. The older preview remains available as a historical build. See [delivery status](product/implementation-status.md) for merged, published, installed and live-tested evidence. The first-launch steps below describe stable 0.2.14; downloading a newer package does not establish installation or live acceptance.
+This stable package adds background conversation retention, fixed saved versions and explicit PM continuation summaries (#498), plus read-only host deployment observations (#495). It retains the earlier managed-service, Windows and Fleet recovery fixes. The older preview remains available as a historical build. See [delivery status](product/implementation-status.md) for the exact source and CI, and separate merged, published, installed and live-tested evidence. The first-launch steps below describe stable 0.2.15; downloading a newer package does not establish installation or live acceptance.
 
-| Platform | Stable 0.1.10 asset | Preview 0.1.9 asset | Package |
+| Platform | Stable 0.1.11 asset | Preview 0.1.9 asset | Package |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.10_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.10_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.10_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.10_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.11_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.11_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.11_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.11_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 Use the platform asset on the release page. Separate GitHub Actions candidates may require sign-in and expire. Windows packages are unsigned; Mac bundles use ad-hoc signing. Formal signing, Mac notarization, production update channels and a Linux persistent native credential vault are outside this delivery. GitHub's release label does not establish real-device stability.
+
+### Update an existing desktop
+
+For Windows, download `better-agent-dashboard_0.1.11_windows_x64.exe`, quit Dashboard through its tray menu, then run the installer. Preserve the existing application data; do not delete the Connector journal or credentials. Existing unsigned test packages cannot use the in-app signed update path. Other platforms use their matching package above.
+
+The release checks build older Connector cores from pinned published 0.2.12 and 0.2.14 sources, then exercise the upgrade to 0.2.15 while checking retained identity, data and original operations. These core fixtures do not exercise an old desktop installer upgrading to a new installer or establish recovery on your machine. Final source and passed CI evidence are recorded in [delivery status](product/implementation-status.md).
 
 ## First launch: your local Connector
 
@@ -188,6 +194,18 @@ These steps describe available product actions, not a claim that full
 lifecycle live acceptance has run. Record actual operation, source, runtime and
 delivery receipts separately from offline tests and CI.
 
+### Read saved conversations and request a PM summary
+
+Open a session's **Saved conversation** panel and choose **Read saved history** to read text already retained by this Connector. Choose a saved version and page through it; later captures do not replace the version being read. The Connector collects observed user/assistant text in the background without an open Dashboard or model call. Saved excerpts retain their original message version references. Retention and backfill are bounded; content that was never read and is no longer available at its source cannot be reconstructed.
+
+For a semantic summary, open a PM discussion's **Discussion info → Context → Continue from here**. Under **Saved conversation (optional)**, choose **Browse conversations**, select a conversation, then **Include this saved version**. Enter the summary focus and choose **Prepare continuation** (or **Update continuation**) through the configured PM runtime. The saved brief records its exact sources and model interpretation; it does not adopt scope or accept delivery. Incomplete history cannot establish that all work is finished. Browsing or selecting a source does not call the model.
+
+Saved text may remain readable while BAT is offline, provided the Connector is reachable and current access remains authorized. Missing sessions and saved history do not prove that a process stopped. See the [retention contract](design/session-retention.md) for text/storage bounds and [PM continuation](design/pm-continuation-brief.md) for source and runtime requirements.
+
+### Observe host deployment status
+
+Open a host from the session list and choose **Host deployment status (read-only)**. An operator first configures that querying Connector's optional SSH aliases and deployment directories; each Connector queries independently. The view reads container, systemd and configured Git deployment metadata on demand. It does not install, restart or update services. CLI users can run `batc hosts deploy-status`; configuration and partial-result limits are described in the [deployment observation guide](design/host-deploy-status.md).
+
 ### Read an AHP host catalog
 
 In the workspace's **Agents** view, expand **AHP observations**. An operator must first configure an
@@ -243,10 +261,10 @@ It creates a private version directory under
 For an existing uv tool installation, see [adoption and restoration](connector-updates.md#adopting-an-existing-uv-tool-installation).
 
 Both published versions include the installer. Pin the same tag for the bootstrap
-and installation. For stable **v0.2.14**:
+and installation. For stable **v0.2.15**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.14/scripts/install.sh | sh -s -- --tag v0.2.14 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.15/scripts/install.sh | sh -s -- --tag v0.2.15 --channel-check stable
 ```
 
 For prerelease **v0.2.13-preview.20261022**:
@@ -393,7 +411,6 @@ then continue in a new managed session; or let a scoped MCP agent drive managed 
 The checkpoint path keeps the person's session and checkout read-only. The Start and
 dispatch forms explain the worktree, BAT session and tracked evidence in **How dispatch works**.
 
-
 The CLI offers the same observation and operation records:
 
 ```bash
@@ -442,7 +459,6 @@ and must not be group- or world-writable. Review the reported path, then run the
 suggested command for that directory and retry installation or `--verify-only`.
 The installer never changes permissions automatically. If the owner is wrong,
 removing write permissions alone will not fix ownership; ask the administrator.
-
 
 | What you see | What to check / do |
 | --- | --- |
