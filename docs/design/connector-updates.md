@@ -30,10 +30,12 @@ also verifies installed package metadata, VCS commit and command availability.
 No branch tip, mutable checkout or unpublished Git object is an update source.
 
 The shared installer/updater source verifier accepts the wheel's generated
-`build-info.json` only with the producer's commit-only schema and the exact
+`skill/build-info.json` (and the legacy package-root `build-info.json`) only with the producer's commit-only schema and the exact
 candidate SHA. That validated file can lack a tracked source counterpart; all
-other source files still match individually. The installed proof digest includes
-the generated file, so later changes are detected on verification and reuse.
+other source files still match individually. The legacy package-root file remains
+in the installed proof digest; the new location is excluded by the legacy updater's
+`skill/` rule, preserving exact source-map compatibility. Frozen desktop bundles
+continue to read their package-root `build-info.json`.
 
 Git source installs disable automatic maintenance and automatic garbage collection in
 their subprocess environment, preventing background repacking while uv copies
