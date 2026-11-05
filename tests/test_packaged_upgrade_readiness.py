@@ -30,6 +30,78 @@ def put_pointer(root, pid, endpoint='http://127.0.0.1:45123/rpc'):
     platform_files.atomic_write(root / 'state/task-service.json', json.dumps({'pid': pid, 'endpoint': endpoint}).encode())
 
 
+def test_fixture_shutdown_sends_once_then_waits_for_lease(upgrade, tmp_path, monkeypatch):
+    scope = upgrade['quiesce_fixture_owner'].__globals__
+    requests, pauses = [], []
+    ownership = iter([True, True, False])
+    launch = {'endpoint': 'http://127.0.0.1:45123', 'token': 'fixture-token'}
+
+    def request(owner, path, **kwargs):
+        requests.append((owner, path, kwargs))
+        return {'protocol': 1, 'stopped': True}
+
+    monkeypatch.setitem(scope, 'request', request)
+    monkeypatch.setitem(scope, '_running', lambda data: next(ownership))
+    monkeypatch.setitem(scope, 'time', SimpleNamespace(monotonic=lambda: 0, sleep=pauses.append))
+    upgrade['quiesce_fixture_owner'](tmp_path, launch)
+    assert requests == [(launch, '/api/v1/managed/stop', {'body': {}})]
+    assert pauses == [0.1, 0.1]
+    assert not (tmp_path / 'state/lifecycle.json').exists()
+
+
+def test_fixture_shutdown_preserves_an_existing_stop_hold(upgrade, tmp_path, monkeypatch):
+    hold = tmp_path / 'state/lifecycle.json'
+    hold.parent.mkdir()
+    hold.write_bytes(b'fixture hold')
+    monkeypatch.setitem(upgrade['quiesce_fixture_owner'].__globals__, 'request',
+                        lambda *_a, **_kw: pytest.fail('Held service must not receive another shutdown'))
+    with pytest.raises(AssertionError, match='must not clear a stop hold'):
+        upgrade['quiesce_fixture_owner'](tmp_path, {})
+    assert hold.read_bytes() == b'fixture hold'
+
+
+@pytest.mark.parametrize('reply', [{'stopped': True}, {'protocol': 1, 'stopped': False}])
+def test_fixture_shutdown_requires_exact_ack_before_waiting(upgrade, tmp_path, monkeypatch, reply):
+    scope = upgrade['quiesce_fixture_owner'].__globals__
+    monkeypatch.setitem(scope, 'request', lambda *_a, **_kw: reply)
+    monkeypatch.setitem(scope, '_running', lambda *_: pytest.fail('Invalid ack must not advance setup'))
+    with pytest.raises(AssertionError):
+        upgrade['quiesce_fixture_owner'](tmp_path, {})
+
+
+def test_fixture_shutdown_bounds_lease_wait_without_resending(upgrade, tmp_path, monkeypatch):
+    scope = upgrade['quiesce_fixture_owner'].__globals__
+    calls = []
+    ticks = iter([0, 0, 31])
+
+    def request(*args, **kwargs):
+        calls.append(1)
+        return {'protocol': 1, 'stopped': True}
+
+    monkeypatch.setitem(scope, 'request', request)
+    monkeypatch.setitem(scope, '_running', lambda *_: True)
+    monkeypatch.setitem(scope, 'time', SimpleNamespace(monotonic=lambda: next(ticks), sleep=lambda _: None))
+    with pytest.raises(AssertionError, match='did not release its lease'):
+        upgrade['quiesce_fixture_owner'](tmp_path, {})
+    assert calls == [1]
+
+
+@pytest.mark.parametrize('failure', [TimeoutError('fixture'), urllib.error.HTTPError('', 409, 'busy', {}, None)])
+def test_fixture_shutdown_does_not_retry_an_uncertain_or_refused_request(upgrade, tmp_path, monkeypatch, failure):
+    scope = upgrade['quiesce_fixture_owner'].__globals__
+    requests = []
+
+    def request(*args, **kwargs):
+        requests.append(1)
+        raise failure
+
+    monkeypatch.setitem(scope, 'request', request)
+    monkeypatch.setitem(scope, '_running', lambda *_: pytest.fail('Failed shutdown must not advance setup'))
+    with pytest.raises(type(failure)):
+        upgrade['quiesce_fixture_owner'](tmp_path, {})
+    assert requests == [1]
+
+
 @pytest.mark.parametrize('code', [5, 32])
 def test_pointer_refusal_uses_production_reader_once_with_winerror(upgrade, tmp_path, monkeypatch, code):
     put_pointer(tmp_path, 42)

@@ -37,6 +37,7 @@ from managed_runtime_assertions import (
 )
 
 from bat_agent_connector import platform_files
+from bat_agent_connector.managed_runtime import _locked, _running
 
 continuity = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'tests/upgrade_continuity_helpers.py'))
 snapshot_rows = continuity['snapshot_rows']
@@ -316,10 +317,24 @@ def terminate_owned(child):
         child.wait(timeout=10)
 
 
+def quiesce_fixture_owner(data, launch, *, timeout=30):
+    # Setup hands an idle installation to our explicit serve child. Use the
+    # upgrader's authenticated shutdown, not the user's durable Stop command:
+    # versions with lifecycle holds correctly refuse serve after that command.
+    with _locked(data / 'launcher.lock'):
+        assert not (data / 'state/lifecycle.json').exists(), 'Fixture setup must not clear a stop hold'
+        assert request(launch, '/api/v1/managed/stop', body={}) == {'protocol': 1, 'stopped': True}
+        until = time.monotonic() + timeout
+        while _running(data):
+            assert time.monotonic() < until, 'Fixture owner did not release its lease'
+            time.sleep(0.1)
+        assert not (data / 'state/lifecycle.json').exists(), 'Upgrade shutdown must not create a stop hold'
+
+
 def busy_refusal(previous, current, old_manifest, root, env):
     data = root / 'busy-installation'
     original = command(previous, data, env)
-    assert command(previous, data, env, action='stop')['stopped'] is True
+    quiesce_fixture_owner(data, original)
     options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {'start_new_session': True}
     child = subprocess.Popen(  # noqa: S603 - explicit hash-verified task-owned fault fixture
         [str(previous), 'serve', '--data-dir', str(data)], env=env, stdin=subprocess.DEVNULL,
@@ -440,7 +455,7 @@ existing packaged workspace/identity checks; its publication path remains open.
         handlers[name] = hashlib.sha256(old.read_bytes()).hexdigest()
     data = root / 'publication-installation'
     original = command(previous, data, env)
-    assert command(previous, data, env, action='stop')['stopped'] is True
+    quiesce_fixture_owner(data, original)
     output = root / 'publication-seed.json'
     # Controller Python has dev dependencies; frozen children still have no
     # Python on PATH. The seeder writes through the real action/receipt code.

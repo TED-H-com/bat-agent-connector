@@ -102,6 +102,7 @@ def test_publication_failure_preserves_redacted_seed_and_core_logs(tmp_path, mon
         Popen=popen, DEVNULL=subprocess.DEVNULL, STDOUT=subprocess.STDOUT,
         TimeoutExpired=subprocess.TimeoutExpired))
     monkeypatch.setitem(scope, 'terminate_owned', lambda _: None)
+    monkeypatch.setitem(scope, 'quiesce_fixture_owner', lambda *_: None)
     monkeypatch.setitem(scope, 'command', lambda *args, **kwargs:
         {'stopped': True} if kwargs.get('action') == 'stop' else {'runtime_version': '0.2.6'})
     with pytest.raises(AssertionError) as caught:
