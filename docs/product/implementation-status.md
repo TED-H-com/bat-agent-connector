@@ -1,5 +1,26 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-05：對話保存已合併，0.2.15／0.1.11 發布準備
+
+[#498](https://github.com/TED-H-com/bat-agent-connector/pull/498) 已合併為 `7681c207`，
+合併 tree 與通過完整 CI 的 `48fc3bd8` 相同。Connector 背景將已讀到的 BAT 對話保存至
+SQLite，提供固定版本、來源摘錄及明確 PM 接續摘要；詳見[對話保存合約](../design/session-retention.md)。
+原 session 消失不會刪除已保存內容，未曾讀到就刪除的來源仍無法補回。
+PM 模型摘要由既有明確操作觸發，沿用來源權限與原操作紀錄，不自動採納決策或宣告工作完成。
+
+`release/0.2.15-desktop-0.1.11` 準備 Connector 0.2.15／Desktop 0.1.11，
+並以正式 0.2.14 的固定來源驗證實際核心升級。發布前需核對最終 main 的 CI、
+套件來源與 digest；目前尚未發布或安裝，也沒有新的真 BAT／模型、Windows owner 或實體手機驗收。
+這是 E04／E08／E09／E10、EC-1.1 T3／T4／T6 增量；PM v1.2、E00–E11、R0–R5、A01–A40
+其餘未完成範圍維持開放。穩定版下載仍是下方 0.2.14，直到新版正式發布。
+
+PR #498 is merged as 7681c207 with the same tree as fully tested 48fc3bd8.
+Background SQLite retention, fixed saved versions and explicit source-grounded PM continuation
+are preparing for Connector 0.2.15 / Desktop 0.1.11. Final main-source CI and package
+provenance remain publication gates. No publication, user installation or live acceptance
+is claimed by this preparation entry; the remaining PM lifecycle and E/R/A work stays open.
+
+
 ## 2026-11-04：Connector 0.2.14／Desktop 0.1.10 發布
 
 [穩定版 v0.2.14](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14)
