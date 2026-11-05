@@ -1,8 +1,52 @@
 import {test, expect, type Page} from '@playwright/test';
 import {conversationFixture, mountConversation} from './conversation-fixture.ts';
+import {followUpFixture, openWork, WS, WI, ATTEMPT} from './work-next-turn-fixture.ts';
 
 const FIRST = 'a'.repeat(64), SECOND = 'b'.repeat(64);
 const SAVED = 1793872800;
+
+for (const width of [390, 1440]) {
+  test(`saved history stays below live follow-up controls when closed or open (${width}px)`, async ({page}) => {
+    await page.setViewportSize({width, height:844});
+    const fixture = followUpFixture('zh-TW'), dispatch = fixture.dispatch;
+    const operationId = 'op_' + 'c'.repeat(32);
+    fixture.follow.items.push({operation_id:operationId, workspace_id:WS, work_item_id:WI,
+      attempt_id:ATTEMPT, sequence:1, state:'sent', actor:'owner', cancellable:false,
+      text_excerpt:'再補一個失敗後重新送出的案例。', text_truncated:false,
+      labels:{state:{en:'Sent', 'zh-TW':'已送出'}, detail:{en:'Sent to the session.',
+        'zh-TW':'此指令已開始送出或已送達工作階段，無法透過取消操作撤回。'}}, next_allowed_actions:[]});
+    fixture.dispatch = async input => {
+      const result = await dispatch(input), path = new URL(input.path, 'http://fixture').pathname;
+      if (path === '/capabilities' || path === '/bootstrap') {
+        const caps = path === '/bootstrap' ? result.data.capabilities : result.data;
+        caps.features.session_archive = {version:1};
+        caps.features.session_reading = {version:1};
+      }
+      return result;
+    };
+    await openWork(page, fixture, 'zh-TW');
+    const pane = page.locator('[data-session-archive]'), summary = pane.locator('summary');
+    const receipt = page.locator(`[data-follow-up-receipt="${operationId}"]`);
+    await expect(receipt).toContainText('已送出');
+    const assertSeparate = async () => {
+      const layout = await page.locator('main.session-view').evaluate(main => ({
+        liveBottom:main.querySelector('[data-work-section="next-turn"]')!.getBoundingClientRect().bottom,
+        savedTop:main.querySelector('[data-session-archive]')!.getBoundingClientRect().top,
+      }));
+      expect(layout.savedTop).toBeGreaterThanOrEqual(layout.liveBottom);
+    };
+    await assertSeparate();
+    await summary.click();
+    await expect(pane).toHaveAttribute('open', '');
+    await assertSeparate();
+    await summary.click();
+    await assertSeparate();
+    await receipt.locator(`a[href="#/op/${operationId}"]`).click();
+    await expect.poll(()=>fixture.follow.reads.includes(`GET /operations/${operationId}`)).toBe(true);
+    expect(fixture.follow.posts).toEqual([]);
+  });
+}
+
 function archiveFixture() {
   const base = conversationFixture();
   const data = {latest:FIRST, gone:false, refused:0, liveUnavailable:false, hold:false,

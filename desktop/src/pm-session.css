@@ -3,9 +3,10 @@
 main.session-view { display: flex; flex-direction: column; height: calc(100dvh - var(--shell-header-height, 48px)); overflow: auto; }
 main.session-view > .workspace-session-heading { flex: none; }
 main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-items: stretch; }
-/* Opening retained history must not squeeze live controls over the saved reader. */
+/* Keep live controls in flow above both the collapsed and expanded saved reader. */
 main.session-view > [data-session-archive] { flex: none; min-width: 0; }
-main.session-view:has(> [data-session-archive][open]) > .workspace-session { flex: none; min-height: min-content; }
+main.session-view:has(> [data-session-archive]) > .workspace-session { min-height: min-content; }
+main.session-view:has(> [data-session-archive][open]) > .workspace-session { flex: none; }
 .session-workspace .workspace-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .workspace-session-heading .ui-page-header { margin-bottom: 0; width: 100%; }
 .workspace-session-heading .session-mark { display: inline-flex; }
