@@ -101,6 +101,9 @@ def build(ops, principal, target, params, pre, head):
     sources.update(row['operation_id'] for row in messages)
     if not fits():
         raise error('Decision facts and previous brief exceed the context budget', 'PM_CONTEXT_TOO_LARGE', 413)
+    if 'retained_session_ref' in params:
+        from . import pm_retained_session_context
+        pm_retained_session_context.attach(ops, principal, result, params['retained_session_ref'])
     for row in reversed(messages):
         key = 'message.' + row['message_id']
         add(key, 'message', row['message_id'], row, row['content'], row['operation_id'])
@@ -110,7 +113,8 @@ def build(ops, principal, target, params, pre, head):
             del refs[key]
             coverage['included_message_ids'].remove(row['message_id'])
             coverage['omitted_message_ids'].append(row['message_id'])
-    coverage['partial'] = bool(coverage['previous_partial'] or coverage['older_messages_omitted'] or coverage['omitted_message_ids'])
+    coverage['partial'] = bool(coverage['partial'] or coverage['previous_partial']
+        or coverage['older_messages_omitted'] or coverage['omitted_message_ids'])
     if not refs or not fits():
         raise error('Continuation context exceeds the selected budget', 'PM_CONTEXT_TOO_LARGE', 413)
     from .pm_access import require_operation_sources

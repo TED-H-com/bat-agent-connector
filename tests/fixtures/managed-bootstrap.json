@@ -1903,7 +1903,8 @@
       "session_archive": {
         "version": 1,
         "background": true,
-        "summary": "extractive"
+        "summary": "extractive",
+        "pm_continuation": true
       },
       "session_observation": {
         "read": true,

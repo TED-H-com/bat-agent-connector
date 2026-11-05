@@ -1422,7 +1422,7 @@ class ApiV1:
                                   "session_instructions": {"version": 1, "live_queue": False, "per_message_cancel": False},
                                   "repository_sync": repository_sync.capabilities(self.daemon.ops),
                                   "worktree_merge": worktree_merge_operations.capabilities(self.daemon.ops),
-                                  "cleanup": True, "cleanup_task": True, "inventory": True, "session_history": True, "session_archive": {"version": 1, "background": True, "summary": "extractive"}, "session_observation": {"read": True, "wait": True, "max_wait_s": 1800}, "resource_relations": True, "discovery_scope": True,
+                                  "cleanup": True, "cleanup_task": True, "inventory": True, "session_history": True, "session_archive": {"version": 1, "background": True, "summary": "extractive", "pm_continuation": True}, "session_observation": {"read": True, "wait": True, "max_wait_s": 1800}, "resource_relations": True, "discovery_scope": True,
                                   "worktree_history": {"known_bindings_only": True}, "history": {"source": "journal", "legacy_transitions": "may_be_incomplete", "optional_adapters": ["delivery_part_a", "delivery_part_b"],
                                       "observed_event_kinds": [r[0] for r in self.daemon.journal.db.execute("SELECT DISTINCT kind FROM api_events ORDER BY kind")]}, "events_stream": True, "operations": True, "work_items": True,
                                   "board_github_sync": {"version": 1, "interval_s": 300},

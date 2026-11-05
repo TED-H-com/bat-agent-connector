@@ -131,6 +131,8 @@ class SessionArchive:
                 for verb in ("UPDATE", "DELETE"):
                     self.db.execute(f"CREATE TRIGGER IF NOT EXISTS {table}_{verb.lower()}_immutable "
                         f"BEFORE {verb} ON {table} BEGIN SELECT RAISE(ABORT, 'Session archive is immutable'); END")
+        from .pm_retained_session_source import register
+        register(self)
 
     def identity(self, host, sid):
         inventory = self.daemon.inventory
@@ -383,6 +385,7 @@ class SessionArchive:
 
     def read(self, principal, host, session_id, *, snapshot_id=None, offset=0, last_n=20,
              max_chars=12000, max_message_chars=2000, **_):
+        from .pm_retained_session_source import reference
         from .pm_source_lineage import require_session
         if not principal.allows("observe"):
             raise OperationError("FORBIDDEN", "Saved conversation needs observe scope", 403)
@@ -409,6 +412,7 @@ class SessionArchive:
             messages.append(row)
         messages.reverse()
         return {"host": host, "session_id": session_id, "source": "retained", "snapshot_id": selected,
+                "retained_session_ref": reference(self.db, host, session_id, binding, selected),
                 "saved_at": saved["saved_at"], "last_checked_at": source["checked_at"], "source_status": source["status"],
                 "execution_status": "unknown", "coverage": doc["coverage"], "brief": json.loads(saved["brief"]),
                 "messages": messages, "offset": offset,

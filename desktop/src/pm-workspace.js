@@ -1309,7 +1309,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, errorBox, guard: alive,
           capability: () => pmCapabilities, capabilityError: () => pmCapabilitiesError, thread: () => threadData, permitted, target, refresh: load});
       }
-      continuation = continuationBrief({h,t,form,input,labelled,caps,capability:()=>pmCapabilities,thread:()=>threadData,permitted,target,refresh:load,
+      continuation = continuationBrief({h,t,api,guard:alive,form,input,labelled,caps,capability:()=>pmCapabilities,thread:()=>threadData,permitted,target,refresh:load,
         onOpen:()=>discussionTools.open('context')});
       column.querySelector('.pd-transcript').prepend(continuation.reader);
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
@@ -1990,7 +1990,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     disposed = true; main.removeEventListener('toggle', openedSource, true); for (const placeholder of maskedSources.values()) placeholder.remove(); maskedSources.clear();
     discussionTools?.dispose(); sequence++; off(); offOnline(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
     brief?.dispose?.();traceability?.dispose();kanban?.dispose();resources?.dispose();externalHistory?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
-    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();assessmentSources?.dispose();
+    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();assessmentSources?.dispose();continuation?.dispose();
     for (const control of viewToolMenus.values()) control.dispose();
     for (const value of forms) value.dispose();
     refreshing = false;

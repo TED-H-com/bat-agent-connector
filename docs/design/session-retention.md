@@ -1,7 +1,8 @@
 # Connector 保存的 session 對話
 
 2026-11-05，`feat/session-retention-20261105` 的未合併增量契約。
-對應既有 E04／E08／E10 與 EC-1.1 T3／T4 的資料保全和歷史閱讀；不代表
+對應既有 E04／E08／E10 與 EC-1.1 T3／T4 的資料保全和歷史閱讀，並沿 T6／E09
+補明確請求的 PM 接續摘要；不代表
 原生 CLI 完整收集、PM 判讀、E00–E11／R0–R5／A01–A40 或 PM v1.2 已完成。
 沒有發布、安裝、真實 BAT／模型或實體裝置驗收聲明。
 
@@ -99,9 +100,39 @@ JSON 使用 UTF-8、排序 keys、無多餘空白。較早 snapshot 始終解析
 這些文字可能包含建議、錯誤或未確認主張，不能被改標為已採用決定、已完成工作或驗收證據。
 背景保存及摘錄沒有模型呼叫或 embedding 費用。
 
-語意摘要、目標／決策／待辦提取仍須透過既有已設定、已授權的 PM 路徑，保留固定來源、
-模型／prompt 版本、候選與採用狀態。這個摘錄不代替 PM 全生命週期，也沒有新建模型排程器。
+語意摘要透過既有已設定、已授權的 `pm.continuation.prepare` 明確請求，
+可帶 `retained_session_ref` 選定一份保存版本。目標、曾討論的選項、問題與可能待辦
+沿用 [continuation brief](pm-continuation-brief.md) 的版本 1 契約和 SQL run／receipt，
+不另建摘要權威、模型排程器或自動費用。背景摘錄與模型摘要的版本分開保留。
+語意判讀與摘錄都不代替 PM 全生命週期。
 全文搜尋、跨 session memory 合併、長期 persona 與自動注入 agent context 不在本增量內。
+
+### 固定保存版本的語意接續
+
+讀取回應提供完整 `retained_session_ref`：`version=1`、`server_id`、`host`、
+完整 `session_id`、`binding` 和 `snapshot_id`。呼叫端原樣保存，不從路徑、標題、
+目錄或目前 UI 選取猜測來源身分、工作區關係或所有權；只提供 `latest`、短 ID 或
+不同 Connector／binding 的 reference 均不能使用。
+
+admission 從選定 snapshot 的 immutable members 讀取最多最新 20 則、合計最多
+16,000 個文字 codepoint，並依現有 PM context 的 2,000–64,000-character 上限
+再保留可放入的最新連續區段。使用保存的完整正文，不使用閱讀頁面的 display clipping；
+此步不再截短正文。至少一則保存訊息及固定 PM 決策放不下時，在模型送出前拒絕。
+凍結 context 保存實際入選的 `message_id`＋`revision` 順序、selection digest、
+原 snapshot、保存時間、coverage、省略數與 `execution_status=unknown`。
+新增 capture 或相同 ID 的新正文都不能改寫已凍結的來源。
+
+每則模型引用是 `retained_session_message`，帶 exact snapshot／message revision，
+沒有偽造的 operation ID，disposition 固定為 `context`。過去對話聲稱「決定」或
+「完成」仍是來源主張；已採用／排除決策繼續由中央 PM 狀態供給。
+只引用保存對話不能產生 `completed_evidence`，且 partial coverage 禁止
+`no_remaining_work`。模型解讀始終標示未經語意驗證。
+
+每次 derived run、brief、operation、event 或後續接續讀取，仍須通過目前 observe、
+工作區與原 session 的 PM source lineage 權限；送出與 import 沿既有 final-frame checks。
+當前 Connector config 的 host binding 由 connection-local callback 即時查核，
+不等下一次 inventory scan 才撤銷。來源離線仍可摘要已保存文字；移除／改綁 host、
+觀察到另一原生 session 身分或原權限撤回則來源不可用，不回退成舊的可見摘要。
 
 ## HTTP、RPC／MCP 與目前權限
 
@@ -117,7 +148,8 @@ offset 從選定版本的最新訊息向前計數，各頁仍按保存的來源�
 數值限制沿用 [session observation](session-observation.md)：最多 100 則、60,000 characters，
 單則另受 `max_message_chars` 限制。版本清單最多回傳最近 50 份；已知較早 digest 仍可明確讀取。
 回應包含 `source=retained`、`snapshot_id`、保存時間、上次查核時間、`source_status`、
-`coverage`、`brief`、`messages` 與分頁資訊，不把歷史填成 live pending／turn result。
+`coverage`、`brief`、`messages`、`retained_session_ref` 與分頁資訊，
+不把歷史填成 live pending／turn result。
 
 retained 不接受 `after`；live 不接受 `snapshot_id`。`session_wait` 繼續走既有 live 路徑。
 完整 session ID、observe scope、目前 host／source binding 及既有 `require_session` 的
@@ -140,6 +172,11 @@ Web／Tauri 使用同一收合的「已保存的對話／Saved conversation」�
 
 保存面板不能重設 live transcript、turn marker、pending、event ACK、read receipt、
 輸入草稿或原 operation key，也不讓歷史文字授權新的 send／start／resume。
+
+共用 PM 接續表單可選擇一份保存來源，再使用原 durable action／已設定 adapter
+請求摘要；選取、讀取與重新整理本身不呼叫模型。摘要的來源連結以 snapshot digest
+開啟原保存版本。一般草稿恢復時重新驗來源；結果未確認的原請求維持原 reference
+與 operation key，不更換來源重送。
 
 ## 固定上游研究與採用範圍
 

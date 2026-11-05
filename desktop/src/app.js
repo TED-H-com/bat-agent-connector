@@ -2666,6 +2666,9 @@ async function viewSession(main, host, sid, context = null) {
   // Keep the subscription after a partial initial failure. The view already contains controls;
   // returning here would let later journal pages be acknowledged without refreshing them.
   try { await refresh(); if (!withdrawn) await settleRefreshes([cps.load(), labels.refresh()]); } catch { /* retain the failure and drafts */ }
+  // A citation is an explicit saved read. Start it after initial live withdrawal
+  // so a missing live session cannot cancel that independent authorization.
+  archive?.openSnapshot(params.get('retained_snapshot'));
   const reload = debounceRefresh(() => refresh(true), 500), reloadCps = debounceRefresh(cps.load, 500);
   const off = onEvents(ev => {
     observations.changed(ev);

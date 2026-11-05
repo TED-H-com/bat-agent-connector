@@ -82,5 +82,7 @@ export function sessionArchivePanel({h, t, api, guard, host, sessionId, when}) {
     }
   }
   box.addEventListener('toggle', () => {if (box.open) poll(); else clear();});
-  return {box, clear, dispose(){disposed = true; clear();}};
+  return {box, clear, openSnapshot(snapshot) {
+    if (!disposed && typeof snapshot === 'string' && /^[0-9a-f]{64}$/.test(snapshot)) {box.open = true; void read(0, snapshot);}
+  }, dispose(){disposed = true; clear();}};
 }
