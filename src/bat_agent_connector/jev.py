@@ -129,7 +129,15 @@ class Jev:
             return None
 
     async def ask(self, state: Any, questions: dict) -> dict | None:
-        """Use TypeSafe first, then OpenRouter Jev; invalid answers never reach callers."""
+        """Use TypeSafe first, then OpenRouter Jev; invalid answers never reach callers.
+
+        Args:
+            state (Any): The context/state to base judgments on.
+            questions (dict): The questions to ask the judgment model.
+
+        Returns:
+            dict | None: The validated answers dictionary, or None if unavailable/invalid.
+        """
         self._answered_by.set(None)
         if self.cfg.enabled == "false":
             return None
@@ -154,6 +162,14 @@ class Jev:
         return None
 
     async def classify_state(self, excerpt: str) -> dict | None:
+        """Classify the current state of a coding agent session.
+
+        Args:
+            excerpt (str): The recent output from the session.
+
+        Returns:
+            dict | None: The classification result with state and confidence, or None.
+        """
         q = {
             "state": {
                 "type": "choice",
@@ -170,7 +186,17 @@ class Jev:
                 "jev_backend": self.backend}
 
     async def merge_gate(self, task: str, final_output: str, diff_excerpt: str, tests: str) -> dict | None:
-        """Judge whether an idle worktree session's work looks complete and safe to merge."""
+        """Judge whether an idle worktree session's work looks complete and safe to merge.
+
+        Args:
+            task (str): The task description.
+            final_output (str): The final output reported by the agent.
+            diff_excerpt (str): The diff excerpt of the changes.
+            tests (str): The result of any run tests.
+
+        Returns:
+            dict | None: The judgment results or None if unavailable/invalid.
+        """
         q = {
             "claims_done": {
                 "type": "noul",
