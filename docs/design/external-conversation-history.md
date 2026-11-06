@@ -152,7 +152,28 @@ reviewable material; they change no Work/Attempt state, approval, ownership,
 fingerprint or Overview progress. The source remains `external_read_only`.
 `features.external_history.relationships` is additive and has `derive_ready=false`;
 it grants no admission authority. There is no relationship UI, derive, search,
-automatic suggestion or native route yet.
+automatic suggestion or native execution route yet.
+
+### Desktop transport parity
+
+The Tauri `connector_request` bridge admits the five existing relationship reads
+above, including the pure-read POST preview. It passes them to the same central
+service with the current principal; Rust does not resolve source files, maintain
+grants or store relationships. Link/unlink continue through the existing
+`/operations` path with their original idempotency key.
+
+Preview accepts only `source_id`, `entry_id`, `expected_content_digest` and one
+typed `selection`. It refuses queries, operation keys, paths, caller identity
+overrides and extra fields. A text selection uses integer Unicode codepoint
+offsets, a part index below 128 and `0 <= start < end <= 16000`; central still
+checks the actual retained part, content digest and current access. Whole-entry
+selection accepts only `kind: "entry"`.
+
+The two list routes accept only `after` (0 through 2^63−1) and `limit` (1–50).
+Source associations additionally require one exact `shi_` entry ID. Duplicate
+or unrelated parameters and malformed IDs are refused. Excerpt and link detail
+routes accept no query fields. This transport increment does not add a
+relationship UI, native CLI execution or installed-device acceptance.
 
 ## Narrow format profiles
 

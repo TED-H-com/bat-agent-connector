@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Admit existing external-conversation excerpt previews and Work relationship
+  reads through the restricted desktop bridge, using exact source identities,
+  bounded text selections and pagination. Authorization and relationship writes
+  remain in the central service; this adds no relationship UI or CLI control.
+
 ## 0.2.16 / Desktop 0.1.12 (2026-11-05)
 
 - Fix hourly `installed_source_mismatch` on v0.2.12-managed hosts by moving

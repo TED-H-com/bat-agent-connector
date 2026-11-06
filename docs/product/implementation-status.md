@@ -1,5 +1,43 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-06：外部對話關聯的桌面傳輸候選
+
+分支 `fix/external-history-desktop-parity-20261106` 以 `d78cfc70` 為基底，
+接續 E08／E10、EC-1.1 T5：既有 HTTP／MCP 的固定摘錄預覽、摘錄讀取、Work 關聯
+清單／詳情及來源反查，現在也可通過 Tauri 的受限 bridge。
+Rust 只驗證路徑、精確欄位、固定 ID／digest、文字範圍及分頁上限；
+Python 中央仍負責目前來源授權、workspace membership、版本、關聯與 durable operations。
+沒有新增 schema、第二個排程器、原生 CLI 控制或關聯 UI。
+
+已通過相關 Python 測試 158 項、Node 測試 581 項、ruff、Rust 格式檢查與公開內容檢查。
+Rust 1.98 對實際 bridge 驗證程式與測試的獨立編譯有 58 項通過，包含新增的兩項測試；
+這個隔離編譯只涵蓋請求驗證，不能替代整個 Tauri binary 的建置。
+完整原生測試因本機缺少 GTK／WebKit／DBus 開發套件而未完成。
+Python 3.13 完整五分片共 9,964 項：9,866 passed、84 skipped、14 failed。
+Collection manifests 已確認 434 個檔案、無遺漏或重複；原完整檢查仍記為失敗，
+不因後續局部重驗改寫原結果。14 項失敗全在未修改的 `test_fleet_bootstrap.py`：
+主機測試目錄的上層具有群組寫入權限（0775），被原有 `_secure_path` 正確拒絕。
+相同程式與整個該模組改以隔離容器的安全路徑掛載磁碟暫存資料後，44 項全部通過；
+沒有變更主機共享目錄權限、產品安全檢查或 fixture。容器與測試資料已移除。
+84 項略過依原有平台、選跑整合、具名 CLI 版本或已移除能力的規則保留。
+更早的測試曾因暫存路徑超過 Unix socket 長度限制失敗；縮短磁碟暫存路徑後
+改跑上述完整五分片。原失敗與中止紀錄保留，沒有改變產品逾時或減少覆蓋。
+
+狀態：已在分支實作，尚未合併、發布、安裝或實機驗收。
+E00–E11、R0–R5、A01–A40 與 PM v1.2 其餘待辦維持原狀。
+
+The unmerged E08/E10 candidate admits existing fixed-history relationship reads
+through the restricted desktop transport. Central authorization and durable
+operations remain authoritative. Focused Python tests, all Node tests and the
+isolated Rust request-validator tests passed. The full Python run selected all
+9,964 tests without gaps or duplicates: 9,866 passed, 84 skipped and 14 failed.
+All failures came from unchanged Fleet bootstrap tests refusing group-writable
+temporary-directory ancestors. The unchanged module passed all 44 tests with a
+disk-backed temporary directory mounted at a secure container path; the original
+full-run failure is retained. No host permissions or product guards were relaxed.
+Missing Linux native development libraries prevent a full Tauri test run.
+No release, installation, native CLI execution or live acceptance is claimed.
+
 ## 2026-11-05：Connector 0.2.16／Desktop 0.1.12 發布準備
 
 2026-11-05：#502 已合併為 `53171768`；`release/0.2.16` 正準備 Connector 0.2.16／Desktop 0.1.12 發布。
