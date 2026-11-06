@@ -337,3 +337,240 @@ async def test_coordinator_integration_tick(tmp_path, monkeypatch):
     task = journal.get("task_1")
     # Actually checking the transition happened is enough, since we only mocked _verify_and_review
     assert task["state"] != "running"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_integration_pause(tmp_path, monkeypatch):
+    journal = Journal(tmp_path / "test.db")
+    memory_db = journal.db
+
+    memory_db.execute(
+        "INSERT INTO tasks (task_id, idem_key, engine, recipe, payload_hash, project, host, workspace, original_words, acceptance, state, paused, control_version, submitted_at, updated_at, session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "task_1",
+            "k1",
+            "goose",
+            "recipe1",
+            "hash1",
+            "project1",
+            "host1",
+            "workspace1",
+            100,
+            "auto",
+            "running",
+            0,
+            1,
+            0.0,
+            0.0,
+            "session_1",
+        ),
+    )
+
+    adapter = FakeAdapter()
+    coordinator = TaskCoordinator(journal, adapter)
+
+    import contextlib
+
+    import bat_agent_connector.controller_authority
+    import bat_agent_connector.task_control
+
+    @contextlib.contextmanager
+    def mock_use(*args, **kwargs):
+        yield
+
+    monkeypatch.setattr(bat_agent_connector.controller_authority, "use", mock_use)
+    monkeypatch.setattr(bat_agent_connector.task_control, "require_authority", lambda task: True)
+
+    await coordinator.pause("task_1")
+    task = journal.get("task_1")
+    assert task["paused"] == 1
+
+
+@pytest.mark.asyncio
+async def test_coordinator_integration_session_control(tmp_path, monkeypatch):
+    journal = Journal(tmp_path / "test.db")
+    memory_db = journal.db
+
+    # insert dummy task in running state
+    memory_db.execute(
+        "INSERT INTO tasks (task_id, idem_key, engine, recipe, payload_hash, project, host, workspace, original_words, acceptance, state, paused, control_version, submitted_at, updated_at, session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "task_1",
+            "k1",
+            "goose",
+            "recipe1",
+            "hash1",
+            "project1",
+            "host1",
+            "workspace1",
+            100,
+            "auto",
+            "running",
+            0,
+            1,
+            0.0,
+            0.0,
+            "session_1",
+        ),
+    )
+
+    adapter = FakeAdapter()
+    coordinator = TaskCoordinator(journal, adapter)
+
+    import contextlib
+
+    import bat_agent_connector.controller_authority
+    import bat_agent_connector.task_control
+
+    @contextlib.contextmanager
+    def mock_use(*args, **kwargs):
+        yield
+
+    monkeypatch.setattr(bat_agent_connector.controller_authority, "use", mock_use)
+    monkeypatch.setattr(bat_agent_connector.task_control, "require_authority", lambda task: True)
+
+    import bat_agent_connector.registry as registry
+
+    monkeypatch.setattr(
+        registry, "get", lambda host, sid: {"task_id": "task_1", "role": "lead", "cwd": "/tmp"}
+    )
+    monkeypatch.setattr(bat_agent_connector.controller_authority, "require_binding", lambda x: True)
+
+    with pytest.raises(Exception):
+        await coordinator.session_control("task_1", "host1", "session_1", "unknown_action", {}, None)
+
+
+@pytest.mark.asyncio
+async def test_coordinator_integration_resolve_command(tmp_path, monkeypatch):
+    journal = Journal(tmp_path / "test.db")
+    memory_db = journal.db
+
+    # insert dummy task in running state
+    memory_db.execute(
+        "INSERT INTO tasks (task_id, idem_key, engine, recipe, payload_hash, project, host, workspace, original_words, acceptance, state, paused, control_version, submitted_at, updated_at, session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "task_1",
+            "k1",
+            "goose",
+            "recipe1",
+            "hash1",
+            "project1",
+            "host1",
+            "workspace1",
+            100,
+            "auto",
+            "uncertain",
+            0,
+            1,
+            0.0,
+            0.0,
+            "session_1",
+        ),
+    )
+
+    # insert uncertain send command
+    memory_db.execute(
+        "INSERT INTO commands (task_id, command_id, idem_key, kind, status, session_id, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("task_1", "cmd1", "k2", "send", "uncertain", "session_1", "{}", 0.0, 0.0),
+    )
+
+    adapter = FakeAdapter()
+    adapter.prepare_send = lambda task, sid: asyncio.sleep(0) or {"marker": "m1"}
+    coordinator = TaskCoordinator(journal, adapter)
+
+    import contextlib
+
+    import bat_agent_connector.controller_authority
+    import bat_agent_connector.task_control
+
+    @contextlib.contextmanager
+    def mock_use(*args, **kwargs):
+        yield
+
+    monkeypatch.setattr(bat_agent_connector.controller_authority, "use", mock_use)
+    monkeypatch.setattr(bat_agent_connector.task_control, "require_authority", lambda task: True)
+
+    coordinator._send = lambda *args, **kwargs: {"status": "ok"}
+    cap = journal.issue_reconcile_capability("task_1", "cmd1")
+    await coordinator.resolve_command(
+        "task_1",
+        "cmd1",
+        token=cap,
+        outcome="delivered",
+        actor="operator",
+        source="source",
+        evidence="evidence",
+        next_prompt=None,
+    )
+
+    cmd = journal.command_get("cmd1")
+    assert cmd["status"] == "resolved_delivered"
+
+
+@pytest.mark.asyncio
+@pytest.mark.asyncio
+async def test_coordinator_integration_failover_and_recover(tmp_path, monkeypatch):
+    journal = Journal(tmp_path / "test.db")
+    memory_db = journal.db
+
+    # insert dummy task in running state
+    memory_db.execute(
+        "INSERT INTO tasks (task_id, idem_key, engine, recipe, payload_hash, project, host, workspace, original_words, acceptance, state, paused, control_version, submitted_at, updated_at, session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "task_1",
+            "k1",
+            "goose",
+            "recipe1",
+            "hash1",
+            "project1",
+            "host1",
+            "workspace1",
+            100,
+            "auto",
+            "quota_limited",
+            0,
+            1,
+            0.0,
+            0.0,
+            "session_1",
+        ),
+    )
+
+    adapter = FakeAdapter()
+
+    async def mock_failover(task, session_id, successor_id, handoff_message_id, handoff_command_id):
+        return {"status": "ok"}
+
+    async def mock_recover_failover(task, successor_id, handoff_message_id, handoff_command_id):
+        return {"status": "ok"}
+
+    adapter.failover = mock_failover
+    adapter.recover_failover = mock_recover_failover
+
+    coordinator = TaskCoordinator(journal, adapter)
+
+    import contextlib
+
+    import bat_agent_connector.controller_authority
+    import bat_agent_connector.task_control
+
+    @contextlib.contextmanager
+    def mock_use(*args, **kwargs):
+        yield
+
+    monkeypatch.setattr(bat_agent_connector.controller_authority, "use", mock_use)
+    monkeypatch.setattr(bat_agent_connector.task_control, "require_authority", lambda task: True)
+
+    def mock_failover_authority(*args, **kwargs):
+        return lambda: {"handoff_command_id": "cmd1", "handoff_message_id": "msg1", "successor_id": "succ1"}
+
+    coordinator._failover_authority = mock_failover_authority
+
+    # Run _failover
+    await coordinator._failover(journal.get("task_1"))
+
+    # test that failover created command correctly
+    cmds = journal.commands("task_1")
+    assert len(cmds) > 0
+    cmd_failover = cmds[0]
+    assert cmd_failover["kind"] == "failover"
