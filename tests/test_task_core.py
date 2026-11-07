@@ -1,14 +1,15 @@
 import pytest
-from bat_agent_connector.task_journal import Journal
+
 from bat_agent_connector.task_core import (
-    TaskCoordinator,
     TaskAdapter,
-    initial_prompt,
-    reviewer_prompt,
-    final_agent_text,
-    review_verdict,
+    TaskCoordinator,
     classify_read,
+    final_agent_text,
+    initial_prompt,
+    review_verdict,
+    reviewer_prompt,
 )
+from bat_agent_connector.task_journal import Journal
 
 
 class MockTaskAdapter(TaskAdapter):
@@ -253,7 +254,7 @@ async def test_coordinator_start_paused(tmp_path, monkeypatch):
 
     journal.command = mock_command
 
-    t1 = await coord._start(journal.get("task_1"), role="lead")
+    await coord._start(journal.get("task_1"), role="lead")
     assert journal.get("task_1")["paused"] == 1
 
 
