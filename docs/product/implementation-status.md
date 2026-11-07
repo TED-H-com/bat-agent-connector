@@ -1,5 +1,46 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-07：Work 看板的外部對話摘錄閱讀候選
+
+`feat/work-history-reader-20261107` 接續 `fdb37bc6`，在原有 Board Work inspector
+加入英文／繁中「查看已關聯摘錄」。沿用既有 Work 選擇、中央關聯／摘錄 API 及
+`desktop/src` 共用介面，未新增後端、schema、原生控制或第二套 Dashboard。
+每次閱讀會驗證關聯、讀取固定摘錄，再確認 Work／Attempt 關聯仍有效才顯示正文。
+分頁重讀既有頁面，開啟時每分鐘重新檢查；權限或來源失效、Work 切換與關閉檢視器
+會清除內容並隔離晚到回覆。文字、工具標記、原參照、部分歷史與執行未知各自明示。
+正文及閱讀選擇不寫入 localStorage，單純閱讀不產生 operation、PM context 或模型請求。
+
+222 個不同的 HTTP／注入 IPC 介面案例、581 項 Node 與 169 項相關 Python 測試已通過；
+另完成 ruff、雙入口建置及英文／繁中 390／1440 px 截圖檢查。介面回歸涵蓋既有
+來源閱讀／關聯操作、Board、Workbench，以及新閱讀區的撤權、固定參照、分頁、
+定時更新、父層 Work 重讀和晚到回覆。另驗證既有開工草稿與 Attempt 成果共存：
+參考資料不改草稿，也不混入執行成果。兩輪介面檢查分別為 143 及 118 項通過
+（其中 39 項重疊）；最終 generated assets 的 Dashboard／靜態提供測試 11 項通過。
+
+Python 3.13 全套八分片：9,866 passed、84 skipped、14 failed。Collection manifests
+確認 9,964 項、434 個檔案、無遺漏或重複；完整檢查仍記為失敗。14 個失敗案例
+與前輪完全相同，皆為未修改的 Fleet bootstrap 測試受到暫存目錄上層 0775 權限
+影響，被 `_secure_path` 拒絕。相同完整模組以磁碟暫存掛載隔離容器安全路徑後，
+44 項通過；沒有改變共享目錄權限、安全檢查或 fixture。暫存資料與容器已清理。
+公開內容檢查與秘密掃描通過。本輪沒有修改 Python 後端邏輯或 Rust。
+
+此為 E08／E10、EC-1.1 T5 的分支增量，尚未合併、發布、安裝或實機驗收。
+HTTP／注入 IPC 與 responsive fixtures 不等同原生 WebView、真 BAT／模型或實體手機。
+本輪閱讀入口僅在 Board Work inspector；獨立 Work 頁與 requirement inspector
+尚未加入同一入口。文字範圍／Attempt 選擇、替換、撤權後清理、derive 與原生執行
+仍開放，E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂生命週期待辦維持原狀。
+
+The unmerged Board-inspector candidate reads fixed external-history excerpts
+through the existing central API, rechecking the Work/Attempt relationship before
+displaying plaintext. Pagination, periodic reads and view retirement preserve
+current access and fence late responses. Distinct UI regressions (222), Node tests (581)
+and focused Python checks (169) passed. The full Python run remains failed:
+9,866 passed, 84 skipped and 14 failed, with complete, disjoint collection coverage.
+The failing cases exactly match the previous run's Fleet bootstrap ancestor-permission
+failures; the unchanged module passed all 44 tests at a secure container path with
+disk-backed fixtures. This increment claims no release, installation, native
+execution or live acceptance.
+
 ## 2026-11-06：外部對話與既有 Work 的共用操作介面候選
 
 `feat/external-history-work-links-20261106` 接續 `f340211c` 的桌面傳輸增量。

@@ -1832,6 +1832,10 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 [data-history-links] select { display: block; width: 100%; min-width: 0; margin-block: var(--space-2); }
 .exh-relation { display: grid; gap: var(--space-2); padding-block: var(--space-3); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 [data-history-links] .actions { flex-wrap: wrap; }
+[data-work-history-reader] summary { cursor: pointer; padding-block: var(--space-2); }
+[data-work-history-reader] button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+.exh-reference pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 799px) { [data-work-history-reader] summary, [data-work-history-reader] button { min-height: 44px; } }
 @media (max-width: 799px) { [data-history-links] button, [data-history-links] summary, [data-history-links] select { min-height: 44px; } }
 @media (max-width: 799px) { .exh-source button, .exh-actions button { min-height: 44px; } }
 

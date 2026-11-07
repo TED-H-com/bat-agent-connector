@@ -11,6 +11,10 @@
   operation keys across lost replies, including withdrawals no longer present
   in the active list. Sources stay read-only; relationships do not imply approval
   or completion.
+- Read fixed external-conversation excerpts from the shared Board Work inspector,
+  with current relationship/source checks, bounded pagination and explicit partial
+  history. Hide withdrawn or unavailable content and fence responses after Work
+  selection changes. Reading preserves the original sessions and creates no operation.
 
 ## 0.2.16 / Desktop 0.1.12 (2026-11-05)
 

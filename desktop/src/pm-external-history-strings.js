@@ -19,6 +19,11 @@ export const externalHistoryStrings = {
     exh_entire_entry: 'Entire entry', exh_selected_text: 'Selected text', exh_preview: 'Entry to link',
     exh_link_help: 'Link this fixed entry as reference material. The history is partial; linking does not approve or complete the Work or control the original session.',
     exh_link_target: '{name} · version {version}', exh_link: 'Link entry to Work', exh_link_saved: 'Entry linked to Work.', exh_unlink: 'Withdraw relationship',
+    exh_read_links: 'View linked excerpts', exh_read_excerpt: 'Read excerpt · {name}',
+    exh_work_help: 'Read fixed excerpts explicitly linked to this Work. These references do not approve or complete it, and the original sessions remain read-only.',
+    exh_work_no_links: 'This Work has no visible external conversation relationships.', exh_execution_unknown: 'Execution status unknown · tool markers do not prove execution.',
+    exh_fixed_reference: 'This excerpt resolves the original fixed reference with your current access.',
+    exh_link_limit: 'This view has read 25 pages. More relationships may exist.',
   },
   'zh-TW': {
     exh_title: '外部對話', exh_help: '閱讀分享至此工作區的對話。原本的 CLI 會話維持唯讀。',
@@ -40,5 +45,10 @@ export const externalHistoryStrings = {
     exh_entire_entry: '整則紀錄', exh_selected_text: '選取的文字', exh_preview: '將關聯的紀錄',
     exh_link_help: '將這則固定紀錄連到工作，作為參考資料。歷史並不完整；建立關聯不會核准或完成工作，也不會控制原會話。',
     exh_link_target: '{name} · 第 {version} 版', exh_link: '將紀錄連到工作', exh_link_saved: '已將紀錄連到工作。', exh_unlink: '撤回關聯',
+    exh_read_links: '查看已關聯摘錄', exh_read_excerpt: '閱讀摘錄 · {name}',
+    exh_work_help: '閱讀明確連到這項工作的固定摘錄。這些參考資料不代表工作已核准或完成，原會話仍維持唯讀。',
+    exh_work_no_links: '這項工作目前沒有可查看的外部對話關聯。', exh_execution_unknown: '執行狀態未知 · 工具標記不能證明已執行。',
+    exh_fixed_reference: '這份摘錄依原固定參照及你目前的權限讀取。',
+    exh_link_limit: '此畫面已讀取 25 頁，可能還有其他關聯。',
   },
 };

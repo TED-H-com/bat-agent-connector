@@ -216,9 +216,55 @@ dispose relationship forms, hide preview/plaintext and fence late responses.
 Administrators do not bypass source grants or workspace roles. Older servers
 retain the original read-only reader. This increment supplies whole-entry links
 and withdrawal in the source reader, not text-range selection, Attempt selection,
-replacement, a Work-side excerpt reader or cleanup after source access is lost.
-Those broader UI paths, derive and real-device acceptance remain open. Linking
+replacement or cleanup after source access is lost. The Work-side reader below
+is a subsequent candidate. Those broader UI paths, derive and real-device acceptance remain open. Linking
 adds reference material without approving, completing or taking over any work.
+
+### Work-side reader candidate
+
+The shared Board Work inspector now offers **View linked excerpts** in English
+and zh-TW. It uses the existing selected Work and workspace membership; opening a
+Work alone does not read external histories. The disclosure appears only for
+relationship version 1 with the fixed-reference schema, observe scope and an
+explicit workspace role. Older servers keep their existing inspector structure.
+
+Opening the disclosure reads active, currently visible relationships in pages of
+20. **Read more relationships** rereads earlier pages before advancing, including
+empty pages with hidden rows. Cursors must advance, identities must match the
+current workspace/Work/server and duplicate links are refused. The reader caps a
+view at 25 pages and labels that limit without claiming complete coverage. Each
+row shows the source ID, relationship time, whole-entry/text selection and any
+explicit Attempt association. It does not infer a title, session or execution.
+
+Selecting an excerpt reads the exact relationship, resolves its retained excerpt
+and reads the relationship again before displaying plaintext. Both relationship
+reads must match its active state, version, Work, Attempt, excerpt and canonical
+reference. This preserves the Work/Attempt visibility check around the source
+read. The server remains responsible for current grants and digest verification;
+the frontend compares the canonical fields without calculating replacement hashes.
+Reordered object fields do not change reference identity.
+
+The reader renders literal text and tool markers, with shortened/omitted content,
+partial history and unknown execution stated explicitly. **Source and coverage**
+shows the fixed reference and association IDs. Text, references and reading
+selection are not written to local storage. Reading creates no operation, Work,
+Attempt, approval, PM context or model request, and leaves original CLI sessions
+read-only. Existing text selections can be read; creating a text selection remains
+outside this increment.
+
+An open reader rechecks its loaded pages and selected excerpt every 60 seconds.
+Refresh, pagination and pending parent Work reads clear previous content before
+publishing a new result. Withdrawal, denial, changed identity or failed reads hide
+all loaded relationships and plaintext; the user can explicitly retry. Closing
+the disclosure/inspector, changing Work, leaving the board or disposing the view
+cancels its timer and fences late responses. A revoked relationship cannot be
+restored by a still-pending excerpt response. This is Board-inspector coverage;
+the standalone Work route and requirement inspector are not new reader surfaces.
+
+HTTP and injected desktop IPC regressions exercise this shared frontend. They do
+not establish native WebView, real BAT/model or physical-mobile acceptance. Work
+derivation, native execution, text/Attempt selection, replacement and cleanup after
+source revocation remain open alongside the unrevised PM lifecycle requirements.
 
 ## Narrow format profiles
 

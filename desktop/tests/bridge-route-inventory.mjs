@@ -41,6 +41,8 @@ const ID = {
   wt: `wt_${hex(32)}`,
   art: `art_${hex(32)}`,
   cp: `cp_${hex(32)}`,
+  hxl: `hxl_${hex(32)}`,
+  hxe: `hxe_${hex(64)}`,
 };
 const SEGMENT = new Map([
   ['workspaces', ID.ws], ['work', ID.wi], ['work-items', ID.wi], ['work-attempts', ID.att],
@@ -62,6 +64,7 @@ const SEGMENT = new Map([
   ['dod', `pmdod_${hex(32)}`], ['backlog', `pmbkl_${hex(32)}`], ['kanban', ID.wi],
   ['cleanup-tombstones', `cr_${hex(32)}`], ['transitions', ID.pmlt],
   ['deployments', ID.dep], ['history', 'fixture'],
+  ['external-links', ID.hxl], ['history-excerpts', ID.hxe],
 ]);
 const NAME_SAMPLE = new Map([
   ['endpoint', `/pm/workspaces/${ID.ws}`], ['base', `/pm/workspaces/${ID.ws}`],
