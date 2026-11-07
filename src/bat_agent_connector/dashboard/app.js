@@ -1063,7 +1063,28 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_cli: "Recorded CLI version",
 			exh_page_limit: "This view shows the first 500 collected entries.",
 			exh_retry: "Try reading again",
-			exh_current: "No newer collected entries"
+			exh_current: "No newer collected entries",
+			exh_related: "Related Work",
+			exh_refresh_links: "Refresh relationships",
+			exh_more_links: "Read more relationships",
+			exh_choose_work: "Choose a Work",
+			exh_work: "Existing Work",
+			exh_select_work: "Select a Work",
+			exh_more_work: "Read more Work",
+			exh_refresh_work: "Refresh selected Work",
+			exh_attempt_relation: "Linked to a specific attempt",
+			exh_withdrawal_pending: "Check the result of the original withdrawal.",
+			exh_no_work: "No Work is available on this workspace’s board.",
+			exh_no_links: "No visible relationships for this entry.",
+			exh_more_hidden_links: "No visible relationships on this page. More may be available.",
+			exh_entire_entry: "Entire entry",
+			exh_selected_text: "Selected text",
+			exh_preview: "Entry to link",
+			exh_link_help: "Link this fixed entry as reference material. The history is partial; linking does not approve or complete the Work or control the original session.",
+			exh_link_target: "{name} · version {version}",
+			exh_link: "Link entry to Work",
+			exh_link_saved: "Entry linked to Work.",
+			exh_unlink: "Withdraw relationship"
 		},
 		"zh-TW": {
 			exh_title: "外部對話",
@@ -1099,7 +1120,28 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_cli: "記錄的 CLI 版本",
 			exh_page_limit: "此畫面最多顯示最早收集的 500 則紀錄。",
 			exh_retry: "重新讀取",
-			exh_current: "目前沒有更新的已收集紀錄"
+			exh_current: "目前沒有更新的已收集紀錄",
+			exh_related: "相關工作",
+			exh_refresh_links: "重新讀取關聯",
+			exh_more_links: "讀取更多關聯",
+			exh_choose_work: "選擇工作",
+			exh_work: "既有工作",
+			exh_select_work: "請選擇工作",
+			exh_more_work: "讀取更多工作",
+			exh_refresh_work: "重新讀取所選工作",
+			exh_attempt_relation: "已連到特定執行輪次",
+			exh_withdrawal_pending: "查回原本撤回關聯的結果。",
+			exh_no_work: "這個工作區的看板目前沒有可選擇的工作。",
+			exh_no_links: "這則紀錄目前沒有可查看的關聯。",
+			exh_more_hidden_links: "此頁沒有可查看的關聯，可繼續讀取下一頁。",
+			exh_entire_entry: "整則紀錄",
+			exh_selected_text: "選取的文字",
+			exh_preview: "將關聯的紀錄",
+			exh_link_help: "將這則固定紀錄連到工作，作為參考資料。歷史並不完整；建立關聯不會核准或完成工作，也不會控制原會話。",
+			exh_link_target: "{name} · 第 {version} 版",
+			exh_link: "將紀錄連到工作",
+			exh_link_saved: "已將紀錄連到工作。",
+			exh_unlink: "撤回關聯"
 		}
 	};
 }));
@@ -17990,7 +18032,7 @@ var frontendBuild = Object.freeze({ frontend_digest: frontendDigest("__BATC_FRON
 //#region src/version-projection.js
 var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
 var commit = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) && [40, 64].includes(value.length) ? value : null;
-var digest$10 = frontendDigest;
+var digest$11 = frontendDigest;
 var frontendLoadedAt = new Date().toISOString();
 var time = (value) => {
 	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
@@ -18021,7 +18063,7 @@ var fact$1 = (id, value, source, at, period, extra = {}) => {
 	const selected = {
 		version: version$2(value?.version),
 		commit: commit(value?.commit),
-		digest: digest$10(value?.digest)
+		digest: digest$11(value?.digest)
 	};
 	const observed_at = time(at), observed = Object.values(selected).some(Boolean) || observed_at !== null;
 	return {
@@ -18053,7 +18095,7 @@ function versionProjection(input = {}) {
 		code: updateCode(update.last.code),
 		at: time(update.last.at)
 	} : null;
-	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$10(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
+	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$11(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
 	const rows = [
 		released("desktop_released", input.desktop && candidate ? {
 			version: candidate.version,
@@ -20491,7 +20533,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 //#region src/pm-execution-verification.js
 var ACTION$5 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
-var digest$9 = /^[0-9a-f]{64}$/;
+var digest$10 = /^[0-9a-f]{64}$/;
 var operation$2 = /^op_[0-9a-f]{32}$/;
 function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {}, fixedResult = null, allowedAction = () => true }) {
 	let sources = [], selected = "", generation = 0, ready = false, configuration = null, editor = null;
@@ -20584,7 +20626,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		try {
 			const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/executions/${selected}/verification-config`);
 			if (!valid(ticket)) return;
-			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$9.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$9.test(value.command_digest) || value.candidate_commit !== null && !sha$5.test(value.candidate_commit) || value.tree_hash !== null && !sha$5.test(value.tree_hash)) throw Error(t("pmq_invalid"));
+			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$10.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$10.test(value.command_digest) || value.candidate_commit !== null && !sha$5.test(value.candidate_commit) || value.tree_hash !== null && !sha$5.test(value.tree_hash)) throw Error(t("pmq_invalid"));
 			configuration = value;
 			ready = true;
 			status.replaceChildren();
@@ -20898,7 +20940,7 @@ var CREATE = "pm.quality.review.create";
 var RECORD$2 = "pm.quality.review.record";
 var REVOKE = "pm.quality.review.revoke";
 var sha$4 = /^[0-9a-f]{40}$/;
-var digest$8 = /^[0-9a-f]{64}$/;
+var digest$9 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
 var ordered$1 = (value) => Array.isArray(value) ? value.map(ordered$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered$1(value[key])])) : value;
@@ -21055,7 +21097,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		throw Error(t("pmq_history_bound"));
 	}
 	function checkReview(row) {
-		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$8.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$8.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
+		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$9.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$9.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
 		return row;
 	}
 	function packageFor(id) {
@@ -21562,7 +21604,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const receipt = saved.verification;
 				if (saved.workspace_id !== workspaceId) throw error();
 				if (!receipt) continue;
-				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$8.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$4.test(receipt.reference.candidate_commit) || !sha$4.test(receipt.reference.tree_hash) || !digest$8.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
+				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$9.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$4.test(receipt.reference.candidate_commit) || !sha$4.test(receipt.reference.tree_hash) || !digest$9.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
 				proofs.push({
 					key: op.operation_id,
 					label: `${t("pmq_runner")} · ${receipt.reference.candidate_commit.slice(0, 12)} · ${op.operation_id}`,
@@ -21579,7 +21621,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const data = await request("GET", `${base}/evidence/${entry.evidence_id}`);
 				if (!valid(ticket)) return;
 				const e = data.evidence, f = e?.document?.facts;
-				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$4.test(f.candidate_commit) || !sha$4.test(f.tree_hash) || !digest$8.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
+				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$4.test(f.candidate_commit) || !sha$4.test(f.tree_hash) || !digest$9.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
 				proofs.push({
 					key: entry.evidence_id,
 					label: `${t("pmq_runner")} · #${f.verification_id} · ${f.candidate_commit.slice(0, 12)}`,
@@ -21598,7 +21640,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			for (const delivery of deliveries) for (const source of delivery.integration?.sources || []) {
 				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$4.test(source.delivered_sha) || !operation$1.test(source.source_id)) continue;
 				for (const observation of observations) {
-					if (!digest$8.test(observation.document_digest)) throw error();
+					if (!digest$9.test(observation.document_digest)) throw error();
 					proofs.push({
 						key: `${delivery.operation_id}:${source.seq}:${observation.observation_id}`,
 						source_operation_id: source.source_id,
@@ -21679,7 +21721,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		onUnavailable: failure,
 		onConfiguration: (value) => {
 			if (model) {
-				model.configuration = value?.available && digest$8.test(value.command_digest) ? value : null;
+				model.configuration = value?.available && digest$9.test(value.command_digest) ? value : null;
 				matrixKey = "";
 				create?.sync();
 			}
@@ -23690,12 +23732,358 @@ function renderEffectivePmRoute(node, { h, t, document, readyKey = "pm_effective
 	return node;
 }
 //#endregion
+//#region src/pm-external-history-links.js
+var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
+var digest$8 = (value) => /^[0-9a-f]{64}$/.test(value || "");
+function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, sourceId, entry, onUnavailable }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const draftNamespace = `${namespace}.history.${JSON.stringify([sourceId, entry.entry_id])}`;
+	const selectionKey = `batc.pm.${draftNamespace}.work-selection`;
+	const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
+	let disposed = false, generation = 0, loaded = false, busy = false, after = null;
+	let preview = null, selected = "", editor = null, choosing = false, workAfter = null, workBusy = false;
+	let selectionSerial = 0, currentWork = null;
+	const forms = new Set(), links = new Map(), works = new Map(), recoveryForms = new Set();
+	const status = h("div", { role: "status" }), rows = h("div", { class: "exh-relations" }), draft = h("div");
+	const element = h("details", { "data-history-links": entry.entry_id }, h("summary", {}, t("exh_related")), status, rows, draft);
+	const current = (ticket) => {
+		try {
+			alive();
+		} catch {
+			return false;
+		}
+		return !disposed && ticket === generation;
+	};
+	const supported = (action) => caps()?.features?.external_history?.relationships?.version === 1 && caps()?.features?.external_history?.relationships?.actions?.includes(action) && caps()?.scopes?.includes("observe") && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === action && row.allowed === true);
+	const canLink = () => current(generation) && supported("pm.history.link") && permitted(false) && ["owner", "contributor"].includes(workspace()?.membership?.role);
+	const canUnlink = (link) => current(generation) && supported("pm.history.unlink") && Boolean(workspace()?.membership) && (workspace()?.membership?.role === "owner" || link.created_by === caps()?.actor);
+	const mismatch = () => Error(t("pm_scope_mismatch"));
+	const matches = (ref) => ref?.schema === "external_history_ref/v1" && ref.server_id === workspace()?.server_id && ref.workspace_id === workspaceId && ref.source_id === sourceId && ref.entry_id === entry.entry_id && ref.content_digest === entry.content_digest && digest$8(ref.source_digest) && digest$8(ref.excerpt_digest);
+	function fail(error, ticket) {
+		if (!current(ticket)) return;
+		onUnavailable(error);
+	}
+	function disposeForms() {
+		for (const value of forms) value.dispose();
+		forms.clear();
+		recoveryForms.clear();
+		editor = null;
+	}
+	function checkPage(data, cursor, key) {
+		const next = data[key];
+		if (next !== null && (!Number.isSafeInteger(next) || next <= cursor)) throw mismatch();
+		return next;
+	}
+	function pendingWithdrawals() {
+		const saved = JSON.parse(localStorage.getItem(withdrawalKey) || "[]");
+		if (!Array.isArray(saved) || saved.some((link) => !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || !workId$1(link.work_item_id) || !Number.isSafeInteger(link.version) || link.version < 1 || typeof link.created_by !== "string")) throw mismatch();
+		return saved;
+	}
+	function rememberWithdrawal(link, remove = false) {
+		const saved = pendingWithdrawals().filter((row) => row.link_id !== link.link_id);
+		if (!remove) saved.push({
+			link_id: link.link_id,
+			work_item_id: link.work_item_id,
+			version: link.version,
+			created_by: link.created_by
+		});
+		if (saved.length) localStorage.setItem(withdrawalKey, JSON.stringify(saved));
+		else localStorage.removeItem(withdrawalKey);
+	}
+	function withdrawal(link, active = true) {
+		const target = {
+			workspace_id: workspaceId,
+			work_item_id: link.work_item_id,
+			link_id: link.link_id
+		};
+		if (!active) {
+			if (!JSON.parse(localStorage.getItem(`batc.pm.${draftNamespace}.pm.history.unlink.${JSON.stringify(target)}`) || "null")?.intent) {
+				rememberWithdrawal(link, true);
+				return null;
+			}
+		}
+		const remove = form({
+			namespace: draftNamespace,
+			action: "pm.history.unlink",
+			target,
+			fields: {},
+			params: () => ({}),
+			preconditions: () => {
+				rememberWithdrawal(link);
+				return { expected_link_version: link.version };
+			},
+			permitted: () => active && canUnlink(link),
+			recoverPermitted: () => canUnlink(link),
+			label: "exh_unlink",
+			onSaved: () => {
+				rememberWithdrawal(link, true);
+				return readLinks(true);
+			}
+		});
+		forms.add(remove);
+		if (!active) recoveryForms.add(remove);
+		return remove.box;
+	}
+	const refresh = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_refresh_links"),
+		onclick: () => void readLinks(true)
+	});
+	const more = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_more_links"),
+		onclick: () => void readLinks(false)
+	});
+	more.hidden = true;
+	const choose = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_choose_work"),
+		onclick: () => void prepare()
+	});
+	choose.hidden = !canLink() || caps()?.features?.pm_workspaces?.kanban !== true;
+	element.append(h("div", { class: "exh-actions" }, refresh, more, choose));
+	async function readLinks(reset) {
+		if (busy || disposed) return;
+		const ticket = generation, cursor = reset ? 0 : after;
+		busy = true;
+		refresh.disabled = more.disabled = true;
+		status.replaceChildren();
+		try {
+			const data = await api("GET", `${endpoint}/history/${encodeURIComponent(sourceId)}/associations?entry_id=${encodeURIComponent(entry.entry_id)}&after=${cursor}&limit=20`);
+			if (!current(ticket)) return;
+			if (!Array.isArray(data.links) || data.links.length > 20) throw mismatch();
+			const next = checkPage(data, cursor, "next_after");
+			const visible = await Promise.all(data.links.map(async (link) => {
+				if (link.workspace_id !== workspaceId || !workId$1(link.work_item_id) || !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || link.state !== "active" || !Number.isSafeInteger(link.version) || link.version < 1 || !matches(link.fixed_ref)) throw mismatch();
+				const detail = await api("GET", `/work-items/${encodeURIComponent(link.work_item_id)}`);
+				if (detail.work_item?.work_item_id !== link.work_item_id || typeof detail.work_item.title !== "string") throw mismatch();
+				return {
+					link,
+					title: detail.work_item.title
+				};
+			}));
+			if (!current(ticket)) return;
+			if (reset) {
+				for (const value of forms) if (value !== editor) {
+					value.dispose();
+					forms.delete(value);
+				}
+				rows.replaceChildren();
+				links.clear();
+			}
+			for (const { link, title } of visible) {
+				if (links.has(link.link_id)) continue;
+				links.set(link.link_id, link);
+				const row = h("div", {
+					class: "exh-relation",
+					"data-history-link": link.link_id
+				}, h("a", { href: `#/item/${encodeURIComponent(link.work_item_id)}` }, title), h("span", { class: "ui-meta" }, t(link.fixed_ref.selection?.kind === "entry" ? "exh_entire_entry" : "exh_selected_text")));
+				if (link.attempt_id) row.append(h("span", { class: "ui-meta" }, t("exh_attempt_relation")));
+				if (canUnlink(link)) row.append(withdrawal(link));
+				rows.append(row);
+			}
+			for (const value of recoveryForms) {
+				value.dispose();
+				forms.delete(value);
+			}
+			recoveryForms.clear();
+			rows.querySelectorAll("[data-history-withdrawal]").forEach((node) => node.remove());
+			for (const link of pendingWithdrawals()) if (!links.has(link.link_id) && canUnlink(link)) {
+				const recovery = withdrawal(link, false);
+				if (recovery) rows.append(h("div", {
+					class: "exh-relation",
+					"data-history-withdrawal": link.link_id
+				}, h("p", {}, t("exh_withdrawal_pending")), recovery));
+			}
+			loaded = true;
+			after = next;
+			more.hidden = next === null;
+			if (!links.size) status.append(h("p", { class: "ui-meta" }, t(next === null ? "exh_no_links" : "exh_more_hidden_links")));
+		} catch (error) {
+			fail(error, ticket);
+		} finally {
+			if (current(ticket)) {
+				busy = false;
+				refresh.disabled = more.disabled = false;
+			}
+		}
+	}
+	const workSelect = h("select", {
+		"aria-label": t("exh_work"),
+		onchange: () => void selectWork(workSelect.value)
+	});
+	const workStatus = h("div", { role: "status" }), formSlot = h("div");
+	const workMore = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_more_work"),
+		onclick: () => void readWorks(false)
+	});
+	const workRefresh = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_refresh_work"),
+		onclick: () => void selectWork(selected)
+	});
+	workRefresh.disabled = true;
+	function checkCard(card, id = card?.work_item_id) {
+		if (!workId$1(id) || card?.work_item_id !== id || card.work?.work_item_id !== id || typeof card.work.title !== "string" || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== id || card.work.project_id !== card.binding.project_id || !/^pmwb_[0-9a-f]{32}$/.test(card.binding.binding_id) || !Number.isSafeInteger(card.work.version) || card.work.version < 1) throw mismatch();
+		return card;
+	}
+	function choices() {
+		workSelect.replaceChildren(h("option", { value: "" }, t("exh_select_work")), ...[...works.values()].map((card) => h("option", { value: card.work_item_id }, card.work.title)));
+		workSelect.value = selected;
+	}
+	async function readWorks(reset) {
+		if (workBusy || disposed) return;
+		workBusy = true;
+		workMore.disabled = true;
+		const ticket = generation, cursor = reset ? 0 : workAfter;
+		try {
+			const data = await api("GET", `${endpoint}/kanban?after=${cursor}&limit=20`);
+			if (!current(ticket)) return;
+			if (data.workspace_id !== workspaceId || !Array.isArray(data.cards) || data.cards.length > 20) throw mismatch();
+			const next = checkPage(data, cursor, "next_cursor");
+			for (const card of data.cards) checkCard(card);
+			if (reset) works.clear();
+			for (const card of data.cards) works.set(card.work_item_id, card);
+			workAfter = next;
+			workMore.hidden = next === null;
+			choices();
+			if (!works.size) workStatus.replaceChildren(h("p", { class: "ui-meta" }, t("exh_no_work")));
+		} catch (error) {
+			if (current(ticket)) {
+				currentWork = null;
+				editor?.update();
+				workStatus.replaceChildren(errorBox(error, { within: workStatus }));
+			}
+		} finally {
+			if (current(ticket)) {
+				workBusy = false;
+				workMore.disabled = false;
+			}
+		}
+	}
+	async function selectWork(id) {
+		if (editor?.locked() || !current(generation)) return;
+		const ticket = generation, selection = ++selectionSerial;
+		editor?.dispose();
+		forms.delete(editor);
+		editor = null;
+		currentWork = null;
+		workRefresh.disabled = true;
+		formSlot.replaceChildren();
+		workStatus.replaceChildren();
+		selected = id;
+		try {
+			if (id && !workId$1(id)) throw mismatch();
+			if (id) localStorage.setItem(selectionKey, id);
+			else localStorage.removeItem(selectionKey);
+			if (!id) return;
+			const data = await api("GET", `${endpoint}/kanban/${encodeURIComponent(id)}`);
+			if (!current(ticket) || selection !== selectionSerial) return;
+			if (data.workspace_id !== workspaceId) throw mismatch();
+			currentWork = checkCard(data.card, id);
+			works.set(id, currentWork);
+			choices();
+			const fixed = currentWork;
+			editor = form({
+				namespace: draftNamespace,
+				action: "pm.history.link",
+				target: {
+					workspace_id: workspaceId,
+					work_item_id: id
+				},
+				fields: {},
+				params: () => ({ fixed_ref: preview.ref }),
+				preconditions: () => ({
+					expected_work_version: fixed.work.version,
+					expected_binding_id: fixed.binding.binding_id
+				}),
+				permitted: () => canLink() && Boolean(preview) && currentWork === fixed,
+				recoverPermitted: canLink,
+				label: "exh_link",
+				savedText: "exh_link_saved",
+				onStateChange: () => {
+					workSelect.disabled = Boolean(editor?.locked());
+					workRefresh.disabled = !selected || workSelect.disabled;
+				},
+				onSaved: async () => {
+					await readLinks(true);
+				},
+				extra: h("p", { class: "ui-meta" }, t("exh_link_target", {
+					name: fixed.work.title,
+					version: fixed.work.version
+				}))
+			});
+			forms.add(editor);
+			formSlot.append(editor.box);
+			editor.update();
+		} catch (error) {
+			if (current(ticket) && selection === selectionSerial) workStatus.replaceChildren(errorBox(error, { within: workStatus }));
+		} finally {
+			if (current(ticket) && selection === selectionSerial) workRefresh.disabled = !selected || Boolean(editor?.locked());
+		}
+	}
+	async function prepare() {
+		if (choosing || !canLink()) return;
+		choosing = true;
+		choose.disabled = true;
+		const ticket = generation;
+		try {
+			const data = await api("POST", `${endpoint}/history-excerpt-preview`, {
+				source_id: sourceId,
+				entry_id: entry.entry_id,
+				expected_content_digest: entry.content_digest,
+				selection: { kind: "entry" }
+			});
+			if (!current(ticket)) return;
+			if (!matches(data.ref) || data.ref.selection?.kind !== "entry" || Object.keys(data.ref.selection).length !== 1 || data.history_complete !== false || data.execution_status !== "unknown" || !Array.isArray(data.content?.parts)) throw mismatch();
+			preview = data;
+			draft.replaceChildren(h("div", {}, h("h4", {}, t("exh_preview")), h("p", { class: "ui-meta" }, t("exh_link_help")), ...data.content.parts.map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), data.content.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, data.content.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: data.content.omitted_parts })) : null, h("label", {}, t("exh_work"), workSelect), workStatus, h("div", { class: "exh-actions" }, workMore, workRefresh), formSlot));
+			choose.hidden = true;
+			selected = localStorage.getItem(selectionKey) || "";
+			await readWorks(true);
+			if (current(ticket) && selected) await selectWork(selected);
+		} catch (error) {
+			fail(error, ticket);
+		} finally {
+			if (current(ticket)) choose.disabled = false;
+		}
+	}
+	element.addEventListener("toggle", () => {
+		if (element.open && !loaded) readLinks(true);
+	});
+	return {
+		element,
+		dispose() {
+			disposed = true;
+			generation++;
+			selectionSerial++;
+			disposeForms();
+			preview = currentWork = null;
+			works.clear();
+			links.clear();
+			element.replaceChildren();
+		}
+	};
+}
+//#endregion
 //#region src/pm-external-history.js
-function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
+function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, workspace, caps, namespace, permitted, form }) {
 	const root = `/pm/workspaces/${encodeURIComponent(workspaceId)}/history`;
 	let active = false, disposed = false, serial = 0, detailSerial = 0, timer = null, loading = null;
 	let rows = [], signature = "", selected = null, panel = null, count = 0, last = 0, next = null, detailBusy = false;
 	let messages = null, detailStatus = null, more = null, newEntries = null;
+	const relationships = new Set();
+	function clearEntries() {
+		for (const value of relationships) value.dispose();
+		relationships.clear();
+		messages?.replaceChildren();
+	}
 	const status = h("div", { role: "status" }), list = h("div", { class: "exh-list" });
 	const element = sectionCard({
 		title: t("exh_title"),
@@ -23718,6 +24106,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 		return !disposed && active && ticket === serial;
 	};
 	function close() {
+		clearEntries();
 		detailSerial++;
 		selected = null;
 		count = 0;
@@ -23775,6 +24164,39 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 		});
 	}
 	function entry(value) {
+		let relation = null;
+		if (caps()?.features?.external_history?.relationships?.version === 1 && /^shi_[0-9a-f]{32}$/.test(value.entry_id) && /^[0-9a-f]{64}$/.test(value.content_digest)) {
+			relation = externalHistoryLinks({
+				h,
+				t,
+				api,
+				alive,
+				workspaceId,
+				workspace,
+				caps,
+				namespace,
+				permitted,
+				form,
+				errorBox,
+				sourceId: selected,
+				entry: value,
+				onUnavailable: (error) => {
+					detailSerial++;
+					clearEntries();
+					count = last = 0;
+					next = null;
+					detailBusy = false;
+					detailStatus?.replaceChildren(errorBox(error), button({
+						variant: "secondary",
+						size: "sm",
+						label: t("exh_retry"),
+						onclick: () => void open(selected)
+					}));
+					controls(null);
+				}
+			});
+			relationships.add(relation);
+		}
 		return h("article", {
 			class: "exh-entry",
 			"data-history-entry": value.entry_id
@@ -23782,7 +24204,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 			"user",
 			"assistant",
 			"tool"
-		].includes(value.role) ? `exh_${value.role}` : "exh_tool")), h("span", { class: "ui-meta" }, value.observed_at ? timeStamp(value.observed_at) : "—")), ...(value.parts || []).map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), value.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, value.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: value.omitted_parts })) : null);
+		].includes(value.role) ? `exh_${value.role}` : "exh_tool")), h("span", { class: "ui-meta" }, value.observed_at ? timeStamp(value.observed_at) : "—")), ...(value.parts || []).map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), value.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, value.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: value.omitted_parts })) : null, relation?.element);
 	}
 	async function page({ initial = false } = {}) {
 		if (!selected || !panel || detailBusy || count >= 500) return;
@@ -23795,14 +24217,14 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 			if (data.workspace_id !== workspaceId || data.source?.source_id !== id || !Array.isArray(data.entries)) throw Error(t("pm_scope_mismatch"));
 			detailStatus.replaceChildren();
 			if (!data.source.readable) {
-				messages.replaceChildren();
+				clearEntries();
 				count = last = 0;
 				next = null;
 				detailStatus.replaceChildren(h("p", {}, t("exh_unavailable")));
 				return;
 			}
 			if (initial) {
-				messages.replaceChildren();
+				clearEntries();
 				panel.body.prepend(coverage(data.source));
 			}
 			for (const value of data.entries || []) if (Number.isSafeInteger(value.sequence) && value.sequence > last) {
@@ -23817,7 +24239,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 			if (index >= 0) rows[index] = data.source;
 		} catch (error) {
 			if (!valid(current) || ticket !== detailSerial || selected !== id || !panel) return;
-			messages.replaceChildren();
+			clearEntries();
 			count = last = 0;
 			next = null;
 			detailStatus.replaceChildren(errorBox(error), button({
@@ -23846,6 +24268,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 			returnFocus: () => [...list.querySelectorAll("[data-history-source]")].find((node) => node.dataset.historySource === id),
 			onClose: () => {
 				detailSerial++;
+				clearEntries();
 				selected = null;
 				count = last = 0;
 				next = null;
@@ -54064,7 +54487,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		api,
 		alive,
 		workspaceId,
-		errorBox
+		errorBox,
+		workspace: () => workspace,
+		caps,
+		namespace,
+		permitted,
+		form
 	}) : null;
 	if (externalHistory) body.insertBefore(externalHistory.element, content);
 	const agentsContent = resources && externalHistory ? h("div", {}, resources.element, externalHistory.element) : resources?.element || externalHistory?.element;

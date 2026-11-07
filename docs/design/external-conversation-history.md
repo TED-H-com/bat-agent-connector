@@ -1,7 +1,8 @@
 # Explicit external conversation history
 
-This is an E08 / EC-1.1 T3–T5 read-only increment. It retains the Connector as
-collection and authorization authority. It does not complete native execution,
+This E08 / EC-1.1 T3–T5 increment reads external histories and explicitly relates
+fixed entries to Work. Original CLI sessions stay read-only, with the Connector
+as collection and authorization authority. It does not complete native execution,
 source discovery, cross-adapter aliasing, Work derivation or real-device acceptance.
 
 ## Grant and identity
@@ -151,8 +152,8 @@ Global operation/event reads also enforce source access. Relationships add
 reviewable material; they change no Work/Attempt state, approval, ownership,
 fingerprint or Overview progress. The source remains `external_read_only`.
 `features.external_history.relationships` is additive and has `derive_ready=false`;
-it grants no admission authority. There is no relationship UI, derive, search,
-automatic suggestion or native execution route yet.
+it grants no admission authority. The shared relationship UI below is a branch
+candidate; derive, search, automatic suggestion and native execution remain open.
 
 ### Desktop transport parity
 
@@ -172,8 +173,52 @@ selection accepts only `kind: "entry"`.
 The two list routes accept only `after` (0 through 2^63−1) and `limit` (1–50).
 Source associations additionally require one exact `shi_` entry ID. Duplicate
 or unrelated parameters and malformed IDs are refused. Excerpt and link detail
-routes accept no query fields. This transport increment does not add a
-relationship UI, native CLI execution or installed-device acceptance.
+routes accept no query fields. This transport increment does not add
+native CLI execution or installed-device acceptance. The subsequent shared UI
+candidate uses these same routes.
+
+### Shared relationship UI candidate
+
+The English/zh-TW history reader exposes an on-demand **Related Work** disclosure
+per retained entry when the server advertises relationship version 1. Opening it
+reads current associations in pages of 20, follows advancing cursors even across
+hidden rows and resolves current Work titles. Each relationship distinguishes a
+whole entry from selected text and identifies an optional Attempt association.
+Opening the Work uses its existing route. Merely reading creates no operation.
+
+An owner or contributor with the advertised link action and manage/observe can
+choose an existing Work. The client requests the whole-entry preview, verifies
+its server/workspace/source/entry/digest identity and renders returned plaintext,
+clipping and omissions. It sends the returned canonical reference unchanged.
+The existing workspace board supplies paginated Work choices; selecting a Work
+reads its current card and checks the binding, project and version. No Work,
+Attempt, source grant or ownership is inferred or created by this picker.
+
+The existing durable form submits `pm.history.link` with the displayed binding
+and Work version. Its namespace also includes source and entry IDs so two entries
+linked to the same Work cannot share an intent. Only the chosen Work ID and the
+form's fixed reference/request persist locally; preview text and Work titles do
+not. A lost response restores the original target, preconditions and key after
+reload. Selection and refresh controls stay locked while that intent is unresolved.
+After an explicit failed-request reset, **Refresh selected Work** obtains a new
+version before a new submission. No retry silently retargets the original request.
+
+Creators and workspace owners can submit `pm.history.unlink` through the same
+form. Before submission a small index saves only the known link/Work IDs, version
+and creator. If the withdrawal succeeds but its response is lost, the link may
+disappear from the active-only list; its original stored intent remains reachable
+through a recovery control. The index alone cannot create a new withdrawal. A
+verified success removes the index entry. Current scopes, membership, action
+authorization and the central existing-operation checks continue to apply.
+
+Source withdrawal, failed source reads, reader close and workspace departure
+dispose relationship forms, hide preview/plaintext and fence late responses.
+Administrators do not bypass source grants or workspace roles. Older servers
+retain the original read-only reader. This increment supplies whole-entry links
+and withdrawal in the source reader, not text-range selection, Attempt selection,
+replacement, a Work-side excerpt reader or cleanup after source access is lost.
+Those broader UI paths, derive and real-device acceptance remain open. Linking
+adds reference material without approving, completing or taking over any work.
 
 ## Narrow format profiles
 

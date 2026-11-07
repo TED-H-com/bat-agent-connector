@@ -5,7 +5,12 @@
 - Admit existing external-conversation excerpt previews and Work relationship
   reads through the restricted desktop bridge, using exact source identities,
   bounded text selections and pagination. Authorization and relationship writes
-  remain in the central service; this adds no relationship UI or CLI control.
+  remain in the central service.
+- Add shared English/zh-TW controls to preview a fixed external-history entry,
+  link it to an existing Work and withdraw a relationship. Preserve original
+  operation keys across lost replies, including withdrawals no longer present
+  in the active list. Sources stay read-only; relationships do not imply approval
+  or completion.
 
 ## 0.2.16 / Desktop 0.1.12 (2026-11-05)
 

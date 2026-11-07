@@ -842,7 +842,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === 'day'}) : null;
   if (resources) body.insertBefore(resources.element, content);
   const externalHistory = workspaceId && !threadId && caps()?.features?.external_history?.version === 1
-    ? workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox}) : null;
+    ? workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox, workspace:()=>workspace, caps, namespace, permitted, form}) : null;
   if (externalHistory) body.insertBefore(externalHistory.element, content);
   const agentsContent = resources && externalHistory ? h('div', {}, resources.element, externalHistory.element) : resources?.element || externalHistory?.element;
   const drawersHome = h('div', {hidden: true});

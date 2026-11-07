@@ -1,12 +1,16 @@
 import {button, disclosure, emptyState, inspector, sectionCard, skeleton} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
+import {externalHistoryLinks} from './pm-external-history-links.js';
 
-// Clients only read the shared collector. No CLI controls, prompts or automatic PM context.
-export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox}) {
+// Source content comes from the shared collector. Explicit relationships use
+// central record actions; there are no CLI controls or automatic PM context.
+export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox, workspace, caps, namespace, permitted, form}) {
   const root = `/pm/workspaces/${encodeURIComponent(workspaceId)}/history`;
   let active = false, disposed = false, serial = 0, detailSerial = 0, timer = null, loading = null;
   let rows = [], signature = '', selected = null, panel = null, count = 0, last = 0, next = null, detailBusy = false;
   let messages = null, detailStatus = null, more = null, newEntries = null;
+  const relationships = new Set();
+  function clearEntries() {for (const value of relationships) value.dispose(); relationships.clear(); messages?.replaceChildren();}
   const status = h('div', {role: 'status'}), list = h('div', {class: 'exh-list'});
   const element = sectionCard({title: t('exh_title'), body: h('div', {}, h('p', {class: 'ui-meta'}, t('exh_help')), status, list)});
   element.dataset.externalHistory = '';
@@ -14,6 +18,7 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
   const state = row => t(row.stale ? 'exh_stale' : ({current:'exh_ready', catching_up:'exh_catching', entry_limit:'exh_limit', pending:'exh_pending'}[row.status] || 'exh_unavailable'));
   const valid = ticket => {try {alive();} catch {return false;} return !disposed && active && ticket === serial;};
   function close() {
+    clearEntries();
     detailSerial++; selected = null; count = 0; last = 0; next = null; detailBusy = false;
     const old = panel; panel = null; old?.dispose();
     messages = detailStatus = more = newEntries = null;
@@ -44,13 +49,25 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
       h('p', {}, t('exh_cli'), ': ', row.cli_version || '—'), h('code', {}, row.adapter))});
   }
   function entry(value) {
+    let relation = null;
+    if (caps()?.features?.external_history?.relationships?.version === 1
+      && /^shi_[0-9a-f]{32}$/.test(value.entry_id) && /^[0-9a-f]{64}$/.test(value.content_digest)) {
+      relation = externalHistoryLinks({h,t,api,alive,workspaceId,workspace,caps,namespace,permitted,form,errorBox,sourceId:selected,entry:value,
+        onUnavailable:error=>{
+          detailSerial++; clearEntries(); count = last = 0; next = null; detailBusy = false;
+          detailStatus?.replaceChildren(errorBox(error), button({variant:'secondary', size:'sm', label:t('exh_retry'), onclick:()=>void open(selected)}));
+          controls(null);
+        }});
+      relationships.add(relation);
+    }
     return h('article', {class:'exh-entry', 'data-history-entry':value.entry_id},
       h('header', {}, h('strong', {}, t(['user','assistant','tool'].includes(value.role) ? `exh_${value.role}` : 'exh_tool')),
         h('span', {class:'ui-meta'}, value.observed_at ? timeStamp(value.observed_at) : '—')),
       ...(value.parts || []).map(part => part.kind === 'text' ? h('p', {class:'exh-text'}, part.text)
         : h('p', {class:'ui-meta'}, t(part.kind === 'tool_request' ? 'exh_tool_request' : 'exh_tool_result', {name:part.name || t('exh_tool_unknown')}))),
       value.clipped ? h('p', {class:'ui-meta'}, t('exh_clipped')) : null,
-      value.omitted_parts ? h('p', {class:'ui-meta'}, t('exh_omitted', {count:value.omitted_parts})) : null);
+      value.omitted_parts ? h('p', {class:'ui-meta'}, t('exh_omitted', {count:value.omitted_parts})) : null,
+      relation?.element);
   }
   async function page({initial = false} = {}) {
     if (!selected || !panel || detailBusy || count >= 500) return;
@@ -62,10 +79,10 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
       if (data.workspace_id !== workspaceId || data.source?.source_id !== id || !Array.isArray(data.entries)) throw Error(t('pm_scope_mismatch'));
       detailStatus.replaceChildren();
       if (!data.source.readable) {
-        messages.replaceChildren(); count = last = 0; next = null;
+        clearEntries(); count = last = 0; next = null;
         detailStatus.replaceChildren(h('p', {}, t('exh_unavailable'))); return;
       }
-      if (initial) {messages.replaceChildren(); panel.body.prepend(coverage(data.source));}
+      if (initial) {clearEntries(); panel.body.prepend(coverage(data.source));}
       for (const value of data.entries || []) {
         if (Number.isSafeInteger(value.sequence) && value.sequence > last) {messages.append(entry(value)); last = value.sequence; count++;}
       }
@@ -77,7 +94,7 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
     } catch (error) {
       if (!valid(current) || ticket !== detailSerial || selected !== id || !panel) return;
       // Every failed source proof hides old plaintext, including a lost grant.
-      messages.replaceChildren(); count = last = 0; next = null;
+      clearEntries(); count = last = 0; next = null;
       detailStatus.replaceChildren(errorBox(error), button({variant:'secondary', size:'sm', label:t('exh_retry'), onclick:()=>void open(id)}));
     } finally {
       if (ticket === detailSerial) {detailBusy = false; controls(rows.find(row=>row.source_id === id));}
@@ -88,7 +105,7 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
     const row = rows.find(row=>row.source_id === id); if (!row) return;
     panel = inspector({title:sourceName(row), dock:true, overlay:true, historyNavigation:true,
       returnFocus:()=>[...list.querySelectorAll('[data-history-source]')].find(node=>node.dataset.historySource === id),
-      onClose:()=>{detailSerial++; selected = null; count = last = 0; next = null; detailBusy = false; panel?.body.replaceChildren(); messages = detailStatus = more = newEntries = null;}, canReopen:()=>active && selected === id && rows.some(row=>row.source_id === id)});
+      onClose:()=>{detailSerial++; clearEntries(); selected = null; count = last = 0; next = null; detailBusy = false; panel?.body.replaceChildren(); messages = detailStatus = more = newEntries = null;}, canReopen:()=>active && selected === id && rows.some(row=>row.source_id === id)});
     panel.dataset.historyDetail = '';
     detailStatus = h('div', {role:'status'}, skeleton(3)); messages = h('div', {class:'exh-messages'});
     more = button({variant:'secondary', size:'sm', label:t('exh_more'), onclick:()=>void page()}); more.hidden = true;

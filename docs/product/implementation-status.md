@@ -1,5 +1,41 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-06：外部對話與既有 Work 的共用操作介面候選
+
+`feat/external-history-work-links-20261106` 接續 `f340211c` 的桌面傳輸增量。
+共用 `desktop/src` 已加入英文／繁中整則紀錄預覽、既有 Work 選擇、關聯清單及撤回。
+來源、權限、Work binding／版本及操作結果仍由 Python 中央決定；前端使用原有
+durable form，保留固定參照與原 operation key。撤回成功但回覆遺失、關聯已離開
+active 清單時，也能從只保存 ID 的索引查回原操作。預覽正文不進 localStorage。
+瀏覽器資產由共用來源重建，沒有第二套 Dashboard 或新 schema。
+
+已通過 44 項瀏覽器／注入 IPC 回歸、581 項 Node 測試、169 項相關 Python 測試、
+ruff、共用前端雙入口建置及公開內容檢查。回歸包含固定參照、原 key 恢復、消失的
+撤回關聯、兩則紀錄對同一 Work 的獨立 intent、權限、分頁、版本衝突、晚到回覆及
+英文／繁中版面。最終產物另重驗 Dashboard／靜態提供測試。
+
+Python 3.13 全套八分片共 9,964 項：9,866 passed、84 skipped、14 failed。
+Collection manifests 證明 434 個檔案、無遺漏或重複；完整檢查仍記為失敗。
+14 項失敗與前一輪相同，全部在未修改的 Fleet bootstrap 模組，原因為測試目錄的
+上層具有群組寫入權限（0775），被 `_secure_path` 拒絕。相同程式與完整該模組在
+隔離容器內以安全路徑掛載磁碟暫存資料後，44 項通過。沒有改變共享目錄權限、
+安全檢查或 fixture；容器與測試資料已移除。略過項目沿用原有平台、選跑整合、
+具名 CLI 版本或已移除能力的規則。本輪沒有修改 Python 後端邏輯或 Rust。
+
+狀態：已在分支實作，尚未合併、發布、安裝或實機驗收。
+HTTP 與注入 IPC fixtures 不等同原生 WebView、真 BAT／模型或實體手機驗收。
+這是 E08／E10、EC-1.1 T5 的局部增量；文字範圍／Attempt 選擇、替換及 Work 側摘錄
+閱讀仍開放。E00–E11、R0–R5、A01–A40 與未修訂的 PM v1.2 生命週期待辦維持原狀。
+
+The shared E08/E10/T5 candidate adds whole-entry preview, existing Work selection,
+linking and withdrawal through central actions and the existing durable form.
+Lost replies retain their original intent, including withdrawals absent from the
+active list. UI regressions (44), Node tests (581) and focused Python checks (169)
+passed. The full Python run remains failed: 9,866 passed, 84 skipped and 14 failed,
+all in unchanged Fleet bootstrap tests rejecting group-writable ancestors. That
+entire module passed 44 tests with disk-backed fixtures mounted at a secure
+container path. This claims no merge, release, installation or live acceptance.
+
 ## 2026-11-06：外部對話關聯的桌面傳輸候選
 
 分支 `fix/external-history-desktop-parity-20261106` 以 `d78cfc70` 為基底，
