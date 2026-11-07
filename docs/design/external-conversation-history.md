@@ -215,8 +215,8 @@ Source withdrawal, failed source reads, reader close and workspace departure
 dispose relationship forms, hide preview/plaintext and fence late responses.
 Administrators do not bypass source grants or workspace roles. Older servers
 retain the original read-only reader. The initial increment supplies whole-entry
-links and withdrawal; the text-range and Work-side reader candidates below extend
-it. Attempt selection, replacement, cleanup after source access is lost, derive
+links and withdrawal; the text-range, optional Attempt and Work-side reader candidates below extend
+it. Replacement, cleanup after source access is lost, derive
 and real-device acceptance remain open. Linking
 adds reference material without approving, completing or taking over any work.
 
@@ -257,8 +257,45 @@ stored original through that accessor. An unresolved request locks range control
 and a failed request requires the existing explicit **New request** action.
 
 This adds no API, schema, source takeover, automatic PM input or model call.
-Optional Attempt selection, relationship replacement and revoked-source cleanup
-remain separate UI work within E08/E10 and EC-1.1 T5.
+The optional Attempt candidate below extends this path. Relationship replacement
+and revoked-source cleanup remain separate UI work within E08/E10 and EC-1.1 T5.
+
+### Optional Attempt selection candidate
+
+The shared source reader defaults to **Work only**. With the existing Work-start
+version 1 capability, **Choose an attempt (optional)** lazily reads that Work's
+central Attempt list. No latest Attempt, session or execution target is inferred.
+Choices show the recorded sequence, localized time and start stage; selecting one
+reads its exact detail and displays its full ID. Both responses must match the
+selected workspace and Work. This is reference association, not execution control.
+
+The existing list route uses 20-row pages and strictly advancing safe-integer
+cursors, including pages containing only hidden rows. **Read more attempts**
+rereads prior pages before displaying the combined choices. Refresh clears old
+metadata immediately, revalidates the selected detail and retains only current
+visible rows. Reading stops at 25 pages with an explicit partial-list notice.
+A detail refusal or identity mismatch clears displayed metadata and blocks a new
+link with that selection; it never silently falls back to Work only. The user can
+explicitly choose Work only or refresh. Work changes, source close and disposal
+fence pending reads. The central admission remains the final authority for access
+and same-Work membership at submission.
+
+Only the optional `attempt_id` joins `fixed_ref` in the existing durable form's
+draft and `pm.history.link` parameters. Titles, stages, dates and session details
+are not saved locally. Restoring a draft rereads its choice; an original immutable
+request overrides newer draft metadata, including an older Work-only request.
+Original key, parameters, target and preconditions remain unchanged. Receipt
+recovery does not depend on current picker availability; an unresolved intent
+locks selection, and a failed intent requires the existing explicit new-request
+action. A succeeded receipt arriving during restored reads cannot erase or retarget
+the displayed choice. Servers without the capability keep Work-only creation;
+previous original requests remain recoverable through their existing central path.
+
+English and zh-TW use the shared browser/desktop source and native select control.
+HTTP and injected IPC fixtures cover the same reads and operation body; route
+inventory checks include both existing Attempt endpoints. No new API, schema,
+Rust transport, start action, automatic PM input or model call is added. This
+E08/E10/T5 candidate does not establish native WebView or physical-mobile acceptance.
 
 ### Work-side reader candidate
 
@@ -303,7 +340,7 @@ the standalone Work route and requirement inspector are not new reader surfaces.
 
 HTTP and injected desktop IPC regressions exercise this shared frontend. They do
 not establish native WebView, real BAT/model or physical-mobile acceptance. Work
-derivation, native execution, Attempt selection, replacement and cleanup after
+derivation, native execution, replacement and cleanup after
 source revocation remain open alongside the unrevised PM lifecycle requirements.
 
 ## Narrow format profiles

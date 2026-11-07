@@ -1072,6 +1072,17 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_select_work: "Select a Work",
 			exh_more_work: "Read more Work",
 			exh_refresh_work: "Refresh selected Work",
+			exh_choose_attempt: "Choose an attempt (optional)",
+			exh_attempt: "Existing attempt",
+			exh_work_only: "Work only",
+			exh_attempt_help: "Optionally attach this reference to one existing attempt of this Work. Choose the attempt explicitly.",
+			exh_refresh_attempts: "Refresh attempts",
+			exh_more_attempts: "Read more attempts",
+			exh_no_attempts: "No visible attempts on the pages read so far.",
+			exh_attempt_option: "Attempt {number} · {time} · {stage}",
+			exh_attempt_stage_unknown: "Stage unavailable",
+			exh_attempt_unavailable: "Selected attempt has not been verified",
+			exh_attempt_limit: "This view has read 25 pages. More attempts may exist.",
 			exh_attempt_relation: "Linked to a specific attempt",
 			exh_withdrawal_pending: "Check the result of the original withdrawal.",
 			exh_no_work: "No Work is available on this workspace’s board.",
@@ -1142,6 +1153,17 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_select_work: "請選擇工作",
 			exh_more_work: "讀取更多工作",
 			exh_refresh_work: "重新讀取所選工作",
+			exh_choose_attempt: "選擇執行輪次（選填）",
+			exh_attempt: "既有執行輪次",
+			exh_work_only: "只關聯工作",
+			exh_attempt_help: "可將這份參考資料連到這項工作的某次既有執行，請明確選擇輪次。",
+			exh_refresh_attempts: "重新讀取執行輪次",
+			exh_more_attempts: "讀取更多執行輪次",
+			exh_no_attempts: "目前讀取的頁面沒有可查看的執行輪次。",
+			exh_attempt_option: "執行紀錄 {number} · {time} · {stage}",
+			exh_attempt_stage_unknown: "階段資訊不可用",
+			exh_attempt_unavailable: "尚未驗證所選執行輪次",
+			exh_attempt_limit: "此畫面已讀取 25 頁，可能還有其他執行輪次。",
 			exh_attempt_relation: "已連到特定執行輪次",
 			exh_withdrawal_pending: "查回原本撤回關聯的結果。",
 			exh_no_work: "這個工作區的看板目前沒有可選擇的工作。",
@@ -23874,6 +23896,201 @@ function matchesHistoryContent(content, entry, selection) {
 	});
 }
 //#endregion
+//#region src/pm-history-attempt-picker.js
+var attemptId = (value) => /^att_[0-9a-f]{32}$/.test(value || "");
+function historyAttemptPicker({ h, t, api, alive, workspaceId, workId, supported, blocked, onChange, errorBox }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const field = h("input", {
+		type: "hidden",
+		value: ""
+	});
+	let disposed = false, serial = 0, busy = false, loaded = false, pages = 1, after = null;
+	let selected = "", verified = null, rows = [];
+	const status = h("div", { role: "status" }), detail = h("div", { "data-history-attempt-detail": "" });
+	const select = h("select", {
+		"aria-label": t("exh_attempt"),
+		onchange: () => {
+			if (busy || blocked()) return;
+			selected = select.value;
+			field.value = selected;
+			verified = null;
+			onChange();
+			readSelected();
+		}
+	});
+	const refresh = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_refresh_attempts"),
+		onclick: () => void readPages(pages)
+	});
+	const more = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_more_attempts"),
+		onclick: () => void readPages(pages + 1)
+	});
+	const element = h("details", {
+		"data-history-attempt-picker": "",
+		hidden: !supported()
+	}, h("summary", {}, t("exh_choose_attempt")), h("p", { class: "ui-meta" }, t("exh_attempt_help")), h("label", {}, t("exh_attempt"), select), status, detail, h("div", { class: "exh-actions" }, refresh, more));
+	const current = (ticket) => {
+		try {
+			alive();
+		} catch {
+			return false;
+		}
+		return !disposed && ticket === serial;
+	};
+	const mismatch = () => Error(t("pm_scope_mismatch"));
+	function check(row, id = row?.attempt_id) {
+		if (!attemptId(id) || row?.attempt_id !== id || row.workspace_id !== workspaceId || row.work_item_id !== workId || !Number.isSafeInteger(row.sequence) || row.sequence < 1 || typeof row.stage !== "string" || !row.stage || !Number.isFinite(row.created_at) || row.created_at < 0 || !Number.isFinite(new Date(row.created_at * 1e3).getTime())) throw mismatch();
+		return row;
+	}
+	function label(row) {
+		const key = `wst_status_${row.stage}`, stage = t(key) === key ? t("exh_attempt_stage_unknown") : t(key);
+		return t("exh_attempt_option", {
+			number: row.sequence,
+			time: timeText(row.created_at),
+			stage
+		});
+	}
+	function choices() {
+		select.replaceChildren(h("option", { value: "" }, t("exh_work_only")), ...rows.map((row) => h("option", { value: row.attempt_id }, label(row.attempt_id === verified?.attempt_id ? verified : row))));
+		if (selected && !rows.some((row) => row.attempt_id === selected)) select.append(h("option", { value: selected }, verified ? label(verified) : t("exh_attempt_unavailable")));
+		select.value = selected;
+	}
+	function update() {
+		const disabled = busy || blocked();
+		select.disabled = disabled;
+		refresh.disabled = disabled || !supported();
+		more.disabled = refresh.disabled;
+		more.hidden = after === null || pages >= 25;
+	}
+	function clear() {
+		verified = null;
+		rows = [];
+		detail.replaceChildren();
+		choices();
+	}
+	async function selectedDetail() {
+		if (!selected) return null;
+		if (!attemptId(selected) || !supported()) throw mismatch();
+		const data = await api("GET", `${endpoint}/work-attempts/${encodeURIComponent(selected)}`);
+		if (data.workspace_id !== workspaceId) throw mismatch();
+		return check(data.attempt, selected);
+	}
+	function display(row) {
+		verified = row;
+		choices();
+		detail.replaceChildren(...row ? [h("p", {}, label(row)), h("p", { class: "mono" }, row.attempt_id)] : []);
+	}
+	function failed(error) {
+		clear();
+		after = null;
+		status.replaceChildren(errorBox(error, { within: status }));
+	}
+	async function readSelected() {
+		const ticket = ++serial;
+		busy = true;
+		detail.replaceChildren();
+		status.replaceChildren();
+		update();
+		onChange();
+		try {
+			const row = await selectedDetail();
+			if (current(ticket)) display(row);
+		} catch (error) {
+			if (current(ticket)) failed(error);
+		} finally {
+			if (current(ticket)) {
+				busy = false;
+				update();
+				onChange();
+			}
+		}
+	}
+	async function readPages(count) {
+		if (busy || disposed || !supported()) return;
+		const ticket = ++serial;
+		busy = true;
+		clear();
+		status.replaceChildren(h("p", {}, t("pm_kanban_detail_loading")));
+		update();
+		onChange();
+		try {
+			const found = new Map();
+			let cursor = 0, next = null, filtered = false, read = 0, lastSequence = 0;
+			do {
+				const data = await api("GET", `${endpoint}/work/${encodeURIComponent(workId)}/attempts?after=${cursor}&limit=20`);
+				if (!current(ticket)) return;
+				if (data.workspace_id !== workspaceId || data.work_item_id !== workId || !Array.isArray(data.attempts) || data.attempts.length > 20 || typeof data.visibility_filtered !== "boolean") throw mismatch();
+				next = data.next_cursor;
+				if (next !== null && (!Number.isSafeInteger(next) || next <= cursor)) throw mismatch();
+				for (const row of data.attempts) {
+					check(row);
+					if (row.sequence <= Math.max(lastSequence, cursor) || next !== null && row.sequence > next || found.has(row.attempt_id)) throw mismatch();
+					found.set(row.attempt_id, row);
+					lastSequence = row.sequence;
+				}
+				filtered ||= data.visibility_filtered;
+				cursor = next;
+				read++;
+			} while (next !== null && read < Math.min(count, 25));
+			const row = await selectedDetail();
+			if (!current(ticket)) return;
+			rows = [...found.values()];
+			pages = read;
+			after = next;
+			loaded = true;
+			display(row);
+			status.replaceChildren();
+			if (!rows.length) status.append(h("p", { class: "ui-meta" }, t("exh_no_attempts")));
+			if (filtered) status.append(h("p", { class: "ui-meta" }, t("wst_visibility_filtered")));
+			if (next !== null && pages >= 25) status.append(h("p", { class: "ui-meta" }, t("exh_attempt_limit")));
+		} catch (error) {
+			if (current(ticket)) failed(error);
+		} finally {
+			if (current(ticket)) {
+				busy = false;
+				update();
+				onChange();
+			}
+		}
+	}
+	element.addEventListener("toggle", () => {
+		if (element.open && !loaded && !busy) readPages(1);
+	});
+	choices();
+	update();
+	return {
+		element,
+		field,
+		update,
+		ready: () => !busy && field.value === selected && (!selected || Boolean(verified && verified.attempt_id === selected && supported())),
+		retain: () => {
+			field.value = selected;
+		},
+		restore: async (id) => {
+			selected = id;
+			field.value = id;
+			choices();
+			if (!id) return;
+			element.hidden = false;
+			element.open = true;
+			if (supported()) await readPages(1);
+			else await readSelected();
+		},
+		dispose: () => {
+			disposed = true;
+			serial++;
+			clear();
+			field.value = "";
+			element.replaceChildren();
+		}
+	};
+}
+//#endregion
 //#region src/pm-external-history-links.js
 var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
 var digest$9 = (value) => /^[0-9a-f]{64}$/.test(value || "");
@@ -23884,7 +24101,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
 	let disposed = false, generation = 0, loaded = false, busy = false, after = null;
 	let preview = null, selected = "", editor = null, choosing = false, workAfter = null, workBusy = false;
-	let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null;
+	let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null;
 	const forms = new Set(), links = new Map(), works = new Map(), recoveryForms = new Set();
 	const status = h("div", { role: "status" }), rows = h("div", { class: "exh-relations" }), draft = h("div");
 	const element = h("details", { "data-history-links": entry.entry_id }, h("summary", {}, t("exh_related")), status, rows, draft);
@@ -23906,6 +24123,8 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		onUnavailable(error);
 	}
 	function disposeForms() {
+		attemptPicker?.dispose();
+		attemptPicker = null;
 		for (const value of forms) value.dispose();
 		forms.clear();
 		recoveryForms.clear();
@@ -24039,6 +24258,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		whole.hidden = preview?.ref.selection.kind !== "text";
 		workSelect.disabled = locked || previewBusy;
 		workRefresh.disabled = !selected || workSelect.disabled;
+		attemptPicker?.update();
 	}
 	function drawPreview() {
 		previewSlot.replaceChildren(h("h4", {}, t("exh_preview")), h("p", { class: "ui-meta" }, t("exh_link_help")), h("p", { class: "ui-meta" }, t(preview.ref.selection.kind === "entry" ? "exh_entire_entry" : "exh_selected_text")), ...preview.content.parts.map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), ...[preview.content.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, preview.content.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: preview.content.omitted_parts })) : null].filter(Boolean));
@@ -24210,6 +24430,8 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	async function selectWork(id) {
 		if (editor?.locked() || previewBusy || !current(generation)) return;
 		const ticket = generation, selection = ++selectionSerial;
+		attemptPicker?.dispose();
+		attemptPicker = null;
 		editor?.dispose();
 		forms.delete(editor);
 		editor = null;
@@ -24236,6 +24458,22 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 				type: "hidden",
 				value: JSON.stringify(preview.ref)
 			});
+			const attempts = historyAttemptPicker({
+				h,
+				t,
+				api,
+				alive,
+				workspaceId,
+				workId: id,
+				errorBox,
+				supported: () => caps()?.features?.pm_workspaces?.work_start?.version === 1,
+				blocked: () => !canLink() || Boolean(editor?.locked()) || previewBusy || workSelecting,
+				onChange: () => {
+					editor?.changed();
+					editor?.update();
+				}
+			});
+			attemptPicker = attempts;
 			editor = form({
 				namespace: draftNamespace,
 				action: "pm.history.link",
@@ -24243,39 +24481,52 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 					workspace_id: workspaceId,
 					work_item_id: id
 				},
-				fields: { fixed_ref: reference },
-				params: (values) => ({ fixed_ref: JSON.parse(values.fixed_ref) }),
+				fields: {
+					fixed_ref: reference,
+					attempt_id: attempts.field
+				},
+				params: (values) => ({
+					fixed_ref: JSON.parse(values.fixed_ref),
+					...values.attempt_id ? { attempt_id: values.attempt_id } : {}
+				}),
 				preconditions: () => ({
 					expected_work_version: fixed.work.version,
 					expected_binding_id: fixed.binding.binding_id
 				}),
-				permitted: () => canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed,
+				permitted: () => canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed && attempts.ready(),
 				recoverPermitted: canLink,
 				label: "exh_link",
 				savedText: "exh_link_saved",
 				onStateChange: updateSelectionControls,
 				onSaved: async () => {
 					if (preview) reference.value = JSON.stringify(preview.ref);
+					attempts.retain();
 					await readLinks(true);
 				},
-				extra: h("p", { class: "ui-meta" }, t("exh_link_target", {
+				extra: h("div", {}, h("p", { class: "ui-meta" }, t("exh_link_target", {
 					name: fixed.work.title,
 					version: fixed.work.version
-				}))
+				})), attempts.element)
 			});
 			forms.add(editor);
 			formSlot.append(editor.box);
 			editor.update();
-			let restored;
+			let restored, restoredAttempt;
 			try {
-				restored = editor.intentRequest()?.params.fixed_ref || JSON.parse(editor.values().fixed_ref);
+				const intent = editor.intentRequest();
+				restored = intent?.params.fixed_ref || JSON.parse(editor.values().fixed_ref);
+				restoredAttempt = (intent ? intent.params.attempt_id : editor.values().attempt_id) ?? "";
 				if (!matches(restored) || !historyReferenceKey(restored)) throw mismatch();
+				if (typeof restoredAttempt !== "string" || restoredAttempt && !/^att_[0-9a-f]{32}$/.test(restoredAttempt)) throw mismatch();
 				if (editor.locked()) reference.value = JSON.stringify(restored);
 			} catch (error) {
 				fail(error, ticket);
 				return;
 			}
 			if (historyReferenceKey(restored) !== historyReferenceKey(preview.ref)) await changeSelection(restored.selection, restored);
+			if (!current(ticket) || selection !== selectionSerial) return;
+			await attempts.restore(restoredAttempt);
+			if (!current(ticket) || selection !== selectionSerial) return;
 			if (preview && !editor.locked()) editor.set("fixed_ref", JSON.stringify(preview.ref));
 			editor?.update();
 		} catch (error) {

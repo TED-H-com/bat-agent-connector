@@ -8,6 +8,8 @@ test('shared frontend central routes are on the desktop bridge allow-list', () =
   const discovered = found.calls.map(call => `${call.method} ${call.path} ${call.file}`);
   for (const needle of [
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/attempts?limit=100 pm-work-start.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/attempts?after=1&limit=20 pm-history-attempt-picker.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-attempts/att_cccccccccccccccccccccccccccccccc pm-history-attempt-picker.js',
     'POST /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/start-preview pm-work-start.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-attempts/att_cccccccccccccccccccccccccccccccc/result pm-work-result.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/inputs?limit=50&attempt_id=att_cccccccccccccccccccccccccccccccc pm-work-follow-up.js',

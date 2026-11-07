@@ -63,7 +63,7 @@ export function fixture() {
       let op = state.ops.get(input.idempotency_key);
       if (!op) {
         const action = input.body.action, unlink = action === 'pm.history.unlink';
-        if (!state.stale) state.links = unlink ? [] : [{...link(),work_item_id:input.body.target.work_item_id,fixed_ref:structuredClone(input.body.params.fixed_ref)}];
+        if (!state.stale) state.links = unlink ? [] : [{...link(),work_item_id:input.body.target.work_item_id,attempt_id:input.body.params.attempt_id ?? null,fixed_ref:structuredClone(input.body.params.fixed_ref)}];
         op = {...structuredClone(input.body), actor:base.base.state.actor, idempotency_key:input.idempotency_key,
           operation_id:'op_'+String(state.ops.size+1).padStart(32,'0'), status:state.stale ? 'failed' : 'succeeded',
           result:state.stale ? null : {link_id:linkId,state:unlink ? 'withdrawn' : 'active',version:unlink ? 2 : 1},

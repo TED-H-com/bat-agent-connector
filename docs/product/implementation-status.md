@@ -1,5 +1,47 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-07：外部對話摘錄的選填 Attempt 關聯候選
+
+`feat/history-attempt-selection-20261107` 接續 `194892ed`，在既有來源閱讀器加入
+英文／繁中執行輪次選擇。預設只關聯 Work，展開選填區才讀中央 Attempt 清單；
+使用者明確選取後，另讀明細核對同一 workspace／Work。沒有自動選最新一輪，
+也不建立 Attempt、控制原 CLI、呼叫模型或自動加入 PM 輸入。
+
+沿用既有 list／detail API、`pm.history.link`、Work 版本／binding 及 durable form。
+分頁涵蓋隱藏紀錄並重新驗證先前頁面，最多 25 頁；重新讀取先清除舊資料。
+拒絕、身分不符、切換 Work 或關閉來源不會讓晚到回覆恢復舊資料。只在草稿保存
+選取 ID，原始 request 優先於較新欄位；遺失回覆、舊版 Work-only intent、已確認
+收據和顯示讀取同時完成，都維持原 key／target／params／preconditions。
+未通過驗證的選取不會默默改成只關聯 Work；使用者可明確清除或重新讀取。
+
+最終共用來源的 249 項相關 HTTP／注入 IPC 介面測試、602 項 Node 測試及 169 項
+相關 Python 測試通過。介面包含 34 項新增 Attempt 案例，以及既有文字選取、關聯、
+Work 閱讀器、看板、Workbench 和共用表單／收據回歸。雙入口建置、ruff、公開內容
+檢查及 staged secret scan 通過。英文／繁中 390／1440 px 截圖已檢查；新增區塊
+捲入畫面後的四項版面檢查再驗通過，手機選單及重新讀取按鈕保留 44 px 高度。
+
+Python 3.13 全套八分片完成：9,866 passed、84 skipped、14 failed，沒有 errors。
+Collection manifests 核對 9,964 項、434 個檔案，沒有遺漏或重複；完整檢查仍記為
+失敗。14 個失敗案例 ID 與前輪完全相同，皆在未修改的 Fleet bootstrap 模組，
+錯誤均含 `BOOTSTRAP_STATE_UNPROVEN`：測試路徑的上層 0775 權限遭安全檢查拒絕。
+相同完整模組放在隔離容器的安全路徑、掛載磁碟暫存後，44 項通過。沒有修改共享
+目錄權限、安全檢查或 fixtures；測試暫存與容器均已清理。
+
+此為 E08／E10、EC-1.1 T5 的未合併分支增量，沒有 Python 後端或 Rust 變更；
+尚未發布、安裝或實機驗收。注入 IPC／responsive fixtures 不等同原生 WebView、
+真 BAT／模型或實體手機。關聯替換、撤權後清理、其他 Work 閱讀入口、derive 與
+原生執行仍開放，E00–E11、R0–R5、A01–A40 及 PM v1.2 未修訂工作維持原狀。
+
+The shared history form can associate a fixed excerpt with an explicitly selected
+existing Attempt of the same Work. Work-only linking remains the default; current
+list/detail reads, opaque-ID drafts and immutable original requests preserve the
+existing central authority. UI (249), Node (602) and focused Python (169) checks
+passed. The complete Python run remains failed: 9,866 passed, 84 skipped and the
+same 14 Fleet bootstrap permission failures as the previous run, with complete
+disjoint coverage. The unchanged Fleet module passed all 44 tests at a secure
+container path with disk-backed fixtures. This unmerged E08/E10/T5 candidate
+claims no publication, installation, native execution or live acceptance.
+
 ## 2026-11-07：外部對話文字範圍摘錄候選
 
 `feat/history-text-selection-20261107` 接續 `7c75c1ae`，在共用來源閱讀器加入

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Optionally associate a fixed external-conversation excerpt with an explicitly
+  selected existing Work attempt. Revalidate paginated choices and the selected
+  detail, preserve opaque-ID drafts and original operation recovery, and keep
+  Work-only association as the default in English and zh-TW.
 - Select fixed text ranges from external conversations before linking to Work,
   with Unicode and original-newline offsets, read-only keyboard controls and
   English/zh-TW previews. Restore range metadata without saving plaintext and

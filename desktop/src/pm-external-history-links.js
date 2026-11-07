@@ -1,5 +1,6 @@
 import {button} from './ui/components.js';
 import {historyTextSelection, historySelectionKey, historyReferenceKey, matchesHistoryContent, navigateHistoryText} from './pm-history-selection.js';
+import {historyAttemptPicker} from './pm-history-attempt-picker.js';
 
 const workId = value => /^wi_[0-9a-f]{20}$/.test(value || '');
 const digest = value => /^[0-9a-f]{64}$/.test(value || '');
@@ -13,7 +14,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
   const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
   let disposed = false, generation = 0, loaded = false, busy = false, after = null;
   let preview = null, selected = '', editor = null, choosing = false, workAfter = null, workBusy = false;
-  let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null;
+  let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null;
   const forms = new Set(), links = new Map(), works = new Map(), recoveryForms = new Set();
   const status = h('div', {role:'status'}), rows = h('div', {class:'exh-relations'}), draft = h('div');
   const element = h('details', {'data-history-links':entry.entry_id}, h('summary', {}, t('exh_related')), status, rows, draft);
@@ -35,7 +36,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     // A refused source proof must hide the original entry as well as its preview.
     onUnavailable(error);
   }
-  function disposeForms() {for (const value of forms) value.dispose(); forms.clear(); recoveryForms.clear(); editor = null;}
+  function disposeForms() {attemptPicker?.dispose(); attemptPicker = null; for (const value of forms) value.dispose(); forms.clear(); recoveryForms.clear(); editor = null;}
   function checkPage(data, cursor, key) {
     const next = data[key];
     if (next !== null && (!Number.isSafeInteger(next) || next <= cursor)) throw mismatch();
@@ -101,6 +102,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     whole.hidden = preview?.ref.selection.kind !== 'text';
     workSelect.disabled = locked || previewBusy;
     workRefresh.disabled = !selected || workSelect.disabled;
+    attemptPicker?.update();
   }
   function drawPreview() {
     previewSlot.replaceChildren(h('h4', {}, t('exh_preview')), h('p', {class:'ui-meta'}, t('exh_link_help')),
@@ -230,6 +232,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
   async function selectWork(id) {
     if (editor?.locked() || previewBusy || !current(generation)) return;
     const ticket = generation, selection = ++selectionSerial;
+    attemptPicker?.dispose(); attemptPicker = null;
     editor?.dispose(); forms.delete(editor); editor = null; currentWork = null; workRefresh.disabled = true; formSlot.replaceChildren(); workStatus.replaceChildren(); selected = id;
     workSelecting = true; updateSelectionControls();
     try {
@@ -242,24 +245,35 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
       currentWork = checkCard(data.card, id); works.set(id, currentWork); choices();
       const fixed = currentWork;
       const reference = h('input', {type:'hidden', value:JSON.stringify(preview.ref)});
+      const attempts = historyAttemptPicker({h, t, api, alive, workspaceId, workId:id, errorBox,
+        supported:()=>caps()?.features?.pm_workspaces?.work_start?.version === 1,
+        blocked:()=>!canLink() || Boolean(editor?.locked()) || previewBusy || workSelecting,
+        onChange:()=>{editor?.changed(); editor?.update();}});
+      attemptPicker = attempts;
       editor = form({namespace:draftNamespace, action:'pm.history.link', target:{workspace_id:workspaceId, work_item_id:id},
-        fields:{fixed_ref:reference}, params:values=>({fixed_ref:JSON.parse(values.fixed_ref)}),
+        fields:{fixed_ref:reference, attempt_id:attempts.field}, params:values=>({fixed_ref:JSON.parse(values.fixed_ref), ...(values.attempt_id ? {attempt_id:values.attempt_id} : {})}),
         preconditions:()=>({expected_work_version:fixed.work.version, expected_binding_id:fixed.binding.binding_id}),
-        permitted:()=>canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed, recoverPermitted:canLink,
+        permitted:()=>canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed && attempts.ready(), recoverPermitted:canLink,
         label:'exh_link', savedText:'exh_link_saved',
         onStateChange:updateSelectionControls,
-        onSaved:async()=>{if (preview) reference.value = JSON.stringify(preview.ref); await readLinks(true);},
-        extra:h('p', {class:'ui-meta'}, t('exh_link_target', {name:fixed.work.title, version:fixed.work.version}))});
+        onSaved:async()=>{if (preview) reference.value = JSON.stringify(preview.ref); attempts.retain(); await readLinks(true);},
+        extra:h('div', {}, h('p', {class:'ui-meta'}, t('exh_link_target', {name:fixed.work.title, version:fixed.work.version})), attempts.element)});
       forms.add(editor); formSlot.append(editor.box); editor.update();
-      let restored;
+      let restored, restoredAttempt;
       try {
         // Original operations predate range metadata in some local drafts.
         // Their immutable request, not a newly chosen preview, owns recovery.
-        restored = editor.intentRequest()?.params.fixed_ref || JSON.parse(editor.values().fixed_ref);
+        const intent = editor.intentRequest();
+        restored = intent?.params.fixed_ref || JSON.parse(editor.values().fixed_ref);
+        restoredAttempt = (intent ? intent.params.attempt_id : editor.values().attempt_id) ?? '';
         if (!matches(restored) || !historyReferenceKey(restored)) throw mismatch();
+        if (typeof restoredAttempt !== 'string' || restoredAttempt && !/^att_[0-9a-f]{32}$/.test(restoredAttempt)) throw mismatch();
         if (editor.locked()) reference.value = JSON.stringify(restored);
       } catch (error) {fail(error, ticket); return;}
       if (historyReferenceKey(restored) !== historyReferenceKey(preview.ref)) await changeSelection(restored.selection, restored);
+      if (!current(ticket) || selection !== selectionSerial) return;
+      await attempts.restore(restoredAttempt);
+      if (!current(ticket) || selection !== selectionSerial) return;
       // Field order in a stored server reference is immaterial. New requests
       // still send that reference unchanged, with no client-produced digest.
       if (preview && !editor.locked()) editor.set('fixed_ref', JSON.stringify(preview.ref));
