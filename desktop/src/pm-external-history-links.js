@@ -1,12 +1,13 @@
 import {button} from './ui/components.js';
 import {historyTextSelection, historySelectionKey, historyReferenceKey, matchesHistoryContent, navigateHistoryText} from './pm-history-selection.js';
 import {historyAttemptPicker} from './pm-history-attempt-picker.js';
+import {historyReplacement} from './pm-history-replacement.js';
 
 const workId = value => /^wi_[0-9a-f]{20}$/.test(value || '');
 const digest = value => /^[0-9a-f]{64}$/.test(value || '');
 // Relationships are records in the Connector. Only selection/recovery metadata
 // and the shared form's original intent persist locally; preview text never does.
-export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, sourceId, entry, onUnavailable}) {
+export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, cleanup, sourceId, entry, onUnavailable}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const identity = JSON.stringify([sourceId, entry.entry_id]);
   const draftNamespace = `${namespace}.history.${identity}`;
@@ -14,8 +15,8 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
   const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
   let disposed = false, generation = 0, loaded = false, busy = false, after = null;
   let preview = null, selected = '', editor = null, choosing = false, workAfter = null, workBusy = false;
-  let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null;
-  const forms = new Set(), links = new Map(), works = new Map(), recoveryForms = new Set();
+  let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null, replacement = null;
+  const forms = new Set(), links = new Map(), titles = new Map(), works = new Map(), recoveryForms = new Set();
   const status = h('div', {role:'status'}), rows = h('div', {class:'exh-relations'}), draft = h('div');
   const element = h('details', {'data-history-links':entry.entry_id}, h('summary', {}, t('exh_related')), status, rows, draft);
   const current = ticket => {try {alive();} catch {return false;} return !disposed && ticket === generation;};
@@ -36,7 +37,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     // A refused source proof must hide the original entry as well as its preview.
     onUnavailable(error);
   }
-  function disposeForms() {attemptPicker?.dispose(); attemptPicker = null; for (const value of forms) value.dispose(); forms.clear(); recoveryForms.clear(); editor = null;}
+  function disposeForms() {replacement?.dispose(); replacement = null; attemptPicker?.dispose(); attemptPicker = null; for (const value of forms) value.dispose(); forms.clear(); recoveryForms.clear(); editor = null;}
   function checkPage(data, cursor, key) {
     const next = data[key];
     if (next !== null && (!Number.isSafeInteger(next) || next <= cursor)) throw mismatch();
@@ -65,6 +66,10 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     const remove = form({namespace:draftNamespace, action:'pm.history.unlink', target, fields:{}, params:()=>({}),
       preconditions:()=>{rememberWithdrawal(link); return {expected_link_version:link.version};},
       permitted:()=>active && canUnlink(link), recoverPermitted:()=>canUnlink(link), label:'exh_unlink',
+      onBeforeSaved:result=>{
+        if (result?.link_id !== link.link_id || result.state !== 'withdrawn' || result.version !== remove.intentRequest()?.preconditions.expected_link_version + 1) throw mismatch();
+        cleanup.remove(link.link_id);
+      },
       onSaved:()=>{rememberWithdrawal(link, true); return readLinks(true);}});
     forms.add(remove); if (!active) recoveryForms.add(remove); return remove.box;
   }
@@ -103,6 +108,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     workSelect.disabled = locked || previewBusy;
     workRefresh.disabled = !selected || workSelect.disabled;
     attemptPicker?.update();
+    replacement?.update();
   }
   function drawPreview() {
     previewSlot.replaceChildren(h('h4', {}, t('exh_preview')), h('p', {class:'ui-meta'}, t('exh_link_help')),
@@ -168,11 +174,12 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
       if (reset) {
         // Refreshing source metadata never replaces an unresolved original intent.
         for (const value of forms) if (value !== editor) {value.dispose(); forms.delete(value);}
-        rows.replaceChildren(); links.clear();
+        rows.replaceChildren(); links.clear(); titles.clear();
       }
       for (const {link, title} of visible) {
         if (links.has(link.link_id)) continue;
         links.set(link.link_id, link);
+        titles.set(link.link_id,title); cleanup.remember(link);
         const row = h('div', {class:'exh-relation', 'data-history-link':link.link_id},
           h('a', {href:`#/item/${encodeURIComponent(link.work_item_id)}`}, title),
           h('span', {class:'ui-meta'}, t(link.fixed_ref.selection?.kind === 'entry' ? 'exh_entire_entry' : 'exh_selected_text')));
@@ -190,6 +197,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
         if (recovery) rows.append(h('div', {class:'exh-relation', 'data-history-withdrawal':link.link_id}, h('p', {}, t('exh_withdrawal_pending')), recovery));
       }
       loaded = true; after = next; more.hidden = next === null;
+      replacement?.refreshChoices();
       if (!links.size) status.append(h('p', {class:'ui-meta'}, t(next === null ? 'exh_no_links' : 'exh_more_hidden_links')));
     } catch (error) {fail(error, ticket);}
     finally {if (current(ticket)) {busy = false; refresh.disabled = more.disabled = false;}}
@@ -232,6 +240,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
   async function selectWork(id) {
     if (editor?.locked() || previewBusy || !current(generation)) return;
     const ticket = generation, selection = ++selectionSerial;
+    replacement?.dispose(); replacement = null;
     attemptPicker?.dispose(); attemptPicker = null;
     editor?.dispose(); forms.delete(editor); editor = null; currentWork = null; workRefresh.disabled = true; formSlot.replaceChildren(); workStatus.replaceChildren(); selected = id;
     workSelecting = true; updateSelectionControls();
@@ -250,22 +259,39 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
         blocked:()=>!canLink() || Boolean(editor?.locked()) || previewBusy || workSelecting,
         onChange:()=>{editor?.changed(); editor?.update();}});
       attemptPicker = attempts;
+      const replacing = historyReplacement({h,t,api,alive,workspaceId,matches,errorBox,
+        allowed:link=>canLink() && canUnlink(link),
+        choices:()=>[...links.values()].map(link=>({link,title:titles.get(link.link_id)})),
+        blocked:()=>!canLink() || Boolean(editor?.locked()) || previewBusy || workSelecting,
+        onChange:()=>{editor?.changed(); editor?.update();}});
+      replacement = replacing;
       editor = form({namespace:draftNamespace, action:'pm.history.link', target:{workspace_id:workspaceId, work_item_id:id},
-        fields:{fixed_ref:reference, attempt_id:attempts.field}, params:values=>({fixed_ref:JSON.parse(values.fixed_ref), ...(values.attempt_id ? {attempt_id:values.attempt_id} : {})}),
+        fields:{fixed_ref:reference, attempt_id:attempts.field, replacement:replacing.field}, params:values=>{
+          const old = values.replacement ? JSON.parse(values.replacement) : null;
+          return {fixed_ref:JSON.parse(values.fixed_ref), ...(values.attempt_id ? {attempt_id:values.attempt_id} : {}),
+            ...(old ? {replaces_link_id:old.link_id,expected_old_link_version:old.version} : {})};},
         preconditions:()=>({expected_work_version:fixed.work.version, expected_binding_id:fixed.binding.binding_id}),
-        permitted:()=>canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed && attempts.ready(), recoverPermitted:canLink,
+        permitted:()=>canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed && attempts.ready() && replacing.ready(), recoverPermitted:canLink,
         label:'exh_link', savedText:'exh_link_saved',
         onStateChange:updateSelectionControls,
-        onSaved:async()=>{if (preview) reference.value = JSON.stringify(preview.ref); attempts.retain(); await readLinks(true);},
-        extra:h('div', {}, h('p', {class:'ui-meta'}, t('exh_link_target', {name:fixed.work.title, version:fixed.work.version})), attempts.element)});
+        onBeforeSaved:result=>{
+          if (!/^hxl_[0-9a-f]{32}$/.test(result?.link_id) || result.state !== 'active' || !Number.isSafeInteger(result.version) || result.version < 1) throw mismatch();
+          const old = editor.intentRequest()?.params.replaces_link_id;
+          if (old && old !== result.link_id) cleanup.remove(old);
+        },
+        onSaved:async()=>{if (preview) reference.value = JSON.stringify(preview.ref); attempts.retain(); replacing.saved(); await readLinks(true);},
+        extra:h('div', {}, h('p', {class:'ui-meta'}, t('exh_link_target', {name:fixed.work.title, version:fixed.work.version})), attempts.element, replacing.element)});
       forms.add(editor); formSlot.append(editor.box); editor.update();
-      let restored, restoredAttempt;
+      let restored, restoredAttempt, restoredReplacement, originalIntent;
       try {
         // Original operations predate range metadata in some local drafts.
         // Their immutable request, not a newly chosen preview, owns recovery.
         const intent = editor.intentRequest();
+        originalIntent = intent;
         restored = intent?.params.fixed_ref || JSON.parse(editor.values().fixed_ref);
         restoredAttempt = (intent ? intent.params.attempt_id : editor.values().attempt_id) ?? '';
+        restoredReplacement = intent ? (intent.params.replaces_link_id ? {link_id:intent.params.replaces_link_id,version:intent.params.expected_old_link_version} : '')
+          : (editor.values().replacement ? JSON.parse(editor.values().replacement) : '');
         if (!matches(restored) || !historyReferenceKey(restored)) throw mismatch();
         if (typeof restoredAttempt !== 'string' || restoredAttempt && !/^att_[0-9a-f]{32}$/.test(restoredAttempt)) throw mismatch();
         if (editor.locked()) reference.value = JSON.stringify(restored);
@@ -273,6 +299,11 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
       if (historyReferenceKey(restored) !== historyReferenceKey(preview.ref)) await changeSelection(restored.selection, restored);
       if (!current(ticket) || selection !== selectionSerial) return;
       await attempts.restore(restoredAttempt);
+      if (!current(ticket) || selection !== selectionSerial) return;
+      // A verified success may arrive before these display reads finish. It has
+      // already retired the replacement; never restore that withdrawn selection.
+      if (originalIntent && editor.operation()?.status === 'succeeded' && !editor.intentRequest()) restoredReplacement = '';
+      await replacing.restore(restoredReplacement);
       if (!current(ticket) || selection !== selectionSerial) return;
       // Field order in a stored server reference is immaterial. New requests
       // still send that reference unchanged, with no client-produced digest.
@@ -303,5 +334,5 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     finally {if (current(ticket)) choose.disabled = false;}
   }
   element.addEventListener('toggle', ()=>{if (element.open && !loaded) void readLinks(true);});
-  return {element, dispose(){disposed = true; generation++; selectionSerial++; previewSerial++; disposeForms(); preview = currentWork = null; works.clear(); links.clear(); element.replaceChildren();}};
+  return {element, dispose(){disposed = true; generation++; selectionSerial++; previewSerial++; disposeForms(); preview = currentWork = null; works.clear(); links.clear(); titles.clear(); element.replaceChildren();}};
 }

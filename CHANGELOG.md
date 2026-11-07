@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Replace an existing external-history relationship through the shared Work form,
+  preserving central atomic replacement and original request recovery. Withdraw
+  previously read relationships after source access is lost using a bounded
+  local index of identifiers, with no saved transcript or inferred authority.
+  English and zh-TW use the same browser/desktop controls.
 - Optionally associate a fixed external-conversation excerpt with an explicitly
   selected existing Work attempt. Revalidate paginated choices and the selected
   detail, preserve opaque-ID drafts and original operation recovery, and keep

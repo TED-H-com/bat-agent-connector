@@ -1,6 +1,7 @@
 import {button, disclosure, emptyState, inspector, sectionCard, skeleton} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {externalHistoryLinks} from './pm-external-history-links.js';
+import {historyCleanup} from './pm-history-cleanup.js';
 
 // Source content comes from the shared collector. Explicit relationships use
 // central record actions; there are no CLI controls or automatic PM context.
@@ -12,7 +13,8 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
   const relationships = new Set();
   function clearEntries() {for (const value of relationships) value.dispose(); relationships.clear(); messages?.replaceChildren();}
   const status = h('div', {role: 'status'}), list = h('div', {class: 'exh-list'});
-  const element = sectionCard({title: t('exh_title'), body: h('div', {}, h('p', {class: 'ui-meta'}, t('exh_help')), status, list)});
+  const cleanup = historyCleanup({h,t,alive,workspaceId,workspace,caps,namespace,form,errorBox});
+  const element = sectionCard({title: t('exh_title'), body: h('div', {}, h('p', {class: 'ui-meta'}, t('exh_help')), status, list, cleanup.element)});
   element.dataset.externalHistory = '';
   const sourceName = row => `${row.adapter?.startsWith('codex-') ? 'Codex' : row.adapter?.startsWith('claude-') ? 'Claude' : t('exh_source')} · ${row.source_id}`;
   const state = row => t(row.stale ? 'exh_stale' : ({current:'exh_ready', catching_up:'exh_catching', entry_limit:'exh_limit', pending:'exh_pending'}[row.status] || 'exh_unavailable'));
@@ -22,6 +24,7 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
     detailSerial++; selected = null; count = 0; last = 0; next = null; detailBusy = false;
     const old = panel; panel = null; old?.dispose();
     messages = detailStatus = more = newEntries = null;
+    cleanup.setActive(active && !disposed);
   }
   function draw() {
     const changed = JSON.stringify(rows.map(row => [row.source_id, row.adapter, row.status, row.stale, row.readable, row.entries]));
@@ -52,7 +55,7 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
     let relation = null;
     if (caps()?.features?.external_history?.relationships?.version === 1
       && /^shi_[0-9a-f]{32}$/.test(value.entry_id) && /^[0-9a-f]{64}$/.test(value.content_digest)) {
-      relation = externalHistoryLinks({h,t,api,alive,workspaceId,workspace,caps,namespace,permitted,form,errorBox,sourceId:selected,entry:value,
+      relation = externalHistoryLinks({h,t,api,alive,workspaceId,workspace,caps,namespace,permitted,form,errorBox,cleanup,sourceId:selected,entry:value,
         onUnavailable:error=>{
           detailSerial++; clearEntries(); count = last = 0; next = null; detailBusy = false;
           detailStatus?.replaceChildren(errorBox(error), button({variant:'secondary', size:'sm', label:t('exh_retry'), onclick:()=>void open(selected)}));
@@ -103,9 +106,10 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
   async function open(id) {
     close(); selected = id;
     const row = rows.find(row=>row.source_id === id); if (!row) return;
+    cleanup.setActive(false);
     panel = inspector({title:sourceName(row), dock:true, overlay:true, historyNavigation:true,
       returnFocus:()=>[...list.querySelectorAll('[data-history-source]')].find(node=>node.dataset.historySource === id),
-      onClose:()=>{detailSerial++; clearEntries(); selected = null; count = last = 0; next = null; detailBusy = false; panel?.body.replaceChildren(); messages = detailStatus = more = newEntries = null;}, canReopen:()=>active && selected === id && rows.some(row=>row.source_id === id)});
+      onClose:()=>{detailSerial++; clearEntries(); selected = null; count = last = 0; next = null; detailBusy = false; panel?.body.replaceChildren(); messages = detailStatus = more = newEntries = null; cleanup.setActive(active && !disposed);}, canReopen:()=>active && selected === id && rows.some(row=>row.source_id === id)});
     panel.dataset.historyDetail = '';
     detailStatus = h('div', {role:'status'}, skeleton(3)); messages = h('div', {class:'exh-messages'});
     more = button({variant:'secondary', size:'sm', label:t('exh_more'), onclick:()=>void page()}); more.hidden = true;
@@ -113,7 +117,7 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
     panel.body.append(h('p', {class:'ui-meta'}, t('exh_scope')), detailStatus, messages, h('div', {class:'exh-actions'}, more, newEntries));
     element.append(panel); const opened = panel; queueMicrotask(()=>{if (panel === opened) opened.open();}); await page({initial:true});
   }
-  function withdraw() {serial++; loading = null; clearTimeout(timer); rows = []; signature = ''; close(); list.replaceChildren(); status.replaceChildren();}
+  function withdraw({sourcesOnly = false} = {}) {serial++; loading = null; clearTimeout(timer); rows = []; signature = ''; close(); list.replaceChildren(); status.replaceChildren(); if (!sourcesOnly) cleanup.withdraw();}
   async function refresh() {
     if (!active || disposed) return;
     if (loading) return loading;
@@ -131,7 +135,7 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
         }
       } catch (error) {
         if (!valid(ticket)) return;
-        withdraw(); status.replaceChildren(errorBox(error));
+        withdraw({sourcesOnly:true}); status.replaceChildren(errorBox(error));
       } finally {
         if (loading === request) loading = null;
         clearTimeout(timer);
@@ -141,10 +145,11 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
     loading = request; return request;
   }
   function setActive(value) {
+    cleanup.setActive(value && !selected);
     if (active === value) return value ? refresh() : undefined;
     active = value;
     if (!value) {serial++; loading = null; clearTimeout(timer); close(); return;}
     return refresh();
   }
-  return {element, refresh, setActive, withdraw, dispose(){disposed = true; active = false; withdraw();}};
+  return {element, refresh, setActive, withdraw, dispose(){disposed = true; active = false; withdraw(); cleanup.dispose();}};
 }

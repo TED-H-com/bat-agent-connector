@@ -80,7 +80,7 @@ for(const native of [false,true]) {
 test('draft selection survives reload and Work switching, with no attempt metadata saved',async({page})=>{
   const f=attemptsFixture(); await open(page,false,f); await select(page); await choose(page);
   const stored=await page.evaluate(()=>Object.entries(localStorage).filter(([key])=>key.includes('.pm.history.link.')).map(([,value])=>JSON.parse(value)));
-  expect(stored[0].values.attempt_id).toBe(att(1)); expect(Object.keys(stored[0].values).sort()).toEqual(['attempt_id','fixed_ref']);
+  expect(stored[0].values.attempt_id).toBe(att(1)); expect(Object.keys(stored[0].values).sort()).toEqual(['attempt_id','fixed_ref','replacement']);
   await relations(page).getByRole('combobox',{name:'Existing Work',exact:true}).selectOption(workId(2));
   await expect(submit(page)).toBeEnabled(); expect(await picker(page).getAttribute('open')).toBeNull();
   await relations(page).getByRole('combobox',{name:'Existing Work',exact:true}).selectOption(workId(1));

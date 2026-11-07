@@ -215,9 +215,9 @@ Source withdrawal, failed source reads, reader close and workspace departure
 dispose relationship forms, hide preview/plaintext and fence late responses.
 Administrators do not bypass source grants or workspace roles. Older servers
 retain the original read-only reader. The initial increment supplies whole-entry
-links and withdrawal; the text-range, optional Attempt and Work-side reader candidates below extend
-it. Replacement, cleanup after source access is lost, derive
-and real-device acceptance remain open. Linking
+links and withdrawal; the text-range, optional Attempt, relationship maintenance
+and Work-side reader candidates below extend it. Derive and real-device acceptance
+remain open. Linking
 adds reference material without approving, completing or taking over any work.
 
 ### Text-range selection candidate
@@ -257,8 +257,8 @@ stored original through that accessor. An unresolved request locks range control
 and a failed request requires the existing explicit **New request** action.
 
 This adds no API, schema, source takeover, automatic PM input or model call.
-The optional Attempt candidate below extends this path. Relationship replacement
-and revoked-source cleanup remain separate UI work within E08/E10 and EC-1.1 T5.
+The optional Attempt and relationship maintenance candidates below extend this
+path within E08/E10 and EC-1.1 T5.
 
 ### Optional Attempt selection candidate
 
@@ -296,6 +296,55 @@ HTTP and injected IPC fixtures cover the same reads and operation body; route
 inventory checks include both existing Attempt endpoints. No new API, schema,
 Rust transport, start action, automatic PM input or model call is added. This
 E08/E10/T5 candidate does not establish native WebView or physical-mobile acceptance.
+
+### Relationship maintenance candidate
+
+The shared source form defaults to creating a relationship. **Replace a
+relationship (optional)** lists currently loaded, withdrawable associations for
+that same source entry. Selecting one rereads its central link and Work detail,
+checking current membership/creator authority, identity, active state and the
+displayed version. The replacement may change the destination Work, fixed text
+range or optional Attempt. No write happens during selection. A single existing
+`pm.history.link` operation carries `replaces_link_id` and
+`expected_old_link_version` together with the new fixed reference and destination
+preconditions; the central transaction preserves the old record and events.
+
+Only the old ID and version join the existing durable draft. An immutable original
+request takes precedence over newer fields, including an older create-only intent.
+Lost replies retain the same key even when the old association has disappeared.
+A mismatched or unavailable selection blocks a new submission without reverting
+to create mode. The user can explicitly clear the choice, or use **Reread selected
+relationship** to advance an unsent draft. Failed operations require the existing
+**New request** action first. Closing or switching Work fences late reads; a
+successful receipt clears the retired choice even during draft restoration.
+
+**Saved relationship IDs**, outside the source inspector, supports
+withdrawal after source access is lost. An actor/connection/workspace-specific
+local index remembers only previously read, withdrawable workspace, link, Work,
+source and entry IDs, creator and version. It stores no transcript, title, digest
+or fixed-reference body. The list displays opaque link/Work IDs and the last-read
+version and pages locally by 20. The index holds at most 500 records without
+eviction; pre-existing pending withdrawal intents remain separately recoverable.
+A storage failure or full index is explicit. It is not a central
+enumeration and cannot recover identifiers never read on this client.
+
+The cleanup control requires current explicit membership, manage/observe, the
+advertised unlink action and creator/owner authority. New requests use the last
+known version; only the central action checks current Work visibility, authority
+and compare-and-swap state. No source or excerpt read is needed for cleanup, and
+conflicts never silently advance the version or resend. Existing withdrawal
+drafts reuse their original namespace, request and key. An older index without
+workspace identity is admitted only when its exact original intent targets this
+workspace; the index alone cannot create a request. Damaged metadata fails closed
+and leaves original intents intact. Validated success removes only that known
+record and its legacy index entry; malformed receipts preserve recovery.
+
+The source inspector suspends cleanup forms to avoid concurrent controls for the
+same draft. Both surfaces preserve the existing durable operation and connection
+gates. English/zh-TW and HTTP/injected IPC use the same source. This adds no API,
+schema, native transport or CLI control. Cross-entry/source replacement, other
+Work reading surfaces, derive and native/live acceptance remain open; known-ID
+cleanup does not establish complete revoked-source discovery or lifecycle coverage.
 
 ### Work-side reader candidate
 
@@ -340,8 +389,10 @@ the standalone Work route and requirement inspector are not new reader surfaces.
 
 HTTP and injected desktop IPC regressions exercise this shared frontend. They do
 not establish native WebView, real BAT/model or physical-mobile acceptance. Work
-derivation, native execution, replacement and cleanup after
-source revocation remain open alongside the unrevised PM lifecycle requirements.
+derivation and native execution remain open alongside the unrevised PM lifecycle
+requirements. Relationship maintenance above covers same-entry replacement and
+locally known IDs after source revocation; it does not provide cross-source
+replacement or discovery of unseen relationships.
 
 ## Narrow format profiles
 

@@ -1,5 +1,52 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-07：外部對話關聯替換與撤權後撤回候選
+
+`feat/history-relationship-maintenance-20261107` 接續 `804eb826`，在共用來源表單
+加入英文／繁中選填替換關聯。可選同一紀錄中已載入、可撤回的關聯，重讀中央關聯
+與 Work 明細，確認身分、角色及舊版本後，以一筆既有 `pm.history.link` 原子操作
+替換 Work、文字範圍或 Attempt 關聯。保留舊關聯與事件，不建立執行或自動 PM 輸入。
+
+來源閱讀器外另有「已保存的關聯識別資料」。它以目前身分／連線／工作區隔離，只
+保存先前讀取且可撤回的識別資料、建立者與版本，不保存正文、標題或 digest。
+每頁 20 筆，新索引最多 500 筆，舊版待確認請求另外保留復原入口；不移除較早
+紀錄來容納新資料。來源撤權後可明確
+撤回已知 ID；中央仍檢查目前 Work 可見性、角色、操作權限與版本，沒有從路徑、
+來源名稱或本機索引推斷權限。這不是中央完整清單，不能找回未曾讀取的 ID。
+
+替換與撤回沿用 durable form、原 request／key 及連線 gate。舊版索引只有在找到
+同工作區的原撤回 intent 時才提供復原，不能據此建立新請求。錯誤收據與損壞資料
+保留原 intent；版本衝突不自動重送或換版。較新草稿不會改寫舊版建立關聯請求，
+切換 Work／關閉及收據與顯示重讀競態也不會恢復已撤回的選取。
+
+最終共用來源的 292 項 HTTP／注入 IPC 介面測試、614 項 Node 測試及 169 項相關
+Python 測試通過。介面包含 43 項新增維護案例，以及 Attempt／文字選取、來源關聯、
+Work 閱讀器、看板、Workbench 與共用表單／收據回歸。雙入口建置、ruff、公開內容
+檢查及 staged secret scan 通過。已檢查英文／繁中 390／1440 px 截圖；手機撤回
+按鈕保留 44 px 高度，展開及返回沿用共用元件。
+
+Python 3.13 全套十六分片完成：9,866 passed、84 skipped、14 failed，沒有 errors。
+Collection manifests 核對 9,964 項、434 個檔案，沒有遺漏或重複；完整檢查仍記為
+失敗。14 個案例 ID 與前輪完全相同，均在未修改的 Fleet bootstrap 模組，錯誤均含
+`BOOTSTRAP_STATE_UNPROVEN`：測試路徑上層的 0775 權限遭安全檢查拒絕。相同完整
+模組以磁碟暫存掛載隔離容器的安全路徑後，44 項通過。沒有修改共享目錄權限、
+安全檢查或 fixtures；測試暫存與容器均已清理。
+
+此為 E08／E10、EC-1.1 T5 的未合併增量，未修改 Python 後端或 Rust；尚未發布、
+安裝或實機驗收。HTTP／注入 IPC 及 responsive fixtures 不代表原生 WebView、
+真 BAT／模型或實體手機驗收。跨來源替換、未讀 ID 發現、其他 Work 閱讀入口、
+derive、原生執行及 PM v1.2 未修訂工作仍開放；E00–E11、R0–R5、A01–A40 維持原狀。
+
+The shared history form can atomically replace a same-entry relationship and
+withdraw locally known associations after source revocation. A bounded index
+stores identifiers only; current central authority, version checks and immutable
+original operations remain in force. This unmerged E08/E10/T5 candidate adds no
+backend/native transport change or publication, installation or live acceptance.
+UI (292), Node (614) and focused Python (169) checks passed. The complete Python
+run remains failed: 9,866 passed, 84 skipped and the same 14 Fleet bootstrap
+permission failures as before, with complete disjoint coverage. The unchanged
+Fleet module passed all 44 tests at a secure container path using disk fixtures.
+
 ## 2026-11-07：外部對話摘錄的選填 Attempt 關聯候選
 
 `feat/history-attempt-selection-20261107` 接續 `194892ed`，在既有來源閱讀器加入

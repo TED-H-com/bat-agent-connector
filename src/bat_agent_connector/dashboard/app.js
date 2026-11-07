@@ -1108,7 +1108,22 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_work_no_links: "This Work has no visible external conversation relationships.",
 			exh_execution_unknown: "Execution status unknown · tool markers do not prove execution.",
 			exh_fixed_reference: "This excerpt resolves the original fixed reference with your current access.",
-			exh_link_limit: "This view has read 25 pages. More relationships may exist."
+			exh_link_limit: "This view has read 25 pages. More relationships may exist.",
+			exh_replace_choose: "Replace a relationship (optional)",
+			exh_replacement: "Relationship to replace",
+			exh_create_relationship: "Create a relationship",
+			exh_replace_help: "Choose a loaded relationship for this entry. One operation withdraws it and links the displayed excerpt to the selected Work and optional attempt.",
+			exh_replacement_refresh: "Reread selected relationship",
+			exh_replace_target: "Replacing a relationship to {name} · version {version}",
+			exh_cleanup: "Saved relationship IDs",
+			exh_cleanup_help: "Relationships previously read on this device can be withdrawn even when their source is unavailable. Only IDs and recovery metadata are saved here; the service checks your current authority.",
+			exh_cleanup_refresh: "Refresh saved list",
+			exh_cleanup_more: "Show more saved relationships",
+			exh_cleanup_empty: "No saved relationships are available for withdrawal.",
+			exh_cleanup_version: "Last read version {version}",
+			exh_cleanup_done: "Relationship withdrawn.",
+			exh_cleanup_invalid: "Saved relationship metadata could not be read. Original requests have been kept.",
+			exh_cleanup_limit: "This device keeps up to 500 known IDs. Some relationships may be absent if storage is full or unavailable; existing recovery records are kept."
 		},
 		"zh-TW": {
 			exh_title: "外部對話",
@@ -1189,7 +1204,22 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_work_no_links: "這項工作目前沒有可查看的外部對話關聯。",
 			exh_execution_unknown: "執行狀態未知 · 工具標記不能證明已執行。",
 			exh_fixed_reference: "這份摘錄依原固定參照及你目前的權限讀取。",
-			exh_link_limit: "此畫面已讀取 25 頁，可能還有其他關聯。"
+			exh_link_limit: "此畫面已讀取 25 頁，可能還有其他關聯。",
+			exh_replace_choose: "替換關聯（選填）",
+			exh_replacement: "要替換的關聯",
+			exh_create_relationship: "建立關聯",
+			exh_replace_help: "選擇這則紀錄中已載入的關聯。一次操作會撤回舊關聯，並將畫面上的摘錄連到所選工作及選填的執行輪次。",
+			exh_replacement_refresh: "重讀所選關聯",
+			exh_replace_target: "將替換與「{name}」的關聯 · 第 {version} 版",
+			exh_cleanup: "已保存的關聯識別資料",
+			exh_cleanup_help: "即使來源已無法讀取，仍可撤回這個裝置先前讀過的關聯。此處只保存識別與復原資料；服務會檢查你目前的權限。",
+			exh_cleanup_refresh: "重新整理保存清單",
+			exh_cleanup_more: "顯示更多已保存關聯",
+			exh_cleanup_empty: "目前沒有可撤回的已保存關聯。",
+			exh_cleanup_version: "上次讀取為第 {version} 版",
+			exh_cleanup_done: "已撤回關聯。",
+			exh_cleanup_invalid: "無法讀取已保存的關聯資料，原請求仍保留。",
+			exh_cleanup_limit: "此裝置最多保存 500 個關聯識別資料。空間已滿或無法儲存時，部分關聯可能未列出；既有復原紀錄仍保留。"
 		}
 	};
 }));
@@ -24091,18 +24121,148 @@ function historyAttemptPicker({ h, t, api, alive, workspaceId, workId, supported
 	};
 }
 //#endregion
+//#region src/pm-history-replacement.js
+function historyReplacement({ h, t, api, alive, workspaceId, matches, allowed, choices, blocked, onChange, errorBox }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const field = h("input", {
+		type: "hidden",
+		value: ""
+	});
+	let selected = null, verified = null, busy = false, disposed = false, serial = 0;
+	const status = h("div", { role: "status" }), detail = h("div", { "data-history-replacement-detail": "" });
+	const select = h("select", {
+		"aria-label": t("exh_replacement"),
+		onchange: () => {
+			if (blocked() || busy) return;
+			const row = choices().find((value) => value.link.link_id === select.value)?.link;
+			selected = row ? {
+				link_id: row.link_id,
+				version: row.version
+			} : null;
+			field.value = selected ? JSON.stringify(selected) : "";
+			verified = null;
+			onChange();
+			read();
+		}
+	});
+	const refresh = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_replacement_refresh"),
+		onclick: () => void read(true)
+	});
+	const element = h("details", { "data-history-replacement": "" }, h("summary", {}, t("exh_replace_choose")), h("p", { class: "ui-meta" }, t("exh_replace_help")), h("label", {}, t("exh_replacement"), select), status, detail, refresh);
+	const current = (ticket) => {
+		try {
+			alive();
+		} catch {
+			return false;
+		}
+		return !disposed && ticket === serial;
+	};
+	const mismatch = () => Error(t("pm_scope_mismatch"));
+	function drawChoices() {
+		const rows = choices().filter((row) => allowed(row.link));
+		select.replaceChildren(h("option", { value: "" }, t("exh_create_relationship")), ...rows.map(({ link, title }) => h("option", { value: link.link_id }, `${title} · ${t(link.fixed_ref.selection.kind === "entry" ? "exh_entire_entry" : "exh_selected_text")} · ${link.link_id}`)));
+		if (selected && !rows.some((row) => row.link.link_id === selected.link_id)) select.append(h("option", { value: selected.link_id }, selected.link_id));
+		select.value = selected?.link_id || "";
+	}
+	function update() {
+		select.disabled = busy || blocked();
+		refresh.disabled = select.disabled || !selected;
+	}
+	async function read(advance = false) {
+		if (advance && (blocked() || busy)) return;
+		const ticket = ++serial, expected = selected;
+		busy = true;
+		verified = null;
+		detail.replaceChildren();
+		status.replaceChildren();
+		update();
+		onChange();
+		try {
+			if (!expected) return;
+			const data = await api("GET", `${endpoint}/external-links/${encodeURIComponent(expected.link_id)}`);
+			if (!current(ticket)) return;
+			const link = data.link;
+			if (link?.link_id !== expected.link_id || link.workspace_id !== workspaceId || !/^wi_[0-9a-f]{20}$/.test(link.work_item_id) || link.state !== "active" || link.purpose !== "reference" || !Number.isSafeInteger(link.version) || link.version < 1 || !matches(link.fixed_ref) || !historyReferenceKey(link.fixed_ref) || !allowed(link) || !advance && link.version !== expected.version) throw mismatch();
+			const work = await api("GET", `/work-items/${encodeURIComponent(link.work_item_id)}`);
+			if (!current(ticket)) return;
+			if (work.work_item?.work_item_id !== link.work_item_id || typeof work.work_item.title !== "string") throw mismatch();
+			selected = {
+				link_id: link.link_id,
+				version: link.version
+			};
+			field.value = JSON.stringify(selected);
+			verified = link;
+			detail.replaceChildren(h("p", {}, t("exh_replace_target", {
+				name: work.work_item.title,
+				version: link.version
+			})), h("p", { class: "mono" }, link.link_id));
+		} catch (error) {
+			if (current(ticket)) {
+				verified = null;
+				detail.replaceChildren();
+				status.replaceChildren(errorBox(error, { within: status }));
+			}
+		} finally {
+			if (current(ticket)) {
+				busy = false;
+				update();
+				onChange();
+			}
+		}
+	}
+	drawChoices();
+	update();
+	return {
+		element,
+		field,
+		update,
+		refreshChoices: drawChoices,
+		ready: () => !busy && (!selected ? field.value === "" : Boolean(verified && allowed(verified) && field.value === JSON.stringify(selected))),
+		restore: async (value) => {
+			if (value !== "" && (typeof value !== "object" || !value || Object.keys(value).sort().join(",") !== "link_id,version" || !/^hxl_[0-9a-f]{32}$/.test(value.link_id) || !Number.isSafeInteger(value.version) || value.version < 1)) throw mismatch();
+			selected = value || null;
+			field.value = selected ? JSON.stringify(selected) : "";
+			drawChoices();
+			if (selected) {
+				element.open = true;
+				await read();
+			}
+		},
+		saved() {
+			serial++;
+			busy = false;
+			selected = verified = null;
+			field.value = "";
+			detail.replaceChildren();
+			status.replaceChildren();
+			drawChoices();
+			update();
+		},
+		dispose() {
+			disposed = true;
+			serial++;
+			selected = verified = null;
+			field.value = "";
+			element.replaceChildren();
+		}
+	};
+}
+//#endregion
 //#region src/pm-external-history-links.js
 var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
 var digest$9 = (value) => /^[0-9a-f]{64}$/.test(value || "");
-function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, sourceId, entry, onUnavailable }) {
+function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, cleanup, sourceId, entry, onUnavailable }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const draftNamespace = `${namespace}.history.${JSON.stringify([sourceId, entry.entry_id])}`;
 	const selectionKey = `batc.pm.${draftNamespace}.work-selection`;
 	const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
 	let disposed = false, generation = 0, loaded = false, busy = false, after = null;
 	let preview = null, selected = "", editor = null, choosing = false, workAfter = null, workBusy = false;
-	let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null;
-	const forms = new Set(), links = new Map(), works = new Map(), recoveryForms = new Set();
+	let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null, replacement = null;
+	const forms = new Set(), links = new Map(), titles = new Map(), works = new Map(), recoveryForms = new Set();
 	const status = h("div", { role: "status" }), rows = h("div", { class: "exh-relations" }), draft = h("div");
 	const element = h("details", { "data-history-links": entry.entry_id }, h("summary", {}, t("exh_related")), status, rows, draft);
 	const current = (ticket) => {
@@ -24123,6 +24283,8 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		onUnavailable(error);
 	}
 	function disposeForms() {
+		replacement?.dispose();
+		replacement = null;
 		attemptPicker?.dispose();
 		attemptPicker = null;
 		for (const value of forms) value.dispose();
@@ -24176,6 +24338,10 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			permitted: () => active && canUnlink(link),
 			recoverPermitted: () => canUnlink(link),
 			label: "exh_unlink",
+			onBeforeSaved: (result) => {
+				if (result?.link_id !== link.link_id || result.state !== "withdrawn" || result.version !== remove.intentRequest()?.preconditions.expected_link_version + 1) throw mismatch();
+				cleanup.remove(link.link_id);
+			},
 			onSaved: () => {
 				rememberWithdrawal(link, true);
 				return readLinks(true);
@@ -24259,6 +24425,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		workSelect.disabled = locked || previewBusy;
 		workRefresh.disabled = !selected || workSelect.disabled;
 		attemptPicker?.update();
+		replacement?.update();
 	}
 	function drawPreview() {
 		previewSlot.replaceChildren(h("h4", {}, t("exh_preview")), h("p", { class: "ui-meta" }, t("exh_link_help")), h("p", { class: "ui-meta" }, t(preview.ref.selection.kind === "entry" ? "exh_entire_entry" : "exh_selected_text")), ...preview.content.parts.map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), ...[preview.content.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, preview.content.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: preview.content.omitted_parts })) : null].filter(Boolean));
@@ -24333,10 +24500,13 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 				}
 				rows.replaceChildren();
 				links.clear();
+				titles.clear();
 			}
 			for (const { link, title } of visible) {
 				if (links.has(link.link_id)) continue;
 				links.set(link.link_id, link);
+				titles.set(link.link_id, title);
+				cleanup.remember(link);
 				const row = h("div", {
 					class: "exh-relation",
 					"data-history-link": link.link_id
@@ -24361,6 +24531,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			loaded = true;
 			after = next;
 			more.hidden = next === null;
+			replacement?.refreshChoices();
 			if (!links.size) status.append(h("p", { class: "ui-meta" }, t(next === null ? "exh_no_links" : "exh_more_hidden_links")));
 		} catch (error) {
 			fail(error, ticket);
@@ -24430,6 +24601,8 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	async function selectWork(id) {
 		if (editor?.locked() || previewBusy || !current(generation)) return;
 		const ticket = generation, selection = ++selectionSerial;
+		replacement?.dispose();
+		replacement = null;
 		attemptPicker?.dispose();
 		attemptPicker = null;
 		editor?.dispose();
@@ -24474,6 +24647,26 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 				}
 			});
 			attemptPicker = attempts;
+			const replacing = historyReplacement({
+				h,
+				t,
+				api,
+				alive,
+				workspaceId,
+				matches,
+				errorBox,
+				allowed: (link) => canLink() && canUnlink(link),
+				choices: () => [...links.values()].map((link) => ({
+					link,
+					title: titles.get(link.link_id)
+				})),
+				blocked: () => !canLink() || Boolean(editor?.locked()) || previewBusy || workSelecting,
+				onChange: () => {
+					editor?.changed();
+					editor?.update();
+				}
+			});
+			replacement = replacing;
 			editor = form({
 				namespace: draftNamespace,
 				action: "pm.history.link",
@@ -24483,39 +24676,58 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 				},
 				fields: {
 					fixed_ref: reference,
-					attempt_id: attempts.field
+					attempt_id: attempts.field,
+					replacement: replacing.field
 				},
-				params: (values) => ({
-					fixed_ref: JSON.parse(values.fixed_ref),
-					...values.attempt_id ? { attempt_id: values.attempt_id } : {}
-				}),
+				params: (values) => {
+					const old = values.replacement ? JSON.parse(values.replacement) : null;
+					return {
+						fixed_ref: JSON.parse(values.fixed_ref),
+						...values.attempt_id ? { attempt_id: values.attempt_id } : {},
+						...old ? {
+							replaces_link_id: old.link_id,
+							expected_old_link_version: old.version
+						} : {}
+					};
+				},
 				preconditions: () => ({
 					expected_work_version: fixed.work.version,
 					expected_binding_id: fixed.binding.binding_id
 				}),
-				permitted: () => canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed && attempts.ready(),
+				permitted: () => canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed && attempts.ready() && replacing.ready(),
 				recoverPermitted: canLink,
 				label: "exh_link",
 				savedText: "exh_link_saved",
 				onStateChange: updateSelectionControls,
+				onBeforeSaved: (result) => {
+					if (!/^hxl_[0-9a-f]{32}$/.test(result?.link_id) || result.state !== "active" || !Number.isSafeInteger(result.version) || result.version < 1) throw mismatch();
+					const old = editor.intentRequest()?.params.replaces_link_id;
+					if (old && old !== result.link_id) cleanup.remove(old);
+				},
 				onSaved: async () => {
 					if (preview) reference.value = JSON.stringify(preview.ref);
 					attempts.retain();
+					replacing.saved();
 					await readLinks(true);
 				},
 				extra: h("div", {}, h("p", { class: "ui-meta" }, t("exh_link_target", {
 					name: fixed.work.title,
 					version: fixed.work.version
-				})), attempts.element)
+				})), attempts.element, replacing.element)
 			});
 			forms.add(editor);
 			formSlot.append(editor.box);
 			editor.update();
-			let restored, restoredAttempt;
+			let restored, restoredAttempt, restoredReplacement, originalIntent;
 			try {
 				const intent = editor.intentRequest();
+				originalIntent = intent;
 				restored = intent?.params.fixed_ref || JSON.parse(editor.values().fixed_ref);
 				restoredAttempt = (intent ? intent.params.attempt_id : editor.values().attempt_id) ?? "";
+				restoredReplacement = intent ? intent.params.replaces_link_id ? {
+					link_id: intent.params.replaces_link_id,
+					version: intent.params.expected_old_link_version
+				} : "" : editor.values().replacement ? JSON.parse(editor.values().replacement) : "";
 				if (!matches(restored) || !historyReferenceKey(restored)) throw mismatch();
 				if (typeof restoredAttempt !== "string" || restoredAttempt && !/^att_[0-9a-f]{32}$/.test(restoredAttempt)) throw mismatch();
 				if (editor.locked()) reference.value = JSON.stringify(restored);
@@ -24526,6 +24738,9 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			if (historyReferenceKey(restored) !== historyReferenceKey(preview.ref)) await changeSelection(restored.selection, restored);
 			if (!current(ticket) || selection !== selectionSerial) return;
 			await attempts.restore(restoredAttempt);
+			if (!current(ticket) || selection !== selectionSerial) return;
+			if (originalIntent && editor.operation()?.status === "succeeded" && !editor.intentRequest()) restoredReplacement = "";
+			await replacing.restore(restoredReplacement);
 			if (!current(ticket) || selection !== selectionSerial) return;
 			if (preview && !editor.locked()) editor.set("fixed_ref", JSON.stringify(preview.ref));
 			editor?.update();
@@ -24574,7 +24789,240 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			preview = currentWork = null;
 			works.clear();
 			links.clear();
+			titles.clear();
 			element.replaceChildren();
+		}
+	};
+}
+//#endregion
+//#region src/pm-history-records.js
+var fields$2 = [
+	"workspace_id",
+	"link_id",
+	"work_item_id",
+	"version",
+	"created_by",
+	"source_id",
+	"entry_id"
+];
+function historyRecord(value) {
+	const row = Object.fromEntries(fields$2.map((key) => [key, value?.[key] ?? value?.fixed_ref?.[key]]));
+	if (fields$2.filter((key) => key !== "version").some((key) => typeof row[key] !== "string") || !/^ws_[0-9a-f]{32}$/.test(row.workspace_id || "") || !/^hxl_[0-9a-f]{32}$/.test(row.link_id || "") || !/^wi_[0-9a-f]{20}$/.test(row.work_item_id || "") || !/^shi_[0-9a-f]{32}$/.test(row.entry_id || "") || typeof row.source_id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(row.source_id) || typeof row.created_by !== "string" || !row.created_by || row.created_by.length > 256 || !Number.isSafeInteger(row.version) || row.version < 1) throw Error("HISTORY_RECORDS_INVALID");
+	return row;
+}
+var historyDraftNamespace = (namespace, row) => `${namespace}.history.${JSON.stringify([row.source_id, row.entry_id])}`;
+function historyRecords(storage, namespace, workspaceId) {
+	const key = `batc.pm.${namespace}.history-known.${workspaceId}`;
+	function read() {
+		const saved = JSON.parse(storage.getItem(key) || "{\"version\":1,\"records\":[]}");
+		if (saved?.version !== 1 || !Array.isArray(saved.records) || saved.records.length > 500) throw Error("HISTORY_RECORDS_INVALID");
+		const seen = new Set();
+		return saved.records.map((value) => {
+			const row = historyRecord(value);
+			if (Object.keys(value).sort().join(",") !== [...fields$2].sort().join(",") || row.workspace_id !== workspaceId || seen.has(row.link_id)) throw Error("HISTORY_RECORDS_INVALID");
+			seen.add(row.link_id);
+			return row;
+		});
+	}
+	function write(records) {
+		if (records.length) storage.setItem(key, JSON.stringify({
+			version: 1,
+			records
+		}));
+		else storage.removeItem(key);
+	}
+	return {
+		read,
+		remember(value) {
+			const row = historyRecord(value);
+			if (row.workspace_id !== workspaceId) throw Error("HISTORY_RECORDS_INVALID");
+			const records = read(), index = records.findIndex((item) => item.link_id === row.link_id);
+			if (index < 0 && records.length >= 500) return false;
+			if (index < 0) records.push(row);
+			else records[index] = row;
+			write(records);
+			return true;
+		},
+		remove(linkId) {
+			write(read().filter((row) => row.link_id !== linkId));
+		}
+	};
+}
+//#endregion
+//#region src/pm-history-cleanup.js
+function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, form, errorBox }) {
+	const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set();
+	let active = false, disposed = false, count = 20, limited = false;
+	const status = h("div", { role: "status" }), rows = h("div");
+	const refresh = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_cleanup_refresh"),
+		onclick: draw
+	});
+	const more = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_cleanup_more"),
+		onclick: () => {
+			count += 20;
+			draw();
+		}
+	});
+	const element = h("details", {
+		"data-history-cleanup": "",
+		hidden: true
+	}, h("summary", {}, t("exh_cleanup")), h("p", { class: "ui-meta" }, t("exh_cleanup_help")), status, rows, h("div", { class: "exh-actions" }, refresh, more));
+	function supported(visible = true) {
+		try {
+			alive();
+		} catch {
+			return false;
+		}
+		return (active || !visible) && !disposed && workspace()?.workspace_id === workspaceId && [
+			"owner",
+			"contributor",
+			"reader"
+		].includes(workspace()?.membership?.role) && caps()?.features?.external_history?.relationships?.version === 1 && caps()?.features?.external_history?.relationships?.actions?.includes("pm.history.unlink") && caps()?.scopes?.includes("manage") && caps()?.scopes?.includes("observe") && caps()?.actions?.some((row) => row.action === "pm.history.unlink" && row.allowed === true);
+	}
+	const allowed = (row, visible = true) => supported(visible) && (workspace()?.membership?.role === "owner" || row.created_by === caps()?.actor);
+	const target = (row) => ({
+		workspace_id: workspaceId,
+		work_item_id: row.work_item_id,
+		link_id: row.link_id
+	});
+	function legacyPending() {
+		const prefix = `batc.pm.${namespace}.history.`, found = [];
+		for (const key of Object.keys(localStorage)) {
+			if (!key.startsWith(prefix) || !key.endsWith(".withdrawals")) continue;
+			const identity = JSON.parse(key.slice(prefix.length, -12));
+			if (!Array.isArray(identity) || identity.length !== 2) throw Error(t("exh_cleanup_invalid"));
+			const pending = JSON.parse(localStorage.getItem(key));
+			if (!Array.isArray(pending) || pending.length > 500) throw Error(t("exh_cleanup_invalid"));
+			for (const value of pending) {
+				const row = historyRecord({
+					...value,
+					workspace_id: workspaceId,
+					source_id: identity[0],
+					entry_id: identity[1]
+				});
+				const saved = JSON.parse(localStorage.getItem(`batc.pm.${historyDraftNamespace(namespace, row)}.pm.history.unlink.${JSON.stringify(target(row))}`) || "null");
+				if (saved?.intent?.request?.action === "pm.history.unlink" && JSON.stringify(saved.intent.request.target) === JSON.stringify(target(row))) found.push(row);
+			}
+		}
+		return found;
+	}
+	function clearForms() {
+		for (const value of forms) value.dispose();
+		forms.clear();
+		rows.replaceChildren();
+		refresh.disabled = more.disabled = false;
+	}
+	function remove(row) {
+		records.remove(row.link_id);
+		const key = `batc.pm.${historyDraftNamespace(namespace, row)}.withdrawals`;
+		const pending = JSON.parse(localStorage.getItem(key) || "[]").filter((value) => value.link_id !== row.link_id);
+		if (pending.length) localStorage.setItem(key, JSON.stringify(pending));
+		else localStorage.removeItem(key);
+	}
+	function draw() {
+		if (!supported() || !element.open || [...forms].some((value) => value.checking())) return;
+		clearForms();
+		status.replaceChildren();
+		more.hidden = true;
+		try {
+			const known = records.read(), byId = new Map(known.map((row) => [row.link_id, row]));
+			for (const row of legacyPending()) if (!byId.has(row.link_id)) byId.set(row.link_id, row);
+			const visible = [...byId.values()].filter((row) => allowed(row));
+			for (const row of visible.slice(0, count)) {
+				const isKnown = known.some((value) => value.link_id === row.link_id);
+				const editor = form({
+					namespace: historyDraftNamespace(namespace, row),
+					action: "pm.history.unlink",
+					target: target(row),
+					fields: {},
+					params: () => ({}),
+					preconditions: () => ({ expected_link_version: row.version }),
+					permitted: () => isKnown && allowed(row),
+					recoverPermitted: () => allowed(row),
+					label: "exh_unlink",
+					onBeforeSaved: (result) => {
+						const version = editor.intentRequest()?.preconditions.expected_link_version;
+						if (result?.link_id !== row.link_id || result.state !== "withdrawn" || result.version !== version + 1) throw Error(t("pm_scope_mismatch"));
+						remove(row);
+					},
+					onSaved: () => {
+						alive();
+						editor.box.hidden = true;
+						rowElement.prepend(h("p", { role: "status" }, t("exh_cleanup_done")));
+					},
+					onStateChange: () => {
+						refresh.disabled = more.disabled = [...forms].some((value) => value.checking());
+					}
+				});
+				const rowElement = h("div", {
+					class: "exh-relation",
+					"data-history-cleanup-link": row.link_id
+				}, h("p", { class: "mono" }, row.link_id), h("a", {
+					class: "mono",
+					href: `#/item/${encodeURIComponent(row.work_item_id)}`
+				}, row.work_item_id), h("p", { class: "ui-meta" }, t("exh_cleanup_version", { version: row.version })), editor.box);
+				forms.add(editor);
+				rows.append(rowElement);
+				editor.update();
+			}
+			more.hidden = visible.length <= count;
+			if (!visible.length) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_empty")));
+			if (limited || known.length >= 500) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_limit")));
+		} catch (error) {
+			clearForms();
+			status.replaceChildren(errorBox(error, {
+				summary: t("exh_cleanup_invalid"),
+				within: status
+			}));
+		}
+	}
+	element.addEventListener("toggle", () => {
+		if (element.open) draw();
+		else {
+			clearForms();
+			status.replaceChildren();
+			count = 20;
+		}
+	});
+	return {
+		element,
+		remember(link) {
+			if (!allowed(link, false)) return;
+			try {
+				if (!records.remember(link)) limited = true;
+			} catch {
+				limited = true;
+			}
+		},
+		remove(linkId) {
+			const row = records.read().find((value) => value.link_id === linkId);
+			if (row) remove(row);
+		},
+		setActive(value) {
+			active = value;
+			element.hidden = !supported();
+			if (element.hidden) {
+				clearForms();
+				status.replaceChildren();
+				element.open = false;
+			} else if (element.open) for (const editor of forms) editor.update();
+		},
+		withdraw() {
+			active = false;
+			clearForms();
+			status.replaceChildren();
+			element.open = false;
+			element.hidden = true;
+		},
+		dispose() {
+			disposed = true;
+			this.withdraw();
 		}
 	};
 }
@@ -24592,9 +25040,20 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 		messages?.replaceChildren();
 	}
 	const status = h("div", { role: "status" }), list = h("div", { class: "exh-list" });
+	const cleanup = historyCleanup({
+		h,
+		t,
+		alive,
+		workspaceId,
+		workspace,
+		caps,
+		namespace,
+		form,
+		errorBox
+	});
 	const element = sectionCard({
 		title: t("exh_title"),
-		body: h("div", {}, h("p", { class: "ui-meta" }, t("exh_help")), status, list)
+		body: h("div", {}, h("p", { class: "ui-meta" }, t("exh_help")), status, list, cleanup.element)
 	});
 	element.dataset.externalHistory = "";
 	const sourceName = (row) => `${row.adapter?.startsWith("codex-") ? "Codex" : row.adapter?.startsWith("claude-") ? "Claude" : t("exh_source")} · ${row.source_id}`;
@@ -24624,6 +25083,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 		panel = null;
 		old?.dispose();
 		messages = detailStatus = more = newEntries = null;
+		cleanup.setActive(active && !disposed);
 	}
 	function draw() {
 		const changed = JSON.stringify(rows.map((row) => [
@@ -24685,6 +25145,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 				permitted,
 				form,
 				errorBox,
+				cleanup,
 				sourceId: selected,
 				entry: value,
 				onUnavailable: (error) => {
@@ -24767,6 +25228,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 		selected = id;
 		const row = rows.find((row) => row.source_id === id);
 		if (!row) return;
+		cleanup.setActive(false);
 		panel = inspector({
 			title: sourceName(row),
 			dock: true,
@@ -24782,6 +25244,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 				detailBusy = false;
 				panel?.body.replaceChildren();
 				messages = detailStatus = more = newEntries = null;
+				cleanup.setActive(active && !disposed);
 			},
 			canReopen: () => active && selected === id && rows.some((row) => row.source_id === id)
 		});
@@ -24810,7 +25273,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 		});
 		await page({ initial: true });
 	}
-	function withdraw() {
+	function withdraw({ sourcesOnly = false } = {}) {
 		serial++;
 		loading = null;
 		clearTimeout(timer);
@@ -24819,6 +25282,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 		close();
 		list.replaceChildren();
 		status.replaceChildren();
+		if (!sourcesOnly) cleanup.withdraw();
 	}
 	async function refresh() {
 		if (!active || disposed) return;
@@ -24841,7 +25305,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 				}
 			} catch (error) {
 				if (!valid(ticket)) return;
-				withdraw();
+				withdraw({ sourcesOnly: true });
 				status.replaceChildren(errorBox(error));
 			} finally {
 				if (loading === request) loading = null;
@@ -24853,6 +25317,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 		return request;
 	}
 	function setActive(value) {
+		cleanup.setActive(value && !selected);
 		if (active === value) return value ? refresh() : void 0;
 		active = value;
 		if (!value) {
@@ -24873,6 +25338,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 			disposed = true;
 			active = false;
 			withdraw();
+			cleanup.dispose();
 		}
 	};
 }
