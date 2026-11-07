@@ -388,6 +388,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   });
   form.append(connection);
   return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !(initialChecking && receiptTimer !== null) && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+    intentRequest: () => saved.intent ? structuredClone(saved.intent.request) : null,
     initialChecking: () => initialChecking && (busy || receiptTimer !== null),
     stopAutoCheck: () => {if (initialChecking) {initialChecking = false; stopTimer(); update();}},
     stage: () => {

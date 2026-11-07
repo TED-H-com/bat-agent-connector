@@ -1,4 +1,5 @@
 import {button} from './ui/components.js';
+import {historyTextSelection, historySelectionKey, historyReferenceKey, matchesHistoryContent, navigateHistoryText} from './pm-history-selection.js';
 
 const workId = value => /^wi_[0-9a-f]{20}$/.test(value || '');
 const digest = value => /^[0-9a-f]{64}$/.test(value || '');
@@ -12,7 +13,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
   const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
   let disposed = false, generation = 0, loaded = false, busy = false, after = null;
   let preview = null, selected = '', editor = null, choosing = false, workAfter = null, workBusy = false;
-  let selectionSerial = 0, currentWork = null;
+  let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null;
   const forms = new Set(), links = new Map(), works = new Map(), recoveryForms = new Set();
   const status = h('div', {role:'status'}), rows = h('div', {class:'exh-relations'}), draft = h('div');
   const element = h('details', {'data-history-links':entry.entry_id}, h('summary', {}, t('exh_related')), status, rows, draft);
@@ -72,6 +73,78 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
   const choose = button({variant:'secondary', size:'sm', label:t('exh_choose_work'), onclick:()=>void prepare()});
   choose.hidden = !canLink() || caps()?.features?.pm_workspaces?.kanban !== true;
   element.append(h('div', {class:'exh-actions'}, refresh, more, choose));
+
+  const previewSlot = h('div', {'data-history-preview':'', role:'status'});
+  const selectionStatus = h('p', {role:'status', class:'ui-meta'});
+  const whole = button({variant:'secondary', size:'sm', label:t('exh_use_entry'), onclick:()=>void changeSelection({kind:'entry'})});
+  const selectionControls = [whole];
+  const textChoices = h('details', {'data-history-text-picker':''}, h('summary', {}, t('exh_choose_text')),
+    h('p', {class:'ui-meta'}, t('exh_selection_help')));
+  for (const [index, part] of (entry.parts || []).entries()) {
+    if (part.kind !== 'text' || !part.text) continue;
+    const input = h('textarea', {readonly:true, rows:5, class:'exh-text', 'aria-label':t('exh_text_part', {number:index + 1}), 'data-history-text-part':index});
+    input.value = part.text;
+    input.addEventListener('keydown', event=>navigateHistoryText(input, event));
+    const use = button({variant:'secondary', size:'sm', label:t('exh_preview_selection'), onclick:()=>{
+      if (previewBusy || editor?.locked() || !canLink()) return;
+      const selection = historyTextSelection(part.text, index, input.selectionStart, input.selectionEnd);
+      if (!selection) {selectionStatus.textContent = t('exh_select_text_first'); input.focus(); return;}
+      void changeSelection(selection);
+    }});
+    selectionControls.push(input, use);
+    textChoices.append(h('div', {class:'exh-text-choice'}, h('label', {}, t('exh_text_part', {number:index + 1}), input), use));
+  }
+  textChoices.hidden = selectionControls.length === 1;
+  function updateSelectionControls() {
+    const locked = Boolean(editor?.locked()), blocked = locked || previewBusy || workSelecting || !canLink();
+    for (const control of selectionControls) control.disabled = blocked;
+    whole.hidden = preview?.ref.selection.kind !== 'text';
+    workSelect.disabled = locked || previewBusy;
+    workRefresh.disabled = !selected || workSelect.disabled;
+  }
+  function drawPreview() {
+    previewSlot.replaceChildren(h('h4', {}, t('exh_preview')), h('p', {class:'ui-meta'}, t('exh_link_help')),
+      h('p', {class:'ui-meta'}, t(preview.ref.selection.kind === 'entry' ? 'exh_entire_entry' : 'exh_selected_text')),
+      ...preview.content.parts.map(part=>part.kind === 'text' ? h('p', {class:'exh-text'}, part.text)
+        : h('p', {class:'ui-meta'}, t(part.kind === 'tool_request' ? 'exh_tool_request' : 'exh_tool_result', {name:part.name || t('exh_tool_unknown')}))),
+      ...[preview.content.clipped ? h('p', {class:'ui-meta'}, t('exh_clipped')) : null,
+        preview.content.omitted_parts ? h('p', {class:'ui-meta'}, t('exh_omitted', {count:preview.content.omitted_parts})) : null].filter(Boolean));
+  }
+  async function readPreview(selection) {
+    if (!historySelectionKey(selection)) throw mismatch();
+    const data = await api('POST', `${endpoint}/history-excerpt-preview`, {
+      source_id:sourceId, entry_id:entry.entry_id, expected_content_digest:entry.content_digest, selection});
+    if (!matches(data.ref) || !historyReferenceKey(data.ref) || historySelectionKey(data.ref.selection) !== historySelectionKey(selection)
+      || data.history_complete !== false || data.execution_status !== 'unknown' || !matchesHistoryContent(data.content, entry, selection)) throw mismatch();
+    return data;
+  }
+  async function changeSelection(selection, restored = null) {
+    if (!current(generation) || !canLink() || (!restored && (previewBusy || workSelecting || editor?.locked()))) return;
+    const ticket = generation, serial = ++previewSerial, owner = editor;
+    const focused = selectionControls.includes(document.activeElement) ? document.activeElement : null;
+    previewBusy = true; preview = null; selectionStatus.textContent = '';
+    previewSlot.replaceChildren(h('p', {}, t('pm_kanban_detail_loading')));
+    editor?.update(); updateSelectionControls();
+    try {
+      const data = await readPreview(selection);
+      if (!current(ticket) || serial !== previewSerial || owner !== editor) return;
+      if (restored && historyReferenceKey(data.ref) !== historyReferenceKey(restored)) throw mismatch();
+      preview = data; drawPreview();
+      if (restored && editor) {
+        // A succeeded automatic receipt may clear fields while this preview is
+        // pending. Restore the verified display value even during onSaved;
+        // this never changes the form's immutable original request.
+        editor.fields.fixed_ref.value = JSON.stringify(data.ref);
+        editor.changed();
+      } else editor?.set('fixed_ref', JSON.stringify(data.ref));
+    } catch (error) {if (serial === previewSerial && owner === editor) fail(error, ticket);}
+    finally {
+      if (current(ticket) && serial === previewSerial && owner === editor) {
+        previewBusy = false; editor?.update(); updateSelectionControls();
+        if (focused?.isConnected && !focused.disabled && !focused.hidden && document.activeElement === document.body) focused.focus({preventScroll:true});
+      }
+    }
+  }
 
   async function readLinks(reset) {
     if (busy || disposed) return;
@@ -155,9 +228,10 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     } finally {if (current(ticket)) {workBusy = false; workMore.disabled = false;}}
   }
   async function selectWork(id) {
-    if (editor?.locked() || !current(generation)) return;
+    if (editor?.locked() || previewBusy || !current(generation)) return;
     const ticket = generation, selection = ++selectionSerial;
     editor?.dispose(); forms.delete(editor); editor = null; currentWork = null; workRefresh.disabled = true; formSlot.replaceChildren(); workStatus.replaceChildren(); selected = id;
+    workSelecting = true; updateSelectionControls();
     try {
       if (id && !workId(id)) throw mismatch();
       if (id) localStorage.setItem(selectionKey, id); else localStorage.removeItem(selectionKey);
@@ -167,19 +241,33 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
       if (data.workspace_id !== workspaceId) throw mismatch();
       currentWork = checkCard(data.card, id); works.set(id, currentWork); choices();
       const fixed = currentWork;
+      const reference = h('input', {type:'hidden', value:JSON.stringify(preview.ref)});
       editor = form({namespace:draftNamespace, action:'pm.history.link', target:{workspace_id:workspaceId, work_item_id:id},
-        fields:{}, params:()=>({fixed_ref:preview.ref}),
+        fields:{fixed_ref:reference}, params:values=>({fixed_ref:JSON.parse(values.fixed_ref)}),
         preconditions:()=>({expected_work_version:fixed.work.version, expected_binding_id:fixed.binding.binding_id}),
-        permitted:()=>canLink() && Boolean(preview) && currentWork === fixed, recoverPermitted:canLink,
+        permitted:()=>canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed, recoverPermitted:canLink,
         label:'exh_link', savedText:'exh_link_saved',
-        onStateChange:()=>{workSelect.disabled = Boolean(editor?.locked()); workRefresh.disabled = !selected || workSelect.disabled;},
-        onSaved:async()=>{await readLinks(true);},
+        onStateChange:updateSelectionControls,
+        onSaved:async()=>{if (preview) reference.value = JSON.stringify(preview.ref); await readLinks(true);},
         extra:h('p', {class:'ui-meta'}, t('exh_link_target', {name:fixed.work.title, version:fixed.work.version}))});
       forms.add(editor); formSlot.append(editor.box); editor.update();
+      let restored;
+      try {
+        // Original operations predate range metadata in some local drafts.
+        // Their immutable request, not a newly chosen preview, owns recovery.
+        restored = editor.intentRequest()?.params.fixed_ref || JSON.parse(editor.values().fixed_ref);
+        if (!matches(restored) || !historyReferenceKey(restored)) throw mismatch();
+        if (editor.locked()) reference.value = JSON.stringify(restored);
+      } catch (error) {fail(error, ticket); return;}
+      if (historyReferenceKey(restored) !== historyReferenceKey(preview.ref)) await changeSelection(restored.selection, restored);
+      // Field order in a stored server reference is immaterial. New requests
+      // still send that reference unchanged, with no client-produced digest.
+      if (preview && !editor.locked()) editor.set('fixed_ref', JSON.stringify(preview.ref));
+      editor?.update();
     } catch (error) {
       if (current(ticket) && selection === selectionSerial) workStatus.replaceChildren(errorBox(error, {within:workStatus}));
     } finally {
-      if (current(ticket) && selection === selectionSerial) workRefresh.disabled = !selected || Boolean(editor?.locked());
+      if (current(ticket) && selection === selectionSerial) {workSelecting = false; updateSelectionControls();}
     }
   }
   async function prepare() {
@@ -187,17 +275,11 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     choosing = true; choose.disabled = true;
     const ticket = generation;
     try {
-      const data = await api('POST', `${endpoint}/history-excerpt-preview`, {
-        source_id:sourceId, entry_id:entry.entry_id, expected_content_digest:entry.content_digest, selection:{kind:'entry'}});
+      const data = await readPreview({kind:'entry'});
       if (!current(ticket)) return;
-      if (!matches(data.ref) || data.ref.selection?.kind !== 'entry' || Object.keys(data.ref.selection).length !== 1
-        || data.history_complete !== false || data.execution_status !== 'unknown' || !Array.isArray(data.content?.parts)) throw mismatch();
       preview = data;
-      draft.replaceChildren(h('div', {}, h('h4', {}, t('exh_preview')), h('p', {class:'ui-meta'}, t('exh_link_help')),
-        ...data.content.parts.map(part=>part.kind === 'text' ? h('p', {class:'exh-text'}, part.text)
-          : h('p', {class:'ui-meta'}, t(part.kind === 'tool_request' ? 'exh_tool_request' : 'exh_tool_result', {name:part.name || t('exh_tool_unknown')}))),
-        data.content.clipped ? h('p', {class:'ui-meta'}, t('exh_clipped')) : null,
-        data.content.omitted_parts ? h('p', {class:'ui-meta'}, t('exh_omitted', {count:data.content.omitted_parts})) : null,
+      drawPreview(); updateSelectionControls();
+      draft.replaceChildren(h('div', {}, textChoices, selectionStatus, whole, previewSlot,
         h('label', {}, t('exh_work'), workSelect), workStatus, h('div', {class:'exh-actions'}, workMore, workRefresh), formSlot));
       choose.hidden = true;
       selected = localStorage.getItem(selectionKey) || '';
@@ -207,5 +289,5 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     finally {if (current(ticket)) choose.disabled = false;}
   }
   element.addEventListener('toggle', ()=>{if (element.open && !loaded) void readLinks(true);});
-  return {element, dispose(){disposed = true; generation++; selectionSerial++; disposeForms(); preview = currentWork = null; works.clear(); links.clear(); element.replaceChildren();}};
+  return {element, dispose(){disposed = true; generation++; selectionSerial++; previewSerial++; disposeForms(); preview = currentWork = null; works.clear(); links.clear(); element.replaceChildren();}};
 }

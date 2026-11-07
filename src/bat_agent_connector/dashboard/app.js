@@ -1079,11 +1079,17 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_more_hidden_links: "No visible relationships on this page. More may be available.",
 			exh_entire_entry: "Entire entry",
 			exh_selected_text: "Selected text",
-			exh_preview: "Entry to link",
-			exh_link_help: "Link this fixed entry as reference material. The history is partial; linking does not approve or complete the Work or control the original session.",
+			exh_preview: "Excerpt to link",
+			exh_choose_text: "Choose a text range",
+			exh_use_entry: "Use entire entry",
+			exh_text_part: "Text part {number}",
+			exh_selection_help: "Select text in a read-only field, then preview it. Use touch selection handles or Shift with Left/Right, Home or End.",
+			exh_preview_selection: "Preview selected text",
+			exh_select_text_first: "Select a nonempty range of complete characters first.",
+			exh_link_help: "Link this fixed excerpt as reference material. The history is partial; linking does not approve or complete the Work or control the original session.",
 			exh_link_target: "{name} · version {version}",
-			exh_link: "Link entry to Work",
-			exh_link_saved: "Entry linked to Work.",
+			exh_link: "Link excerpt to Work",
+			exh_link_saved: "Excerpt linked to Work.",
 			exh_unlink: "Withdraw relationship",
 			exh_read_links: "View linked excerpts",
 			exh_read_excerpt: "Read excerpt · {name}",
@@ -1143,11 +1149,17 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_more_hidden_links: "此頁沒有可查看的關聯，可繼續讀取下一頁。",
 			exh_entire_entry: "整則紀錄",
 			exh_selected_text: "選取的文字",
-			exh_preview: "將關聯的紀錄",
-			exh_link_help: "將這則固定紀錄連到工作，作為參考資料。歷史並不完整；建立關聯不會核准或完成工作，也不會控制原會話。",
+			exh_preview: "將關聯的摘錄",
+			exh_choose_text: "選取文字範圍",
+			exh_use_entry: "使用整則紀錄",
+			exh_text_part: "第 {number} 段文字",
+			exh_selection_help: "在唯讀欄位中選取文字，再預覽選取範圍。可使用觸控控制點，或按住 Shift 搭配左右方向鍵、Home、End。",
+			exh_preview_selection: "預覽選取文字",
+			exh_select_text_first: "請先選取一段文字，並保留完整字元。",
+			exh_link_help: "將這份固定摘錄連到工作，作為參考資料。歷史並不完整；建立關聯不會核准或完成工作，也不會控制原會話。",
 			exh_link_target: "{name} · 第 {version} 版",
-			exh_link: "將紀錄連到工作",
-			exh_link_saved: "已將紀錄連到工作。",
+			exh_link: "將摘錄連到工作",
+			exh_link_saved: "已將摘錄連到工作。",
 			exh_unlink: "撤回關聯",
 			exh_read_links: "查看已關聯摘錄",
 			exh_read_excerpt: "閱讀摘錄 · {name}",
@@ -23747,6 +23759,121 @@ function renderEffectivePmRoute(node, { h, t, document, readyKey = "pm_effective
 	return node;
 }
 //#endregion
+//#region src/pm-history-selection.js
+function historyTextSelection(text, partIndex, start, end) {
+	if (typeof text !== "string" || /[\uD800-\uDFFF]/u.test(text) || ![
+		partIndex,
+		start,
+		end
+	].every(Number.isSafeInteger) || partIndex < 0 || partIndex >= 128 || start < 0 || start >= end) return null;
+	const points = [...text], boundaries = new Map([[0, 0]]);
+	if (points.length > 16e3) return null;
+	let offset = 0;
+	for (let index = 0; index < points.length; index++) {
+		const point = points[index];
+		if (point === "\r" && points[index + 1] === "\n") index++;
+		offset += point.length;
+		boundaries.set(offset, index + 1);
+	}
+	if (!boundaries.has(start) || !boundaries.has(end)) return null;
+	return {
+		kind: "text",
+		part_index: partIndex,
+		start_codepoint: boundaries.get(start),
+		end_codepoint: boundaries.get(end)
+	};
+}
+function navigateHistoryText(input, event) {
+	if (input.disabled || event.isComposing || event.altKey || ![
+		"ArrowLeft",
+		"ArrowRight",
+		"Home",
+		"End"
+	].includes(event.key)) return;
+	const { value, selectionStart: start, selectionEnd: end, selectionDirection: direction } = input;
+	const anchor = direction === "backward" ? end : start, focus = direction === "backward" ? start : end;
+	const modified = event.ctrlKey || event.metaKey;
+	let next;
+	if (event.key === "Home") next = modified || focus === 0 ? 0 : value.lastIndexOf("\n", focus - 1) + 1;
+	else if (event.key === "End") {
+		const newline = value.indexOf("\n", focus);
+		next = modified || newline < 0 ? value.length : newline;
+	} else {
+		if (modified) return;
+		const right = event.key === "ArrowRight";
+		const segments = typeof Intl.Segmenter === "function" ? [...new Intl.Segmenter(void 0, { granularity: "grapheme" }).segment(value)].map((row) => row.segment) : [...value];
+		let offset = 0;
+		const boundaries = [0, ...segments.map((segment) => offset += segment.length)];
+		next = !event.shiftKey && start !== end ? right ? end : start : right ? boundaries.find((value) => value > focus) ?? value.length : boundaries.filter((value) => value < focus).at(-1) ?? 0;
+	}
+	event.preventDefault();
+	if (!event.shiftKey) input.setSelectionRange(next, next);
+	else input.setSelectionRange(Math.min(anchor, next), Math.max(anchor, next), next < anchor ? "backward" : "forward");
+}
+var keys$3 = (value, names) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join(",") === [...names].sort().join(",");
+function historySelectionKey(selection) {
+	if (keys$3(selection, ["kind"]) && selection.kind === "entry") return "entry";
+	if (!keys$3(selection, [
+		"kind",
+		"part_index",
+		"start_codepoint",
+		"end_codepoint"
+	]) || selection.kind !== "text" || ![
+		selection.part_index,
+		selection.start_codepoint,
+		selection.end_codepoint
+	].every(Number.isSafeInteger) || selection.part_index < 0 || selection.part_index >= 128 || selection.start_codepoint < 0 || selection.start_codepoint >= selection.end_codepoint || selection.end_codepoint > 16e3) return null;
+	return JSON.stringify([
+		selection.part_index,
+		selection.start_codepoint,
+		selection.end_codepoint
+	]);
+}
+function historyReferenceKey(ref) {
+	const fields = [
+		"schema",
+		"server_id",
+		"workspace_id",
+		"source_id",
+		"entry_id",
+		"source_digest",
+		"content_digest",
+		"selection",
+		"excerpt_digest"
+	];
+	const selection = historySelectionKey(ref?.selection);
+	if (!keys$3(ref, fields) || ref.schema !== "external_history_ref/v1" || !selection || !fields.filter((key) => key !== "selection").every((key) => typeof ref[key] === "string") || ![
+		"source_digest",
+		"content_digest",
+		"excerpt_digest"
+	].every((key) => /^[0-9a-f]{64}$/.test(ref[key]))) return null;
+	return JSON.stringify([...fields.filter((key) => key !== "selection").map((key) => ref[key]), selection]);
+}
+function matchesHistoryContent(content, entry, selection) {
+	if (!historySelectionKey(selection) || !content || content.role !== entry.role || content.clipped !== entry.clipped || content.omitted_parts !== entry.omitted_parts || ![
+		"user",
+		"assistant",
+		"tool"
+	].includes(content.role) || typeof content.clipped !== "boolean" || !Number.isSafeInteger(content.omitted_parts) || content.omitted_parts < 0 || !Array.isArray(entry.parts) || entry.parts.length > 128 || !Array.isArray(content.parts)) return false;
+	let length = 0;
+	for (const part of entry.parts) if (part?.kind === "text" && typeof part.text === "string" && !/[\uD800-\uDFFF]/u.test(part.text)) length += [...part.text].length;
+	else if (!["tool_request", "tool_result"].includes(part?.kind) || part.name !== null && typeof part.name !== "string") return false;
+	if (length > 16e3) return false;
+	let parts = entry.parts;
+	if (selection.kind === "text") {
+		const part = parts[selection.part_index];
+		if (part?.kind !== "text" || selection.end_codepoint > [...part.text].length) return false;
+		parts = [{
+			kind: "text",
+			text: [...part.text].slice(selection.start_codepoint, selection.end_codepoint).join("")
+		}];
+	}
+	return content.parts.length === parts.length && parts.every((part, index) => {
+		const other = content.parts[index];
+		return keys$3(other, Object.keys(part)) && Object.keys(part).every((key) => part[key] === other[key]);
+	});
+}
+//#endregion
 //#region src/pm-external-history-links.js
 var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
 var digest$9 = (value) => /^[0-9a-f]{64}$/.test(value || "");
@@ -23757,7 +23884,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
 	let disposed = false, generation = 0, loaded = false, busy = false, after = null;
 	let preview = null, selected = "", editor = null, choosing = false, workAfter = null, workBusy = false;
-	let selectionSerial = 0, currentWork = null;
+	let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null;
 	const forms = new Set(), links = new Map(), works = new Map(), recoveryForms = new Set();
 	const status = h("div", { role: "status" }), rows = h("div", { class: "exh-relations" }), draft = h("div");
 	const element = h("details", { "data-history-links": entry.entry_id }, h("summary", {}, t("exh_related")), status, rows, draft);
@@ -23860,6 +23987,104 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	});
 	choose.hidden = !canLink() || caps()?.features?.pm_workspaces?.kanban !== true;
 	element.append(h("div", { class: "exh-actions" }, refresh, more, choose));
+	const previewSlot = h("div", {
+		"data-history-preview": "",
+		role: "status"
+	});
+	const selectionStatus = h("p", {
+		role: "status",
+		class: "ui-meta"
+	});
+	const whole = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_use_entry"),
+		onclick: () => void changeSelection({ kind: "entry" })
+	});
+	const selectionControls = [whole];
+	const textChoices = h("details", { "data-history-text-picker": "" }, h("summary", {}, t("exh_choose_text")), h("p", { class: "ui-meta" }, t("exh_selection_help")));
+	for (const [index, part] of (entry.parts || []).entries()) {
+		if (part.kind !== "text" || !part.text) continue;
+		const input = h("textarea", {
+			readonly: true,
+			rows: 5,
+			class: "exh-text",
+			"aria-label": t("exh_text_part", { number: index + 1 }),
+			"data-history-text-part": index
+		});
+		input.value = part.text;
+		input.addEventListener("keydown", (event) => navigateHistoryText(input, event));
+		const use = button({
+			variant: "secondary",
+			size: "sm",
+			label: t("exh_preview_selection"),
+			onclick: () => {
+				if (previewBusy || editor?.locked() || !canLink()) return;
+				const selection = historyTextSelection(part.text, index, input.selectionStart, input.selectionEnd);
+				if (!selection) {
+					selectionStatus.textContent = t("exh_select_text_first");
+					input.focus();
+					return;
+				}
+				changeSelection(selection);
+			}
+		});
+		selectionControls.push(input, use);
+		textChoices.append(h("div", { class: "exh-text-choice" }, h("label", {}, t("exh_text_part", { number: index + 1 }), input), use));
+	}
+	textChoices.hidden = selectionControls.length === 1;
+	function updateSelectionControls() {
+		const locked = Boolean(editor?.locked()), blocked = locked || previewBusy || workSelecting || !canLink();
+		for (const control of selectionControls) control.disabled = blocked;
+		whole.hidden = preview?.ref.selection.kind !== "text";
+		workSelect.disabled = locked || previewBusy;
+		workRefresh.disabled = !selected || workSelect.disabled;
+	}
+	function drawPreview() {
+		previewSlot.replaceChildren(h("h4", {}, t("exh_preview")), h("p", { class: "ui-meta" }, t("exh_link_help")), h("p", { class: "ui-meta" }, t(preview.ref.selection.kind === "entry" ? "exh_entire_entry" : "exh_selected_text")), ...preview.content.parts.map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), ...[preview.content.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, preview.content.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: preview.content.omitted_parts })) : null].filter(Boolean));
+	}
+	async function readPreview(selection) {
+		if (!historySelectionKey(selection)) throw mismatch();
+		const data = await api("POST", `${endpoint}/history-excerpt-preview`, {
+			source_id: sourceId,
+			entry_id: entry.entry_id,
+			expected_content_digest: entry.content_digest,
+			selection
+		});
+		if (!matches(data.ref) || !historyReferenceKey(data.ref) || historySelectionKey(data.ref.selection) !== historySelectionKey(selection) || data.history_complete !== false || data.execution_status !== "unknown" || !matchesHistoryContent(data.content, entry, selection)) throw mismatch();
+		return data;
+	}
+	async function changeSelection(selection, restored = null) {
+		if (!current(generation) || !canLink() || !restored && (previewBusy || workSelecting || editor?.locked())) return;
+		const ticket = generation, serial = ++previewSerial, owner = editor;
+		const focused = selectionControls.includes(document.activeElement) ? document.activeElement : null;
+		previewBusy = true;
+		preview = null;
+		selectionStatus.textContent = "";
+		previewSlot.replaceChildren(h("p", {}, t("pm_kanban_detail_loading")));
+		editor?.update();
+		updateSelectionControls();
+		try {
+			const data = await readPreview(selection);
+			if (!current(ticket) || serial !== previewSerial || owner !== editor) return;
+			if (restored && historyReferenceKey(data.ref) !== historyReferenceKey(restored)) throw mismatch();
+			preview = data;
+			drawPreview();
+			if (restored && editor) {
+				editor.fields.fixed_ref.value = JSON.stringify(data.ref);
+				editor.changed();
+			} else editor?.set("fixed_ref", JSON.stringify(data.ref));
+		} catch (error) {
+			if (serial === previewSerial && owner === editor) fail(error, ticket);
+		} finally {
+			if (current(ticket) && serial === previewSerial && owner === editor) {
+				previewBusy = false;
+				editor?.update();
+				updateSelectionControls();
+				if (focused?.isConnected && !focused.disabled && !focused.hidden && document.activeElement === document.body) focused.focus({ preventScroll: true });
+			}
+		}
+	}
 	async function readLinks(reset) {
 		if (busy || disposed) return;
 		const ticket = generation, cursor = reset ? 0 : after;
@@ -23983,7 +24208,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		}
 	}
 	async function selectWork(id) {
-		if (editor?.locked() || !current(generation)) return;
+		if (editor?.locked() || previewBusy || !current(generation)) return;
 		const ticket = generation, selection = ++selectionSerial;
 		editor?.dispose();
 		forms.delete(editor);
@@ -23993,6 +24218,8 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		formSlot.replaceChildren();
 		workStatus.replaceChildren();
 		selected = id;
+		workSelecting = true;
+		updateSelectionControls();
 		try {
 			if (id && !workId$1(id)) throw mismatch();
 			if (id) localStorage.setItem(selectionKey, id);
@@ -24005,6 +24232,10 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			works.set(id, currentWork);
 			choices();
 			const fixed = currentWork;
+			const reference = h("input", {
+				type: "hidden",
+				value: JSON.stringify(preview.ref)
+			});
 			editor = form({
 				namespace: draftNamespace,
 				action: "pm.history.link",
@@ -24012,21 +24243,19 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 					workspace_id: workspaceId,
 					work_item_id: id
 				},
-				fields: {},
-				params: () => ({ fixed_ref: preview.ref }),
+				fields: { fixed_ref: reference },
+				params: (values) => ({ fixed_ref: JSON.parse(values.fixed_ref) }),
 				preconditions: () => ({
 					expected_work_version: fixed.work.version,
 					expected_binding_id: fixed.binding.binding_id
 				}),
-				permitted: () => canLink() && Boolean(preview) && currentWork === fixed,
+				permitted: () => canLink() && !previewBusy && Boolean(preview) && reference.value === JSON.stringify(preview.ref) && currentWork === fixed,
 				recoverPermitted: canLink,
 				label: "exh_link",
 				savedText: "exh_link_saved",
-				onStateChange: () => {
-					workSelect.disabled = Boolean(editor?.locked());
-					workRefresh.disabled = !selected || workSelect.disabled;
-				},
+				onStateChange: updateSelectionControls,
 				onSaved: async () => {
+					if (preview) reference.value = JSON.stringify(preview.ref);
 					await readLinks(true);
 				},
 				extra: h("p", { class: "ui-meta" }, t("exh_link_target", {
@@ -24037,10 +24266,25 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			forms.add(editor);
 			formSlot.append(editor.box);
 			editor.update();
+			let restored;
+			try {
+				restored = editor.intentRequest()?.params.fixed_ref || JSON.parse(editor.values().fixed_ref);
+				if (!matches(restored) || !historyReferenceKey(restored)) throw mismatch();
+				if (editor.locked()) reference.value = JSON.stringify(restored);
+			} catch (error) {
+				fail(error, ticket);
+				return;
+			}
+			if (historyReferenceKey(restored) !== historyReferenceKey(preview.ref)) await changeSelection(restored.selection, restored);
+			if (preview && !editor.locked()) editor.set("fixed_ref", JSON.stringify(preview.ref));
+			editor?.update();
 		} catch (error) {
 			if (current(ticket) && selection === selectionSerial) workStatus.replaceChildren(errorBox(error, { within: workStatus }));
 		} finally {
-			if (current(ticket) && selection === selectionSerial) workRefresh.disabled = !selected || Boolean(editor?.locked());
+			if (current(ticket) && selection === selectionSerial) {
+				workSelecting = false;
+				updateSelectionControls();
+			}
 		}
 	}
 	async function prepare() {
@@ -24049,16 +24293,12 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		choose.disabled = true;
 		const ticket = generation;
 		try {
-			const data = await api("POST", `${endpoint}/history-excerpt-preview`, {
-				source_id: sourceId,
-				entry_id: entry.entry_id,
-				expected_content_digest: entry.content_digest,
-				selection: { kind: "entry" }
-			});
+			const data = await readPreview({ kind: "entry" });
 			if (!current(ticket)) return;
-			if (!matches(data.ref) || data.ref.selection?.kind !== "entry" || Object.keys(data.ref.selection).length !== 1 || data.history_complete !== false || data.execution_status !== "unknown" || !Array.isArray(data.content?.parts)) throw mismatch();
 			preview = data;
-			draft.replaceChildren(h("div", {}, h("h4", {}, t("exh_preview")), h("p", { class: "ui-meta" }, t("exh_link_help")), ...data.content.parts.map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), data.content.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, data.content.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: data.content.omitted_parts })) : null, h("label", {}, t("exh_work"), workSelect), workStatus, h("div", { class: "exh-actions" }, workMore, workRefresh), formSlot));
+			drawPreview();
+			updateSelectionControls();
+			draft.replaceChildren(h("div", {}, textChoices, selectionStatus, whole, previewSlot, h("label", {}, t("exh_work"), workSelect), workStatus, h("div", { class: "exh-actions" }, workMore, workRefresh), formSlot));
 			choose.hidden = true;
 			selected = localStorage.getItem(selectionKey) || "";
 			await readWorks(true);
@@ -24078,6 +24318,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			disposed = true;
 			generation++;
 			selectionSerial++;
+			previewSerial++;
 			disposeForms();
 			preview = currentWork = null;
 			works.clear();
@@ -53763,6 +54004,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		canSubmit: () => !disposed && !busy && !(initialChecking && receiptTimer !== null) && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused,
 		operation: () => operation,
 		locked: () => busy || damaged || Boolean(saved.intent),
+		intentRequest: () => saved.intent ? structuredClone(saved.intent.request) : null,
 		initialChecking: () => initialChecking && (busy || receiptTimer !== null),
 		stopAutoCheck: () => {
 			if (initialChecking) {

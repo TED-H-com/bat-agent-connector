@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select fixed text ranges from external conversations before linking to Work,
+  with Unicode and original-newline offsets, read-only keyboard controls and
+  English/zh-TW previews. Restore range metadata without saving plaintext and
+  preserve original requests, including older whole-entry intents.
 - Admit existing external-conversation excerpt previews and Work relationship
   reads through the restricted desktop bridge, using exact source identities,
   bounded text selections and pagination. Authorization and relationship writes

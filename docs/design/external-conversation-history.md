@@ -214,11 +214,51 @@ authorization and the central existing-operation checks continue to apply.
 Source withdrawal, failed source reads, reader close and workspace departure
 dispose relationship forms, hide preview/plaintext and fence late responses.
 Administrators do not bypass source grants or workspace roles. Older servers
-retain the original read-only reader. This increment supplies whole-entry links
-and withdrawal in the source reader, not text-range selection, Attempt selection,
-replacement or cleanup after source access is lost. The Work-side reader below
-is a subsequent candidate. Those broader UI paths, derive and real-device acceptance remain open. Linking
+retain the original read-only reader. The initial increment supplies whole-entry
+links and withdrawal; the text-range and Work-side reader candidates below extend
+it. Attempt selection, replacement, cleanup after source access is lost, derive
+and real-device acceptance remain open. Linking
 adds reference material without approving, completing or taking over any work.
+
+### Text-range selection candidate
+
+After requesting the whole-entry preview, **Choose a text range** exposes each
+nonempty retained text part in a labelled, read-only field. Tool markers have no
+range control. The user explicitly selects a range and chooses **Preview selected
+text**; **Use entire entry** returns to the full retained entry. The preview shows
+which selection is active, preserving clipping, omissions and the partial-history
+notice. Nothing is submitted merely by selecting or previewing text.
+
+Textarea UTF-16 positions are mapped to the original Unicode codepoint offsets,
+including CRLF/CR normalization by the browser. Empty selections, split surrogate
+pairs, invalid parts and out-of-bounds ranges are refused. No Unicode normalization,
+trimming or client digest calculation occurs. Read-only fields support keyboard
+selection with Shift plus Left/Right/Home/End, including backward selections;
+grapheme navigation uses `Intl.Segmenter` when available and complete codepoints
+otherwise. Mouse and native touch selection use the same preview path. These
+browser fixtures do not establish physical mobile or native WebView acceptance.
+
+The preview response must match the requested selection, exact reference schema,
+source identity and retained content. Text excerpts contain only that exact slice;
+role, clipping and omitted-part counts must still match the entry. The returned
+canonical reference is sent through the existing `pm.history.link` action without
+alteration. Pending previews clear the previous excerpt and disable sending or
+changing targets. Source refusal, close and disposal clear plaintext and fence
+late replies; focus returns to the initiating control when it is still available.
+
+Only fixed-reference metadata is retained in the existing Work-specific durable
+form draft, never the text field or preview body. Reloading or changing Work
+re-previews that saved range and compares its original reference before showing
+it. A saved operation's immutable request takes precedence over draft fields,
+including older whole-entry intents without range metadata. Its recovery key,
+target, parameters and preconditions remain unchanged. The shared durable form
+exposes a cloned request for this display purpose; callers cannot mutate the
+stored original through that accessor. An unresolved request locks range controls,
+and a failed request requires the existing explicit **New request** action.
+
+This adds no API, schema, source takeover, automatic PM input or model call.
+Optional Attempt selection, relationship replacement and revoked-source cleanup
+remain separate UI work within E08/E10 and EC-1.1 T5.
 
 ### Work-side reader candidate
 
@@ -249,8 +289,8 @@ partial history and unknown execution stated explicitly. **Source and coverage**
 shows the fixed reference and association IDs. Text, references and reading
 selection are not written to local storage. Reading creates no operation, Work,
 Attempt, approval, PM context or model request, and leaves original CLI sessions
-read-only. Existing text selections can be read; creating a text selection remains
-outside this increment.
+read-only. The source reader's text-range picker above creates text selections;
+this Work-side panel only reads them.
 
 An open reader rechecks its loaded pages and selected excerpt every 60 seconds.
 Refresh, pagination and pending parent Work reads clear previous content before
@@ -263,7 +303,7 @@ the standalone Work route and requirement inspector are not new reader surfaces.
 
 HTTP and injected desktop IPC regressions exercise this shared frontend. They do
 not establish native WebView, real BAT/model or physical-mobile acceptance. Work
-derivation, native execution, text/Attempt selection, replacement and cleanup after
+derivation, native execution, Attempt selection, replacement and cleanup after
 source revocation remain open alongside the unrevised PM lifecycle requirements.
 
 ## Narrow format profiles

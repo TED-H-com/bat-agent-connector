@@ -10,6 +10,8 @@
 [data-history-links] { margin-block-start: var(--space-3); }
 [data-history-links] summary { cursor: pointer; padding-block: var(--space-2); }
 [data-history-links] select { display: block; width: 100%; min-width: 0; margin-block: var(--space-2); }
+.exh-text-choice { margin-block: var(--space-3); }
+.exh-text-choice textarea { display: block; box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; margin-block: var(--space-2); }
 .exh-relation { display: grid; gap: var(--space-2); padding-block: var(--space-3); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 [data-history-links] .actions { flex-wrap: wrap; }
 [data-work-history-reader] summary { cursor: pointer; padding-block: var(--space-2); }

@@ -1,5 +1,48 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-07：外部對話文字範圍摘錄候選
+
+`feat/history-text-selection-20261107` 接續 `7c75c1ae`，在共用來源閱讀器加入
+英文／繁中「選取文字範圍」。可在唯讀欄位選取單一文字部分，明確預覽後連到既有
+Work，或切回整則紀錄。文字位置從瀏覽器 UTF-16／換行表示轉回原文 Unicode
+codepoint；emoji、CRLF、反向選取與工具標記邊界保留。鍵盤 Shift 搭配左右方向鍵、
+Home／End 可選取文字，原文不能編輯。未預覽的選取不會直接提交。
+
+沿用中央固定參照、`pm.history.link` 與 durable form。只保存固定參照 metadata，
+不保存原文或預覽正文；重開草稿會重新讀取並核對原參照。已送出的原 operation
+request 優先於表單欄位，包括缺少新 metadata 的舊版整則 intent；復原不換 key、
+參數、目標或 preconditions。預覽期間停用提交／切換，失敗、撤權與關閉清除正文，
+晚到回覆不能恢復舊畫面。沒有新 API、schema、後端邏輯或原生控制。
+
+最終來源的 215 項 HTTP／注入 IPC 介面回歸、602 項 Node 測試及 169 項相關 Python
+測試已通過；雙入口建置、ruff、公開內容檢查及 staged secret scan 也已通過。
+介面回歸包含 31 項文字範圍案例、原有閱讀／關聯／看板／Workbench，及 39 項共用
+表單／收據回歸。另已檢查英文／繁中 390／1440 px 截圖，並重現及修正「原操作
+先完成、草稿摘錄稍後回來」造成表單停用的時序。最終標準建置產生相同瀏覽器資產，
+Dashboard／靜態提供測試另驗 11 項通過。
+
+Python 3.13 全套八分片：9,866 passed、84 skipped、14 failed，沒有 errors。
+Collection manifests 確認 9,964 項、434 個檔案、無遺漏或重複；完整檢查仍記為失敗。
+14 個案例 ID 與前輪完全相同，皆在未修改的 Fleet bootstrap 模組，錯誤均為
+`BOOTSTRAP_STATE_UNPROVEN`。測試路徑上層的 0775 權限先被安全檢查拒絕；相同
+完整模組以磁碟暫存掛載隔離容器安全路徑後，44 項通過。沒有改變共享目錄權限、
+安全檢查或 fixtures，容器與測試暫存均已清理。本輪未修改 Python 後端邏輯或 Rust。
+
+此為 E08／E10、EC-1.1 T5 的分支增量，尚未合併、發布、安裝或實機驗收。
+HTTP／注入 IPC 及 responsive fixtures 不等同原生 WebView、真 BAT／模型或實體手機。
+Attempt 選擇、關聯替換、撤權後清理、其他 Work 閱讀入口、derive 與原生執行仍開放。
+E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂生命週期待辦維持原狀。
+
+The shared source reader can preview and link an exact text range, preserving
+original Unicode/newline offsets, read-only keyboard selection and the central
+reference. Drafts store reference metadata only; original operation requests own
+recovery, including older whole-entry intents. UI (215), Node (602) and focused
+Python (169) checks passed. The full Python run remains failed: 9,866 passed,
+84 skipped and the same 14 Fleet bootstrap permission failures as the prior run,
+with complete disjoint collection coverage. The unchanged Fleet module passed
+all 44 tests at a secure container path with disk-backed fixtures. This unmerged
+E08/E10/T5 increment claims no release, installation, native execution or live acceptance.
+
 ## 2026-11-07：Work 看板的外部對話摘錄閱讀候選
 
 `feat/work-history-reader-20261107` 接續 `fdb37bc6`，在原有 Board Work inspector
