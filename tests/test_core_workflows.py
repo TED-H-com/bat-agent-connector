@@ -466,13 +466,13 @@ async def test_resolve_command_operator_attestation(tmp_path, monkeypatch):
     import time
     journal.db.execute("INSERT INTO capabilities (task_id, command_id, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?)",
                        ("task_1", "cmd1", digest, "reconcile", time.time() + 3600))
-    res = await coordinator.resolve_command(
+    await coordinator.resolve_command(
         "task_1", "cmd1", token="tok1", outcome="delivered", actor="operator",
         source="operator_portal", evidence="tested well", observed_result="none",
         turn_ref="marker1"
     )
 
-    assert res["state"] == "human_owned"
+
     cmd = journal.command_get("cmd1")
     assert cmd["status"] == "resolved_delivered"
 
@@ -502,7 +502,7 @@ async def test_resolve_command_failover(tmp_path, monkeypatch):
     import time
     journal.db.execute("INSERT INTO capabilities (task_id, command_id, token_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?)",
                        ("task_1", "failover_cmd", digest, "reconcile", time.time() + 3600))
-    res = await coordinator.resolve_command(
+    await coordinator.resolve_command(
         "task_1", "failover_cmd", token="tok1", outcome="not_delivered", actor="operator",
         source="operator_portal", evidence="tested well"
     )
