@@ -1,3 +1,4 @@
+import {workHistoryPanel} from './pm-work-history.js';
 import {viewState} from './ui/view-state.js';
 import {h} from './ui/dom.js';
 import {skeleton, searchField, dataTable, statusPill, agentMark, disclosure, emptyState} from './ui/components.js';
@@ -16,7 +17,7 @@ export function requirementReviews(plan, requirement, reviews) {
       && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === 'accepted')));
 }
 
-export function workspaceTraceability({t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled = () => Promise.resolve()}) {
+export function workspaceTraceability({t, api, alive, namespace, workspaceId, caps, errorBox, workspace = () => null, workspaceSettled = () => Promise.resolve()}) {
   const preference = viewState(namespace, workspaceId, 'requirements'), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
   let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
@@ -35,8 +36,9 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     h('div', {class: 'pm-requirements-toolbar'}, searchField(filter, {class:'pm-work-search'}), h('label', {}, t('wv_group'), group)),
     status, layout, h('div', {class: 'actions'}, ...Object.values(moreButtons)),
     disclosure({label: t('wb_sources'), body: h('div', {}, h('p', {}, t('wb_no_phase')))}));
+  const historyPanel = workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps});
   const detail = workInspector({t, workspaceId, from: 'requirements', mount: layout, tools: () => tools(), returnFocus: () => selectionTarget(selected) || viewHeading(), onClose: () => {
-    detailSerial++; if (!preserveSelection) {const id = selected; selected = null; preference.selected = null; markSelection();
+    historyPanel.withdraw(); detailSerial++; if (!preserveSelection) {const id = selected; selected = null; preference.selected = null; markSelection();
       if (id) selectionTarget(id)?.focus({preventScroll: true});
       const [path, query] = location.hash.split('?'), params = new URLSearchParams(query); params.delete('select');
       history.replaceState(null, '', path + (params.size ? '?' + params : ''));}
@@ -84,7 +86,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     history.replaceState(null, '', path + (params.size ? '?' + params : ''));
   }
   function controls() {for (const [kind, button] of Object.entries(moreButtons)) {button.disabled = busy; button.hidden = cursors[kind] == null;}}
-  function closeRetaining() {detailSerial++; preserveSelection = true; detail.close(); preserveSelection = false;}
+  function closeRetaining() {historyPanel.withdraw(); detailSerial++; preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw({forgetRoute = true} = {}) {
     pendingFocus = null; pendingNavigation = null; currentRequirement = null; currentMilestone = null; scrollGeneration++; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); earlierPlans.clear(); signature = '';
     if (forgetRoute) writeSelection(null);
@@ -204,7 +206,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   }
   async function refresh() {
     if (!active || !visible) {stale = true; return;}
-    stale = false;
+    stale = false; historyPanel.suspend();
     const ticket = ++serial; detailSerial++; busy = true; controls();
     try {
       const accepted = await api('GET', `${endpoint}/plans/accepted`); alive(); if (ticket !== serial) return;
@@ -269,6 +271,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     currentMilestone = null;
     const card = cards.find(row => row.work_item_id === id), requirement = plan?.document?.requirements?.find(row => row.id === id);
     if (!card && !requirement) {const withdrawn = selected === id; selected = null; preference.selected = null; currentRequirement = null; closeRetaining(); markSelection(); status.textContent = t('wv_not_in_plan'); if (withdrawn) {writeSelection(null); viewHeading()?.focus();} return;}
+    if (selected !== id || !retain || requirement) historyPanel.withdraw(); else historyPanel.suspend();
     if (selected !== id) deliveryPages = 1;
     selected = id; preference.selected = id; writeSelection(id);
     if (scroll) {
@@ -307,7 +310,11 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
         milestones: milestones.filter(row => row.plan_revision_id === data.card.binding.plan_revision_id && row.requirement_ids?.some(id => data.card.binding.requirement_ids?.includes(id))),
         requirements: (data.card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(data.card.binding.plan_revision_id))?.document?.requirements?.filter(req => data.card.binding.requirement_ids?.includes(req.id)) || [],
         onMore: () => {deliveryPages++; void select(id, false, true);}});
+      historyPanel.setWork(data.card);
+      if (historyPanel.element.hidden) historyPanel.element.remove();
+      else if (!historyPanel.element.isConnected) detail.element.body.querySelector('[data-work-section="details"]').before(historyPanel.element);
     } catch (error) {if (ticket === detailSerial && generation === serial) {
+      historyPanel.withdraw();
       if ([403, 404].includes(error.status)) {cards = cards.filter(row => row.work_item_id !== id); sources.delete(id); workIncomplete = true; renderTable(); meta.textContent = plan ? t('wv_loaded', {n: plan.document.requirements.length}) : t('ui_status_unknown');}
       detail.show({title: card.work.title, error, onRetry: () => void refresh()});
     }}
@@ -369,5 +376,5 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       : kind === 'work_item' ? cards.find(row => row.work_item_id === id)?.work?.title : '';
     return typeof value === 'string' ? value : '';
   }
-  return {element, meta, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, setActive, rememberScroll, hideInspector: closeRetaining, activate, setTools: value => {tools = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw({forgetRoute: false});}};
+  return {element, meta, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, setActive, rememberScroll, hideInspector: closeRetaining, activate, setTools: value => {tools = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw({forgetRoute: false}); historyPanel.dispose();}};
 }

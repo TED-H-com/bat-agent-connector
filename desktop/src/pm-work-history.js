@@ -6,28 +6,31 @@ const keys = (value, names) => value && typeof value === 'object' && !Array.isAr
   && Object.keys(value).sort().join(',') === [...names].sort().join(',');
 const refFields = ['schema','server_id','workspace_id','source_id','entry_id','source_digest','content_digest','selection','excerpt_digest'];
 
-// The board owns Work selection and visibility. This reader only resolves explicit
+let readerSequence = 0;
+
+// The parent owns Work selection and visibility. This reader only resolves explicit
 // relationships through central; no transcript or selection is persisted locally.
-export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps}) {
+export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps, embedded = false, validate = null}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let card = null, identity = '', disposed = false, generation = 0, detailGeneration = 0;
   let pages = 1, next = null, selected = null, busy = false, timer = null, ready = false;
   let links = new Map();
-  const excerptId = `work-history-${workspaceId}`;
+  const excerptId = `work-history-${workspaceId}-${++readerSequence}`;
   const status = h('div', {role:'status'}), rows = h('div'), excerpt = h('div', {id:excerptId, 'data-work-history-excerpt':''});
   const refresh = button({variant:'ghost', size:'sm', label:t('exh_refresh_links'), onclick:()=>void read()});
   const more = button({variant:'secondary', size:'sm', label:t('exh_more_links'), onclick:()=>{pages++; void read();}});
   more.hidden = true;
-  const reader = h('details', {'data-work-history-reader':''}, h('summary', {}, t('exh_read_links')),
+  const reader = h(embedded ? 'div' : 'details', {'data-work-history-reader':''}, embedded ? null : h('summary', {}, t('exh_read_links')),
     h('p', {class:'ui-meta'}, t('exh_work_help')), status, rows,
     h('div', {class:'exh-actions'}, refresh, more), excerpt);
   const element = h('section', {'data-work-section':'external-history', 'data-work-history':'', hidden:true},
-    h('h3', {}, t('exh_title')), reader);
+    embedded ? null : h('h3', {}, t('exh_title')), reader);
+  const isOpen = () => embedded || reader.open;
   const supported = () => caps()?.features?.external_history?.relationships?.version === 1
     && caps()?.features?.external_history?.relationships?.refs?.includes('external_history_ref/v1')
     && caps()?.scopes?.includes('observe') && workspace()?.workspace_id === workspaceId
     && ['owner','contributor','reader'].includes(workspace()?.membership?.role) && typeof workspace()?.server_id === 'string';
-  const current = ticket => {try {alive();} catch {return false;} return !disposed && ready && card && reader.open && supported() && ticket === generation;};
+  const current = ticket => {try {alive();} catch {return false;} return !disposed && ready && card && isOpen() && supported() && ticket === generation;};
   const mismatch = () => Error(t('pm_scope_mismatch'));
   function reference(ref) {
     if (!keys(ref, refFields) || ref.schema !== 'external_history_ref/v1' || ref.server_id !== workspace()?.server_id
@@ -80,6 +83,7 @@ export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps
     for (const row of rows.querySelectorAll('[data-history-open]')) row.setAttribute('aria-expanded', String(row.dataset.historyOpen === selected));
     const valid = () => current(ticket) && own === detailGeneration;
     try {
+      if (validate) {await validate(); if (!valid()) return;}
       const detail = await api('GET', `${endpoint}/external-links/${encodeURIComponent(linkId)}`);
       if (!valid()) return;
       if (relation(detail.link) !== signature) throw mismatch();
@@ -88,6 +92,7 @@ export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps
       const value = content(data, link);
       // Excerpt reads authorize the source. Recheck the Work/Attempt relationship
       // after that read as well, before publishing any plaintext.
+      if (validate) {await validate(); if (!valid()) return;}
       const final = await api('GET', `${endpoint}/external-links/${encodeURIComponent(linkId)}`);
       if (!valid()) return;
       if (relation(final.link) !== signature) throw mismatch();
@@ -104,7 +109,7 @@ export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps
     } catch (error) {if (valid()) fail(error, ticket);}
   }
   async function read() {
-    if (disposed || !ready || !card || !reader.open) return;
+    if (disposed || !ready || !card || !isOpen()) return;
     const restore = selected, focus = rows.contains(document.activeElement) ? document.activeElement?.dataset.historyOpen : null;
     clear();
     const ticket = generation;
@@ -112,6 +117,7 @@ export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps
     busy = true; refresh.disabled = more.disabled = true; reader.setAttribute('aria-busy', 'true');
     status.replaceChildren(h('p', {}, t('pm_kanban_detail_loading')));
     try {
+      if (validate) {await validate(); if (!current(ticket)) return;}
       const found = new Map(); let after = 0;
       for (let index = 0; index < pages; index++) {
         const data = await api('GET', `${endpoint}/work/${encodeURIComponent(card.work_item_id)}/external-links?after=${after}&limit=20`);
@@ -144,7 +150,7 @@ export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps
       }
     }
   }
-  reader.addEventListener('toggle', ()=>{
+  if (!embedded) reader.addEventListener('toggle', ()=>{
     if (!reader.open) {clear(); selected = null; pages = 1;}
     else if (card && !busy) void read();
   });
@@ -152,14 +158,14 @@ export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps
   return {element, withdraw,
     suspend() {
       clear(); ready = false;
-      if (reader.open) {status.replaceChildren(h('p', {}, t('pm_kanban_detail_loading'))); refresh.disabled = true;}
+      if (isOpen()) {status.replaceChildren(h('p', {}, t('pm_kanban_detail_loading'))); refresh.disabled = true;}
     },
     setWork(value) {
       const key = JSON.stringify([value.work_item_id, value.binding?.binding_id, value.binding?.project_id]);
       if (identity !== key) withdraw();
       card = value; identity = key; ready = true; element.hidden = !supported();
       if (element.hidden) {clear(); return;}
-      if (reader.open) void read();
+      if (isOpen()) void read();
     },
     dispose() {withdraw(); disposed = true;},
   };

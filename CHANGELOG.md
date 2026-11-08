@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reuse the fixed external-conversation reader in Requirements Work inspectors
+  and standalone or linked-session Work details. Revalidate workspace choices
+  and exact Work bindings, clear stale excerpts during safety reads, and preserve
+  unrelated edit drafts in English and zh-TW.
+
 - Replace an existing external-history relationship through the shared Work form,
   preserving central atomic replacement and original request recovery. Withdraw
   previously read relationships after source access is lost using a bounded

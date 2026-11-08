@@ -1,5 +1,60 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-08：需求與獨立 Work 的外部對話閱讀候選
+
+`feat/work-history-surfaces-20261107` 接續 `2a65f5d9`，先以 `02b9ff13` 納入主線
+`c7836ffb` 的 TaskCoordinator 測試，再將既有固定摘錄閱讀元件接到 Requirements
+的 Work inspector，以及獨立／會話內的 Work 詳情。需求本身只保留既有 Work
+關聯；閱讀摘錄不代表需求採納、驗收、執行成功或自動 PM 輸入。
+
+獨立 Work 紀錄沒有工作區綁定，所以由目前中央清單提供工作區選擇。網址中的
+workspace 或最後瀏覽工作區只作為導覽提示；無提示時不自動選取，失效提示也不
+改用另一個工作區。重讀中央 workspace 與精確 kanban card，核對 Work／project／
+server／binding 後才讀關聯；每次列表、摘錄與最後顯示前重新核對。沒有掃描所有
+工作區的 Work 清單或推斷權限，正文及閱讀選取不寫入本機儲存。
+
+沿用來源授權、固定參照、關聯前後重讀、分頁及定時更新。需求切換、Work／工作區
+切換、父頁讀取及失敗均先清除正文，隔離晚到回覆；較舊的成功父頁回覆不能覆蓋較新
+拒絕。會話內「結果」側欄關閉、縮成手機版面或來源撤回也清除閱讀器與計時器，
+重新開啟須重新驗證。這些讀取不改動編輯中的 Work 草稿或既有 operation key。
+
+最終共用來源的 475 項 HTTP／注入 IPC 介面測試、614 項 Node 測試與 159 項相關
+Python 測試通過。介面包含 55 項新增入口案例，以及看板、需求、來源關聯、Attempt／
+文字選取、關聯維護、結果來源、待辦及 Workbench 回歸。雙入口建置與 ruff 通過；
+英文／繁中 390／1440 px 截圖已檢查，新工作區選單與手機展開控制至少 44 px。
+公開內容檢查及 staged secret scan 通過。
+
+Python 3.13 全套十六分片完成：9,891 passed、84 skipped、16 failed，沒有 errors。
+Collection manifests 核對 9,991 項、435 個檔案，沒有遺漏或重複；完整檢查仍記為
+失敗。14 個 Fleet bootstrap 案例 ID 與前輪完全相同，錯誤均含
+`BOOTSTRAP_STATE_UNPROVEN`：測試路徑上層的 0775 權限遭安全檢查拒絕。相同未修改
+模組放在隔離容器的安全磁碟路徑後，44 項通過；沒有修改共享目錄權限或安全檢查。
+
+另兩項未修改的 `tests/test_pm_schedule.py` 測試，在 2026-11-08 發生日期碰撞：
+`test_recorded_lines_keep_sessions_under_work_and_drop_unscoped_rows` 要求 `as_of`
+日期不在固定來源日期內；`test_replaced_baseline_drops_the_previous_forecast` 要求整個
+回應不含 2026-11-08，但合法的 `as_of`／`set_at` 正是當天。排程 range 與 forecast
+斷言先前均已通過；兩項單獨執行也重現相同失敗，日期相依的測試斷言仍待維護。
+本輪沒有 Python 原始碼或測試變更，測試暫存與容器已清理。
+
+此為 E08／E10、EC-1.1 T5 的未合併增量，沒有新增 Python 後端、schema 或 Rust
+變更；尚未發布、安裝或實機驗收。跨來源替換、未讀 ID 的發現、derive、原生執行與
+PM v1.2 未修訂工作仍開放。E00–E11、R0–R5、A01–A40 維持原狀；HTTP／注入 IPC
+及 responsive fixtures 不代表原生 WebView、真 BAT／模型或實體手機驗收。
+
+The existing fixed-excerpt reader now serves Requirements Work inspectors and
+standalone or linked-session Work details. Workspace hints require current central
+binding checks; parent refreshes and Results visibility changes clear stale text
+while preserving unrelated drafts. This unmerged E08/E10/T5 candidate adds no new
+backend/schema/native transport changes or publication, installation or live
+acceptance. UI (475), Node (614) and focused Python (159) checks passed. Full Python
+3.13 coverage remains failed: 9,891 passed, 84 skipped, 16 failed with complete
+collection coverage. Fourteen failures match the previous Fleet permission cases;
+that unchanged module passed all 44 tests at a secure container path. Two unchanged
+schedule tests independently reproduce date-dependent assertions against November 8
+in valid observation timestamps. Their recorded schedule assertions pass; the test
+assumptions still need maintenance.
+
 ## 2026-11-07：外部對話關聯替換與撤權後撤回候選
 
 `feat/history-relationship-maintenance-20261107` 接續 `804eb826`，在共用來源表單

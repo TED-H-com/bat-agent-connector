@@ -837,7 +837,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       onSelectionChange:(id,ref)=>{if(ref)qualitySelections.set(id,ref);else qualitySelections.delete(id);}}) : null;
   if(qualityReviews)body.insertBefore(qualityReviews.element,sprints?.box||content);
   const traceability = charter && brief && kanban
-    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled}) : null;
+    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, workspace: () => workspace, workspaceSettled}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
   const resources = workspaceId && !threadId && caps()?.features?.pm_resources
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === 'day'}) : null;

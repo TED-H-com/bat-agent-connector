@@ -348,8 +348,8 @@ cleanup does not establish complete revoked-source discovery or lifecycle covera
 
 ### Work-side reader candidate
 
-The shared Board Work inspector now offers **View linked excerpts** in English
-and zh-TW. It uses the existing selected Work and workspace membership; opening a
+The shared Board and Requirements Work inspectors offer **View linked excerpts**
+in English and zh-TW. They use the selected Work and workspace membership; opening a
 Work alone does not read external histories. The disclosure appears only for
 relationship version 1 with the fixed-reference schema, observe scope and an
 explicit workspace role. Older servers keep their existing inspector structure.
@@ -382,10 +382,34 @@ An open reader rechecks its loaded pages and selected excerpt every 60 seconds.
 Refresh, pagination and pending parent Work reads clear previous content before
 publishing a new result. Withdrawal, denial, changed identity or failed reads hide
 all loaded relationships and plaintext; the user can explicitly retry. Closing
-the disclosure/inspector, changing Work, leaving the board or disposing the view
+the disclosure/inspector, changing Work, leaving its view or disposing the view
 cancels its timer and fences late responses. A revoked relationship cannot be
-restored by a still-pending excerpt response. This is Board-inspector coverage;
-the standalone Work route and requirement inspector are not new reader surfaces.
+restored by a still-pending excerpt response. Selecting a requirement only shows
+its existing explicit Work links; selecting one of those Works opens that Work's
+reader. There is no requirement-wide transcript aggregation or automatic adoption.
+Each mounted reader has its own accessibility target ID.
+
+The standalone `/item/{work_id}` page, including its linked-session Work view,
+uses the same reader inside a workspace disclosure. The ordinary Work record has
+no workspace binding: an explicit route `workspace` or the last visited workspace
+is only a navigation hint. Without a hint, the person selects a workspace from the
+current central list. An unavailable hint does not silently fall back to another
+workspace, and the client does not scan Work catalogues to discover membership.
+Before reading, central workspace and exact kanban-card reads must match the
+workspace, server, Work, project and binding. Those checks run again for each
+relationship refresh and selected excerpt, and after the excerpt resolves, ahead
+of the final relationship check. A changed server or binding, or a lost membership
+role, withdraws the current read.
+
+Parent Work safety reads suspend history immediately, including while an unrelated
+edit draft has focus. Successful current reads can restore the selected excerpt;
+failed reads withdraw it without using a stale Work record as authority. Workspace
+and operation events also invalidate an open reader independently of the edit form.
+Closing, changing workspace or navigation fences initial workspace proofs as well
+as later excerpt reads. Closing or resizing the linked-session Results inspector,
+or withdrawing its session, also clears the reader and its timer. Workspace choice
+and plaintext stay in memory; these controls add no new backend routes, schema,
+native transport or operations.
 
 HTTP and injected desktop IPC regressions exercise this shared frontend. They do
 not establish native WebView, real BAT/model or physical-mobile acceptance. Work

@@ -22,3 +22,10 @@
 @media (max-width: 799px) { .exh-source button, .exh-actions button { min-height: 44px; } }
 
 @media (min-width: 800px) { [data-history-detail] > header > .ui-icon-button { display: inline-flex; } }
+
+[data-work-item-history-reader] > summary { cursor: pointer; padding-block: var(--space-2); }
+[data-work-item-history-reader] > label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+[data-history-workspace] { max-width: 100%; }
+@media (max-width: 799px) {
+  [data-work-item-history-reader] > summary, [data-history-workspace], [data-work-item-history] button { min-height: 44px; }
+}
