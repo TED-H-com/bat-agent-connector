@@ -1,5 +1,45 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-09：Connector 0.2.17／Desktop 0.1.13 已發布
+
+[穩定版 v0.2.17](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)
+已發布，固定來源為 `0399db5a7b647486126c9bf7bb5900c40dc54ea7`。
+[#507](https://github.com/TED-H-com/bat-agent-connector/pull/507) 整合外部對話的
+固定紀錄／文字範圍、Work／Attempt 關聯、替換與撤回，以及 Board、Requirements、
+獨立／會話內 Work 閱讀入口；[#508](https://github.com/TED-H-com/bat-agent-connector/pull/508)
+補上同一工作區內以明確關聯 ID 替換另一個可讀來源。中央重讀權限與版本，
+保留原操作 key、歷史與唯讀 CLI 邊界，不新增 schema 或 data step。
+
+該來源的 [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/42596030240)
+與 [desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/42596030227)
+均通過，包含四版 Python 的完整分片核對、四平台建置、隔離原生安裝 fixture，
+以及由固定 0.2.12／0.2.16 發布來源建置核心的升級保留檢查。
+八個公開資產的大小與 GitHub SHA-256 均核對一致；來源、套件、升級與安裝 fixture
+的確切回執身分見發布附件 `release-manifest.json`，套件與清單另可用 `SHA256SUMS` 核對。
+
+本機依序完成 Ruff、Python 3.13 與 3.10 全套；發布整合基底各為 9,925 passed、
+84 skipped、零失敗，完整覆蓋 10,009 項測試、436 個檔案。跨來源續作另通過兩版
+Python 的 104 項回歸、253 項相關介面案例與 614 項 Node 測試；最終主線 CI
+包含新增的中央跨來源案例。另完成 60 次回執恢復競態檢查、真 Connector HTTP
+的六個撤權流程及中央 PM 整合檢查。測試只用 mock BAT／providers 與磁碟暫存，
+本機 fixture 已清理。
+
+合併與發布已完成；本輪沒有手動安裝到使用者主機，也沒有新增真 BAT／模型、
+原生使用者操作或實體手機驗收。Linux／Windows 套件未簽章，macOS 採 ad-hoc
+簽章且未公證。歷史圖庫仍固定於 0.2.13／0.1.9，Desktop／site-demo 的離線
+producer receipt 仍不齊全，因此不宣稱完整離線組裝資格；套件一致性與原生 CI
+是各自獨立的證據。
+
+本輪屬 E08／E10／E11、EC-1.1 T5 增量，不關閉 E00–E11、R0–R5、A01–A40
+或 PM v1.2 未修訂待辦。未讀關聯 ID 發現、Work derive、原生執行及完整生命週期
+仍需續作；owner 的持續開發授權不等於 R0／R1 接受。下方候選段落保留各自當時狀態。
+
+Connector 0.2.17 / Desktop 0.1.13 is published from `0399db5a`, including #507 and
+#508. Fixed-source backend/native CI and all eight uploaded asset digests passed;
+the release manifest records package and fixture provenance. Publication adds no
+owner installation or live acceptance. Historical gallery and incomplete offline
+producer receipts remain explicit, and open PM lifecycle and E/R/A work continues.
+
 ## 2026-11-09：跨來源關聯替換續作（分支）
 
 `feat/history-cross-source-replacement-20261109` 接續 #507 的發布候選，補上
