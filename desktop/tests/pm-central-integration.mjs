@@ -353,7 +353,15 @@ try {
   await expect(page.locator('[data-rtm-unassigned] > summary')).toHaveText('Unassigned (1)');
   await page.evaluate(hash=>{location.hash=hash;},`#/pm/${workspaceId}/requirements?select=${work.work_item_id}`);
   await expect(page.locator('[data-work-inspector] h2')).toHaveText('First useful action');
-  await expect(page.locator('[data-work-inspector] [data-work-section]')).toHaveCount(6);
+  const workSections = page.locator('[data-work-inspector] [data-work-section]');
+  await expect(workSections).toHaveCount(7);
+  assert.deepEqual(await workSections.evaluateAll(nodes=>nodes.map(node=>node.dataset.workSection)),
+    ['requirements','status','result','blocker','delivery','external-history','details']);
+  const linkedHistory = page.locator('[data-work-inspector] [data-work-history-reader]');
+  await expect(linkedHistory.locator('summary')).toHaveText('View linked excerpts');
+  await expect(linkedHistory).toHaveJSProperty('open', false);
+  await linkedHistory.locator('summary').click();
+  await expect(linkedHistory).toContainText('This Work has no visible external conversation relationships.');
   await page.keyboard.press('Escape');
   await expect(page.locator(`[data-rtm-select="${work.work_item_id}"]`)).toBeFocused();
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();

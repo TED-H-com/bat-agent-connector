@@ -24,6 +24,7 @@ import {joinLabel} from './label-text.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
 import {sessionHref, workSessionContext} from './session-navigation.js';
 import {readWorkSessionContext} from './work-session-context.js';
+import {workItemHistory} from './pm-work-item-history.js';
 import {workResultPanel} from './pm-work-result.js';
 import {checkDelivery, prGroups, prPills} from './pm-work-inspector.js';
 import {viewState} from './ui/view-state.js';
@@ -4608,7 +4609,10 @@ async function viewWorkItem(main, wid) {
   const panel = h("div", {});
   const reading = h("div", {});
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  let mutable = true;
+  const historyPanel = workItemHistory({h, t, api, alive: () => assertView(connection), caps: () => state.caps, workId: wid,
+    workspaceHint: new URLSearchParams(location.hash.split('?')[1]).get('workspace') || lastWorkspace(connection.namespace),
+    visibilityRoot: main.closest('.ui-inspector')});
+  let mutable = true, historyReadGeneration = 0;
   const archiveLocks = new Map();
   const blocked = h("p", {class: "note warn", hidden: true}, t("parent_archived"));
   main.append(blocked);
@@ -4617,8 +4621,10 @@ async function viewWorkItem(main, wid) {
     if (!mutable) throw new ApiError(409, "ITEM_ARCHIVED", t("parent_archived"));
   };
   const refreshSafety = async () => {
+    const historyRead = ++historyReadGeneration; historyPanel.suspend();
     try {
       const data = await api("GET", `/work-items/${wid}`); assertView(connection);
+      if (historyRead === historyReadGeneration) historyPanel.setWork(data);
       rememberObservation("work_item", wid, data, itemDependencies(data));
       mutable = !data.work_item.archived && !data.project.archived;
       blocked.hidden = mutable;
@@ -4636,7 +4642,7 @@ async function viewWorkItem(main, wid) {
         for (const [control, disabled] of archiveLocks) control.disabled = disabled;
         archiveLocks.clear();
       }
-    } catch (error) { fill(notice, errorBox(error, {within:notice})); throw error; }
+    } catch (error) { if (historyRead === historyReadGeneration) historyPanel.withdraw(); fill(notice, errorBox(error, {within:notice})); throw error; }
   };
   let draft = null; // the edit form's values after a stale save, put back into the reloaded form
   // Fields made once and moved into each render: a re-render never throws away what is being typed.
@@ -4648,7 +4654,7 @@ async function viewWorkItem(main, wid) {
   kind.onchange();
   const results = state.caps?.features?.work_item_results?.version === 1 ? resultSourcesPanel({h, t, api,
     guard: () => assertView(connection), workItemId: wid, linkTarget, onEvents, errorBox}) : null;
-  main.append(manageNote() || "", notice, reading, results?.box || "", panel);
+  main.append(manageNote() || "", notice, reading, results?.box || "", panel, historyPanel.element);
   let displayedItem = null, renderQueue = Promise.resolve();
   const showReading = (w, progress) => {
     const readingSupported = state.caps?.features?.work_item_reads?.version === 1 && progress;
@@ -4677,11 +4683,13 @@ async function viewWorkItem(main, wid) {
   const renderNow = async (fromEvent = false) => {
     if (!panel.isConnected) return;
     const opens = drawerOpens;
+    const historyRead = ++historyReadGeneration; historyPanel.suspend();
     let data;
     try { data = await api("GET", `/work-items/${wid}`); }
-    catch (e) { fill(panel, errorBox(e, {within:panel})); return; }
+    catch (e) { if (historyRead === historyReadGeneration) historyPanel.withdraw(); fill(panel, errorBox(e, {within:panel})); return; }
     if (!panel.isConnected) return;
     assertView(connection);
+    if (historyRead === historyReadGeneration) historyPanel.setWork(data);
     rememberObservation("work_item", wid, data, itemDependencies(data));
     if (holdRender(fromEvent, opens)) {
       if (displayedItem) showReading(displayedItem, data.work_item.reading);
@@ -4793,7 +4801,10 @@ async function viewWorkItem(main, wid) {
   const repair = /^op_[0-9a-f]{32}$/.test(displayedItem?.operation_id) && state.caps?.features?.managed_repairs?.version === 1 ? repairWorkItemPanel({h, t, api,
     guard: () => assertView(connection), projectId: displayedItem.project_id, workItemId: wid, originOperationId: displayedItem.operation_id, errorBox}) : null;
   if (repair) {panel.before(repair.box); await repair.refresh();}
-  try {assertView(connection);} catch {repair?.dispose(); results?.dispose(); return;}
+  try {assertView(connection);} catch {historyPanel.dispose(); repair?.dispose(); results?.dispose(); return;}
+  const offHistory = onEvents(event => {
+    if (event.resource_type?.startsWith('pm_') || event.resource_type === 'operation') historyPanel.refresh();
+  });
   const offRepair = repair ? onEvents(event => {
     if (event.resource_type === "operation" || observationAffected("work_item", wid, event)) return repair.refresh();
   }) : null;
@@ -4802,7 +4813,7 @@ async function viewWorkItem(main, wid) {
   // to blur; renderNow still defers presentation while the person is typing.
   const off = liveReload(render, event => observationAffected("work_item", wid, event), refreshSafety,
     () => editing || (typing() && main.contains(document.activeElement)));
-  return () => {off?.(); offRepair?.(); repair?.dispose(); results?.dispose();};
+  return () => {off?.(); offHistory(); historyPanel.dispose(); offRepair?.(); repair?.dispose(); results?.dispose();};
 }
 
 // Start agent work from a linked checkpoint, with this item's words as the instructions; the new operation is

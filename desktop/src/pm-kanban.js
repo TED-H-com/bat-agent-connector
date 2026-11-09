@@ -11,10 +11,11 @@ import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText
 import {workStartPanel} from './pm-work-start.js';
 import {adoptStartLanding} from './pm-adopt-start-landing.js';
 import {workResultPanel} from './pm-work-result.js';
+import {workHistoryPanel} from './pm-work-history.js';
 import {retiredView, viewLeft} from './pm-retired.js';
 
 // Central management columns stay separate from execution, quality and delivery.
-export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
+export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, workspace = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, 'board');
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
@@ -25,6 +26,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const withdrawObservers = () => {for (const observer of observers.values()) observer.withdraw();};
   let startPanel = null;
   let resultPanel = null;
+  const historyPanel = workHistoryPanel({h,t,api,alive,workspaceId,workspace,caps});
   const updateHeaderButton = startable => {
     if (!detail.element) return;
     const actionRow = detail.element.querySelector('[data-work-actions]');
@@ -103,6 +105,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     withdrawObservers();
     startPanel?.withdraw();
     resultPanel?.withdraw();
+    historyPanel.withdraw();
     updateHeaderButton(false);
     detailSerial++; if (!preserveSelection) {selected = null; preference.selected = null; writeSelection(null); markSelection();}
     requestAnimationFrame(updateEdges);
@@ -321,6 +324,10 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     detail.show({title: card.work.title, card, plan: card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id), earlierPlan: card.binding.plan_revision_id !== plan?.revision_id, requirements: requirements(card),
     milestones: milestones.filter(row => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some(id => card.binding.requirement_ids?.includes(id))), source: sources.get(card.work_item_id),
     onMore: () => {deliveryPages++; void select(card.work_item_id, true);}});
+    const details = detail.element.body.querySelector('[data-work-section="details"]');
+    historyPanel.setWork(card);
+    if (historyPanel.element.hidden) historyPanel.element.remove();
+    else if (!detail.element.body.contains(historyPanel.element)) details.before(historyPanel.element);
     const panel = ensureStartPanel();
     if (panel) {
       const statusSection = detail.element.body.querySelector('[data-work-section="status"]');
@@ -371,6 +378,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   async function select(id, retain = false) {
     const current = rows.get(id); if (!current) return;
+    if (selected !== id || !retain) historyPanel.withdraw(); else historyPanel.suspend();
     if (selected !== id || !retain) { withdrawObservers(); updateHeaderButton(false); }
     if (selected !== id) deliveryPages = 1;
     selected = id; preference.selected = id; writeSelection(id); markSelection();
@@ -407,6 +415,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   async function refresh() {
     if (!active) {stale = true; return;}
     stale = false;
+    historyPanel.suspend();
     withdrawObservers();
     const ticket = ++serial; detailSerial++; reading = true; refreshButton.disabled = true; more.disabled = true;
     // Keep the same recovery controls while checking an existing failure. A
@@ -502,5 +511,5 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       return read;
     }
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); github?.dispose();landing.dispose();startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, rememberScroll, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {rememberScroll(); window.removeEventListener('scroll', onScroll); github?.dispose();landing.dispose();startPanel?.dispose(); startPanel = null; resultPanel?.dispose(); resultPanel = null; historyPanel.dispose(); resize.disconnect(); withdraw({forgetRoute: false});}};
 }

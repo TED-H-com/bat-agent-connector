@@ -388,6 +388,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   });
   form.append(connection);
   return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !(initialChecking && receiptTimer !== null) && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+    intentRequest: () => saved.intent ? structuredClone(saved.intent.request) : null,
     initialChecking: () => initialChecking && (busy || receiptTimer !== null),
     stopAutoCheck: () => {if (initialChecking) {initialChecking = false; stopTimer(); update();}},
     stage: () => {
@@ -739,7 +740,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       && caps()?.scopes?.some(scope => scope === 'observe' || scope === 'admin')}) : null;
   if (schedule) body.insertBefore(schedule.element, content);
   const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
-    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
+    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
@@ -836,13 +837,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       onSelectionChange:(id,ref)=>{if(ref)qualitySelections.set(id,ref);else qualitySelections.delete(id);}}) : null;
   if(qualityReviews)body.insertBefore(qualityReviews.element,sprints?.box||content);
   const traceability = charter && brief && kanban
-    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled}) : null;
+    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, workspace: () => workspace, workspaceSettled}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
   const resources = workspaceId && !threadId && caps()?.features?.pm_resources
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === 'day'}) : null;
   if (resources) body.insertBefore(resources.element, content);
   const externalHistory = workspaceId && !threadId && caps()?.features?.external_history?.version === 1
-    ? workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox}) : null;
+    ? workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox, workspace:()=>workspace, caps, namespace, permitted, form}) : null;
   if (externalHistory) body.insertBefore(externalHistory.element, content);
   const agentsContent = resources && externalHistory ? h('div', {}, resources.element, externalHistory.element) : resources?.element || externalHistory?.element;
   const drawersHome = h('div', {hidden: true});

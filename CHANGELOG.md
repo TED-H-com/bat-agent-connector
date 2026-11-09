@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.2.17 / Desktop 0.1.13 (2026-11-09)
+
+- Reuse the fixed external-conversation reader in Requirements Work inspectors
+  and standalone or linked-session Work details. Revalidate workspace choices
+  and exact Work bindings, clear stale excerpts during safety reads, and preserve
+  unrelated edit drafts in English and zh-TW.
+
+- Replace an existing external-history relationship through the shared Work form,
+  preserving central atomic replacement and original request recovery. Withdraw
+  previously read relationships after source access is lost using a bounded
+  local index of identifiers, with no saved transcript or inferred authority.
+  English and zh-TW use the same browser/desktop controls.
+- Optionally associate a fixed external-conversation excerpt with an explicitly
+  selected existing Work attempt. Revalidate paginated choices and the selected
+  detail, preserve opaque-ID drafts and original operation recovery, and keep
+  Work-only association as the default in English and zh-TW.
+- Select fixed text ranges from external conversations before linking to Work,
+  with Unicode and original-newline offsets, read-only keyboard controls and
+  English/zh-TW previews. Restore range metadata without saving plaintext and
+  preserve original requests, including older whole-entry intents.
+- Admit existing external-conversation excerpt previews and Work relationship
+  reads through the restricted desktop bridge, using exact source identities,
+  bounded text selections and pagination. Authorization and relationship writes
+  remain in the central service.
+- Add shared English/zh-TW controls to preview a fixed external-history entry,
+  link it to an existing Work and withdraw a relationship. Preserve original
+  operation keys across lost replies, including withdrawals no longer present
+  in the active list. Sources stay read-only; relationships do not imply approval
+  or completion.
+- Read fixed external-conversation excerpts from the shared Board Work inspector,
+  with current relationship/source checks, bounded pagination and explicit partial
+  history. Hide withdrawn or unavailable content and fence responses after Work
+  selection changes. Reading preserves the original sessions and creates no operation.
+
 ## 0.2.16 / Desktop 0.1.12 (2026-11-05)
 
 - Fix hourly `installed_source_mismatch` on v0.2.12-managed hosts by moving
