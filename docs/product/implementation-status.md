@@ -1,5 +1,29 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-09：Connector 0.2.17／Desktop 0.1.13 整合候選
+
+`release/history-links-20261109` 整合 `f340211c` 至 `7e382aec` 的外部歷史
+關聯、閱讀入口與測試修復，準備 0.2.17／0.1.13。共用英文／繁中介面可預覽
+整則或固定文字摘錄、選取既有 Work／Attempt、替換同一紀錄關聯及撤回已知 ID；
+Board、Requirements 和獨立／會話內 Work 詳情可重新授權後閱讀摘錄。
+保留原操作 key、來源唯讀、明確工作區綁定與中央權威，不新增 schema 或 data step。
+
+前一版 [v0.2.16](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.16)
+已於 2026-11-05 發布，來源為 `2f9386df38c71974144e58a77496f9f52b687f40`；
+下方「準備發布」保留當時紀錄。本候選將最新穩定版升級 fixture 固定到這個來源，
+保留另一個 0.2.12 基準。版本、canonical skill 與 generated adapters 同步更新。
+
+`7e382aec` 的 Python 3.13／3.10 全套證據與前端 475 項介面回歸見下方紀錄；
+整合候選仍須通過最終 CI、四個平台套件與來源／digest 核對才發布。
+本段是分支準備，不宣稱合併、發布、安裝或實機驗收。這是 E08／E10／E11、
+EC-1.1 T5 增量；E00–E11、R0–R5、A01–A40 和 PM v1.2 未修訂待辦維持開放。
+接續仍含跨來源替換、未讀關聯 ID 發現、Work derive 與原生執行。
+
+The integration candidate prepares Connector 0.2.17 / Desktop 0.1.13 for the shared
+external-history linking and reading flow. Current authorization, original intents
+and read-only sources remain authoritative. Final CI and package verification are
+publication gates; installation and real-device acceptance remain separate.
+
 ## 2026-11-09：排程日期與 Fleet 測試環境修正候選
 
 `fix/deterministic-python-validation-20261108` 接續 `d65ec38a`，處理前輪全套的

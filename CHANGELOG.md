@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.17 / Desktop 0.1.13 (2026-11-09)
 
 - Reuse the fixed external-conversation reader in Requirements Work inspectors
   and standalone or linked-session Work details. Revalidate workspace choices
