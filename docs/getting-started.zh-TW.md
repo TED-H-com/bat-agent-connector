@@ -6,7 +6,7 @@
 
 2026 年 11 月 9 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)為 Connector **0.2.17**／desktop **0.1.13**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
-本穩定版加入共用 Web／桌面的固定外部對話摘錄與明確 Work／Attempt 關聯（#507），可在看板、需求頁及 Work 詳情閱讀，並保留來源授權、原操作 key 與 CLI 會話唯讀邊界。前版的對話保存、PM 摘要及更新／恢復修正仍保留。較早的預覽版保留為歷史版本。最終來源、CI 及各自獨立的合併、發布、安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.17；下載較新套件不代表已安裝或實機驗收。
+本穩定版加入共用 Web／桌面的固定外部對話摘錄與明確 Work／Attempt 關聯（#507），也可用明確關聯識別碼跨可讀來源替換（#508）。可在看板、需求頁及 Work 詳情閱讀，並保留來源授權、原操作 key 與 CLI 會話唯讀邊界。前版的對話保存、PM 摘要及更新／恢復修正仍保留。較早的預覽版保留為歷史版本。最終來源、CI 及各自獨立的合併、發布、安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.17；下載較新套件不代表已安裝或實機驗收。
 
 | 平台 | 穩定版 0.1.13 資產 | 預覽版 0.1.9 資產 | 格式 |
 | --- | --- | --- | --- |
