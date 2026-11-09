@@ -216,7 +216,9 @@ async function refusedAccess(active, workUrl) {
     send({stage: 'refusal-refresh'});
     const {event} = await receive();
     await expect.poll(() => Boolean(paused)).toBe(true);
-    assert.ok(eventPages.some(page => page.events.some(row => row.seq === event.seq)));
+    // The response observer decodes JSON asynchronously in the test process.
+    // A browser debugger pause does not imply that observer has finished.
+    await expect.poll(() => eventPages.some(page => page.events.some(row => row.seq === event.seq))).toBe(true);
     refreshRace = {event, paused_at: Date.now(), frames: paused.callFrames.map(frame => ({
       name: frame.functionName, location: frame.location})), source_path: sourcePath};
     context.off('response', observePage);
