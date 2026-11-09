@@ -1,13 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.17 / Desktop 0.1.13 (2026-11-09)
 
 - Replace a readable external-history relationship from another entry or source
   by explicitly looking up its ID in the same workspace. Review its original
   Work, source and version, preserve the original operation key and ID-only draft,
   and keep English/zh-TW browser and desktop controls aligned.
-
-## 0.2.17 / Desktop 0.1.13 (2026-11-09)
 
 - Reuse the fixed external-conversation reader in Requirements Work inspectors
   and standalone or linked-session Work details. Revalidate workspace choices
