@@ -306,10 +306,7 @@ async def test_coordinator_verify_and_review(tmp_path, monkeypatch):
     coordinator = TaskCoordinator(journal, adapter)
     coordinator.minimal_review_gate = lambda *args: None
 
-    async def mock_route(*args, **kwargs):
-        pass
 
-    coordinator._route = mock_route
 
     import bat_agent_connector.task_control as task_control
 
@@ -406,9 +403,6 @@ async def test_verification_failed_code_rework(tmp_path, monkeypatch):
     adapter = CodeReworkAdapter()
     coordinator = TaskCoordinator(journal, adapter)
 
-    async def mock_route(*args, **kwargs):
-        pass
-    coordinator._route = mock_route
 
     import bat_agent_connector.task_control as task_control
     monkeypatch.setattr(task_control, "require_authority", lambda task: True)
@@ -562,9 +556,6 @@ async def test_start_warm_start(tmp_path, monkeypatch):
     adapter = WarmAdapter()
     coordinator = TaskCoordinator(journal, adapter)
 
-    async def mock_route(*args, **kwargs):
-        pass
-    coordinator._route = mock_route
 
     import bat_agent_connector.task_control as task_control
     monkeypatch.setattr(task_control, "require_authority", lambda task: True)
@@ -603,9 +594,6 @@ async def test_start_fallback_agent(tmp_path, monkeypatch):
     adapter = FallbackAdapter()
     coordinator = TaskCoordinator(journal, adapter)
 
-    async def mock_route(*args, **kwargs):
-        pass
-    coordinator._route = mock_route
 
     import bat_agent_connector.task_control as task_control
     monkeypatch.setattr(task_control, "require_authority", lambda task: True)
@@ -641,9 +629,6 @@ async def test_send_reconciled(tmp_path, monkeypatch):
     adapter = ReconcileAdapter()
     coordinator = TaskCoordinator(journal, adapter)
 
-    async def mock_route(*args, **kwargs):
-        pass
-    coordinator._route = mock_route
 
     import bat_agent_connector.task_control as task_control
     monkeypatch.setattr(task_control, "require_authority", lambda task: True)
