@@ -93,7 +93,9 @@ for(const bad of ['id','workspace','reference','version','withdrawn','creator','
 test('failed replacement needs explicit new request and reread before using a new version',async({page})=>{
   const f=maintenanceFixture(); await open(page,false,f); await select(page,workId(2)); await chooseReplacement(page);
   f.state.links[0].version=2; await submit(page).click(); await expect(relations(page).getByRole('button',{name:'New request',exact:true})).toBeVisible();
-  await expect(replacement(page).getByRole('button')).toBeDisabled(); await relations(page).getByRole('button',{name:'New request',exact:true}).click();
+  await expect(replacement(page).getByRole('button',{name:'Reread selected relationship',exact:true})).toBeDisabled();
+  await expect(replacement(page).getByRole('button',{name:'Read relationship',exact:true})).toBeDisabled();
+  await relations(page).getByRole('button',{name:'New request',exact:true}).click();
   await replacement(page).getByRole('button',{name:'Reread selected relationship'}).click();
   await expect(replacement(page).locator('[data-history-replacement-detail]')).toContainText('version 2'); await submit(page).click();
   await expect(relations(page)).toContainText('Excerpt linked to Work.'); expect(f.state.writes[1].body.params.expected_old_link_version).toBe(2);
@@ -108,9 +110,14 @@ test('late replacement read cannot retarget a different selected Work',async({pa
   await expect.poll(()=>f.state.writes.length).toBe(1); expect(f.state.writes[0].body.params.replaces_link_id).toBeUndefined();
 });
 test('receipt success during replacement restoration clears the retired choice',async({page})=>{
-  const f=maintenanceFixture(); await open(page,false,f); await select(page,workId(2)); await chooseReplacement(page); f.maintenance.pending=true;
-  await submit(page).click(); await expect.poll(()=>f.state.ops.size).toBe(1); f.maintenance.pending=false;
-  let release!:()=>void; f.maintenance.holdLink=new Promise(resolve=>release=resolve); await reloadDraft(page);
+  const f=maintenanceFixture(), dispatch=f.dispatch; let restoring=false;
+  f.dispatch=async input=>{
+    if(restoring && input.path.includes('/external-links/')) f.maintenance.pending=false;
+    return dispatch(input);
+  };
+  await open(page,false,f); await select(page,workId(2)); await chooseReplacement(page); f.maintenance.pending=true;
+  await submit(page).click(); await expect(relations(page).locator('a[href^="#/op/"]')).toHaveCount(1);
+  let release!:()=>void; f.maintenance.holdLink=new Promise(resolve=>release=resolve); restoring=true; await reloadDraft(page);
   await expect(relations(page)).toContainText('Excerpt linked to Work.'); release();
   await expect(replacement(page).getByRole('combobox')).toHaveValue(''); await expect(submit(page)).toBeEnabled(); expect(f.state.writes).toHaveLength(1);
 });

@@ -183,12 +183,14 @@ test('acknowledged success during restored attempt loading retains a usable veri
   f.dispatch=async input=>{
     const result=await dispatch(input);
     if(input.path.startsWith('/operations') && result.data.operation) result.data.operation.status=pending?'running':'succeeded';
-    if(restoring && input.path.includes('/work-attempts/')) {detailStarted=true;await detailWait;}
+    if(restoring && input.path.includes('/work-attempts/')) {detailStarted=true;pending=false;await detailWait;}
     if(detailStarted && input.path.includes('/associations?')) {heldLinks++;await linksWait;}
     return result;
   };
   await open(page,false,f); await select(page); await choose(page); await submit(page).click();
-  await expect.poll(()=>f.state.ops.size).toBe(1); pending=false; restoring=true;
+  // Reload only after the browser has persisted the acknowledged operation ID.
+  // Completion starts inside restoration, not in the interval before reload.
+  await expect(relations(page).locator('a[href^="#/op/"]')).toHaveCount(1); restoring=true;
   await reloadDraft(page); await expect.poll(()=>heldLinks).toBe(1);
   releaseDetail(); await expect(selectedDetail(page)).toContainText(att(1)); releaseLinks();
   await expect(submit(page)).toBeEnabled(); await expect(attemptSelect(page)).toHaveValue(att(1));

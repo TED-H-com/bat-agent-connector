@@ -309,6 +309,23 @@ range or optional Attempt. No write happens during selection. A single existing
 `expected_old_link_version` together with the new fixed reference and destination
 preconditions; the central transaction preserves the old record and events.
 
+An explicit **Relationship ID** lookup also selects a readable relationship from
+another entry or source in the same workspace. The ID is only a lookup hint: a
+current central read must confirm its server, workspace, fixed reference, active
+state, creator/owner authority and Work before supplying its version. The review
+shows the original Work, source, entry and version. A relationship from the loaded
+entry list still has to match that entry's exact reference. There is no source
+scan, automatic replacement or inferred Work association. Both old and new
+sources must be readable through the existing APIs; a revoked source still uses
+the known-ID withdrawal flow below.
+
+Typing another ID retires the previous selection and blocks submission until
+the explicit read succeeds, or the choice is cleared. Invalid IDs make no API
+request. Only the validated ID and version enter the existing replacement draft;
+the old title, source reference and text are not added to local storage. Restoring
+a draft rechecks the same version. An unavailable old relationship does not
+prevent recovery of an already sent original operation.
+
 Only the old ID and version join the existing durable draft. An immutable original
 request takes precedence over newer fields, including an older create-only intent.
 Lost replies retain the same key even when the old association has disappeared.
@@ -342,8 +359,8 @@ record and its legacy index entry; malformed receipts preserve recovery.
 The source inspector suspends cleanup forms to avoid concurrent controls for the
 same draft. Both surfaces preserve the existing durable operation and connection
 gates. English/zh-TW and HTTP/injected IPC use the same source. This adds no API,
-schema, native transport or CLI control. Cross-entry/source replacement, other
-Work reading surfaces, derive and native/live acceptance remain open; known-ID
+schema, native transport or CLI control. Discovery of unseen relationship IDs,
+derive and native/live acceptance remain open; known-ID
 cleanup does not establish complete revoked-source discovery or lifecycle coverage.
 
 ### Work-side reader candidate
@@ -415,8 +432,8 @@ HTTP and injected desktop IPC regressions exercise this shared frontend. They do
 not establish native WebView, real BAT/model or physical-mobile acceptance. Work
 derivation and native execution remain open alongside the unrevised PM lifecycle
 requirements. Relationship maintenance above covers same-entry replacement and
-locally known IDs after source revocation; it does not provide cross-source
-replacement or discovery of unseen relationships.
+locally known IDs after source revocation, plus explicit cross-source replacement
+by readable relationship ID. It does not discover unseen relationships.
 
 ## Narrow format profiles
 

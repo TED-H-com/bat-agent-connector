@@ -1118,6 +1118,11 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_replace_help: "Choose a loaded relationship for this entry. One operation withdraws it and links the displayed excerpt to the selected Work and optional attempt.",
 			exh_replacement_refresh: "Reread selected relationship",
 			exh_replace_target: "Replacing a relationship to {name} · version {version}",
+			exh_replacement_id: "Relationship ID",
+			exh_replacement_read: "Read relationship",
+			exh_replacement_id_help: "Or enter an existing relationship ID from another entry or source in this workspace. Its source must still be readable. Review the original Work and source before linking the new excerpt.",
+			exh_replacement_invalid: "Enter a complete relationship ID beginning with hxl_.",
+			exh_replace_source: "Source: {source} · Entry: {entry}",
 			exh_cleanup: "Saved relationship IDs",
 			exh_cleanup_help: "Relationships previously read on this device can be withdrawn even when their source is unavailable. Only IDs and recovery metadata are saved here; the service checks your current authority.",
 			exh_cleanup_refresh: "Refresh saved list",
@@ -1217,6 +1222,11 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_replace_help: "選擇這則紀錄中已載入的關聯。一次操作會撤回舊關聯，並將畫面上的摘錄連到所選工作及選填的執行輪次。",
 			exh_replacement_refresh: "重讀所選關聯",
 			exh_replace_target: "將替換與「{name}」的關聯 · 第 {version} 版",
+			exh_replacement_id: "關聯識別碼",
+			exh_replacement_read: "讀取關聯",
+			exh_replacement_id_help: "也可輸入此工作區中另一則紀錄或來源的既有關聯識別碼。原來源必須仍可讀取；連結新摘錄前，請核對原工作與來源。",
+			exh_replacement_invalid: "請輸入以 hxl_ 開頭的完整關聯識別碼。",
+			exh_replace_source: "來源：{source} · 紀錄：{entry}",
 			exh_cleanup: "已保存的關聯識別資料",
 			exh_cleanup_help: "即使來源已無法讀取，仍可撤回這個裝置先前讀過的關聯。此處只保存識別與復原資料；服務會檢查你目前的權限。",
 			exh_cleanup_refresh: "重新整理保存清單",
@@ -24587,19 +24597,21 @@ function historyAttemptPicker({ h, t, api, alive, workspaceId, workId, supported
 }
 //#endregion
 //#region src/pm-history-replacement.js
-function historyReplacement({ h, t, api, alive, workspaceId, matches, allowed, choices, blocked, onChange, errorBox }) {
+function historyReplacement({ h, t, api, alive, workspaceId, matches, matchesWorkspace, allowed, choices, blocked, onChange, errorBox }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const field = h("input", {
 		type: "hidden",
 		value: ""
 	});
-	let selected = null, verified = null, busy = false, disposed = false, serial = 0;
+	let selected = null, verified = null, busy = false, disposed = false, serial = 0, lookupPending = false;
 	const status = h("div", { role: "status" }), detail = h("div", { "data-history-replacement-detail": "" });
 	const select = h("select", {
 		"aria-label": t("exh_replacement"),
 		onchange: () => {
 			if (blocked() || busy) return;
 			const row = choices().find((value) => value.link.link_id === select.value)?.link;
+			lookupPending = false;
+			lookup.value = "";
 			selected = row ? {
 				link_id: row.link_id,
 				version: row.version
@@ -24610,13 +24622,53 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, allowed, c
 			read();
 		}
 	});
+	const lookup = h("input", {
+		type: "text",
+		maxlength: 36,
+		autocomplete: "off",
+		spellcheck: false,
+		"aria-label": t("exh_replacement_id"),
+		oninput: () => {
+			if (blocked() || busy) return;
+			serial++;
+			selected = verified = null;
+			field.value = "";
+			select.value = "";
+			lookupPending = lookup.value !== "";
+			detail.replaceChildren();
+			status.replaceChildren();
+			update();
+			onChange();
+		}
+	});
+	const find = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_replacement_read"),
+		onclick: () => {
+			if (blocked() || busy) return;
+			if (!/^hxl_[0-9a-f]{32}$/.test(lookup.value)) {
+				status.replaceChildren(h("p", { role: "alert" }, t("exh_replacement_invalid")));
+				return;
+			}
+			selected = {
+				link_id: lookup.value,
+				version: null
+			};
+			field.value = "";
+			verified = null;
+			lookupPending = true;
+			onChange();
+			read();
+		}
+	});
 	const refresh = button({
 		variant: "ghost",
 		size: "sm",
 		label: t("exh_replacement_refresh"),
 		onclick: () => void read(true)
 	});
-	const element = h("details", { "data-history-replacement": "" }, h("summary", {}, t("exh_replace_choose")), h("p", { class: "ui-meta" }, t("exh_replace_help")), h("label", {}, t("exh_replacement"), select), status, detail, refresh);
+	const element = h("details", { "data-history-replacement": "" }, h("summary", {}, t("exh_replace_choose")), h("p", { class: "ui-meta" }, t("exh_replace_help")), h("label", {}, t("exh_replacement"), select), h("p", { class: "ui-meta" }, t("exh_replacement_id_help")), h("label", {}, t("exh_replacement_id"), lookup), h("div", { class: "exh-actions" }, find), status, detail, refresh);
 	const current = (ticket) => {
 		try {
 			alive();
@@ -24633,7 +24685,8 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, allowed, c
 		select.value = selected?.link_id || "";
 	}
 	function update() {
-		select.disabled = busy || blocked();
+		select.disabled = lookup.disabled = busy || blocked();
+		find.disabled = select.disabled || !lookup.value;
 		refresh.disabled = select.disabled || !selected;
 	}
 	async function read(advance = false) {
@@ -24650,7 +24703,8 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, allowed, c
 			const data = await api("GET", `${endpoint}/external-links/${encodeURIComponent(expected.link_id)}`);
 			if (!current(ticket)) return;
 			const link = data.link;
-			if (link?.link_id !== expected.link_id || link.workspace_id !== workspaceId || !/^wi_[0-9a-f]{20}$/.test(link.work_item_id) || link.state !== "active" || link.purpose !== "reference" || !Number.isSafeInteger(link.version) || link.version < 1 || !matches(link.fixed_ref) || !historyReferenceKey(link.fixed_ref) || !allowed(link) || !advance && link.version !== expected.version) throw mismatch();
+			const local = choices().find((row) => row.link.link_id === expected.link_id)?.link;
+			if (link?.link_id !== expected.link_id || link.workspace_id !== workspaceId || !/^wi_[0-9a-f]{20}$/.test(link.work_item_id) || link.state !== "active" || link.purpose !== "reference" || !Number.isSafeInteger(link.version) || link.version < 1 || !matchesWorkspace(link.fixed_ref) || !historyReferenceKey(link.fixed_ref) || !allowed(link) || local && (!matches(link.fixed_ref) || historyReferenceKey(link.fixed_ref) !== historyReferenceKey(local.fixed_ref)) || !advance && expected.version !== null && link.version !== expected.version) throw mismatch();
 			const work = await api("GET", `/work-items/${encodeURIComponent(link.work_item_id)}`);
 			if (!current(ticket)) return;
 			if (work.work_item?.work_item_id !== link.work_item_id || typeof work.work_item.title !== "string") throw mismatch();
@@ -24660,9 +24714,14 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, allowed, c
 			};
 			field.value = JSON.stringify(selected);
 			verified = link;
+			lookupPending = false;
+			drawChoices();
 			detail.replaceChildren(h("p", {}, t("exh_replace_target", {
 				name: work.work_item.title,
 				version: link.version
+			})), h("p", { class: "ui-meta" }, t("exh_replace_source", {
+				source: link.fixed_ref.source_id,
+				entry: link.fixed_ref.entry_id
 			})), h("p", { class: "mono" }, link.link_id));
 		} catch (error) {
 			if (current(ticket)) {
@@ -24685,10 +24744,12 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, allowed, c
 		field,
 		update,
 		refreshChoices: drawChoices,
-		ready: () => !busy && (!selected ? field.value === "" : Boolean(verified && allowed(verified) && field.value === JSON.stringify(selected))),
+		ready: () => !busy && !lookupPending && (!selected ? field.value === "" : Boolean(verified && allowed(verified) && field.value === JSON.stringify(selected))),
 		restore: async (value) => {
 			if (value !== "" && (typeof value !== "object" || !value || Object.keys(value).sort().join(",") !== "link_id,version" || !/^hxl_[0-9a-f]{32}$/.test(value.link_id) || !Number.isSafeInteger(value.version) || value.version < 1)) throw mismatch();
 			selected = value || null;
+			lookupPending = false;
+			lookup.value = "";
 			field.value = selected ? JSON.stringify(selected) : "";
 			drawChoices();
 			if (selected) {
@@ -24698,9 +24759,9 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, allowed, c
 		},
 		saved() {
 			serial++;
-			busy = false;
+			busy = lookupPending = false;
 			selected = verified = null;
-			field.value = "";
+			field.value = lookup.value = "";
 			detail.replaceChildren();
 			status.replaceChildren();
 			drawChoices();
@@ -25120,6 +25181,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 				workspaceId,
 				matches,
 				errorBox,
+				matchesWorkspace: (ref) => ref?.server_id === workspace()?.server_id && ref.workspace_id === workspaceId && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(ref.source_id) && /^shi_[0-9a-f]{32}$/.test(ref.entry_id),
 				allowed: (link) => canLink() && canUnlink(link),
 				choices: () => [...links.values()].map((link) => ({
 					link,
