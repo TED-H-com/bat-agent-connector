@@ -93,7 +93,9 @@ for(const bad of ['id','workspace','reference','version','withdrawn','creator','
 test('failed replacement needs explicit new request and reread before using a new version',async({page})=>{
   const f=maintenanceFixture(); await open(page,false,f); await select(page,workId(2)); await chooseReplacement(page);
   f.state.links[0].version=2; await submit(page).click(); await expect(relations(page).getByRole('button',{name:'New request',exact:true})).toBeVisible();
-  await expect(replacement(page).getByRole('button')).toBeDisabled(); await relations(page).getByRole('button',{name:'New request',exact:true}).click();
+  await expect(replacement(page).getByRole('button',{name:'Reread selected relationship',exact:true})).toBeDisabled();
+  await expect(replacement(page).getByRole('button',{name:'Read relationship',exact:true})).toBeDisabled();
+  await relations(page).getByRole('button',{name:'New request',exact:true}).click();
   await replacement(page).getByRole('button',{name:'Reread selected relationship'}).click();
   await expect(replacement(page).locator('[data-history-replacement-detail]')).toContainText('version 2'); await submit(page).click();
   await expect(relations(page)).toContainText('Excerpt linked to Work.'); expect(f.state.writes[1].body.params.expected_old_link_version).toBe(2);

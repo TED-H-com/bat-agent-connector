@@ -260,6 +260,8 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
         onChange:()=>{editor?.changed(); editor?.update();}});
       attemptPicker = attempts;
       const replacing = historyReplacement({h,t,api,alive,workspaceId,matches,errorBox,
+        matchesWorkspace:ref=>ref?.server_id === workspace()?.server_id && ref.workspace_id === workspaceId
+          && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(ref.source_id) && /^shi_[0-9a-f]{32}$/.test(ref.entry_id),
         allowed:link=>canLink() && canUnlink(link),
         choices:()=>[...links.values()].map(link=>({link,title:titles.get(link.link_id)})),
         blocked:()=>!canLink() || Boolean(editor?.locked()) || previewBusy || workSelecting,

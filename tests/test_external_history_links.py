@@ -91,6 +91,40 @@ async def test_link_duplicate_replace_unlink_and_unchanged_delivery(linked_work)
     assert invariant(d, req['target']) == before
 
 
+async def test_cross_source_replacement_preserves_old_reference_and_original_key(linked_work):
+    from tests.test_external_history import read
+
+    d, req, source = linked_work
+    original = await submit(d, req)
+    old_id = original['result']['link_id']
+    other = replace(source, source_id='other-history', path=source.path.with_name('other.jsonl'))
+    original_bytes = source.path.read_bytes()
+    other.path.write_bytes(original_bytes)
+    d.history_collector.config = HistoryConfig(10, (source, other))
+    await d.history_collector.collect_once()
+    entry = read(d, other.workspace_id, other)['entries'][0]
+    reference = pm_reads.read(d.ops, OWNER, 'pm_history_excerpt_preview', {
+        'workspace_id': other.workspace_id, 'source_id': other.source_id,
+        'entry_id': entry['entry_id'], 'expected_content_digest': entry['content_digest'],
+        'selection': {'kind': 'entry'},
+    })['ref']
+    before = invariant(d, req['target'])
+    request = req | {'idempotency_key': 'replace-cross-source', 'params': {
+        'fixed_ref': reference, 'replaces_link_id': old_id, 'expected_old_link_version': 1,
+    }}
+    result = await submit(d, request)
+    new_id = result['result']['link_id']
+    assert new_id != old_id
+    assert read_link(d, req, new_id)['fixed_ref'] == reference
+    old = read_link(d, req, old_id)
+    assert old['state'] == 'withdrawn' and old['version'] == 2
+    assert old['fixed_ref'] == req['params']['fixed_ref']
+    assert (await submit(d, request))['operation_id'] == result['operation_id']
+    assert counts(d) == (2, 2, 3)
+    assert invariant(d, req['target']) == before
+    assert source.path.read_bytes() == other.path.read_bytes() == original_bytes
+
+
 @pytest.mark.parametrize('role,grant,admin,allowed', [
     ('owner', True, False, True), ('contributor', True, False, True), ('reader', True, False, False),
     ('owner', False, False, False), ('contributor', False, False, False), ('reader', False, False, False),

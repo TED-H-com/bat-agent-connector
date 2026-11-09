@@ -1,5 +1,25 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-09：跨來源關聯替換續作（分支）
+
+`feat/history-cross-source-replacement-20261109` 接續 #507 的發布候選，補上
+同一工作區內以明確關聯 ID 替換另一則紀錄或來源。查詢會重新確認中央來源、
+Work、權限與版本，顯示原工作與來源後才可提交既有原子操作；輸入中的新 ID
+先停用提交，查詢失敗不自動變成建立關聯。原來源不可讀時仍使用既有撤回入口。
+
+草稿只增加已驗證的舊 ID／版本，原 request 與 key 優先；未讀 ID 發現、來源掃描、
+derive 和原生執行不在這個增量。已通過 253 項相關 HTTP／注入 IPC 介面案例、
+614 項 Node 測試及 104 項 Python 回歸（含 Codex／Claude 兩種 fixture 的跨來源
+中央操作、舊紀錄與原 key 保留）。完整候選檢查另行記錄，不以局部回歸代替。
+這是 E08／E10、EC-1.1 T5 的分支增量，尚未合併、發布、安裝或實機驗收；
+E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂待辦維持開放。
+
+The continuation adds explicit replacement by readable relationship ID across
+entries and sources in one workspace. Central reads establish the original Work,
+source and version; original requests retain recovery authority. Focused UI,
+Node and Python checks passed. The branch is not merged, released, installed or
+live-accepted, and does not complete the remaining lifecycle or execution work.
+
 ## 2026-11-09：Connector 0.2.17／Desktop 0.1.13 整合候選
 
 `release/history-links-20261109` 整合 `f340211c` 至 `7e382aec` 的外部歷史
