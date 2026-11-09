@@ -67,12 +67,13 @@ test('a completed receipt during range restoration cannot leave an empty disable
   f.dispatch=async input=>{
     const result=await dispatch(input);
     if(input.path.startsWith('/operations') && result.data.operation) result.data.operation.status=pending?'running':'succeeded';
-    if(restoring && input.path.endsWith('/history-excerpt-preview') && input.body.selection.kind==='text') {textStarted=true;await textWait;}
+    if(restoring && input.path.endsWith('/history-excerpt-preview') && input.body.selection.kind==='text') {textStarted=true;pending=false;await textWait;}
     if(textStarted && input.path.includes('/associations?')) {heldLinks++;await linksWait;}
     return result;
   };
   await open(page,false,f); await select(page); await range(page,7,9); await expect(submit(page)).toBeEnabled(); await submit(page).click();
-  await expect.poll(()=>f.state.ops.size).toBe(1); pending=false; restoring=true;
+  // The restored form may poll only an ID already acknowledged in the browser.
+  await expect(relations(page).locator('a[href^="#/op/"]')).toHaveCount(1); restoring=true;
   await prepareAgain(page); await expect.poll(()=>heldLinks).toBe(1);
   releaseText(); await expect(preview(page).locator('.exh-text')).toHaveText('🦇'); releaseLinks();
   await expect(relations(page)).toContainText('Excerpt linked to Work.'); await expect(submit(page)).toBeEnabled();
