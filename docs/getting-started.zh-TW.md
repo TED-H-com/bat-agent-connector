@@ -4,24 +4,24 @@
 
 ## 選擇相符的安裝包
 
-2026 年 11 月 5 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)為 Connector **0.2.15**／desktop **0.1.11**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
+2026 年 11 月 9 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)為 Connector **0.2.17**／desktop **0.1.13**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
-本穩定版加入背景對話保存、固定版本閱讀與明確請求的 PM 接續摘要（#498），以及主機部署狀態唯讀觀察（#495），並保留先前的本機服務、Windows 與 Fleet 恢復修正。較早的預覽版保留為歷史版本。最終來源、CI 及各自獨立的合併、發布、安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.15；下載較新套件不代表已安裝或實機驗收。
+本穩定版加入共用 Web／桌面的固定外部對話摘錄與明確 Work／Attempt 關聯（#507），可在看板、需求頁及 Work 詳情閱讀，並保留來源授權、原操作 key 與 CLI 會話唯讀邊界。前版的對話保存、PM 摘要及更新／恢復修正仍保留。較早的預覽版保留為歷史版本。最終來源、CI 及各自獨立的合併、發布、安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.17；下載較新套件不代表已安裝或實機驗收。
 
-| 平台 | 穩定版 0.1.11 資產 | 預覽版 0.1.9 資產 | 格式 |
+| 平台 | 穩定版 0.1.13 資產 | 預覽版 0.1.9 資產 | 格式 |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.11_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.11_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.11_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.11_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.13_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.13_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.13_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.13_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Windows 包未正式簽署，Mac 採 ad-hoc 簽署。正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
 
 ### 更新既有桌面安裝
 
-Windows 請下載 `better-agent-dashboard_0.1.11_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
+Windows 請下載 `better-agent-dashboard_0.1.13_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
 
-發布檢查分別由 Connector 0.2.12 與 0.2.14 的固定發布來源建置舊核心，再升級至 0.2.15，核對原身分、資料與操作保留。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
+發布檢查分別由 Connector 0.2.12 與 0.2.16 的固定發布來源建置舊核心，再升級至 0.2.17，核對原身分、資料與操作保留。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
 
 ## 首次啟動：你的本機 Connector
 
@@ -165,6 +165,23 @@ BAT 分析需要在所選 Linux BAT 主機安裝已審閱的專用 PM runtime；
 
 BAT 離線時，只要 Connector 可連線且目前仍有權限，就可讀先前保存文字。session 消失或已有保存歷史，都不能證明程序停止。文字／容量上限見[保存合約](design/session-retention.md)，來源與 runtime 前提見 [PM 接續合約](design/pm-continuation-brief.md)。
 
+### 將外部對話摘錄連到工作
+
+在 **Agent 資源 → 外部對話** 開啟可用來源，展開紀錄的**相關工作**，按
+**選擇工作**並選取既有 Work。若只需要部分內容，展開**選取文字範圍**，
+選取文字後按**預覽選取文字**；核對**將關聯的摘錄**後，再按**將摘錄連到工作**。
+**選擇執行輪次（選填）**可明確指定既有 Attempt；留空時只關聯 Work。
+
+需要替換時，展開**替換關聯（選填）**，選取已載入關聯，或填入**關聯識別碼**
+後按**讀取關聯**。識別碼查詢也支援同一工作區內另一則紀錄或來源，但原來源須
+仍可讀取；提交前核對原工作、來源與版本。來源失去權限後，可從
+**已保存的關聯識別資料**撤回先前讀過的關聯，服務仍會檢查目前權限。
+回覆遺失時，用**查回原請求**恢復同一操作。
+
+從看板、需求頁或 Work 詳情的**查看已關聯摘錄**閱讀固定參照，提示時選擇工作區。
+這些操作保留原 CLI 會話，不會核准範圍、啟動 Attempt 或完成 Work。
+來源設定與存取規則見[外部對話合約](design/external-conversation-history.md)。
+
 ### 查看主機部署狀態
 
 從 session 清單開啟主機，選擇**主機部署狀態（唯讀）**。操作者須先在發出查詢的 Connector 設定選填的 SSH alias 與部署目錄；各 Connector 各自查詢。介面按需讀取 container、systemd 與已設定 Git 部署 metadata，不會安裝、重啟或更新服務。CLI 可用 `batc hosts deploy-status`；設定方式與部分結果限制見[部署觀察指南](design/host-deploy-status.md)。
@@ -209,7 +226,7 @@ Dashboard 登入欄位不能填 BAT remote token。
 兩個已發布版本都含驗證安裝器；啟動腳本與安裝須使用同一 tag。穩定版：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.15/scripts/install.sh | sh -s -- --tag v0.2.15 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.17/scripts/install.sh | sh -s -- --tag v0.2.17 --channel-check stable
 ```
 
 預覽版：

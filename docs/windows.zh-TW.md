@@ -4,7 +4,7 @@
 
 Windows Fleet 是 Tauri 裡的本機連線與啟動層。Python Connector／Task Service 授權並派工，BAT 在選定主機執行工作。桌面包包含本機 Python 中央 runtime；加入既有中央（例如 Linux 中央）保留為進階選項。
 
-使用[穩定版 0.2.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)：Connector 0.2.15／Desktop 0.1.11。下載 `better-agent-dashboard_0.1.11_windows_x64.exe` 並核對 `release-manifest.json`、`SHA256SUMS`。更新時從系統匣退出 Dashboard，再執行安裝器，保留既有應用程式資料。舊未簽章測試包不支援內建簽章更新。來源／CI、使用 0.2.12 與 0.2.14 固定發布來源建置核心的升級 fixture，以及另外列明的實機驗收限制，見[交付狀態](product/implementation-status.md)。後續開發候選可從 [`main` 成功的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對來源與 Windows 安裝 fixture；Actions artifacts 可能到期。
+使用[穩定版 0.2.17](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)：Connector 0.2.17／Desktop 0.1.13。下載 `better-agent-dashboard_0.1.13_windows_x64.exe` 並核對 `release-manifest.json`、`SHA256SUMS`。更新時從系統匣退出 Dashboard，再執行安裝器，保留既有應用程式資料。舊未簽章測試包不支援內建簽章更新。來源／CI、使用 0.2.12 與 0.2.16 固定發布來源建置核心的升級 fixture，以及另外列明的實機驗收限制，見[交付狀態](product/implementation-status.md)。後續開發候選可從 [`main` 成功的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對來源與 Windows 安裝 fixture；Actions artifacts 可能到期。
 
 ## 每一層負責什麼
 
