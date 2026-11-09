@@ -1,5 +1,38 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-09：排程日期與 Fleet 測試環境修正候選
+
+`fix/deterministic-python-validation-20261108` 接續 `d65ec38a`，處理前輪全套的
+16 項失敗。排程測試只固定 `pm_schedule` 模組的觀察時鐘，涵蓋今天恰好等於來源
+日期與遠晚於來源日期兩種情況；替換 baseline 後，精確驗證有效列與 range 不再帶入
+舊 forecast，保留合法的 `as_of`／`set_at`。沒有全域替換標準函式庫的 datetime。
+
+新增本機 Linux 磁碟測試工具 `scripts/pytest-disktmp`，使用自有磁碟暫存並在正常
+或失敗退出後清理。共享上層權限不符合 Fleet 合約時，可用 `--private-tmp` 建立
+自有 root／tmp 的掛載環境；檔案仍在原磁碟上，正式 guard 與共享目錄權限維持不變。
+Fleet 增加 10 項拒絕案例：先證明安全路徑可正常讀取，再分別讓自有 ancestor、state、
+journal、lock、unit 可由群組或其他人寫入，確認不會啟動服務。工具的 7 項案例驗證
+磁碟身分、參數、退出碼、清理及無關目錄保留；執行方式見
+[開發指南](../../CONTRIBUTING.md)。
+
+Ruff 通過，Python 3.13 與 3.10 全套依序完成，各為 9,925 passed、84 skipped、
+0 failed／errors。每版完整性檢查核對 10,009 項測試、436 個檔案、16 個不重複
+分片，兩版 collection SHA 相同。只有含 Fleet 的分片需要私有掛載環境，工具
+自身在外層執行，因此沒有額外的巢狀 namespace 跳過。前輪 16 項失敗原因已排除，
+測試暫存已清理，開發環境恢復 Python 3.13。
+
+此候選只修改測試、測試工具與開發文件，沒有產品後端、前端、schema 或原生行為
+變更。前輪 E08／E10、EC-1.1 T5 候選仍未合併、發布、安裝或實機驗收；其餘
+E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂工作維持開放。
+
+This continuation makes schedule assertions independent of the calendar date and
+provides disk-backed fixture paths with real ownership checks for Fleet. Ten new
+refusal cases preserve the guard; seven wrapper cases verify disk identity,
+cleanup and unrelated-directory preservation. Python 3.13 and 3.10 each pass all
+16 shards with identical exact coverage: 9,925 passed, 84 skipped and no failures
+or errors. Fixture directories are cleaned up. Production behavior and E/R/A acceptance remain
+unchanged; this candidate is unmerged, unpublished, uninstalled and not live-tested.
+
 ## 2026-11-08：需求與獨立 Work 的外部對話閱讀候選
 
 `feat/work-history-surfaces-20261107` 接續 `2a65f5d9`，先以 `02b9ff13` 納入主線
