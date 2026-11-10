@@ -4609,7 +4609,7 @@ async function viewWorkItem(main, wid) {
   const panel = h("div", {});
   const reading = h("div", {});
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  const historyPanel = workItemHistory({h, t, api, alive: () => assertView(connection), caps: () => state.caps, workId: wid,
+  const historyPanel = workItemHistory({h, t, api, alive: () => assertView(connection), caps: () => state.caps, workId: wid, namespace: connection.namespace,
     workspaceHint: new URLSearchParams(location.hash.split('?')[1]).get('workspace') || lastWorkspace(connection.namespace),
     visibilityRoot: main.closest('.ui-inspector')});
   let mutable = true, historyReadGeneration = 0;

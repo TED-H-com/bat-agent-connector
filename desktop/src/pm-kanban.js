@@ -26,7 +26,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const withdrawObservers = () => {for (const observer of observers.values()) observer.withdraw();};
   let startPanel = null;
   let resultPanel = null;
-  const historyPanel = workHistoryPanel({h,t,api,alive,workspaceId,workspace,caps});
+  const historyPanel = workHistoryPanel({h,t,api,alive,workspaceId,workspace,caps,namespace});
   const updateHeaderButton = startable => {
     if (!detail.element) return;
     const actionRow = detail.element.querySelector('[data-work-actions]');

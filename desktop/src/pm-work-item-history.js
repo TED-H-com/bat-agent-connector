@@ -3,7 +3,7 @@ import {workHistoryPanel} from './pm-work-history.js';
 
 // A Work record has no workspace identity. Navigation context is only a hint;
 // central must prove the current workspace and exact Work binding before reading.
-export function workItemHistory({h, t, api, alive, caps, workId, workspaceHint = null, visibilityRoot = null}) {
+export function workItemHistory({h, t, api, alive, caps, workId, namespace = null, workspaceHint = null, visibilityRoot = null}) {
   let disposed = false, ready = false, serial = 0, record = null, selected = workspaceHint || '';
   let reader = null, card = null;
   const supported = () => caps()?.features?.external_history?.relationships?.version === 1
@@ -54,7 +54,7 @@ export function workItemHistory({h, t, api, alive, caps, workId, workspaceHint =
       let context = await proof(selected, ticket); current(ticket);
       const workspaceId = selected, expected = {serverId:context.workspace.server_id, bindingId:context.card.binding.binding_id};
       card = context.card;
-      reader = workHistoryPanel({h, t, api, alive, caps, workspaceId, workspace:()=>context.workspace, embedded:true,
+      reader = workHistoryPanel({h, t, api, alive, caps, namespace, workspaceId, workspace:()=>context.workspace, embedded:true,
         validate:async()=>{
           // Use the current lifecycle ticket: parent safety refreshes suspend this
           // reader, then reauthorize it without losing the selected excerpt.

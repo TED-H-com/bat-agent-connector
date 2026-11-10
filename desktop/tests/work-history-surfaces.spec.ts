@@ -288,3 +288,40 @@ test('a linked Results resize clears plaintext and cancels its history timer',as
   await page.getByRole('button',{name:'Results',exact:true}).click(); await expect(outer(page)).toHaveJSProperty('open',false);
   await outer(page).locator('summary').click(); await read(page); noWrites(f);
 });
+
+for (const native of [false,true]) for (const surface of ['requirements','standalone']) test(`remember IDs uses the shared workspace index from ${surface} ${native}`,async({page})=>{
+  const f=surfaceFixture(), original=f.dispatch;
+  f.dispatch=async input=>{
+    const result=await original(input), path=new URL(input.path,'http://fixture').pathname;
+    if(path==='/bootstrap'||path==='/capabilities') {
+      const caps=path==='/bootstrap'?result.data.capabilities:result.data;
+      caps.features.external_history.relationships.actions=['pm.history.unlink']; caps.actions.push({action:'pm.history.unlink',allowed:true});
+    }
+    return result;
+  };
+  if(surface==='requirements') await mountRequirements(page,native,f); else await mountItem(page,native,f);
+  await read(page);
+  const button=panel(page).locator('[data-history-remember]'); await button.click();
+  await expect(panel(page)).toContainText('Relationship ID saved.');
+  const records=await page.evaluate(()=>Object.entries(localStorage).filter(([key])=>key.includes('.history-known.')).map(([,value])=>JSON.parse(value).records));
+  expect(records).toHaveLength(1); expect(records[0][0]).toMatchObject({workspace_id:workspaceId,work_item_id:workId(1),link_id:linkId()});
+  noWrites(f);
+});
+
+test('standalone membership withdrawal during save prevents local persistence',async({page})=>{
+  const f=surfaceFixture(), original=f.dispatch; let hold:Promise<void>|null=null, release!:()=>void;
+  f.dispatch=async input=>{
+    const result=await original(input), path=new URL(input.path,'http://fixture').pathname;
+    if(path==='/bootstrap'||path==='/capabilities') {
+      const caps=path==='/bootstrap'?result.data.capabilities:result.data;
+      caps.features.external_history.relationships.actions=['pm.history.unlink']; caps.actions.push({action:'pm.history.unlink',allowed:true});
+    }
+    if(path.includes('/external-links/') && hold) await hold;
+    return result;
+  };
+  await mountItem(page,false,f); await read(page); const before=f.state.linkReads;
+  hold=new Promise(resolve=>release=resolve); await panel(page).locator('[data-history-remember]').click();
+  await expect.poll(()=>f.state.linkReads).toBe(before+1); f.surface.denyWorkspace=403; release();
+  await expect(page.getByText(fullText,{exact:true})).toHaveCount(0);
+  expect(await page.evaluate(()=>Object.keys(localStorage).filter(key=>key.includes('.history-known.')))).toEqual([]); noWrites(f);
+});

@@ -363,6 +363,30 @@ schema, native transport or CLI control. Discovery of unseen relationship IDs,
 derive and native/live acceptance remain open; known-ID
 cleanup does not establish complete revoked-source discovery or lifecycle coverage.
 
+### Remembering Work-side relationships for cleanup
+
+After explicitly opening a fixed excerpt from Board, Requirements, standalone Work
+or linked-session Work, a creator or workspace owner with manage/observe and the
+advertised unlink action can choose **Save relationship ID for cleanup**. The
+shared control rereads the exact central relationship before saving. State, version,
+Work, Attempt, fixed reference and creator must still match; standalone Work also
+rechecks its workspace/binding proof. Closing, switching Work, parent refresh or
+connection changes fence late responses. Reading alone does not save IDs.
+
+Only the existing seven-field identifier record enters the same account/connection/
+workspace-specific 500-record index used by **Saved relationship IDs**. No text,
+title, digest, reference body or reading selection is saved. Full or damaged storage
+is reported without eviction or replacing original withdrawal intents. Storage
+failures preserve the current excerpt and permit an explicit retry. The user can
+later withdraw the known ID from Resources → External conversations, including
+after source revocation, through the existing original-key recovery flow.
+
+This adds no central action, API, schema, native bridge or execution capability.
+The saved version is a recovery hint, not current authorization. It does not discover
+relationships that were never read on this client before their source was revoked.
+English and zh-TW share the browser/desktop component; fixture tests are not native
+or physical-mobile acceptance.
+
 ### Work-side reader candidate
 
 The shared Board and Requirements Work inspectors offer **View linked excerpts**
