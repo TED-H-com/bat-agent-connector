@@ -9,7 +9,7 @@
 空間已滿或損壞不驅逐既有資料，原撤回 intent／key 不變。之後來源撤權，仍可從
 「資源 → 外部對話 → 已保存的關聯 ID」沿用原操作撤回。
 
-本機共用前端 build／browser 產物、614 項 Node 測試與相關介面回歸已通過，
+本機共用前端 build／browser 產物、614 項 Node 測試與 298 項相關介面回歸已通過，
 包含 HTTP／注入 IPC、撤權後原 key 恢復、身份隔離、滿額／損壞索引、晚到回覆
 及 390px 繁中保存畫面。Ruff、公開內容與 staged secret 檢查通過；Python 全套
 與完整 CI 證據另記於 PR，不以 fixture 取代 native 或 live acceptance。
@@ -17,7 +17,8 @@
 這是 E08／E10、EC-1.1 T5 的共用前端增量，沒有 backend、schema 或 native transport
 變更；未讀且已撤權的 ID 發現、Work derive、原生執行與 PM v1.2 未修訂工作仍開放。
 此段記錄分支實作，不宣稱發布、安裝或實機驗收；E00–E11、R0–R5、A01–A40
-未完成範圍保留，持續開發授權不等於 R0／R1 接受。驗證與合併狀態見本分支 PR。
+未完成範圍保留，持續開發授權不等於 R0／R1 接受。驗證與合併狀態見
+[#511](https://github.com/TED-H-com/bat-agent-connector/pull/511)。
 
 November 10 continuation: the shared Work reader can explicitly save validated
 relationship identifiers into the existing cleanup index. Later source revocation

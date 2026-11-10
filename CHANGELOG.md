@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Explicitly save a readable Work-side relationship ID into the existing cleanup
+  index for later withdrawal after source revocation. Recheck current authority
+  and relationship identity; preserve original operation recovery, the 500-record
+  limit and English/zh-TW parity without saving conversation text.
+
 ## 0.2.17 / Desktop 0.1.13 (2026-11-09)
 
 - Replace a readable external-history relationship from another entry or source
