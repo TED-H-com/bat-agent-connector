@@ -36,7 +36,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     h('div', {class: 'pm-requirements-toolbar'}, searchField(filter, {class:'pm-work-search'}), h('label', {}, t('wv_group'), group)),
     status, layout, h('div', {class: 'actions'}, ...Object.values(moreButtons)),
     disclosure({label: t('wb_sources'), body: h('div', {}, h('p', {}, t('wb_no_phase')))}));
-  const historyPanel = workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps});
+  const historyPanel = workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps, namespace});
   const detail = workInspector({t, workspaceId, from: 'requirements', mount: layout, tools: () => tools(), returnFocus: () => selectionTarget(selected) || viewHeading(), onClose: () => {
     historyPanel.withdraw(); detailSerial++; if (!preserveSelection) {const id = selected; selected = null; preference.selected = null; markSelection();
       if (id) selectionTarget(id)?.focus({preventScroll: true});

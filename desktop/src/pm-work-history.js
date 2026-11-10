@@ -1,5 +1,6 @@
 import {button, disclosure, inlineError} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
+import {historyRecord, historyRecords} from './pm-history-records.js';
 
 const digest = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 const keys = (value, names) => value && typeof value === 'object' && !Array.isArray(value)
@@ -10,7 +11,7 @@ let readerSequence = 0;
 
 // The parent owns Work selection and visibility. This reader only resolves explicit
 // relationships through central; no transcript or selection is persisted locally.
-export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps, embedded = false, validate = null}) {
+export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps, namespace = null, embedded = false, validate = null}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let card = null, identity = '', disposed = false, generation = 0, detailGeneration = 0;
   let pages = 1, next = null, selected = null, busy = false, timer = null, ready = false;
@@ -76,6 +77,38 @@ export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps
     if (length > 16000) throw mismatch();
     return value;
   }
+  function rememberControl(link, valid, ticket) {
+    const allowed = () => valid() && typeof namespace === 'string' && namespace.length > 0
+      && caps()?.scopes?.includes('manage')
+      && caps()?.features?.external_history?.relationships?.actions?.includes('pm.history.unlink')
+      && caps()?.actions?.some(row=>row.action === 'pm.history.unlink' && row.allowed === true)
+      && (workspace()?.membership?.role === 'owner' || link.created_by === caps()?.actor);
+    if (!allowed()) return null;
+    let record;
+    try {record = historyRecord(link);} catch {return null;}
+    const notice = h('div', {role:'status'});
+    const save = button({variant:'secondary', size:'sm', label:t('exh_remember'), 'data-history-remember':'', onclick:async()=>{
+      if (!allowed()) return;
+      save.disabled = true; notice.replaceChildren();
+      try {
+        if (validate) await validate();
+        if (!allowed()) return;
+        const data = await api('GET', `${endpoint}/external-links/${encodeURIComponent(link.link_id)}`);
+        if (!valid()) return;
+        if (relation(data.link) !== relation(link) || JSON.stringify(historyRecord(data.link)) !== JSON.stringify(record)) throw mismatch();
+        if (validate) await validate();
+        if (!allowed()) return;
+      } catch (error) {if (valid()) fail(error, ticket); return;}
+      try {
+        const saved = historyRecords(localStorage, namespace, workspaceId).remember(record);
+        notice.textContent = t(saved ? 'exh_remember_done' : 'exh_cleanup_limit');
+        save.disabled = saved;
+      } catch {
+        notice.textContent = t('exh_remember_failed'); save.disabled = false;
+      }
+    }});
+    return h('div', {'data-history-remember-control':''}, h('p', {class:'ui-meta'}, t('exh_remember_help')), save, notice);
+  }
   async function open(linkId, ticket = generation) {
     if (!current(ticket) || !links.has(linkId)) return;
     const own = ++detailGeneration, link = links.get(linkId), signature = relation(link);
@@ -104,6 +137,7 @@ export function workHistoryPanel({h, t, api, alive, workspaceId, workspace, caps
           : h('p', {class:'ui-meta'}, t(part.kind === 'tool_request' ? 'exh_tool_request' : 'exh_tool_result', {name:part.name || t('exh_tool_unknown')}))),
         value.clipped ? h('p', {class:'ui-meta'}, t('exh_clipped')) : null,
         value.omitted_parts ? h('p', {class:'ui-meta'}, t('exh_omitted', {count:value.omitted_parts})) : null,
+        rememberControl(final.link, valid, ticket),
         disclosure({label:t('exh_coverage'), body:h('div', {class:'exh-reference'},
           h('p', {}, t('exh_fixed_reference')), h('pre', {}, JSON.stringify({link_id:link.link_id, attempt_id:link.attempt_id, ref:data.ref}, null, 2)))})));
     } catch (error) {if (valid()) fail(error, ticket);}

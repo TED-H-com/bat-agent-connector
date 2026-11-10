@@ -1,5 +1,9 @@
 export const externalHistoryStrings = {
   en: {
+    exh_remember: 'Save relationship ID for cleanup',
+    exh_remember_help: 'Save only this relationship’s IDs on this device. You can later withdraw it from Resources → External conversations → Saved relationship IDs, even if source access is lost.',
+    exh_remember_done: 'Relationship ID saved. No conversation text was saved.',
+    exh_remember_failed: 'The relationship ID could not be saved on this device. Check local storage and try again.',
     exh_title: 'External conversations', exh_help: 'Read conversations shared with this workspace. Their original CLI sessions remain read-only.',
     exh_empty: 'No conversation histories are shared with you', exh_empty_help: 'An administrator can connect a specific local transcript and grant access to named readers.',
     exh_source: 'Source', exh_entries: '{count} entries', exh_open: 'Read {name}', exh_scope: 'Partial history · text and tool markers only',
@@ -48,6 +52,10 @@ export const externalHistoryStrings = {
     exh_cleanup_limit: 'This device keeps up to 500 known IDs. Some relationships may be absent if storage is full or unavailable; existing recovery records are kept.',
   },
   'zh-TW': {
+    exh_remember: '保存關聯 ID 供日後撤回',
+    exh_remember_help: '只在此裝置保存關聯識別資料。即使之後失去來源權限，仍可到「資源 → 外部對話 → 已保存的關聯 ID」撤回。',
+    exh_remember_done: '已保存關聯 ID，沒有保存對話正文。',
+    exh_remember_failed: '無法在此裝置保存關聯 ID。請檢查本機儲存空間後重試。',
     exh_title: '外部對話', exh_help: '閱讀分享至此工作區的對話。原本的 CLI 會話維持唯讀。',
     exh_empty: '目前沒有分享給你的對話歷史', exh_empty_help: '管理者可連接指定的本機對話檔，並授權具名讀者。',
     exh_source: '來源', exh_entries: '{count} 則紀錄', exh_open: '閱讀 {name}', exh_scope: '部分歷史 · 僅含文字與工具標記',

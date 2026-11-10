@@ -1,5 +1,30 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-10：Work 閱讀端保存清理識別資料（分支增量）
+
+`feat/work-history-cleanup-index-20261110` 在已發布的 0.2.17／0.1.13 之上，
+讓看板、需求頁、獨立／會話內 Work 的固定摘錄閱讀器明確保存可撤回關聯的 ID。
+保存前重讀中央關聯與版本／來源／Work／creator；切頁、關閉與父層撤權隔離晚到回覆。
+只使用原有依帳號／連線／工作區隔離的 500 筆 ID 索引，不保存正文、標題或 digest；
+空間已滿或損壞不驅逐既有資料，原撤回 intent／key 不變。之後來源撤權，仍可從
+「資源 → 外部對話 → 已保存的關聯 ID」沿用原操作撤回。
+
+本機共用前端 build／browser 產物、614 項 Node 測試與相關介面回歸已通過，
+包含 HTTP／注入 IPC、撤權後原 key 恢復、身份隔離、滿額／損壞索引、晚到回覆
+及 390px 繁中保存畫面。Ruff、公開內容與 staged secret 檢查通過；Python 全套
+與完整 CI 證據另記於 PR，不以 fixture 取代 native 或 live acceptance。
+
+這是 E08／E10、EC-1.1 T5 的共用前端增量，沒有 backend、schema 或 native transport
+變更；未讀且已撤權的 ID 發現、Work derive、原生執行與 PM v1.2 未修訂工作仍開放。
+此段記錄分支實作，不宣稱發布、安裝或實機驗收；E00–E11、R0–R5、A01–A40
+未完成範圍保留，持續開發授權不等於 R0／R1 接受。驗證與合併狀態見本分支 PR。
+
+November 10 continuation: the shared Work reader can explicitly save validated
+relationship identifiers into the existing cleanup index. Later source revocation
+still permits original-key withdrawal; no transcript or original intent is replaced.
+This frontend increment is separate from publication and live acceptance and does
+not discover unseen revoked-source relationships or complete the PM lifecycle.
+
 ## 2026-11-09：Connector 0.2.17／Desktop 0.1.13 已發布
 
 [穩定版 v0.2.17](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)

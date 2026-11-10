@@ -1030,6 +1030,10 @@ var externalHistoryStrings;
 var init_pm_external_history_strings = __esmMin((() => {
 	externalHistoryStrings = {
 		en: {
+			exh_remember: "Save relationship ID for cleanup",
+			exh_remember_help: "Save only this relationship’s IDs on this device. You can later withdraw it from Resources → External conversations → Saved relationship IDs, even if source access is lost.",
+			exh_remember_done: "Relationship ID saved. No conversation text was saved.",
+			exh_remember_failed: "The relationship ID could not be saved on this device. Check local storage and try again.",
 			exh_title: "External conversations",
 			exh_help: "Read conversations shared with this workspace. Their original CLI sessions remain read-only.",
 			exh_empty: "No conversation histories are shared with you",
@@ -1134,6 +1138,10 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_cleanup_limit: "This device keeps up to 500 known IDs. Some relationships may be absent if storage is full or unavailable; existing recovery records are kept."
 		},
 		"zh-TW": {
+			exh_remember: "保存關聯 ID 供日後撤回",
+			exh_remember_help: "只在此裝置保存關聯識別資料。即使之後失去來源權限，仍可到「資源 → 外部對話 → 已保存的關聯 ID」撤回。",
+			exh_remember_done: "已保存關聯 ID，沒有保存對話正文。",
+			exh_remember_failed: "無法在此裝置保存關聯 ID。請檢查本機儲存空間後重試。",
 			exh_title: "外部對話",
 			exh_help: "閱讀分享至此工作區的對話。原本的 CLI 會話維持唯讀。",
 			exh_empty: "目前沒有分享給你的對話歷史",
@@ -19996,6 +20004,60 @@ async function readWorkSessionContext({ api, guard, workspaceId, workItemId, att
 	};
 }
 //#endregion
+//#region src/pm-history-records.js
+var fields$2 = [
+	"workspace_id",
+	"link_id",
+	"work_item_id",
+	"version",
+	"created_by",
+	"source_id",
+	"entry_id"
+];
+function historyRecord(value) {
+	const row = Object.fromEntries(fields$2.map((key) => [key, value?.[key] ?? value?.fixed_ref?.[key]]));
+	if (fields$2.filter((key) => key !== "version").some((key) => typeof row[key] !== "string") || !/^ws_[0-9a-f]{32}$/.test(row.workspace_id || "") || !/^hxl_[0-9a-f]{32}$/.test(row.link_id || "") || !/^wi_[0-9a-f]{20}$/.test(row.work_item_id || "") || !/^shi_[0-9a-f]{32}$/.test(row.entry_id || "") || typeof row.source_id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(row.source_id) || typeof row.created_by !== "string" || !row.created_by || row.created_by.length > 256 || !Number.isSafeInteger(row.version) || row.version < 1) throw Error("HISTORY_RECORDS_INVALID");
+	return row;
+}
+var historyDraftNamespace = (namespace, row) => `${namespace}.history.${JSON.stringify([row.source_id, row.entry_id])}`;
+function historyRecords(storage, namespace, workspaceId) {
+	const key = `batc.pm.${namespace}.history-known.${workspaceId}`;
+	function read() {
+		const saved = JSON.parse(storage.getItem(key) || "{\"version\":1,\"records\":[]}");
+		if (saved?.version !== 1 || !Array.isArray(saved.records) || saved.records.length > 500) throw Error("HISTORY_RECORDS_INVALID");
+		const seen = new Set();
+		return saved.records.map((value) => {
+			const row = historyRecord(value);
+			if (Object.keys(value).sort().join(",") !== [...fields$2].sort().join(",") || row.workspace_id !== workspaceId || seen.has(row.link_id)) throw Error("HISTORY_RECORDS_INVALID");
+			seen.add(row.link_id);
+			return row;
+		});
+	}
+	function write(records) {
+		if (records.length) storage.setItem(key, JSON.stringify({
+			version: 1,
+			records
+		}));
+		else storage.removeItem(key);
+	}
+	return {
+		read,
+		remember(value) {
+			const row = historyRecord(value);
+			if (row.workspace_id !== workspaceId) throw Error("HISTORY_RECORDS_INVALID");
+			const records = read(), index = records.findIndex((item) => item.link_id === row.link_id);
+			if (index < 0 && records.length >= 500) return false;
+			if (index < 0) records.push(row);
+			else records[index] = row;
+			write(records);
+			return true;
+		},
+		remove(linkId) {
+			write(read().filter((row) => row.link_id !== linkId));
+		}
+	};
+}
+//#endregion
 //#region src/pm-work-history.js
 var digest$11 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 var keys$3 = (value, names) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join(",") === [...names].sort().join(",");
@@ -20011,7 +20073,7 @@ var refFields = [
 	"excerpt_digest"
 ];
 var readerSequence = 0;
-function workHistoryPanel({ h, t, api, alive, workspaceId, workspace, caps, embedded = false, validate = null }) {
+function workHistoryPanel({ h, t, api, alive, workspaceId, workspace, caps, namespace = null, embedded = false, validate = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let card = null, identity = "", disposed = false, generation = 0, detailGeneration = 0;
 	let pages = 1, next = null, selected = null, busy = false, timer = null, ready = false;
@@ -20132,6 +20194,49 @@ function workHistoryPanel({ h, t, api, alive, workspaceId, workspace, caps, embe
 		if (length > 16e3) throw mismatch();
 		return value;
 	}
+	function rememberControl(link, valid, ticket) {
+		const allowed = () => valid() && typeof namespace === "string" && namespace.length > 0 && caps()?.scopes?.includes("manage") && caps()?.features?.external_history?.relationships?.actions?.includes("pm.history.unlink") && caps()?.actions?.some((row) => row.action === "pm.history.unlink" && row.allowed === true) && (workspace()?.membership?.role === "owner" || link.created_by === caps()?.actor);
+		if (!allowed()) return null;
+		let record;
+		try {
+			record = historyRecord(link);
+		} catch {
+			return null;
+		}
+		const notice = h("div", { role: "status" });
+		const save = button({
+			variant: "secondary",
+			size: "sm",
+			label: t("exh_remember"),
+			"data-history-remember": "",
+			onclick: async () => {
+				if (!allowed()) return;
+				save.disabled = true;
+				notice.replaceChildren();
+				try {
+					if (validate) await validate();
+					if (!allowed()) return;
+					const data = await api("GET", `${endpoint}/external-links/${encodeURIComponent(link.link_id)}`);
+					if (!valid()) return;
+					if (relation(data.link) !== relation(link) || JSON.stringify(historyRecord(data.link)) !== JSON.stringify(record)) throw mismatch();
+					if (validate) await validate();
+					if (!allowed()) return;
+				} catch (error) {
+					if (valid()) fail(error, ticket);
+					return;
+				}
+				try {
+					const saved = historyRecords(localStorage, namespace, workspaceId).remember(record);
+					notice.textContent = t(saved ? "exh_remember_done" : "exh_cleanup_limit");
+					save.disabled = saved;
+				} catch {
+					notice.textContent = t("exh_remember_failed");
+					save.disabled = false;
+				}
+			}
+		});
+		return h("div", { "data-history-remember-control": "" }, h("p", { class: "ui-meta" }, t("exh_remember_help")), save, notice);
+	}
 	async function open(linkId, ticket = generation) {
 		if (!current(ticket) || !links.has(linkId)) return;
 		const own = ++detailGeneration, link = links.get(linkId), signature = relation(link);
@@ -20157,7 +20262,7 @@ function workHistoryPanel({ h, t, api, alive, workspaceId, workspace, caps, embe
 			const final = await api("GET", `${endpoint}/external-links/${encodeURIComponent(linkId)}`);
 			if (!valid()) return;
 			if (relation(final.link) !== signature) throw mismatch();
-			excerpt.replaceChildren(h("article", { class: "exh-entry" }, h("h4", {}, link.fixed_ref.source_id, " · ", t(link.fixed_ref.selection.kind === "entry" ? "exh_entire_entry" : "exh_selected_text")), h("p", { class: "ui-meta" }, t("exh_scope")), h("p", { class: "ui-meta" }, t("exh_execution_unknown")), h("strong", {}, t(`exh_${value.role}`)), ...value.parts.map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), value.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, value.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: value.omitted_parts })) : null, disclosure({
+			excerpt.replaceChildren(h("article", { class: "exh-entry" }, h("h4", {}, link.fixed_ref.source_id, " · ", t(link.fixed_ref.selection.kind === "entry" ? "exh_entire_entry" : "exh_selected_text")), h("p", { class: "ui-meta" }, t("exh_scope")), h("p", { class: "ui-meta" }, t("exh_execution_unknown")), h("strong", {}, t(`exh_${value.role}`)), ...value.parts.map((part) => part.kind === "text" ? h("p", { class: "exh-text" }, part.text) : h("p", { class: "ui-meta" }, t(part.kind === "tool_request" ? "exh_tool_request" : "exh_tool_result", { name: part.name || t("exh_tool_unknown") }))), value.clipped ? h("p", { class: "ui-meta" }, t("exh_clipped")) : null, value.omitted_parts ? h("p", { class: "ui-meta" }, t("exh_omitted", { count: value.omitted_parts })) : null, rememberControl(final.link, valid, ticket), disclosure({
 				label: t("exh_coverage"),
 				body: h("div", { class: "exh-reference" }, h("p", {}, t("exh_fixed_reference")), h("pre", {}, JSON.stringify({
 					link_id: link.link_id,
@@ -20281,7 +20386,7 @@ function workHistoryPanel({ h, t, api, alive, workspaceId, workspace, caps, embe
 }
 //#endregion
 //#region src/pm-work-item-history.js
-function workItemHistory({ h, t, api, alive, caps, workId, workspaceHint = null, visibilityRoot = null }) {
+function workItemHistory({ h, t, api, alive, caps, workId, namespace = null, workspaceHint = null, visibilityRoot = null }) {
 	let disposed = false, ready = false, serial = 0, record = null, selected = workspaceHint || "";
 	let reader = null, card = null;
 	const supported = () => caps()?.features?.external_history?.relationships?.version === 1 && caps()?.features?.external_history?.relationships?.refs?.includes("external_history_ref/v1") && caps()?.features?.pm_workspaces?.kanban && caps()?.scopes?.includes("observe");
@@ -20368,6 +20473,7 @@ function workItemHistory({ h, t, api, alive, caps, workId, workspaceHint = null,
 				api,
 				alive,
 				caps,
+				namespace,
 				workspaceId,
 				workspace: () => context.workspace,
 				embedded: true,
@@ -25318,60 +25424,6 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			links.clear();
 			titles.clear();
 			element.replaceChildren();
-		}
-	};
-}
-//#endregion
-//#region src/pm-history-records.js
-var fields$2 = [
-	"workspace_id",
-	"link_id",
-	"work_item_id",
-	"version",
-	"created_by",
-	"source_id",
-	"entry_id"
-];
-function historyRecord(value) {
-	const row = Object.fromEntries(fields$2.map((key) => [key, value?.[key] ?? value?.fixed_ref?.[key]]));
-	if (fields$2.filter((key) => key !== "version").some((key) => typeof row[key] !== "string") || !/^ws_[0-9a-f]{32}$/.test(row.workspace_id || "") || !/^hxl_[0-9a-f]{32}$/.test(row.link_id || "") || !/^wi_[0-9a-f]{20}$/.test(row.work_item_id || "") || !/^shi_[0-9a-f]{32}$/.test(row.entry_id || "") || typeof row.source_id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(row.source_id) || typeof row.created_by !== "string" || !row.created_by || row.created_by.length > 256 || !Number.isSafeInteger(row.version) || row.version < 1) throw Error("HISTORY_RECORDS_INVALID");
-	return row;
-}
-var historyDraftNamespace = (namespace, row) => `${namespace}.history.${JSON.stringify([row.source_id, row.entry_id])}`;
-function historyRecords(storage, namespace, workspaceId) {
-	const key = `batc.pm.${namespace}.history-known.${workspaceId}`;
-	function read() {
-		const saved = JSON.parse(storage.getItem(key) || "{\"version\":1,\"records\":[]}");
-		if (saved?.version !== 1 || !Array.isArray(saved.records) || saved.records.length > 500) throw Error("HISTORY_RECORDS_INVALID");
-		const seen = new Set();
-		return saved.records.map((value) => {
-			const row = historyRecord(value);
-			if (Object.keys(value).sort().join(",") !== [...fields$2].sort().join(",") || row.workspace_id !== workspaceId || seen.has(row.link_id)) throw Error("HISTORY_RECORDS_INVALID");
-			seen.add(row.link_id);
-			return row;
-		});
-	}
-	function write(records) {
-		if (records.length) storage.setItem(key, JSON.stringify({
-			version: 1,
-			records
-		}));
-		else storage.removeItem(key);
-	}
-	return {
-		read,
-		remember(value) {
-			const row = historyRecord(value);
-			if (row.workspace_id !== workspaceId) throw Error("HISTORY_RECORDS_INVALID");
-			const records = read(), index = records.findIndex((item) => item.link_id === row.link_id);
-			if (index < 0 && records.length >= 500) return false;
-			if (index < 0) records.push(row);
-			else records[index] = row;
-			write(records);
-			return true;
-		},
-		remove(linkId) {
-			write(read().filter((row) => row.link_id !== linkId));
 		}
 	};
 }
@@ -33630,7 +33682,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		alive,
 		workspaceId,
 		workspace,
-		caps
+		caps,
+		namespace
 	});
 	const detail = workInspector({
 		t,
@@ -46416,7 +46469,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		alive,
 		workspaceId,
 		workspace,
-		caps
+		caps,
+		namespace
 	});
 	const updateHeaderButton = (startable) => {
 		if (!detail.element) return;
@@ -79626,6 +79680,7 @@ async function viewWorkItem(main, wid) {
 		alive: () => assertView(connection),
 		caps: () => state.caps,
 		workId: wid,
+		namespace: connection.namespace,
 		workspaceHint: new URLSearchParams(location.hash.split("?")[1]).get("workspace") || lastWorkspace(connection.namespace),
 		visibilityRoot: main.closest(".ui-inspector")
 	});
