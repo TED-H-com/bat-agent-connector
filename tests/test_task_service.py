@@ -9,9 +9,10 @@ import stat
 import subprocess
 import sys
 import time
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, closing, contextmanager
 from functools import wraps
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -263,30 +264,44 @@ async def test_timeout_no_resend_and_reconcile(task_controller, tmp_path):
 
 @authenticated_task_test
 async def test_send_timeout_after_acceptance_read_back_exact_prompt(task_controller, tmp_path):
+    sent_commands = []
+    reconciled_commands = []
+
     class AcceptedThenLost(FakeBAT):
         async def send(self, task, session_id, text, message_id):
+            sent_commands.append(journal.send_for_message(task["task_id"], session_id, message_id))
             self.reconcile_echo = {"session_id": session_id, "message_id": message_id,
                                    "text": text, "turn_id": "user-confirmed-1"}
             await super().send(task, session_id, text, message_id)
 
+        async def reconcile_send(self, task, session_id, prompt_sha256, before, message_id):
+            command = journal.send_for_message(task["task_id"], session_id, message_id)
+            reconciled_commands.append(command)
+            assert command == sent_commands[0]
+            payload = json.loads(command["payload"])
+            assert (payload["prompt_sha256"], payload["before"]) == (prompt_sha256, before)
+            return await super().reconcile_send(task, session_id, prompt_sha256, before, message_id)
+
     path = tmp_path / "tasks.db"
-    journal = task_controller(Journal(path))
-    task = submit(journal)
-    fake = AcceptedThenLost()
-    fake.prepare_kind = "codex"
-    fake.send_error = True
-    core = TaskCoordinator(journal, fake)
-    result = await core.tick(task["task_id"])
-    assert result["state"] == "running" and result["turn_marker"] == "user-confirmed-1"
-    assert len(fake.sends) == 1
-    send = next(c for c in journal.commands(task["task_id"]) if c["kind"] == "send")
-    assert send["status"] == "accepted" and send["marker"] == "user-confirmed-1"
-    assert "send_reconciled_delivered" in [e["kind"] for e in journal.events(task["task_id"])]
-    journal.close()
-    journal = task_controller(Journal(path))
-    await TaskCoordinator(journal, fake).tick(task["task_id"])
-    assert len(fake.sends) == 1
-    journal.close()
+    with closing(task_controller(Journal(path))) as journal:
+        task = submit(journal)
+        fake = AcceptedThenLost()
+        fake.prepare_kind = "codex"
+        fake.send_error = True
+        core = TaskCoordinator(journal, fake)
+        result = await core.tick(task["task_id"])
+        assert result["state"] == "running" and result["turn_marker"] == "user-confirmed-1"
+        assert len(fake.sends) == 1
+        send = next(c for c in journal.commands(task["task_id"]) if c["kind"] == "send")
+        assert send["status"] == "accepted" and send["marker"] == "user-confirmed-1"
+        assert len(sent_commands) == len(reconciled_commands) == len(fake.starts) == 1
+        for field in ("command_id", "idem_key", "session_id", "message_id", "payload"):
+            assert send[field] == sent_commands[0][field]
+        assert [e["kind"] for e in journal.events(task["task_id"])].count("send_reconciled_delivered") == 1
+    with closing(task_controller(Journal(path))) as journal:
+        await TaskCoordinator(journal, fake).tick(task["task_id"])
+        assert len(fake.sends) == len(fake.starts) == len(reconciled_commands) == 1
+        assert [c for c in journal.commands(task["task_id"]) if c["kind"] == "send"] == [send]
 
 
 @authenticated_task_test
@@ -549,20 +564,31 @@ async def test_environment_test_failure_escalates_without_rework(task_controller
 
 @authenticated_task_test
 async def test_missing_dependencies_install_once_then_retest(task_controller, tmp_path):
-    j = task_controller(Journal(tmp_path / "deps.db"))
-    task = submit(j)
-    fake = FailingTestsBAT(["missing_dependencies", "pass"])
-    core = TaskCoordinator(j, fake)
-    await _to_verifying(core, j, fake, task)
-    result = await core.tick(task["task_id"])
-    assert fake.installs == 1 and fake.runs == 2
-    assert result["state"] == "verifying" and result["verification_failures"] == 0
-    await core.tick(task["task_id"])
-    assert j.get(task["task_id"])["state"] == "done"
-    assert j.get(task["task_id"])["reviewer_session_id"] is None
-    kinds = [e["kind"] for e in j.events(task["task_id"])]
-    assert kinds.count("dependency_install") == 1 and "dependency_install_result" in kinds
-    j.close()
+    with closing(task_controller(Journal(tmp_path / 'deps.db'))) as j:
+        task = submit(j)
+        fake = FailingTestsBAT(["missing_dependencies", "pass"])
+        core = TaskCoordinator(j, fake)
+        await _to_verifying(core, j, fake, task)
+        result = await core.tick(task["task_id"])
+        assert fake.installs == 1 and fake.runs == 2
+        assert result["state"] == "verifying" and result["verification_failures"] == 0
+        await core.tick(task["task_id"])
+        assert j.get(task["task_id"])["state"] == "done"
+        assert j.get(task["task_id"])["reviewer_session_id"] is None
+        assert fake.installs == 1 and fake.runs == 2
+        assert len(fake.starts) == len(fake.sends) == 1
+        observed = [dict(row) for row in j.db.execute(
+            "SELECT * FROM observed_verifications WHERE task_id=? ORDER BY verification_id", (task["task_id"],))]
+        assert [row["exit_code"] for row in observed] == [1, 0]
+        for row in observed:
+            assert (row["candidate_commit"], row["tree_hash"], row["command"], row["log_ref"], row["output_sha256"]) == (
+                "a" * 40, "b" * 40, "pytest -q", "journal:fake", "c" * 64)
+        installs = [json.loads(e["body"]) for e in j.events(task["task_id"])
+                    if e["kind"] == "dependency_install_result"]
+        assert installs == [{"candidate_commit": "a" * 40, "ok": True,
+                             "reason": "installed", "lockfile": "package-lock.json"}]
+        kinds = [e["kind"] for e in j.events(task["task_id"])]
+        assert kinds.count("dependency_install") == 1 and "dependency_install_result" in kinds
 
 
 @authenticated_task_test
@@ -608,8 +634,9 @@ async def test_codex_timestamp_never_proves_lost_send_or_review(task_controller,
     j.close()
 
 
+@pytest.mark.parametrize("followup", [True, False], ids=["new-prompt", "delivered-attestation-only"])
 @authenticated_task_test
-async def test_operator_reconcile_is_command_scoped_and_dispatches_new_prompt(task_controller, mock, tmp_path):
+async def test_operator_reconcile_is_command_scoped_and_dispatches_new_prompt(task_controller, mock, tmp_path, followup):
     daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     class OwnedFakeBAT(FakeBAT):
         async def start(self, task, *, role, agent, session_id):
@@ -642,6 +669,10 @@ async def test_operator_reconcile_is_command_scoped_and_dispatches_new_prompt(ta
               "outcome": "not_delivered", "actor": "operator", "source": "ticket:123",
               "evidence": "inspected BAT turn list and found no matching user prompt",
               "next_prompt": "Inspect the repo and report current state for this task."}
+    if not followup:
+        params.pop("next_prompt")
+        params.update(outcome="delivered", turn_ref="operator-inspected-turn",
+                      evidence="inspected exact user turn; no task result attested")
     try:
         status, result = await rpc(daemon._admin_token, "work_reconcile", params)
         assert b"400 Bad Request" in status and result["error"] == "ValueError"
@@ -653,15 +684,27 @@ async def test_operator_reconcile_is_command_scoped_and_dispatches_new_prompt(ta
         assert b"400 Bad Request" in status
         fake.send_error = False
         status, result = await rpc(cap, "work_reconcile", params)
-        assert b"200 OK" in status and result["result"]["state"] == "running"
-        assert len(fake.sends) == 2 and fake.sends[1][1] == params["next_prompt"]
-        assert fake.sends[0][1] != fake.sends[1][1]
-        assert daemon.journal.command_get(command["command_id"])["status"] == "resolved_not_delivered"
+        assert b"200 OK" in status
+        assert result["result"]["state"] == ("running" if followup else "human_owned")
+        assert not result["result"]["delivered"]
+        assert len(fake.starts) == 1 and len(fake.sends) == (2 if followup else 1)
+        if followup:
+            assert fake.sends[1][1] == params["next_prompt"]
+            assert fake.sends[0][1] != fake.sends[1][1]
+        resolved = daemon.journal.command_get(command["command_id"])
+        assert resolved["status"] == "resolved_" + params["outcome"]
+        for field in ("command_id", "idem_key", "session_id", "message_id", "payload"):
+            assert resolved[field] == command[field]
         rec = daemon.journal.reconciliations(task["task_id"])[0]
-        assert (rec["actor"], rec["source"], rec["outcome"]) == ("operator", "ticket:123", "not_delivered")
+        assert (rec["actor"], rec["source"], rec["outcome"], rec["evidence"]) == (
+            "operator", "ticket:123", params["outcome"], params["evidence"])
+        assert rec["observed_result"] == "none"
+        assert rec["turn_ref"] == params.get("turn_ref")
+        assert not daemon.journal.authorize_reconcile_capability(cap, task["task_id"], command["command_id"])
         status, _ = await rpc(cap, "work_reconcile", params)
         assert b"400 Bad Request" in status
-        assert len(fake.sends) == 2
+        assert len(fake.sends) == (2 if followup else 1)
+        assert len(daemon.journal.reconciliations(task["task_id"])) == 1
     finally:
         server.close()
         await server.wait_closed()
@@ -693,6 +736,83 @@ async def test_operator_followup_intent_survives_crash_without_automatic_send(ta
     assert len(fake.sends) == 1
     assert j.command_get(new_command["command_id"])["status"] == "uncertain"
     j.close()
+
+
+@authenticated_task_test
+async def test_resolve_legacy_failover_settles_handoff_without_adopting_successor(task_controller, tmp_path):
+    """Reconcile persisted failover intents; do not enable new mid-task failover."""
+    with closing(task_controller(Journal(tmp_path / "failover-resolution.db"))) as journal:
+        task = submit(journal)
+        task_id = task["task_id"]
+        fake = FakeBAT()
+        core = TaskCoordinator(journal, fake)
+        started = await core.tick(task_id)
+        lead = started["session_id"]
+        journal.change(task_id, "quota_limited")
+        failover, handoff = journal.reserve_failover(task_id, lead, "reserved-successor")
+        journal.command_status(failover["command_id"], "uncertain")
+        journal.change(task_id, "uncertain")
+        cap = journal.issue_reconcile_capability(task_id, failover["command_id"])
+
+        result = await core.resolve_command(
+            task_id, failover["command_id"], token=cap, outcome="not_delivered",
+            actor="operator", source="incident:synthetic",
+            evidence="inspected reserved successor; no matching handoff turn")
+
+        assert result["state"] == "human_owned" and not result["delivered"]
+        assert result["session_id"] == lead and result["branches"] == started["branches"]
+        for original in (failover, handoff):
+            resolved = journal.command_get(original["command_id"])
+            assert resolved["status"] == "resolved_not_delivered"
+            for field in ("command_id", "idem_key", "session_id", "message_id", "payload"):
+                assert resolved[field] == original[field]
+        records = journal.reconciliations(task_id)
+        assert len(records) == 1
+        assert {key: records[0][key] for key in (
+            "command_id", "outcome", "actor", "source", "evidence", "observed_result")} == {
+                "command_id": failover["command_id"], "outcome": "not_delivered",
+                "actor": "operator", "source": "incident:synthetic",
+                "evidence": "inspected reserved successor; no matching handoff turn", "observed_result": "none"}
+        assert not journal.authorize_reconcile_capability(cap, task_id, failover["command_id"])
+        assert [e["kind"] for e in journal.events(task_id)].count("failover_operator_reconciled") == 1
+        with pytest.raises(ValueError, match="command is not uncertain"):
+            await core.resolve_command(
+                task_id, failover["command_id"], token=cap, outcome="not_delivered",
+                actor="operator", source="incident:synthetic", evidence="same attestation")
+        assert (await core.tick(task_id))["state"] == "human_owned"
+        assert len(journal.reconciliations(task_id)) == 1
+        assert len(fake.starts) == len(fake.sends) == 1 and fake.failover_calls == 0
+
+
+@pytest.mark.parametrize("next_prompt", ["", " \t\n ", 42, "x" * 18_001],
+                         ids=["empty", "whitespace", "non-string", "too-long"])
+@authenticated_task_test
+async def test_resolve_command_rejects_invalid_prompt_without_effects(task_controller, tmp_path, next_prompt):
+    with closing(task_controller(Journal(tmp_path / "invalid-prompt.db"))) as journal:
+        task = submit(journal)
+        task_id = task["task_id"]
+        fake = FakeBAT()
+        fake.send_error = True
+        core = TaskCoordinator(journal, fake)
+        await core.tick(task_id)
+        command = next(c for c in journal.commands(task_id) if c["kind"] == "send")
+        cap = journal.issue_reconcile_capability(task_id, command["command_id"])
+        before = journal.get(task_id), journal.commands(task_id), journal.events(task_id)
+        fake.read = AsyncMock(wraps=fake.read)
+        fake.prepare_send = AsyncMock(wraps=fake.prepare_send)
+
+        with pytest.raises(ValueError, match="invalid new prompt"):
+            await core.resolve_command(
+                task_id, command["command_id"], token=cap, outcome="not_delivered",
+                actor="operator", source="incident:synthetic", evidence="inspected original turn",
+                next_prompt=next_prompt)
+
+        assert (journal.get(task_id), journal.commands(task_id), journal.events(task_id)) == before
+        assert journal.reconciliations(task_id) == []
+        assert journal.authorize_reconcile_capability(cap, task_id, command["command_id"])
+        fake.read.assert_not_awaited()
+        fake.prepare_send.assert_not_awaited()
+        assert len(fake.starts) == len(fake.sends) == 1
 
 
 @authenticated_task_test
@@ -839,23 +959,25 @@ async def test_real_agents_follow_ted_order_and_record_provider_usage(task_contr
 
 @authenticated_task_test
 async def test_claude_lead_falls_back_to_codex_and_reviewer_uses_other_family(task_controller, tmp_path):
-    journal = task_controller(Journal(tmp_path / "tasks.db"))
-    fake = FakeBAT()  # only Codex available
-    task = submit(journal, lead_agent="claude")
-    await TaskCoordinator(journal, fake).tick(task["task_id"])
-    assert fake.starts[0][:2] == ("lead", "codex")
-    assert journal.get(task["task_id"])["lead_agent"] == "codex"
-    route = journal.routes(task["task_id"])
-    assert route == [] or route[0]["reason"] == "lead_fallback_unavailable"
-    available = frozenset({"claude", "codex"})
-    assert TaskCoordinator._pick_agent("reviewer", {"lead_agent": "claude"}, available) == (
-        "codex", "review_other_family")
-    assert TaskCoordinator._pick_agent("reviewer", {"lead_agent": "codex"}, available) == (
-        "claude", "review_other_family")
-    assert TaskCoordinator._pick_agent("reviewer", {"lead_agent": "codex"}, frozenset({"codex"})) == (
-        "codex", "review_same_family_only")
-    assert TaskCoordinator._pick_agent("lead", {"lead_agent": "claude"}, available) == ("claude", "lead_agent")
-    journal.close()
+    with closing(task_controller(Journal(tmp_path / 'tasks.db'))) as journal:
+        fake = FakeBAT()  # only Codex available
+        task = submit(journal, lead_agent="claude")
+        await TaskCoordinator(journal, fake).tick(task["task_id"])
+        assert fake.starts[0][:2] == ("lead", "codex")
+        assert journal.get(task["task_id"])["lead_agent"] == "codex"
+        assert len(fake.starts) == len(fake.sends) == 1
+        assert fake.starts == [("lead", "codex", fake.sends[0][0])]
+        assert journal.get(task["task_id"])["state"] == "running"
+        route = journal.routes(task["task_id"])
+        assert route == [] or route[0]["reason"] == "lead_fallback_unavailable"
+        available = frozenset({"claude", "codex"})
+        assert TaskCoordinator._pick_agent("reviewer", {"lead_agent": "claude"}, available) == (
+            "codex", "review_other_family")
+        assert TaskCoordinator._pick_agent("reviewer", {"lead_agent": "codex"}, available) == (
+            "claude", "review_other_family")
+        assert TaskCoordinator._pick_agent("reviewer", {"lead_agent": "codex"}, frozenset({"codex"})) == (
+            "codex", "review_same_family_only")
+        assert TaskCoordinator._pick_agent("lead", {"lead_agent": "claude"}, available) == ("claude", "lead_agent")
 
 
 @authenticated_task_test
@@ -2358,19 +2480,21 @@ async def test_minimal_prefers_warm_session_id_and_goose_provider_order(task_con
             assert task["task_path"] == "minimal"
             return "existing-clean-idle-session"
 
-    journal = task_controller(Journal(tmp_path / "tasks.db"))
-    task = journal.submit(project="p", host="h1", workspace="w", original_words=WORDS,
-                          task_path="minimal", engine_decision={"selected": "rules_engine",
-                          "effective": "rules"}, idempotency_key="minimal:warm")
-    fake = WarmBAT()
-    result = await TaskCoordinator(journal, fake).tick(task["task_id"])
-    assert result["session_id"] == "existing-clean-idle-session"
-    assert fake.starts[0][2] == "existing-clean-idle-session"
-    assert result["branches"][0]["reason"] == "warm_reuse"
-    assert ProviderCatalog().order == ("claude", "agy-claude", "codex")
-    assert ProviderCatalog().entry("claude").model == "claude-opus-5-5"
-    assert ProviderCatalog().entry("agy-claude").model == "claude-opus-4-6-thinking"
-    journal.close()
+    with closing(task_controller(Journal(tmp_path / 'tasks.db'))) as journal:
+        task = journal.submit(project="p", host="h1", workspace="w", original_words=WORDS,
+                              task_path="minimal", engine_decision={"selected": "rules_engine",
+                              "effective": "rules"}, idempotency_key="minimal:warm")
+        fake = WarmBAT()
+        result = await TaskCoordinator(journal, fake).tick(task["task_id"])
+        assert result["session_id"] == "existing-clean-idle-session"
+        assert fake.starts[0][2] == "existing-clean-idle-session"
+        assert fake.starts == [("lead", "codex", "existing-clean-idle-session")]
+        assert len(fake.sends) == 1 and fake.sends[0][0] == "existing-clean-idle-session"
+        assert result["state"] == "running" and result["lead_agent"] == "codex"
+        assert result["branches"][0]["reason"] == "warm_reuse"
+        assert ProviderCatalog().order == ("claude", "agy-claude", "codex")
+        assert ProviderCatalog().entry("claude").model == "claude-opus-5-5"
+        assert ProviderCatalog().entry("agy-claude").model == "claude-opus-4-6-thinking"
 
 
 @authenticated_task_test
