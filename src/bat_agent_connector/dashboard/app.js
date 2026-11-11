@@ -31601,18 +31601,18 @@ function workspaceOverview(options) {
 			class: "ui-button secondary ui-sm",
 			href: `#/op/${reference.operation_id}`,
 			"data-overview-link": `${key}:operation`
-		}, t("pm_operation")), discussLink({
+		}, t("pm_operation")), options.caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes("quality_assessment") ? discussLink({
 			workspaceId,
 			refs: [ref],
 			title: row.title,
 			from: "overview"
-		}, { "data-overview-link": `${key}:discuss` })) : null;
+		}, { "data-overview-link": `${key}:discuss` }) : null) : null;
 		const node = disclosure({
 			label: t("ov_original_assessment"),
 			key: `${namespace}:${workspaceId}:${key}`,
 			body: h("div", {}, h("p", { class: "ui-meta" }, t("ov_assessment_source")), controls, h("pre", { class: "pm-brief-proof" }, JSON.stringify(reference, null, 2)))
 		});
-		node.dataset.overviewAssessment = reference.operation_id || "";
+		node.dataset.overviewDeliveryAssessment = reference.operation_id || "";
 		node.querySelector("summary").dataset.overviewLink = `${key}:source`;
 		return node;
 	}

@@ -35,7 +35,10 @@ document digest、candidate commit）。共用 Web／Tauri 介面以英文與繁
 該引用，提供原操作與固定 quality_assessment 討論來源；不另取最新 review、不推導
 新驗收，也不以引用補齊未知涵蓋。舊服務未提供時不顯示該區塊。重新整理以完整原始
 引用維持焦點／展開狀態，換一筆評估時不沿用舊狀態；來源撤回移除內容，固定報告
-不使用即時交付引用。單純展開不新增讀取或寫入。
+不使用即時交付引用。單純展開不新增讀取或寫入。討論入口沿用品質審閱的
+`quality_reviews.discussion_contexts` capability；未宣告 `quality_assessment`
+時仍可閱讀引用與原操作。此為品質評估的引用，不重畫既有 PM Overview 判讀卡或
+其歷史 reader；兩者使用不同的介面 selector。
 
 Goal 的唯一取值規則：只使用已採用文件的 `selected_inputs`，依固定優先序 **`governance.goal` →
 `goal` → `value` → `problem`** 取值；每個 slot 只考慮 status 為 `user_confirmed` 或 `repo_evidence` 的 input。

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Show original requirement assessments and criterion evidence in the shared
+  Result, keeping verification, applicability, partial coverage and dependent
+  handoff selections distinct. Live Overview exposes each accepted delivery's
+  exact assessment reference through existing operation and supported discussion
+  links, independently of the PM assessment reader, in English and zh-TW.
+
 - Explicitly save a readable Work-side relationship ID into the existing cleanup
   index for later withdrawal after source revocation. Recheck current authority
   and relationship identity; preserve original operation recovery, the 500-record

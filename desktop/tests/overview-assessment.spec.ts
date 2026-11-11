@@ -88,6 +88,39 @@ function assessmentFixture(locale='en') {
     await mountConversation(page,native,dispatch);await page.goto(`/dashboard/#/pm/${wid}/overview`);}};
 }
 
+// The PM judgment and the accepted delivery cite different central records.
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
+  test(`delivery citation coexists with the PM assessment reader ${locale} ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
+    const x = assessmentFixture(locale), reference = {review_id: 'pmqr_' + 'a'.repeat(32),
+      operation_id: 'op_' + 'b'.repeat(32), version: 2, document_digest: 'c'.repeat(64), candidate_commit: 'd'.repeat(40)};
+    x.f.overrides.push((url, result) => {
+      if (url.pathname.endsWith('/overview')) result.data.recent_deliveries.find((row: any) => row.state === 'accepted').assessment_ref = reference;
+    });
+    await page.setViewportSize({width: 390, height: 900});
+    await x.mount(page, native);
+    const judgment = page.locator('[data-overview-assessment]');
+    const citation = page.locator('[data-overview-delivery-assessment]');
+    await expect(judgment).toHaveCount(1);
+    await expect(citation).toHaveCount(1);
+    await citation.locator('summary').click();
+    expect(JSON.parse(await citation.locator('pre').innerText())).toEqual(reference);
+    await expect(judgment.locator('[data-overview-assessment-id]')).toHaveAttribute('data-overview-assessment-id', assessmentId);
+    await expect(judgment).not.toContainText(reference.operation_id);
+    await judgment.locator('[data-overview-assessment-details]').click();
+    const reader = page.locator('[data-overview-history-detail]');
+    await expect(reader.locator('[data-overview-assessment-id]')).toHaveAttribute('data-overview-assessment-id', assessmentId);
+    await expect(reader).not.toContainText(reference.operation_id);
+    await page.keyboard.press('Escape');
+    await expect(judgment.locator('[data-overview-assessment-details]')).toBeFocused();
+    await expect(citation).toHaveAttribute('open', '');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const stored = await page.evaluate(() => JSON.stringify({...localStorage}));
+    for (const value of [reference.review_id, reference.operation_id, reference.document_digest, reference.candidate_commit]) expect(stored).not.toContain(value);
+    expect(x.state.writes).toEqual([]);
+    expect(x.f.reads.some(path => path.includes('/quality-reviews/'))).toBe(false);
+  });
+}
+
 for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`explicit assessment preserves facts and fixed citations ${locale} ${width}`,async({page})=>{
   const x=assessmentFixture(locale);await page.setViewportSize({width,height:900});await x.mount(page,width===768);
   const card=page.locator('[data-overview-assessment]');await expect(card).toContainText('Keep account recovery in scope');
