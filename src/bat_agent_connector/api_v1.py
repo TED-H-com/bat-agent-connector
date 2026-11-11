@@ -345,6 +345,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/pr-publications/(?P<publication_operation_id>op_[0-9a-f]{32})", self.pm_pr_publication, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews", self.pm_quality_reviews, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews/(?P<review_id>pmqr_[0-9a-f]{32})", self.pm_quality_review, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews/(?P<review_id>pmqr_[0-9a-f]{32})/assessments/(?P<operation_id>op_[0-9a-f]{32})", self.pm_quality_assessment, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/quality", self.pm_work_quality, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches", self.pm_work_batches, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches/(?P<batch_id>pmbt_[0-9a-f]{32})", self.pm_work_batch, "observe"),
@@ -622,7 +623,7 @@ class ApiV1:
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_execution_verification_configuration, self.pm_execution_verification_get,
-                      self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_work_quality, self.pm_pr_publication,
+                      self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_quality_assessment, self.pm_work_quality, self.pm_pr_publication,
                       self.pm_work_batches, self.pm_work_batch, self.pm_maintenance_findings_current,
                       self.pm_spec_materializations, self.pm_spec_materialization,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
@@ -835,6 +836,8 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method == "pm_work_profiles_list":
             integer_fields.add("cursor")
+        if method == "pm_quality_assessment_get":
+            integer_fields.add("version")
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
         wide_cursor = method in {"pm_history_get", "pm_history_links_list", "pm_history_associations_list", "pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
@@ -1054,6 +1057,10 @@ class ApiV1:
 
     async def pm_quality_review(self, principal, query, workspace_id, review_id, **_):
         return self._pm_read(principal, "pm_quality_review_get", query, workspace_id=workspace_id, review_id=review_id)
+
+    async def pm_quality_assessment(self, principal, query, workspace_id, review_id, operation_id, **_):
+        return self._pm_read(principal, "pm_quality_assessment_get", query,
+                             workspace_id=workspace_id, review_id=review_id, operation_id=operation_id)
 
     async def pm_work_quality(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_work_quality_get", query, workspace_id=workspace_id, work_item_id=work_item_id)

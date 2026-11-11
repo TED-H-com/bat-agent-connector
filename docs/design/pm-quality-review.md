@@ -172,6 +172,80 @@ Shared reads hold one SQLite read
 snapshot and refuse an inaccessible original whole, including ancestors and
 proof sources. No public read creates an operation or performs provider I/O.
 
+### Exact original assessment read
+
+`pm_quality_assessment_get(workspace_id, review_id, operation_id, version,
+document_digest)` exposes the existing `get_assessment` helper without changing
+its validation, source checks, byte budget or applicability semantics. HTTP uses
+`GET /api/v1/pm/workspaces/{workspace_id}/quality-reviews/{review_id}/assessments/{operation_id}`
+with exactly `version` and `document_digest` query parameters. Daemon RPC and MCP
+use the same method and five required fields. The additive
+`quality_reviews.exact_assessment_read: true` capability advertises this read.
+
+The workspace/review/operation identifiers are exact original IDs. Version is an
+integer from 2 through `MAX_HISTORY + 1` (currently 33); document digest is 64
+lowercase hexadecimal characters. Unknown fields, duplicate/empty HTTP query
+values, missing selectors and malformed values are refused. Valid but mismatched
+operation/version/digest tuples are not-found, never a request for the latest
+assessment. HTTP uses the existing PM GET parser: request bodies are not parsed
+and cannot supply selectors; its handler also ignores the Idempotency-Key header.
+The native bridge permits only this exact GET path,
+the two typed, required query values, and no body or operation key.
+
+The result is the helper's unchanged envelope: `workspace_id`, `review_id`,
+original `context` / `context_digest`, one `assessment`,
+`semantics: immutable_original_assessment`, and
+`current_applicability: not_evaluated`. Rejection in a newer assessment,
+revocation or review supersession cannot rewrite the selected original.
+Applicability to a selected Result must come from its existing projection; the
+exact read performs no new acceptance calculation or dependency selection.
+
+Authorization is the same as `pm_quality_review_get`: `observe`, the shared
+workspace membership gate (including its explicit authenticated administrator
+override), and complete original review/predecessor context and proof-source
+visibility. A global administrator without membership retains the existing
+review read access, but cannot bypass withdrawn original sources. Removed
+ordinary members and callers lacking source access cannot read either surface.
+HTTP preserves the existing status/error body; RPC preserves its code/message
+error object and MCP its ToolError text (including the invoked tool name), without
+adding HTTP status fields. Source-bound requests retain the existing pre-read
+lineage barrier: RPC can refuse a hidden original source before its method scope
+check, just as `pm_work_quality_get` does. No refusal is remapped by this read.
+
+Refusal precedence follows the existing adapters, not one uniform error pipeline:
+
+| Adapter | Effective order for this read |
+| --- | --- |
+| HTTP | Transport/route and bearer or browser authentication gates; route `observe`; retained-empty query parsing; normalized request source-lineage barrier; exact query/number parsing; `pm_reads.read`; final response source-lineage barrier. |
+| Daemon RPC | Registered `API_RPC` method and bearer authentication; request source-lineage barrier; method `observe`; removal of established transport metadata `entry`; `pm_reads.read`; final response source-lineage barrier. |
+| MCP | Generated argument validation; `pm_daemon` requires the caller's `BATC_API_TOKEN` without a local administrator fallback; daemon RPC with that principal; existing ToolError conversion. |
+| Native bridge | Raw path/method/query/body/operation-key allowlist; existing transport to HTTP, where all HTTP gates still apply. No local membership or acceptance authority. |
+
+`pm_reads.read` checks observe and unknown fields before dispatch. The unchanged
+helper validates operation/version/digest syntax, loads the workspace-qualified
+review and checks context integrity, then checks membership and all original
+contexts/proofs in the bounded predecessor history. Exact tuple selection and
+the byte limit follow those access checks. An inaccessible predecessor or a
+newer assessment's proof therefore hides even an older exact document.
+
+Errors are not uniform or guaranteed constant-time across adapters. HTTP scope
+refusal precedes lineage, while RPC lineage can refuse before scope; malformed
+query fields, central fields and MCP arguments also use their existing distinct
+error formats. Missing versus hidden sources may produce different messages and
+work. This read makes no constant-time or indistinguishable-refusal guarantee.
+
+MCP unknown-argument refusal is intentionally stricter for this exact tool than
+for neighbouring quality reads, whose SDK argument models discard extra fields.
+Only this tool's generated argument model forbids extras; the dependency and
+neighbouring tool behavior remain unchanged. HTTP ignores a GET body and
+idempotency header, while the native bridge refuses both.
+
+This read creates no operation, event, collector marker or other persisted row,
+and calls no model, provider, BAT or collector. The single whole-document byte
+limit remains authoritative; exceeding it fails rather than returning a trimmed
+assessment. All transports use the same central helper. There is no new table,
+action, data step or native authorization policy.
+
 The projection returns original review/assessment IDs and digests, separate
 `acceptance` and `dod`, `qualified`, criterion gaps, historical outcome and current
 applicability reasons. It also carries exact package, binding, scope, candidate

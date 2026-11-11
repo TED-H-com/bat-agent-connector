@@ -43,14 +43,28 @@ from .redact import redact
 from .task_daemon import request as task_request
 
 
-class _CleanupCursorMetadata(FuncMetadata):
+class _ExactStringMetadata(FuncMetadata):
+    string_parameters: frozenset[str]
+
     def pre_parse_json(self, data: dict[str, Any]) -> dict[str, Any]:
         parsed = super().pre_parse_json(data)
-        # This opaque string is not JSON-in-a-string. Preserve explicit JSON null,
-        # but let central validation refuse strings such as "null" and "[]".
-        if 'after' in data:
-            parsed['after'] = data['after']
+        # Opaque selectors are not JSON-in-a-string. Keep null distinct from
+        # "null" and leave syntax/authorization decisions to central validation.
+        for name in self.string_parameters & data.keys():
+            parsed[name] = data[name]
         return parsed
+
+
+def _strict_tool_arguments(mcp: MCPServer, name: str, *, string_parameters: frozenset[str]) -> None:
+    """Opt one registered tool into exact selectors without changing SDK defaults."""
+    tool = mcp._tool_manager.get_tool(name)
+    assert tool is not None
+    args = tool.fn_metadata.arg_model
+    args.model_config['extra'] = 'forbid'
+    args.model_rebuild(force=True)
+    tool.parameters = args.model_json_schema()
+    tool.fn_metadata = _ExactStringMetadata(
+        **tool.fn_metadata.model_dump(), string_parameters=string_parameters)
 
 
 READ_TOOLS = [
@@ -98,7 +112,7 @@ READ_TOOLS = [
 
     "pm_work_deliveries_list",
     "pm_execution_verification_configuration", "pm_execution_verification_get",
-    "pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get", "pm_quality_reviews_list", "pm_quality_review_get", "pm_work_quality_get", "pm_pr_publication_get",
+    "pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get", "pm_quality_reviews_list", "pm_quality_review_get", "pm_quality_assessment_get", "pm_work_quality_get", "pm_pr_publication_get",
     "pm_work_batches_list", "pm_work_batch_get", "pm_maintenance_findings_current_get",
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
@@ -738,6 +752,12 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read original source-gated acceptance and DoD review evidence."""
         return await pm_daemon("pm_quality_review_get", workspace_id=workspace_id, review_id=review_id)
 
+    async def pm_quality_assessment_get(workspace_id: str, review_id: str, operation_id: str,
+                                        version: StrictInt, document_digest: str) -> dict[str, Any]:
+        """Read one exact immutable quality assessment; current applicability is not evaluated."""
+        return await pm_daemon("pm_quality_assessment_get", workspace_id=workspace_id, review_id=review_id,
+                               operation_id=operation_id, version=version, document_digest=document_digest)
+
     async def pm_work_quality_get(workspace_id: str, work_item_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Read original source-gated acceptance and DoD review evidence."""
         return await pm_daemon("pm_work_quality_get", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
@@ -1279,7 +1299,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
 
                pm_work_deliveries_list,
                pm_execution_verification_configuration, pm_execution_verification_get,
-               pm_maintenance_repairs_list, pm_maintenance_repair_current_get, pm_maintenance_repair_get, pm_quality_reviews_list, pm_quality_review_get, pm_work_quality_get, pm_pr_publication_get,
+               pm_maintenance_repairs_list, pm_maintenance_repair_current_get, pm_maintenance_repair_get, pm_quality_reviews_list, pm_quality_review_get, pm_quality_assessment_get, pm_work_quality_get, pm_pr_publication_get,
                pm_work_batches_list, pm_work_batch_get, pm_maintenance_findings_current_get,
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
@@ -1306,14 +1326,11 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 
+    _strict_tool_arguments(mcp, "pm_quality_assessment_get",
+        string_parameters=frozenset({"workspace_id", "review_id", "operation_id", "document_digest"}))
     mcp.add_tool(_wrap(pm_history_cleanup_list), name="pm_history_cleanup_list", annotations=ro)
-    cleanup_tool = mcp._tool_manager.get_tool("pm_history_cleanup_list")
-    assert cleanup_tool is not None
-    cleanup_args = cleanup_tool.fn_metadata.arg_model
-    cleanup_args.model_config['extra'] = 'forbid'
-    cleanup_args.model_rebuild(force=True)
-    cleanup_tool.parameters = cleanup_args.model_json_schema()
-    cleanup_tool.fn_metadata = _CleanupCursorMetadata(**cleanup_tool.fn_metadata.model_dump())
+    _strict_tool_arguments(mcp, "pm_history_cleanup_list",
+        string_parameters=frozenset({"workspace_id", "work_item_id", "after"}))
 
     if not read_only:
         async def work_continue_from_repository(repository: str, host: str, workspace_id: str, source_ref: str,

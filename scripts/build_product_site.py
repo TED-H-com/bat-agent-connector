@@ -438,8 +438,8 @@ for en, zh, d, dz in [
     (
         "Match the package",
         "核對套件",
-        "Stable: Connector 0.2.17 / desktop 0.1.13, source recorded in release-manifest.json. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
-        "穩定版：Connector 0.2.17／desktop 0.1.13，完整來源見 release-manifest.json。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
+        "Stable: Connector 0.2.18 / desktop 0.1.14, source recorded in release-manifest.json. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
+        "穩定版：Connector 0.2.18／desktop 0.1.14，完整來源見 release-manifest.json。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
     ),
     (
         "Connect your environment",
@@ -459,23 +459,23 @@ parts.append(
     '</ol><div class="install-current">'
     + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
-        "Stable 0.2.17 was published on November 9, 2026; its exact source is recorded in release-manifest.json. Its backend and desktop CI passed, and the eight public assets match the verified checksums. Source and validation details are linked below.",
-        "穩定版 0.2.17 於 2026 年 11 月 9 日發布，完整來源記錄於 release-manifest.json。該來源的 backend 與 desktop CI 均通過，八個公開檔案亦核對校驗碼相符；來源及驗證細節見下方連結。",
+        "Stable 0.2.18 was published on November 11, 2026; its exact source is recorded in release-manifest.json. Its backend and desktop CI passed, and all eight public asset names, sizes and digests match the verified records. Source and validation details are linked below.",
+        "穩定版 0.2.18 於 2026 年 11 月 11 日發布，完整來源記錄於 release-manifest.json。該來源的 backend 與 desktop CI 均通過，八個公開資產的名稱、大小及 digest 亦核對相符；來源與驗證詳情見下方連結。",
         "p",
     )
     + bi(
-        "0.2.17 links fixed external-conversation entries or text ranges to existing Work and optional Attempts. Review, replace or withdraw relationships, and read authorized excerpts from Board, Requirements and Work details. Original CLI sessions remain read-only; references do not approve or complete work. Earlier saved conversations and explicit PM summaries remain available.",
-        "0.2.17 可將固定外部對話紀錄或文字範圍連到既有 Work 與選填 Attempt，檢閱、替換或撤回關聯，並從看板、需求頁及 Work 詳情閱讀已授權摘錄。原 CLI 會話仍維持唯讀，參考資料不代表核准或完成工作；前版的對話保存及明確 PM 摘要仍保留。",
+        "Connector 0.2.18 adds Workbench list resizing, quote copying from completed messages and original requirement evidence in Result and Live Overview. It keeps credential-bearing repository URLs and staged credential handles out of setup drafts, preserves original-request recovery, tightens operation-history cursor and loopback validation, and lets readers save readable relationship IDs for later cleanup. Desktop 0.1.14 updates the updater plugin to 2.14.1 with ZIP handling through zip 9.5.1.",
+        "Connector 0.2.18 加入 Workbench 清單調寬、完成訊息的引用複製，以及 Result 與 Live Overview 的原始需求證據。設定草稿不保存含憑證的儲存庫網址或暫存憑證 handle，保留原請求恢復；另收緊操作歷史 cursor 與 loopback 驗證，並可明確保存可讀關聯 ID 供日後清理。Desktop 0.1.14 將 updater plugin 更新至 2.14.1，透過 zip 9.5.1 處理 ZIP。",
         "p",
     )
     + bi(
-        "On Windows, quit Dashboard from its tray menu and install the 0.1.13 package while preserving application data. Existing unsigned test packages cannot use in-app signed updates. Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.17 sources; old-installer upgrades are separate. CI does not establish recovery on your computer or real BAT/model acceptance.",
-        "Windows 請從系統匣退出 Dashboard，再安裝 0.1.13 套件並保留應用程式資料。既有未簽章測試包不能使用內建簽章更新。目前候選版的升級 fixture 使用由 0.2.12 與 0.2.17 固定發布來源建出的核心，舊安裝器的完整升級另有範圍；CI 不代表已修復你的電腦或通過真 BAT／模型驗收。",
+        "On Windows, quit Dashboard from its tray menu and install the 0.1.14 package while preserving application data. Existing unsigned test packages cannot use in-app signed updates. Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.17 sources; old-installer upgrades are separate. CI does not establish recovery on your computer or real BAT/model acceptance.",
+        "Windows 請從系統匣退出 Dashboard，再安裝 0.1.14 套件並保留應用程式資料。既有未簽章測試包不能使用內建簽章更新。目前候選版的升級 fixture 使用由 0.2.12 與 0.2.17 固定發布來源建出的核心，舊安裝器的完整升級另有範圍；CI 不代表已修復你的電腦或通過真 BAT／模型驗收。",
         "p",
     )
     + bi(
-        "Advanced users can explicitly join an existing central. The published release includes fixed source and checksum records. These are unsigned or ad-hoc-signed development builds, not a stable signed update channel. Closing the UI leaves central work running.",
-        "進階使用者可明確加入既有中央。已發布版本附有固定來源與校驗紀錄。這些是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
+        "Advanced users can explicitly join an existing central. The published release includes fixed source and checksum records. Linux and Windows packages are unsigned; macOS uses ad-hoc signing without notarization. There is no signed updater feed. This release adds no owner installation, physical-device or real BAT/model acceptance evidence. Closing the UI leaves central work running.",
+        "進階使用者可明確加入既有中央。已發布版本附有固定來源與校驗紀錄。Linux 與 Windows 套件未簽章；macOS 採 ad-hoc 簽章，未公證。沒有 signed updater feed。本版不新增 owner 安裝、實體裝置或真 BAT／模型驗收證據。關閉 UI 仍保留中央工作。",
         "p",
     )
     + bi(
@@ -484,7 +484,7 @@ parts.append(
         "p",
     )
     + bi("Stable", "穩定版", "p")
-    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.17 --channel-check stable</code></pre>'
+    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.18 --channel-check stable</code></pre>'
     + bi("Prerelease", "預覽版", "p")
     + '<pre class="install-command" tabindex="0" aria-label="Preview installer arguments / 預覽版安裝器參數"><code>--tag v0.2.13-preview.20261022 --channel-check preview</code></pre>'
     + bi(
@@ -501,9 +501,9 @@ parts.append(
         "button light lang-zh",
     )
     + link(
-        repo + "/releases/tag/v0.2.17",
-        "Download stable 0.2.17 →",
-        "下載穩定版 0.2.17 →",
+        repo + "/releases/tag/v0.2.18",
+        "Download stable 0.2.18 →",
+        "下載穩定版 0.2.18 →",
         "text-link",
     )
     + link(
