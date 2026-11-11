@@ -69,8 +69,9 @@ execution reuse original runtime completion and settled-lineage predicates,
 including the inherited 256-descendant known-hold limit shared with Workload
 (not a WIP enumeration bound);
 fixed verification alone is insufficient. Unsupported/older completion evidence
-keeps an identified commitment held. This read neither gathers new evidence nor
-broadens the result collector or creates a completion authority.
+keeps an identified commitment held. This read neither gathers new evidence nor creates a completion authority.
+The existing result collector has one narrow extension for exact direct markers,
+as specified in [E04 Result](v1.3-e04-result.md).
 
 Linked task sends use the TaskCoordinator's original cancelled/rejected-before-
 dispatch or exact-command `not_delivered` reconciliation evidence. Task closure
@@ -208,7 +209,7 @@ Advertise `workspace_wip` only when its action and schema are installed:
 {"version":1,"read":"pm_workspace_wip_get","action":"pm.wip_policy.save",
  "modes":["advisory","disabled"],"enforcement":false,
  "counting_basis":"work_commitments_v1",
- "bounds":{"works":10000,"contributing_records":50000,"per_work_history":500}}
+ "bounds":{"works":10000,"contributing_records":50000,"per_work_history":500,"per_execution_direct_inputs":500}}
 ```
 
 HTTP, daemon, MCP and native bridge share the same authority, success and refusal
@@ -258,3 +259,41 @@ Attempt/original execution, and its resolved session is this Attempt's session.
 It retains the existing Work-input marker path. A send whose stored target is
 exactly the Attempt host/session is a direct input. Anything else is generic
 unknown, including a mismatched resolved target; targets are never rewritten.
+
+## Direct inputs and reachable release
+
+Only new agent-work inputs create or extend a hold. `pm_direct_inputs.eligible`
+is shared by the collector and the WIP read: original handoff lineage, exact
+host/session stored target, succeeded/non-uncertain operation, succeeded send
+step, equal request/response message IDs and accepted=true are all required.
+The original external-step uncertainty predicate is preserved. The WIP read
+still enumerates, authorizes and charges **every** lineage source, including
+non-inputs and controls; hidden sources and any budget overflow remain the same
+generic unknown. The eligible lookup is charged too; it performs no provider read.
+
+Required receipts are the existing initial/latest Work-input marker plus every
+eligible direct marker. Each must match the original source key and generation
+and the existing terminal-boundary predicate (`turn_done` or `agent_error`, not
+`process_ended`). Attribution is `correlated`, or `correlated_after_prior_turn`
+only for a direct marker whose original send response says queued. ACK alone
+keeps the hold. The collector can now produce each such receipt through its
+ordinary original-marker read and append-only receipt path; no release action
+or new completion authority is introduced.
+
+The WIP bound `per_execution_direct_inputs: 500` covers all later direct inputs
+for one execution, including accepted/pending inputs. At 501 return generic
+unknown, without partial counts. Collector eligibility separately fetches at
+most 501 eligible inputs; overflow skips only its additive direct step and records
+`direct_input_limit` in the separate direct check. The existing step still runs. The shared lookup starts at the original's lineage index
+and uses existing operation/step indexes, never a global history scan. Only the
+bounded rows are sorted in memory by `operations.rowid` admission order, then
+operation ID. No fifth index, schema/data step or admission change is needed.
+
+
+Each collector pass completes the existing initial/latest Work-input step first,
+including its original memo, check and queue wake behavior. Only an Attempt that
+survives that memo short-circuit, has an existing terminal marker receipt and has
+remaining pass time may receive one additive direct step. That step never wakes
+the Work queue and never reads or writes the existing memo entry; its check reason
+is stored separately. Thus a queued direct marker cannot delay the existing
+prior-turn queue wake. An eligible pass performs at most one additional session read.

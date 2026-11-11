@@ -1670,7 +1670,8 @@
           "bounds": {
             "works": 10000,
             "contributing_records": 50000,
-            "per_work_history": 500
+            "per_work_history": 500,
+            "per_execution_direct_inputs": 500
           }
         },
         "work_profiles": {

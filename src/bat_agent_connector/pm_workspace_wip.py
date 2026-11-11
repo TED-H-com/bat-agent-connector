@@ -107,13 +107,14 @@ def install(ops):
 
 
 def capabilities(ops):
-    from . import pm_kanban
+    from . import pm_direct_inputs, pm_kanban
     if ACTION not in ops.actions or not installed(ops.db):
         return None
     return {"version": 1, "read": READ, "action": ACTION, "modes": ["advisory", "disabled"],
             "enforcement": False, "counting_basis": BASIS,
             "bounds": {"works": MAX_WORKS, "contributing_records": MAX_RECORDS,
-                       "per_work_history": pm_kanban.MAX_HISTORY}}
+                       "per_work_history": pm_kanban.MAX_HISTORY,
+                       "per_execution_direct_inputs": pm_direct_inputs.MAX_DIRECT_INPUTS}}
 
 
 def _record(db, wid, revision=None):

@@ -4,6 +4,7 @@ from __future__ import annotations
 from . import (
     artifact_managed,
     pm_attempt_results,
+    pm_direct_inputs,
     pm_evidence,
     pm_execution_runtime,
     pm_kanban,
@@ -274,6 +275,8 @@ class _Collector:
                     raise _Unavailable
                 if LINEAGE_ACTIONS[later['action']] == 'input':
                     input_kinds[later['operation_id']] = self.input_kind(attempt, op, later)
+        if sum(kind == 'direct' for kind in input_kinds.values()) > pm_direct_inputs.MAX_DIRECT_INPUTS:
+            raise _Unavailable
         steps = self.steps(op)
         released = self.unsent(op, steps)
         if not released and self.works[wi][1] and op["status"] == "succeeded":
@@ -309,7 +312,17 @@ class _Collector:
 
     def attempt_complete(self, attempt, handoff, associated, input_kinds):
         """Apply only saved original generation/turn evidence; never query runtime."""
-        later_markers = set()
+        session = pm_work_start._child_session(handoff)
+        if not session:
+            return False
+        room = min(policy.MAX_RECORDS - self.used_records, pm_direct_inputs.MAX_DIRECT_INPUTS)
+        direct = pm_direct_inputs.eligible(self.db, handoff['operation_id'], session, limit=room + 1)
+        self.used_records += len(direct)
+        if len(direct) > room:
+            raise _Unavailable
+        eligible = {row['operation_id']: row for row in direct}
+        later_markers = {row['marker'] for row in direct}
+        queued_markers = {row['marker'] for row in direct if row['queued']}
         for op in associated:
             if op['operation_id'] == handoff['operation_id']:
                 continue
@@ -318,20 +331,11 @@ class _Collector:
             steps = self.steps(op)
             if self.unsent(op, steps):
                 continue
-            send = next((row for row in steps if row['name'] == 'send'), None)
-            if op['status'] != 'succeeded' or send is None or send['status'] != 'succeeded':
+            if op['operation_id'] not in eligible:
                 return False
-            request, response = pm_evidence._body(send['request']), pm_evidence._body(send['response'])
-            marker = request.get('message_id')
-            if not marker or response.get('accepted') is not True or response.get('message_id') != marker:
-                return False
-            later_markers.add(marker)
         if not pm_attempt_results.installed(self.db) or not pm_work_follow_up.installed(self.db):
             return False
         aid = attempt["attempt_id"]
-        session = pm_work_start._child_session(handoff)
-        if not session:
-            return False
         host, sid = session["host"], session["session_id"]
         observed = self.db.execute("SELECT body FROM sessions_observed WHERE host=? AND session_id=?", (host, sid)).fetchone()
         origin = pm_evidence._body(observed[0]).get("registry_origin") if observed else None
@@ -363,8 +367,10 @@ class _Collector:
             result_marker = pos.get("turn_marker") or doc.get("turn_marker")
             if result_marker not in required:
                 continue
+            attribution = doc.get("turn_attribution", (doc.get("turn_progress") or {}).get("turn_attribution"))
+            allowed = {'correlated', 'correlated_after_prior_turn'} if result_marker in queued_markers else {'correlated'}
             if (row["source_key"] != f"bat:{host}:{sid}" or row["source_generation"] != generation
-                    or doc.get("turn_attribution", (doc.get("turn_progress") or {}).get("turn_attribution")) != "correlated"):
+                    or attribution not in allowed):
                 return False
             matched.add(result_marker)
         # Existing terminal boundary predicate, after exact original-source checks.
