@@ -11,7 +11,7 @@ import json
 import re
 import time
 
-from . import pm_plans, pm_sprints, pm_workspace, repository_sync
+from . import pm_impact_discovery, pm_plans, pm_sprints, pm_workspace, repository_sync
 from . import pm_work_packages as packages
 from .github import GitHubAmbiguous
 from .operations import RERUN, TERMINAL, ActionDef, Cancelled, OperationError, OperationService, Wait
@@ -60,6 +60,7 @@ def schema(journal):
             previous_revision_id TEXT UNIQUE, document TEXT NOT NULL, document_digest TEXT NOT NULL,
             operation_id TEXT NOT NULL UNIQUE, created_at REAL NOT NULL, actor TEXT NOT NULL)""")
         journal.db.execute("CREATE INDEX IF NOT EXISTS pm_issue_mapping_history ON pm_issue_revisions(workspace_id,mapping_id,sequence)")
+        pm_impact_discovery.schema(journal)
         # A reservation is not a publication fact. It remains held while any
         # original POST may have run, including a crashed worker's started step.
         journal.db.execute("""CREATE TABLE IF NOT EXISTS pm_issue_claims (

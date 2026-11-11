@@ -5,6 +5,7 @@ import json
 
 from . import (
     pm_evidence,
+    pm_impact_discovery,
     pm_issue_mappings,
     pm_plans,
     pm_snapshots,
@@ -43,6 +44,14 @@ def _proof(condition):
 def _bound(condition):
     if not condition:
         raise OperationError("PM_IMPACT_TOO_LARGE", "Select a smaller binding subset; the complete impact matrix exceeds its bounds", 413)
+
+
+def _encoded_size(value, remaining):
+    size = 0
+    for chunk in json.JSONEncoder(ensure_ascii=False, allow_nan=False).iterencode(value):
+        size += len(chunk.encode("utf-8"))
+        _bound(size <= remaining)
+    return size
 
 
 def _source(reader, *args, **kwargs):
@@ -91,37 +100,19 @@ def _eligible(ops, operation, bindings, cursor):
 
 
 def _candidates(ops, workspace_id, work_ids, cursor, bindings):
-    # Discovery depends exclusively on retained events, not today's domain heads.
-    # Original envelopes interpret admissions (including cancel and direct handoff).
-    rows = ops.db.execute("""SELECT e.*,o.operation_id AS original_operation_id FROM api_events e
-        LEFT JOIN operations o ON o.operation_id=CASE WHEN e.kind='operation.accepted' THEN e.resource_id
-            ELSE json_extract(e.body,'$.operation_id') END
-        WHERE e.seq<=? AND (
-          (e.kind IN ('pm.work_package.created','work.start.succeeded','pm.issue.recorded')
-            AND json_extract(e.body,'$.workspace_id')=? AND json_extract(e.body,'$.work_item_id') IN (SELECT value FROM json_each(?)))
-          OR (e.kind='operation.accepted' AND e.resource_type='operation' AND (
-            (o.action IN ('pm.work_package.create','work.start','pm.issue.publish','pm.issue.cancel')
-              AND json_extract(o.target,'$.workspace_id')=?
-              AND COALESCE(json_extract(o.target,'$.work_item_id'),
-                json_extract(o.external_refs,'$.admission_binding.issue_intent.work_item_id')) IN (SELECT value FROM json_each(?)))
-            OR (o.action='repository.continue'
-              AND json_extract(o.external_refs,'$.admission_binding.pm_handoff.contract.package_ref.workspace_id')=?
-              AND json_extract(o.external_refs,'$.admission_binding.pm_handoff.contract.package.work_item_id') IN (SELECT value FROM json_each(?)))
-          ))) ORDER BY e.seq""",
-        (cursor, workspace_id, json.dumps(work_ids), workspace_id, json.dumps(work_ids),
-         workspace_id, json.dumps(work_ids)))
-    groups = {}
-    inspected = 0
-    for row in rows:
-        if row["original_operation_id"] is None:
+    groups, seen = {}, set()
+    for raw in pm_impact_discovery.rows(ops.db, workspace_id, work_ids, cursor):
+        row = {**dict(raw), "body": json.loads(raw["body"])}
+        oid = row["resource_id"] if row["kind"] == "operation.accepted" else row["body"].get("operation_id")
+        operation = ops._row(oid)
+        if operation is None:
             raise _unavailable()
-        if not _eligible(ops, ops._row(row["original_operation_id"]), bindings, cursor):
+        if not _eligible(ops, operation, bindings, cursor) or row["seq"] in seen:
             continue
-        inspected += 1
-        if inspected > MAX_CANDIDATES:
+        seen.add(row["seq"])
+        if len(seen) > MAX_CANDIDATES:
             raise _unavailable()
-        group = groups.setdefault(row["original_operation_id"], [])
-        group.append({**dict(row), "body": json.loads(row["body"])})
+        groups.setdefault(oid, []).append(row)
     return groups
 
 
@@ -330,6 +321,22 @@ def preview(ops, principal, workspace_id, snapshot_id, from_revision_id, to_revi
             raise
         candidates = {c["binding"]["binding_id"]: c for c in comparison["impact_candidates"]}
         subjects = []
+        matrix = {"selector": {"workspace_id": workspace_id, "snapshot_id": snapshot_id,
+                              "from_revision_id": from_revision_id, "to_revision_id": to_revision_id,
+                              "binding_ids": sorted(binding_ids)},
+                  "snapshot_digest": snapshot["snapshot_digest"], "journal_cursor": cursor,
+                  "comparison": comparison, "work": sorted(selected, key=lambda w: w["binding"]["binding_id"]),
+                  "subjects": subjects, "coverage": {"work": "selected_bindings_only", "project_complete": False,
+                      "unselected_work": "not_scanned", "history": "retained_events_only",
+                      "snapshot": snapshot["coverage"], "undiscoverable_history": "creation_boundary_unproven",
+                      "semantic_impact": "unassessed", "acceptance_verification": "not_performed",
+                      "delivery_verification": "not_performed", "network_checked": False,
+                      "cross_scope_issue_publication": "unsupported"},
+                  "execution_authorized": False, "work_update_authorized": False}
+        # Digest has a fixed wire width. Account for the whole response shell,
+        # then each complete subject before retaining it in the matrix.
+        used = _encoded_size({"version": 1, "workspace_id": workspace_id, "matrix": matrix,
+                              "impact_digest": "0" * 64}, MAX_BYTES)
         for oid, rows in sorted(groups.items()):
             events = {e["kind"]: e for e in rows}
             _proof(len(events) == len(rows))
@@ -343,22 +350,12 @@ def preview(ops, principal, workspace_id, snapshot_id, from_revision_id, to_revi
                 requirements = set(subject.get("requirement_ids", ()))
                 for key in ("direct_requirement_ids", "dependent_requirement_ids"):
                     subject[key] = sorted(requirements.intersection(candidate[key])) if candidate else []
+                _bound(len(subjects) < MAX_SUBJECTS)
+                separator = 2 if subjects else 0
+                used += separator + _encoded_size(subject, MAX_BYTES - used - separator)
                 subjects.append(subject)
-                _bound(len(subjects) <= MAX_SUBJECTS)
-        matrix = {"selector": {"workspace_id": workspace_id, "snapshot_id": snapshot_id,
-                              "from_revision_id": from_revision_id, "to_revision_id": to_revision_id,
-                              "binding_ids": sorted(binding_ids)},
-                  "snapshot_digest": snapshot["snapshot_digest"], "journal_cursor": cursor,
-                  "comparison": comparison, "work": sorted(selected, key=lambda w: w["binding"]["binding_id"]),
-                  "subjects": subjects, "coverage": {"work": "selected_bindings_only", "project_complete": False,
-                      "unselected_work": "not_scanned", "history": "retained_events_only",
-                      "snapshot": snapshot["coverage"], "undiscoverable_history": "creation_boundary_unproven",
-                      "semantic_impact": "unassessed", "acceptance_verification": "not_performed",
-                      "delivery_verification": "not_performed", "network_checked": False,
-                      "cross_scope_issue_publication": "unsupported"},
-                  "execution_authorized": False, "work_update_authorized": False}
         result = {"version": 1, "workspace_id": workspace_id, "matrix": matrix, "impact_digest": diff._digest(matrix)}
         _source(pm_source_lineage.require_document, ops.db, principal, result)
         # Check the ordinary wire encoding too, not just compact digest bytes.
-        _bound(len(json.dumps(result, ensure_ascii=False, allow_nan=False).encode("utf-8")) <= MAX_BYTES)
+        _encoded_size(result, MAX_BYTES)
         return result

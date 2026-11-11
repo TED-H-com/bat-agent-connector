@@ -72,6 +72,48 @@ package/execution IDs and package reuse against the original admission and child
 relation. Its session payload does not prove an impact edge and is neither
 copied nor used to infer execution progress or completion.
 
+### Indexed discovery and construction cost
+
+The existing issue/package startup schema installs two idempotent indexes; the
+read never installs them. There is no table, column, trigger, data step,
+`user_version` change or backfill. In the expressions below `W` is
+`CASE WHEN kind='operation.accepted' THEN json_extract(body,'$.target.workspace_id')
+ELSE json_extract(body,'$.workspace_id') END`; `R` is
+`CASE WHEN kind='operation.accepted' THEN COALESCE(json_extract(body,'$.target.work_item_id'),
+json_extract(body,'$.target.mapping_id')) ELSE json_extract(body,'$.work_item_id') END`.
+
+- `CREATE INDEX IF NOT EXISTS pm_impact_event_relation ON api_events((W),(R),seq)`
+  has the partial predicate `kind IN ('pm.work_package.created','work.start.succeeded',
+  'pm.issue.recorded') OR (kind='operation.accepted' AND resource_type='operation'
+  AND json_extract(body,'$.action') IN ('pm.work_package.create','work.start',
+  'pm.issue.publish','pm.issue.cancel'))`. Unrelated kinds/actions create no index
+  entries. Both Work and cancellation-mapping event arms use equality on W/R and
+  an index range `seq <= cursor`; neither scans the global event prefix.
+- `CREATE INDEX IF NOT EXISTS pm_impact_issue_work ON
+  pm_issue_revisions(workspace_id,work_item_id,mapping_id)` supplies distinct
+  immutable mapping identities for the cancellation arm. Locators are not proof:
+  a retained, validated admission/domain event still establishes every boundary.
+
+Package identities use existing `pm_package_work`; their original handoff
+envelopes use existing `pm_handoff_package`. Each handoff admission uses
+`api_events_resource(resource_type,resource_id,seq)` with `seq <= cursor`.
+Direct handoff admissions have no PM IDs, so discovering their envelope IDs
+cannot use a cursor range. Its cost is the selected Work's immutable package
+locator rows plus the original handoff envelopes for those packages (including
+later ones), with one indexed cursor lookup per envelope. Mapping locators cost
+the selected Work's indexed immutable mapping history; no unrelated workspace,
+Work or operation scan is permitted. Locators never authorize or establish a
+creation boundary, and never acquire a cap that could invalidate a fixed older
+selector after later inserts. Only eligible retained event rows at/before the
+cursor consume the candidate budget; excluded bindings and post-cursor rows do
+not. There is no ordering by `created_at` or substitution of current heads.
+
+After complete source authorization, an incremental UTF-8 wire-size budget checks
+the fixed response shell and each subject before appending it. Encoding stops as
+soon as the size provably exceeds 150 KiB, before hashing an oversized matrix.
+The complete final wire representation is checked again. Comparison and source
+readers retain their own existing bounds; this read does not change their replies.
+
 A retained admission without its domain creation event yields a subject keyed by
 the original operation, with `creation_boundary_unproven`; it never acquires a
 package/issue ID from a later result. If both admission and creation evidence were
