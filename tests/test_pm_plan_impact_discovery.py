@@ -235,3 +235,29 @@ async def test_impact_every_attempt_discovery_statement_uses_an_index(start_read
                 text = ' '.join(row[3] for row in plan)
                 assert 'INDEX' in text
                 assert not any(term in text for term in ('SCAN api_events', 'SCAN operations', 'INTEGER PRIMARY KEY (rowid<'))
+
+
+async def test_impact_ambiguous_attempt_finish_discovery_has_constant_probe_cost(start_ready):
+    from bat_agent_connector.operations import OperationError
+    from tests import test_pm_work_start as starting
+    w, ops = start_ready, start_ready['d'].ops
+    op, _ = ops.create(starting.STARTER_OWNER, **await starting._start_envelope(w))
+    done = await starting._advance_start(ops, op['operation_id'])
+    assert done['status'] == 'succeeded', done
+    event = ops.db.execute("SELECT * FROM api_events WHERE kind='work.start.succeeded'").fetchone()
+    with ops.journal.tx():
+        ops.db.executemany('INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at) VALUES(?,?,?,?,?,?)',
+            [(event['resource_type'], event['resource_id'], event['kind'], event['body'], event['actor'], 0)] * 1001)
+    params = await selector(w)
+    ticks = [0]
+    def progress():
+        ticks[0] += 1
+        return 0
+    ops.db.set_progress_handler(progress, 100)
+    try:
+        with pytest.raises(OperationError, match='PM_IMPACT_SOURCE_UNAVAILABLE'):
+            read(w, params)
+    finally:
+        ops.db.set_progress_handler(None, 0)
+    print('AMBIGUOUS_FINISH_VM_STEPS', ticks[0] * 100)
+    assert ticks[0] * 100 < 1000000

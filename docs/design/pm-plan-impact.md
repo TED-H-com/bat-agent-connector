@@ -106,7 +106,9 @@ Work or operation scan is permitted. Locators never authorize or establish a
 creation boundary, and never acquire a cap that could invalidate a fixed older
 selector after later inserts. Only eligible retained event rows at/before the
 cursor consume the candidate budget; excluded bindings and post-cursor rows do
-not. There is no ordering by `created_at` or substitution of current heads.
+not. Private Attempt eligibility reads at most two matching retained finishes:
+one can assign a binding, two establish ambiguity without repeatedly loading all
+duplicate proofs. There is no ordering by `created_at` or substitution of current heads.
 
 After complete source authorization, an incremental UTF-8 wire-size budget checks
 the fixed response shell and each subject before appending it. Encoding stops as

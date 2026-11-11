@@ -79,8 +79,10 @@ def _eligible(ops, operation, bindings, cursor):
                                  (operation["operation_id"],)).fetchone()
             if row is None:
                 return True
+            # Two proofs suffice to establish ambiguity. Never materialize all
+            # duplicates again for each candidate from this same Attempt.
             events = ops.db.execute("""SELECT body FROM api_events WHERE resource_type='pm_work_attempt'
-                AND resource_id=? AND seq<=? AND kind='work.start.succeeded'""", (row[0], cursor)).fetchall()
+                AND resource_id=? AND seq<=? AND kind='work.start.succeeded' LIMIT 2""", (row[0], cursor)).fetchall()
             if len(events) != 1:
                 return True
             body = json.loads(events[0][0])
