@@ -63,6 +63,16 @@ fixed verification alone is insufficient. Unsupported/older completion evidence
 keeps an identified commitment held. This read neither gathers new evidence nor
 broadens the result collector or creates a completion authority.
 
+Linked task sends use the TaskCoordinator's original cancelled/rejected-before-
+dispatch or exact-command `not_delivered` reconciliation evidence. Task closure
+(`done`/`failed`) and management closure are both required. Read and charge the
+original command history, reconciliation and any bound operation's dispatch steps.
+Accepted markers, historical ACKs, running/uncertain dispatch fences and unresolved
+sends retain the hold; a later cancelled status cannot erase those originals.
+A terminal task alone is never delivery or completion evidence. Task history is
+read through its existing task index in index order and stops at the remaining
+record budget plus one, using the same generic unknown on overflow.
+
 ## Complete or unknown
 
 Read one database snapshot; never probe BAT, providers, sessions or files. Count

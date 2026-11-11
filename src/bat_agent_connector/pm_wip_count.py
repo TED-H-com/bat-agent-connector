@@ -14,6 +14,7 @@ from . import (
     pm_work_batches,
     pm_work_follow_up,
     pm_work_start,
+    task_journal,
     work_items,
 )
 from . import (
@@ -42,6 +43,7 @@ BINDING_SQL = """SELECT * FROM pm_work_bindings WHERE workspace_id=? AND work_it
     ORDER BY work_item_id DESC,sequence DESC LIMIT 1"""
 LINEAGE_SQL = """SELECT resource_id FROM pm_source_lineage
     WHERE original_operation_id=? AND resource_type='operation' LIMIT ?"""
+TASK_EVENTS_SQL = "SELECT * FROM events WHERE task_id=? ORDER BY kind,event_id LIMIT ?"
 
 
 class _Unavailable(Exception):
@@ -308,6 +310,32 @@ class _Collector:
             else:
                 self.execution(wi, op)
 
+    def task_unsent(self, command, kinds):
+        """Read the original coordinator's pre-dispatch/reconciliation outcomes."""
+        cid = command['command_id']
+        reconciled = self.rows('SELECT * FROM command_reconciliations WHERE command_id=? LIMIT ?', (cid,))
+        oid = pm_evidence._body(command['payload']).get('operation_id')
+        if oid:
+            op = self.source(oid)
+            steps = self.steps(op)
+            if pm_work_start._uncertain_db(self.db, oid):
+                return False
+            for step in steps:
+                if step['name'] == 'task_dispatch' and (step['status'] in {'started', 'uncertain'} or
+                        step['status'] == 'succeeded' and pm_evidence._body(step['response']).get('accepted') is not False):
+                    return False
+        if reconciled:
+            # Only the existing exact-command not-delivered decision proves no send.
+            return (command['status'] == 'resolved_not_delivered' and reconciled[0]['task_id'] == command['task_id']
+                    and reconciled[0]['outcome'] == 'not_delivered')
+        if command['status'] not in {'cancelled', 'rejected'} or command['marker']:
+            return False
+        # These local outcomes are the ones TaskCoordinator._recover_unsent_send replays.
+        # A contradictory historical ACK/fence/uncertainty never becomes unsent by status alone.
+        return ('command_intent' in kinds and 'command_' + command['status'] in kinds and
+                not kinds & {'command_accepted', 'command_running', 'command_settled', 'command_uncertain',
+                             'command_reconciled', 'send_reconciled_delivered'})
+
     def links(self, wi):
         for link in self.rows(LINKS_SQL, (wi,)):
             kind, ref = link["kind"], link["ref"]
@@ -327,7 +355,15 @@ class _Collector:
                 for command in commands:
                     if not pm_evidence._command_visible(self.ops, self.principal, self.wid, command["command_id"]):
                         raise _Unavailable
-                if commands:
+                events = self.rows(TASK_EVENTS_SQL, (ref,)) if commands else []
+                event_kinds = {}
+                for event in events:
+                    cid = pm_evidence._body(event['body']).get('command_id')
+                    event_kinds.setdefault(cid, set()).add(event['kind'])
+                unsent = [self.task_unsent(command, event_kinds.get(command['command_id'], set())) for command in commands]
+                tasks = self.rows('SELECT state FROM tasks WHERE task_id=? LIMIT ?', (ref,)) if commands else []
+                if commands and (not self.works[wi][1] or not tasks or tasks[0][0] not in task_journal.TERMINAL
+                                 or not all(unsent)):
                     self.groups["unresolved_execution"].add(wi)
             else:
                 if not pm_evidence._session_visible(self.ops, self.principal, self.wid, ref):
