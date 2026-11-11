@@ -957,6 +957,12 @@
         "allowed": false
       },
       {
+        "action": "pm.wip_policy.save",
+        "scope": "manage",
+        "summary": "Save advisory workspace WIP policy without changing admission",
+        "allowed": false
+      },
+      {
         "action": "pm.work_input.defer",
         "scope": "manage",
         "summary": "Retain an unsent Work instruction as an Idea",
@@ -1363,6 +1369,7 @@
             "pm.sprint.cancel",
             "pm.sprint.close",
             "pm.thread.rename",
+            "pm.wip_policy.save",
             "pm.work_batch.evidence.record",
             "pm.workload.capture",
             "pm.workspace.adapter.select",
@@ -1649,6 +1656,21 @@
             "codex"
           ],
           "existing_sessions": "continue_under_original_authority"
+        },
+        "workspace_wip": {
+          "version": 1,
+          "read": "pm_workspace_wip_get",
+          "action": "pm.wip_policy.save",
+          "modes": [
+            "advisory",
+            "disabled"
+          ],
+          "enforcement": false,
+          "counting_basis": "work_commitments_v1",
+          "bounds": {
+            "works": 10000,
+            "contributing_records": 50000
+          }
         },
         "work_profiles": {
           "version": 1,

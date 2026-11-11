@@ -105,6 +105,7 @@ READ_TOOLS = [
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
+    "pm_workspace_wip_get",
     "pm_work_profiles_list", "pm_work_profile_get", "pm_work_profile_readiness_get",
     "pm_work_adopt_and_start_preview", "pm_work_start_preview", "pm_work_attempts_list", "pm_work_attempt_get", "pm_work_inputs_list",
     "pm_work_attempt_result_get", "pm_work_attempt_changes_get", "pm_work_attempt_diff_get",
@@ -976,6 +977,11 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id,
                                **({'quality_refs': quality_refs} if quality_refs is not None else {}))
 
+    async def pm_workspace_wip_get(workspace_id: str, policy_revision: StrictInt | None = None) -> dict[str, Any]:
+        """Read complete-or-unknown workspace commitments and advisory policy; never admission authority."""
+        return await pm_daemon("pm_workspace_wip_get", workspace_id=workspace_id,
+                               **({"policy_revision": policy_revision} if policy_revision is not None else {}))
+
     async def pm_work_profiles_list(workspace_id: str, limit: StrictInt = 50, cursor: StrictInt = 0) -> dict[str, Any]:
         """List current PM work profiles. Read-only; this does not call BAT."""
         return await pm_daemon("pm_work_profiles_list", workspace_id=workspace_id, limit=limit, cursor=cursor)
@@ -1292,6 +1298,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
                pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
+               pm_workspace_wip_get,
                pm_work_profiles_list, pm_work_profile_get, pm_work_profile_readiness_get,
                pm_work_adopt_and_start_preview, pm_work_start_preview, pm_work_attempts_list, pm_work_attempt_get, pm_work_inputs_list,
                pm_work_attempt_result_get, pm_work_attempt_changes_get, pm_work_attempt_diff_get,
@@ -1326,6 +1333,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 
+    _strict_tool_arguments(mcp, "pm_workspace_wip_get",
+        string_parameters=frozenset({"workspace_id", "policy_revision"}))
     _strict_tool_arguments(mcp, "pm_quality_assessment_get",
         string_parameters=frozenset({"workspace_id", "review_id", "operation_id", "document_digest"}))
     mcp.add_tool(_wrap(pm_history_cleanup_list), name="pm_history_cleanup_list", annotations=ro)

@@ -379,6 +379,40 @@ dispatch work or prove DoD. Retro may explicitly select no new improvements with
 a reason; useful reflection does not require manufacturing new work. Shared
 quality assessment, Daily Scrum and complete Scrum conformance remain separate.
 
+
+## Advisory workspace WIP
+
+When `workspace_wip` capability is advertised, use
+`pm_workspace_wip_get(workspace_id, policy_revision?)` to read distinct Work
+commitments across the workspace. This independent read is not the Kanban
+returned-page count. It counts management WIP, unresolved executions and accepted
+batch/adopt-and-start selections, in that first-match breakdown order. Multiple
+Attempts and wrappers do not count a Work twice. Unknown completion retains its
+hold; ACK, idle and successful dispatch are not completion evidence.
+
+`coverage.status=unknown` means usage and remaining capacity are unknown, never
+zero. `coverage_unavailable` intentionally does not distinguish hidden sources
+from scan bounds; do not infer a partial total. Complete coverage excludes
+unassociated external work, removed-link activity, host resource capacity and model
+cost. Active explicit links count; covered admissions retain their original
+evidence independently of link removal.
+
+`pm.wip_policy.save` uses ordinary `operation_submit(confirm=true)` with target
+`{workspace_id}`, params `{policy,rationale}`, and preconditions
+`{expected_policy_revision,expected_policy_digest}` (initially `0,null`). Read the
+current policy before changing it. It requires observe + manage and workspace
+owner authority, with the existing explicit administrator behavior. Preserve the
+original operation key on unknown replies; history and original-key replay are
+immutable. There is no release or per-request override action.
+
+The v1 policy uses `schema_version:1`, `counting_basis:work_commitments_v1`, and
+`basis:{assumptions,review_on}`. `mode:advisory` has an integer limit 1–1000;
+`mode:disabled` requires `limit:null`. Review date is null or an ISO date.
+`enforced` is unsupported. A low limit, over-limit count or unknown coverage does
+not change existing admission. A historical `policy_revision` displays that
+policy against the current count. UI warnings are planned separately; do not
+claim this backend caps work or reserves capacity.
+
 ## Sourced risks, changes and decisions
 
 Use `pm_governance_list`, `pm_governance_get` and `pm_governance_history_list`
