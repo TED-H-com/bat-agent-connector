@@ -1,7 +1,7 @@
 ---
 name: bat-agent-connector
 description: Use this when you need to check on, read, wait for, or (only when explicitly enabled and asked) nudge Claude Code / Codex agent sessions running in Better Agent Terminal (BAT), or fan a project plan out into parallel BAT worktree sessions.
-version: 0.2.17
+version: 0.2.18
 license: MIT
 metadata:
   workflow_version: "2026-10-18.2"
@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "1d08bc9516da89b12e037802110711a65df71229c44d2d5ad4fa0bd8c36dfa96"
+  canonical_sha256: "41c0ae2e37bad8e605b85face7652afe279616f8ed1188878c254dcd60af348c"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -66,6 +66,39 @@ may still expose direct Fleet tools that do not enforce API principal scopes.
    a Task Service recipe uses the discovered `work_submit` schema and the person's exact `original_words`.
    Reconnecting does not create another task or re-split an existing one. Apply only the workflows whose tools and
    capabilities this server actually exposes; an older bundle is not evidence of installed functionality.
+
+## Discover relationships eligible for cleanup
+
+First call `capabilities_get()` and check
+`features.external_history.relationships.cleanup_discovery.version == 1`. If it
+is absent, do not probe the new read. Use
+`pm_history_cleanup_list(workspace_id, work_item_id, after?, limit?)` only for a
+selected visible, bound Work, with the caller's own observe **and** manage token.
+This is a per-Work read; there is no workspace-wide sweep.
+
+It lists all active relationships the caller may withdraw now, including those
+whose source conversation remains readable. Owners may discover other/former
+members' relationships on that Work; other members see only their own. It returns
+exactly `link_id`, `work_item_id`, `version` in `links`, plus `next_after`. It never
+returns conversation or source details, creator identity, text, titles, digests,
+source/entry/Attempt IDs or paths, and grants no source access or execution.
+
+Use limit 1–50 (default 50). Omit `after` or pass JSON null initially; subsequent
+cursors are opaque `hxl_` IDs, not numbers or JSON encoded in a string. Unknown
+arguments and strings such as `"null"`, `"[]"` or `"{}"` are refused. Follow
+non-null `next_after` even on an empty page; a withdrawn anchor may continue.
+Recheck the current scope after refusal. Results are point-in-time observations,
+not reservations or permission to change an existing request.
+
+For an explicitly requested withdrawal, use existing `pm.history.unlink` with
+target `{workspace_id, work_item_id, link_id}`, empty params and precondition
+`{expected_link_version: version}` through `operation_submit`. Keep its original
+request, idempotency key and operation ID after lost replies, even if the link no
+longer appears in discovery. Recover that original operation; never turn a new
+list version into an automatic resend. A conflict requires an explicit reread and
+review. Ordinary link, association and excerpt reads still require source grants.
+HTTP uses its existing status/error envelope; RPC and MCP retain their existing
+error wrappers. Administrator status is not a workspace membership override.
 
 ## Workspace PM: Idea and Planning
 

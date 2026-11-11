@@ -4,24 +4,24 @@
 
 ## 選擇相符的安裝包
 
-2026 年 11 月 9 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)為 Connector **0.2.17**／desktop **0.1.13**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
+2026 年 11 月 11 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18)為 Connector **0.2.18**／desktop **0.1.14**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
-本穩定版加入共用 Web／桌面的固定外部對話摘錄與明確 Work／Attempt 關聯（#507），也可用明確關聯識別碼跨可讀來源替換（#508）。可在看板、需求頁及 Work 詳情閱讀，並保留來源授權、原操作 key 與 CLI 會話唯讀邊界。前版的對話保存、PM 摘要及更新／恢復修正仍保留。較早的預覽版保留為歷史版本。最終來源、CI 及各自獨立的合併、發布、安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.17；下載較新套件不代表已安裝或實機驗收。
+Connector 0.2.18 加入 Workbench 清單調寬、完成訊息的引用複製，以及 Result 與 Live Overview 的原始需求證據。設定草稿不保存含憑證的儲存庫網址或暫存憑證 handle，保留原請求恢復；另收緊操作歷史 cursor 與 loopback 驗證，並可明確保存可讀關聯 ID 供日後清理。Desktop 0.1.14 將 updater plugin 更新至 2.14.1，透過 zip 9.5.1 處理 ZIP。 前版的外部對話關聯及對話保存仍保留。分支、合併、發布、安裝與實機驗證分別見[交付狀態](product/implementation-status.md)。下方首次啟動步驟描述 0.2.18；下載套件不代表已安裝或實機驗收。
 
-| 平台 | 穩定版 0.1.13 資產 | 預覽版 0.1.9 資產 | 格式 |
+| 平台 | 穩定版 0.1.14 資產 | 預覽版 0.1.9 資產 | 格式 |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.13_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.13_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.13_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.13_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.14_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.14_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.14_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.14_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
-請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Windows 包未正式簽署，Mac 採 ad-hoc 簽署。正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
+請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Linux 與 Windows 套件未簽章；macOS 採 ad-hoc 簽章，未公證。沒有 signed updater feed。本版不新增 owner 安裝、實體裝置或真 BAT／模型驗收證據。Linux 原生憑證持久儲存仍不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
 
 ### 更新既有桌面安裝
 
-Windows 請下載 `better-agent-dashboard_0.1.13_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
+Windows 請下載 `better-agent-dashboard_0.1.14_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
 
-發布檢查分別由 Connector 0.2.12 與 0.2.16 的固定發布來源建置舊核心，再升級至 0.2.17，核對原身分、資料與操作保留。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
+目前候選版檢查分別由 Connector 0.2.12 與 0.2.17 的固定發布來源建置舊核心，再升級至候選版，核對原身分、資料與操作保留。候選版的 Connector 版本必須較高；同版本比較會被拒絕。已發布的 0.2.17 使用 0.2.12 與 0.2.16 基準。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
 
 ## 首次啟動：你的本機 Connector
 
@@ -226,7 +226,7 @@ Dashboard 登入欄位不能填 BAT remote token。
 兩個已發布版本都含驗證安裝器；啟動腳本與安裝須使用同一 tag。穩定版：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.17/scripts/install.sh | sh -s -- --tag v0.2.17 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.18/scripts/install.sh | sh -s -- --tag v0.2.18 --channel-check stable
 ```
 
 預覽版：

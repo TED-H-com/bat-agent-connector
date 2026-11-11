@@ -206,9 +206,21 @@ async def test_schema_is_idempotent_and_history_is_immutable(linked_work):
     from bat_agent_connector import pm_external_history_links as links
     d, req, _ = linked_work
     before = d.ops.db.execute('PRAGMA user_version').fetchone()[0]
-    links.install(d.ops)
-    links.install(d.ops)
     await submit(d, req)
+    saved = [tuple(row) for row in d.ops.db.execute('SELECT * FROM pm_external_links')]
+    indexes = ('pm_external_links_cleanup_work', 'pm_external_links_cleanup_creator')
+    for name in indexes:
+        d.ops.db.execute(f'DROP INDEX {name}')
+    changes = d.ops.db.total_changes
+    links.install(d.ops)
+    schema = list(d.ops.db.execute("SELECT name,sql FROM sqlite_master ORDER BY name"))
+    links.install(d.ops)
+    assert list(d.ops.db.execute("SELECT name,sql FROM sqlite_master ORDER BY name")) == schema
+    assert d.ops.db.total_changes == changes
+    assert [tuple(row) for row in d.ops.db.execute('SELECT * FROM pm_external_links')] == saved
+    for name in indexes:
+        sql = d.ops.db.execute('SELECT sql FROM sqlite_master WHERE name=?', (name,)).fetchone()[0]
+        assert "WHERE state='active'" in sql
     assert d.ops.db.execute('PRAGMA user_version').fetchone()[0] == before
     for table in ('pm_external_excerpts', 'pm_external_link_events'):
         with pytest.raises(sqlite3.IntegrityError):

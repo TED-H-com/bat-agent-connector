@@ -13,7 +13,7 @@
   "capabilities": {
     "managed_installation": {
       "installation_id": "fixture-installation",
-      "runtime_version": "0.2.17",
+      "runtime_version": "0.2.18",
       "background": true
     },
     "desktop_identity": {
@@ -27,9 +27,9 @@
     ],
     "api_version": 1,
     "contract_version": "2026-10-08",
-    "connector": "0.2.17",
+    "connector": "0.2.18",
     "build": {
-      "version": "0.2.17",
+      "version": "0.2.18",
       "commit": null,
       "source": "package"
     },
@@ -1053,7 +1053,10 @@
             "pm.history.link",
             "pm.history.unlink"
           ],
-          "derive_ready": false
+          "derive_ready": false,
+          "cleanup_discovery": {
+            "version": 1
+          }
         }
       },
       "pm_schedule": {

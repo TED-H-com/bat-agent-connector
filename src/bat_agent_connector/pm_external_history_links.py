@@ -2,13 +2,22 @@
 from __future__ import annotations
 
 import json
+import re
 import time
+from contextlib import contextmanager
 
 from . import pm_evidence, pm_source_lineage, pm_workspace, work_items
 from . import pm_external_history as refs
 from .operations import ActionDef, OperationError
 
 ACTIONS = ('pm.history.link', 'pm.history.unlink')
+CLEANUP_READ = 'pm_history_cleanup_list'
+_CLEANUP_OWNER_SQL = '''SELECT link_id,sequence FROM pm_external_links
+    WHERE workspace_id=? AND work_item_id=? AND state='active' AND sequence>?
+    ORDER BY sequence LIMIT ?'''
+_CLEANUP_CREATOR_SQL = '''SELECT link_id,sequence FROM pm_external_links
+    WHERE workspace_id=? AND work_item_id=? AND created_by=? AND state='active' AND sequence>?
+    ORDER BY sequence LIMIT ?'''
 
 
 def _changed():
@@ -32,6 +41,10 @@ def install(ops):
                 last_operation_id TEXT NOT NULL)''',
             '''CREATE UNIQUE INDEX IF NOT EXISTS pm_external_links_active ON pm_external_links
                 (workspace_id,work_item_id,excerpt_id,COALESCE(attempt_id,'')) WHERE state='active' ''',
+            '''CREATE INDEX IF NOT EXISTS pm_external_links_cleanup_work ON pm_external_links
+                (workspace_id,work_item_id,sequence) WHERE state='active' ''',
+            '''CREATE INDEX IF NOT EXISTS pm_external_links_cleanup_creator ON pm_external_links
+                (workspace_id,work_item_id,created_by,sequence) WHERE state='active' ''',
             '''CREATE TABLE IF NOT EXISTS pm_external_link_events (
                 link_id TEXT NOT NULL, version INTEGER NOT NULL, operation_id TEXT NOT NULL,
                 actor TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('created','withdrawn','replaced')),
@@ -97,6 +110,89 @@ def _cleanup(db, principal, wid, identity):
     if role != 'owner' and row['created_by'] != principal.actor:
         raise refs.unavailable()
     return row
+
+
+def cleanup_read_scopes(principal):
+    # Called before either transport's generic lineage barrier or any ID lookup.
+    for scope in ('observe', 'manage'):
+        if not principal.allows(scope):
+            raise OperationError('FORBIDDEN', f'{CLEANUP_READ} needs the {scope!r} scope', 403)
+
+
+def _cleanup_params(params):
+    if set(params) - set(READS[CLEANUP_READ]):
+        raise OperationError('INVALID_PARAMS', 'Unknown PM read parameters', 422)
+    wid, wi = params.get('workspace_id'), params.get('work_item_id')
+    after, limit = params.get('after'), params.get('limit', 50)
+    if (not isinstance(wid, str) or not isinstance(wi, str)
+            or after is not None and (not isinstance(after, str) or not re.fullmatch(r'hxl_[0-9a-f]{32}', after))
+            or type(limit) is not int or not 1 <= limit <= 50):
+        raise refs.invalid()
+    return wid, wi, after, limit
+
+
+def _cleanup_scope(db, principal, wid, wi):
+    role = _member(db, principal, wid)
+    _, binding = _work(db, principal, wid, wi)
+    return role, binding['binding_id'], binding['project_id']
+
+
+@contextmanager
+def cleanup_read_guard(ops, principal, params):
+    """Keep cleanup policy around the existing request and final response barriers."""
+    cleanup_read_scopes(principal)
+    wid, wi, _, _ = _cleanup_params(params)
+    try:
+        scope = _cleanup_scope(ops.db, principal, wid, wi)
+
+        def finalize(page):
+            if _cleanup_scope(ops.db, principal, wid, wi) != scope or set(page) != {'links', 'next_after'}:
+                raise refs.unavailable()
+            links = []
+            for value in page['links']:
+                row = _cleanup(ops.db, principal, wid, value['link_id'])
+                if row['work_item_id'] != wi:
+                    raise refs.unavailable()
+                if row['state'] == 'active':
+                    links.append({'link_id': row['link_id'], 'work_item_id': row['work_item_id'], 'version': row['version']})
+            if page['next_after'] is not None:
+                anchor = _cleanup(ops.db, principal, wid, page['next_after'])
+                if anchor['work_item_id'] != wi:
+                    raise refs.unavailable()
+            return {'links': links, 'next_after': page['next_after']}
+
+        yield finalize
+        if _cleanup_scope(ops.db, principal, wid, wi) != scope:
+            raise refs.unavailable()
+    except OperationError as exc:
+        # Syntax/scope checks above retain their own errors. Semantic refusals,
+        # including the generic lineage barriers, reveal no source state.
+        if exc.status in (403, 404):
+            raise refs.unavailable() from None
+        raise
+
+
+def cleanup_list(ops, principal, params):
+    with cleanup_read_guard(ops, principal, params) as finalize:
+        wid, wi, after, limit = _cleanup_params(params)
+        sequence = 0
+        if after is not None:
+            anchor = _cleanup(ops.db, principal, wid, after)
+            if anchor['work_item_id'] != wi:
+                raise refs.unavailable()
+            sequence = anchor['sequence']
+        if _member(ops.db, principal, wid) == 'owner':
+            rows = ops.db.execute(_CLEANUP_OWNER_SQL, (wid, wi, sequence, limit + 1)).fetchall()
+        else:
+            rows = ops.db.execute(_CLEANUP_CREATOR_SQL, (wid, wi, principal.actor, sequence, limit + 1)).fetchall()
+        links = []
+        for candidate in rows[:limit]:
+            row = _cleanup(ops.db, principal, wid, candidate['link_id'])
+            if row['work_item_id'] != wi:
+                raise refs.unavailable()
+            if row['state'] == 'active':
+                links.append({'link_id': row['link_id'], 'work_item_id': row['work_item_id'], 'version': row['version']})
+        return finalize({'links': links, 'next_after': rows[limit - 1]['link_id'] if len(rows) > limit else None})
 
 
 def _source_binding(db, principal, ref):
@@ -266,6 +362,7 @@ def link_get(ops, principal, workspace_id, link_id):
 
 
 READS = {
+    CLEANUP_READ: ('workspace_id', 'work_item_id', 'after', 'limit'),
     'pm_history_excerpt_preview': ('workspace_id', 'source_id', 'entry_id', 'expected_content_digest', 'selection'),
     'pm_history_excerpt_get': ('workspace_id', 'excerpt_id'),
     'pm_history_links_list': ('workspace_id', 'work_item_id', 'after', 'limit'),
@@ -275,6 +372,8 @@ READS = {
 
 
 def read(ops, principal, method, params):
+    if method == CLEANUP_READ:
+        return cleanup_list(ops, principal, params)
     wid = params.get('workspace_id')
     if any(not isinstance(v, str) for k, v in params.items() if k.endswith('_id')):
         raise refs.invalid()
@@ -314,4 +413,5 @@ def read(ops, principal, method, params):
 
 def capabilities():
     return {'version': 1, 'refs': [refs.SCHEMA], 'max_codepoints': refs.MAX_CODEPOINTS,
-        'max_preview_bytes': refs.MAX_PREVIEW_BYTES, 'actions': list(ACTIONS), 'derive_ready': False}
+        'max_preview_bytes': refs.MAX_PREVIEW_BYTES, 'actions': list(ACTIONS), 'derive_ready': False,
+        'cleanup_discovery': {'version': 1}}

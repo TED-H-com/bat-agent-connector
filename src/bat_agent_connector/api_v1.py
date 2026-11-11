@@ -252,6 +252,7 @@ class ApiV1:
             ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-excerpt-preview", self.pm_history_excerpt_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-excerpts/(?P<excerpt_id>hxe_[0-9a-f]{64})", self.pm_history_excerpt_get, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/external-links", self.pm_history_links_list, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/external-links/cleanup", self.pm_history_cleanup_list, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/external-links/(?P<link_id>hxl_[0-9a-f]{32})", self.pm_history_link_get, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history/(?P<source_id>[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})/associations", self.pm_history_associations_list, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history", self.pm_history_sources, "observe"),
@@ -591,9 +592,19 @@ class ApiV1:
                                    browser_session=browser_session)
                 return
             fn, kwargs, scope = self._route(method, path)
+            if fn == self.operations:
+                # Preserve empty/duplicate cursors for central validation only;
+                # other query parameters retain their historical parsing.
+                raw_query = parse_qs(parts.query, keep_blank_values=True)
+                for cursor in ("before", "before_id"):
+                    if cursor in raw_query:
+                        query[cursor] = raw_query[cursor]
             if fn != self.version:
                 if principal is None:
                     raise ApiError(401, "UNAUTHORIZED", "a valid bearer token is required")
+                if fn == self.pm_history_cleanup_list:
+                    from .pm_external_history_links import cleanup_read_scopes
+                    cleanup_read_scopes(principal)
                 if scope and not principal.allows(scope):
                     raise ApiError(403, "FORBIDDEN", f"this route needs the {scope!r} scope")
             if fn in {self.messages, self.session_wait}:
@@ -621,7 +632,7 @@ class ApiV1:
                       self.pm_maintenance_checks, self.pm_maintenance_check_current, self.pm_maintenance_check, self.pm_maintenance_schedule,
                       self.pm_ahp_adapters, self.pm_ahp_observations, self.pm_ahp_observation_current, self.pm_ahp_observation,
                       self.pm_overview, self.pm_dependencies, self.pm_dependency_revisions, self.pm_dependency_impact,
-                      self.pm_history_excerpt_preview, self.pm_history_excerpt_get, self.pm_history_links_list,
+                      self.pm_history_excerpt_preview, self.pm_history_excerpt_get, self.pm_history_links_list, self.pm_history_cleanup_list,
                       self.pm_history_link_get, self.pm_history_associations_list, self.pm_history_sources, self.pm_history, self.pm_resources, self.pm_register, self.pm_register_row, self.pm_schedule, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
                       self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
@@ -633,9 +644,16 @@ class ApiV1:
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
+            cleanup_guard = contextlib.nullcontext()
+            if fn == self.pm_history_cleanup_list:
+                from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard
+                if 'transfer-encoding' in headers or not re.fullmatch(r'0+', headers.get('content-length', '0').strip()):
+                    raise ApiError(422, 'INVALID_REQUEST', 'This read does not accept a request body')
+                params = self._pm_read_params(CLEANUP_READ, query, **kwargs)
+                cleanup_guard = cleanup_read_guard(self.daemon.ops, principal, params)
             from . import controller_authority
             authority = controller_authority.binding(self.daemon.journal.db, principal) if principal else None
-            with controller_authority.use(authority, self.daemon.journal):
+            with controller_authority.use(authority, self.daemon.journal), cleanup_guard as cleanup_finalize:
                 from .pm_source_lineage import http_selection, read_request, read_response
                 # Commands retain their durable admission/replay classification.
                 # Read selectors and final responses always use current sources.
@@ -643,6 +661,8 @@ class ApiV1:
                     read_request(self.daemon.journal.db, principal, http_selection(fn.__name__, kwargs, query, body))
                 status, payload = await fn(principal=principal, query=query, body=body, headers=headers, **kwargs)
                 payload = read_response(self.daemon.journal.db, principal, payload)
+                if cleanup_finalize is not None:
+                    payload = cleanup_finalize(payload)
         except dashboard_sync.ResetRequired as e:
             status, payload = 409, e.document()
         except ApiError as e:
@@ -796,7 +816,11 @@ class ApiV1:
         return 200, await session_start_operations.workspaces(self.daemon.ops, principal, request)
 
     def _pm_read(self, principal, method, query, **ids):
-        from .pm_reads import FIELDS, read
+        from .pm_reads import read
+        return 200, read(self.daemon.ops, principal, method, self._pm_read_params(method, query, **ids))
+
+    def _pm_read_params(self, method, query, **ids):
+        from .pm_reads import FIELDS
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
         if method == 'pm_work_package_readiness_get' and 'quality_refs' in params:
@@ -828,7 +852,7 @@ class ApiV1:
             params[key] = int(value)
         if method == "pm_plan_compare" and "binding_ids" in params:
             params["binding_ids"] = params["binding_ids"].split(",") if params["binding_ids"] else []
-        return 200, read(self.daemon.ops, principal, method, {**params, **ids})
+        return {**params, **ids}
 
     async def pm_workspaces(self, principal, query, **_):
         return self._pm_read(principal, "pm_workspaces_list", query)
@@ -1107,6 +1131,9 @@ class ApiV1:
 
     async def pm_history_links_list(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, 'pm_history_links_list', query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_history_cleanup_list(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, 'pm_history_cleanup_list', query, workspace_id=workspace_id, work_item_id=work_item_id)
 
     async def pm_history_link_get(self, principal, query, workspace_id, link_id, **_):
         return self._pm_read(principal, 'pm_history_link_get', query, workspace_id=workspace_id, link_id=link_id)
@@ -1692,10 +1719,9 @@ class ApiV1:
 
     async def operations(self, query, principal, **_):
         statuses = [s for s in (self._q(query, "status") or "").split(",") if s]
-        before = self._q(query, "before")
         return 200, self.daemon.ops.list(statuses=statuses or None, actor=self._q(query, "actor"),
                                          action=self._q(query, "action"),
-                                         before=float(before) if before else None, before_id=self._q(query, "before_id"),
+                                         before=query.get("before"), before_id=query.get("before_id"),
                                          limit=self._int(query, "limit", 50), principal=principal)
 
     async def create_operation(self, principal, query, body, headers, **_):

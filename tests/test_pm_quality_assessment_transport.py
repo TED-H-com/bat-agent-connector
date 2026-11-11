@@ -437,3 +437,42 @@ async def test_exact_assessment_http_reads_maximum_stored_version(assessed):
     assert selected['version'] == 33
     expected = quality.get_assessment(w['d'].ops, OWNER, **selected)
     assert await http(w['port'], 'GET', path(selected), tok=token(w['d'], OWNER.actor, 'observe')) == (200, expected)
+
+
+async def test_exact_assessment_mcp_preserves_string_selectors_and_central_refusals(assessed, monkeypatch):
+    w, d = assessed, assessed['d']
+    auth = token(d, OWNER.actor, 'observe')
+    server, fleet = mcp(w, monkeypatch, auth)
+    original_read = pm_reads.read
+    received = []
+
+    def capture(ops, principal, method, params):
+        if method == METHOD:
+            received.append(params.copy())
+        return original_read(ops, principal, method, params)
+
+    monkeypatch.setattr(pm_reads, 'read', capture)
+    try:
+        with pytest.raises(ToolError, match='extra_forbidden'):
+            await server.call_tool(METHOD, w['exact'] | {'actor': 'ignored-actor'})
+        assert received == []
+        for field in ('workspace_id', 'review_id', 'operation_id', 'document_digest'):
+            for value in ('null', '[]', '{}', 'true', 'false', '"null"'):
+                params = w['exact'] | {field: value}
+                received.clear()
+                with pytest.raises(ToolError) as error:
+                    await server.call_tool(METHOD, params)
+                assert received == [params]
+                response = await rpc(w, auth, METHOD, params)
+                assert response['error'] in str(error.value)
+                assert response['message'] in str(error.value)
+                # IDs are path segments in HTTP and malformed IDs fail its route
+                # guard. The digest query reaches the same central validation.
+                if field == 'document_digest':
+                    with pytest.raises(OperationError) as central:
+                        original_read(d.ops, OWNER, METHOD, params)
+                    assert response == {'error': central.value.code, 'message': central.value.message}
+                    assert await http(w['port'], 'GET', path(params), tok=auth) == (
+                        central.value.status, {'error': {'code': central.value.code, 'message': central.value.message}})
+    finally:
+        await fleet.close()

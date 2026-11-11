@@ -5,8 +5,11 @@ downloads and verifies its bytes, then requires a separate Install action. The b
 has no update command. The WebView cannot choose URLs, keys, file paths or installer
 arguments. Default CI packages contain no updater public key and visibly disable updates.
 
-The official Tauri updater 2.13.2 verifies Minisign signatures and requires the signed
-version to equal the announced version. Only a newer Windows x64 NSIS version is eligible.
+The official Tauri updater 2.14.1 verifies Minisign signatures during download and again
+before installing the retained bytes. This application's `requireSignedVersion` setting
+requires the signed version to equal the announced version. Only a newer Windows x64
+NSIS version is eligible. The plugin uses patched `zip` 9.5.1 for Windows ZIP-wrapped
+installers; the current signed-candidate workflow produces a direct `.exe` and `.exe.sig`.
 The native adapter overrides endpoints, target and headers, disables proxy inheritance,
 limits redirects to GitHub asset origins and caps downloads at 128 MiB and 185 seconds.
 The feed also identifies API 1, contract `2026-10-08`, source SHA and canonical workflow.

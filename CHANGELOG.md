@@ -6,6 +6,30 @@
   Result reference under existing authorization. This read explicitly leaves
   applicability to the current candidate unevaluated; no UI is added yet.
 
+- Let API and MCP clients discover withdrawable external-conversation relationship
+  IDs for a selected Work with observe/manage scope and current cleanup authority,
+  including after source access is revoked. Return only link/Work IDs and versions,
+  without source identities or conversation content; no discovery UI is added yet.
+
+## 0.2.18 / Desktop 0.1.14 (2026-11-11)
+
+- Update the desktop updater plugin to Tauri updater 2.14.1, with patched archive
+  handling for ZIP-wrapped Windows desktop updates (`zip` 9.5.1).
+
+- Validate operation-history cursors centrally: reject repeated, empty, non-finite
+  or non-positive timestamps and malformed paired operation IDs while preserving
+  timestamp-only pagination and unrelated HTTP query compatibility. Python and
+  native tests share the same cursor vectors.
+
+- Keep credential-bearing repository URLs and staged credential handles out of
+  managed-setup drafts. Project active drafts and proven legacy migration copies,
+  including completed migrations, without restoring consumed drafts. Recover staged
+  submissions through central operation reads with their original key and ID, without
+  resubmitting a changed request. Browser and desktop share English/zh-TW validation and recovery.
+  Damaged legacy requests expose read-only original-request checks. Terminal results
+  allow the next change; an exhausted list permits an explicit local discard with
+  a new key for later setup. Partial, failed or mismatched reads remain locked.
+
 - Resize the Workbench preview's work list with pointer or keyboard controls in
   English and zh-TW. Keep a separate numeric width preference through temporary
   narrowing and mobile navigation; cancel unfinished drags when changing Work.
@@ -31,6 +55,11 @@
   index for later withdrawal after source revocation. Recheck current authority
   and relationship identity; preserve original operation recovery, the 500-record
   limit and English/zh-TW parity without saving conversation text.
+
+- Advance both package versions and move the latest-stable core upgrade fixture
+  to published 0.2.17, retaining the earlier 0.2.12 baseline and existing identity,
+  workspace and history checks. Release preparation does not imply publication
+  or owner, native-installation or live BAT/model acceptance.
 
 ## 0.2.17 / Desktop 0.1.13 (2026-11-09)
 

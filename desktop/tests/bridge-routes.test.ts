@@ -2,6 +2,13 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {allowedByBridge, discoverCentralRoutes} from './bridge-route-inventory.mjs';
 
+test('cleanup discovery has a native read route before its UI is introduced', () => {
+  const path = '/pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/external-links/cleanup';
+  assert.ok(allowedByBridge({method: 'GET', path: `${path}?after=hxl_cccccccccccccccccccccccccccccccc&limit=50`}));
+  assert.equal(allowedByBridge({method: 'POST', path}), false);
+  assert.equal(allowedByBridge({method: 'GET', path: `${path}/raw`}), false);
+});
+
 test('shared frontend central routes are on the desktop bridge allow-list', () => {
   const found = discoverCentralRoutes();
   assert.deepEqual(found.unresolved, [], 'an api() or central forwarder did not resolve to a path');

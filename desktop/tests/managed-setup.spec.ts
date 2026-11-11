@@ -178,14 +178,17 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale + ' managed setup', (
       expect(state.posts[0].body.params).toMatchObject({secret_ref:'setup_'+'b'.repeat(32),writes:false,orchestrate:false});
       expect(JSON.stringify(state.posts)).not.toContain('private-bat-secret');
       expect(await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}))).not.toContain('private-bat-secret');
-      await page.reload(); await openSetupAdvanced(page);
+      // A completed host now appears in bootstrap even though Apply's reply was
+      // lost. Reopen Settings explicitly to inspect its retained intent.
+      await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);
       await expect(form.getByLabel(copy('setup_host_name'),{exact:true})).toHaveValue('demo');
-      await expect(form.getByRole('button',{name:copy('setup_save_host')})).toBeDisabled();
+      await expect(form.locator('button[type=submit]')).toBeDisabled();
       await panel.getByRole('button',{name:copy('setup_recover')}).click();
       await expectSetupOperation(page);
-      expect(state.posts).toHaveLength(2);
-      expect(state.posts[1].idempotency_key).toBe(state.posts[0].idempotency_key);
-      expect(state.posts[1].body).toEqual(state.posts[0].body);expect(state.staged).toHaveLength(1);
+      expect(state.posts).toHaveLength(1);
+      expect(state.operationReads.some(read => read.path.startsWith('/operations?'))).toBe(true);
+      expect(state.operation.idempotency_key).toBe(state.posts[0].idempotency_key);
+      expect(state.staged).toHaveLength(1);
       await expect(form.locator('[data-setup-field=bat_secret]')).toHaveValue('');
     });
     test('known revision refusal allows a reviewed new intent without pretending success',async({page})=>{

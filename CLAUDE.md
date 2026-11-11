@@ -9,6 +9,9 @@ then the [current agent handoff](docs/product/v1.3-agent-handoff.md) and
 current `origin/main`; dated handoff SHAs are snapshots, not instructions to reset
 or overwrite newer work. Use an isolated worktree and preserve unrelated changes.
 
-The November 10 handoff distinguishes merged #511 from published 0.2.17, maps the
+For Connector 0.2.18 / Desktop 0.1.14, use the current delivery record linked above;
+branch, merged, released, installed and live-tested evidence remain separate.
+
+The historical November 10 handoff distinguishes merged #511 from published 0.2.17, maps the
 next work and code entry points, and records validation, release and live-acceptance
 boundaries. It does not replace the product plans or authorize production-host work.

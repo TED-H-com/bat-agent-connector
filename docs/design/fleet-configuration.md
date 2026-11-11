@@ -423,6 +423,14 @@ D2／D4／D5／D7 的整合者技術預設維持原文；D3 僅下列來源讀�
 D1 的服務準備前角色入口已實作；四檔重複輸入的退休、native apply 與 D8 實機驗收仍為**已定，尚未實作／驗收**；
 此子集不新增 action、scope、DDL、data step 或啟動行為。[managed_setup.py:749](../../src/bat_agent_connector/managed_setup.py#L749)
 
+暫存憑證請求的草稿隱私規則已更新：`secret_ref` 不再寫入本機草稿；回覆遺失時以
+原 actor/key 讀取 operation 清單，已有 ID 則讀取明細，不重新 POST 刪減過的請求。
+未找到紀錄時保留原 key 與未確認狀態。無暫存引用的請求仍沿用完整原請求查回。
+完整綁定、期限、舊草稿清理與雙語行為見
+[setup draft privacy](managed-installation.md#setup-draft-privacy-and-original-operation-recovery)。
+Staged-credential requests now recover by reading their original actor/key record;
+their local projection never stores the handle and is never resubmitted.
+
 ### 現況：兩條入口與邊界
 
 | 入口 | 實際資料流與限制（現況） | 收斂規範 |
