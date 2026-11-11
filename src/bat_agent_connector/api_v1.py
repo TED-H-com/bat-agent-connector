@@ -587,6 +587,13 @@ class ApiV1:
                                    browser_session=browser_session)
                 return
             fn, kwargs, scope = self._route(method, path)
+            if fn == self.operations:
+                # Preserve empty/duplicate cursors for central validation only;
+                # other query parameters retain their historical parsing.
+                raw_query = parse_qs(parts.query, keep_blank_values=True)
+                for cursor in ("before", "before_id"):
+                    if cursor in raw_query:
+                        query[cursor] = raw_query[cursor]
             if fn != self.version:
                 if principal is None:
                     raise ApiError(401, "UNAUTHORIZED", "a valid bearer token is required")
@@ -1682,10 +1689,9 @@ class ApiV1:
 
     async def operations(self, query, principal, **_):
         statuses = [s for s in (self._q(query, "status") or "").split(",") if s]
-        before = self._q(query, "before")
         return 200, self.daemon.ops.list(statuses=statuses or None, actor=self._q(query, "actor"),
                                          action=self._q(query, "action"),
-                                         before=float(before) if before else None, before_id=self._q(query, "before_id"),
+                                         before=query.get("before"), before_id=query.get("before_id"),
                                          limit=self._int(query, "limit", 50), principal=principal)
 
     async def create_operation(self, principal, query, body, headers, **_):

@@ -14,6 +14,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import math
 import re
 import time
 import uuid
@@ -71,6 +72,39 @@ class OperationError(Exception):
     def __init__(self, code: str, message: str, status: int = 400) -> None:
         self.code, self.message, self.status = code, message, status
         super().__init__(f"[{code}] {message}")
+
+
+def operation_cursor(before=None, before_id=None) -> tuple[float | None, str | None]:
+    """Validate raw HTTP selectors and direct service cursors at one boundary."""
+    def invalid():
+        return OperationError("INVALID_FILTER", "Use one finite positive cursor before (at most 64 bytes) and an optional "
+                              "op_ plus 32 lowercase hex before_id / 請提供單一有限正數 before（最多 64 位元組），"
+                              "以及選填的 op_ 加 32 位小寫十六進位 before_id", 422)
+
+    def single(value):
+        if isinstance(value, list):
+            if len(value) != 1:
+                raise invalid()
+            return value[0]
+        return value
+
+    before, before_id = single(before), single(before_id)
+    if before_id is not None and (before is None or not isinstance(before_id, str)
+                                 or not re.fullmatch(r"op_[0-9a-f]{32}", before_id)):
+        raise invalid()
+    if before is None:
+        return None, before_id
+    if isinstance(before, bool) or not isinstance(before, (str, int, float)):
+        raise invalid()
+    text = str(before)
+    # Match native f64 decimal syntax, excluding Python-only whitespace,
+    # underscore separators and non-ASCII digits before numeric conversion.
+    if len(text.encode("utf-8")) > 64 or not re.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", text):
+        raise invalid()
+    number = float(text)
+    if not math.isfinite(number) or number <= 0:
+        raise invalid()
+    return number, before_id
 
 
 class NeedsAttention(Exception):
@@ -399,10 +433,7 @@ class OperationService:
     def list(self, *, statuses: list[str] | None = None, actor: str | None = None, action: str | None = None,
              before: float | None = None, before_id: str | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
         limit = max(1, min(200, int(limit)))
-        if before_id is not None and (before is None or not isinstance(before_id, str)
-                or not re.fullmatch(r"op_[0-9a-f]{32}", before_id)):
-            raise OperationError("INVALID_FILTER", "Use before and its bounded operation before_id together / "
-                "請同時提供 before 與對應且符合格式的操作 before_id", 422)
+        before, before_id = operation_cursor(before, before_id)
         sql, args = "SELECT * FROM operations WHERE 1=1", []
         if statuses:
             bad = [s for s in statuses if s not in STATES]

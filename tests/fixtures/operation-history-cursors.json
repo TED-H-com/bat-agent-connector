@@ -1,0 +1,94 @@
+[
+  {
+    "query": "",
+    "valid": true
+  },
+  {
+    "query": "before=42",
+    "valid": true
+  },
+  {
+    "query": "before=42&before_id=op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": true
+  },
+  {
+    "query": "before_id=op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&before=42.5",
+    "valid": true
+  },
+  {
+    "query": "before=1e3",
+    "valid": true
+  },
+  {
+    "query": "before=.5",
+    "valid": true
+  },
+  {
+    "query": "before=0.00001",
+    "valid": true
+  },
+  {
+    "query": "before=1111111111111111111111111111111111111111111111111111111111111111",
+    "valid": true
+  },
+  {
+    "query": "before_id=op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "query": "before=NaN",
+    "valid": false
+  },
+  {
+    "query": "before=inf",
+    "valid": false
+  },
+  {
+    "query": "before=-1",
+    "valid": false
+  },
+  {
+    "query": "before=0",
+    "valid": false
+  },
+  {
+    "query": "before=",
+    "valid": false
+  },
+  {
+    "query": "before=1e999",
+    "valid": false
+  },
+  {
+    "query": "before=11111111111111111111111111111111111111111111111111111111111111111",
+    "valid": false
+  },
+  {
+    "query": "before=42&before=41",
+    "valid": false
+  },
+  {
+    "query": "before=42&before_id=op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&before_id=op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  },
+  {
+    "query": "before=42&before_id=invalid",
+    "valid": false
+  },
+  {
+    "query": "before=42&before_id=op_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "valid": false
+  },
+  {
+    "query": "before=42&before_id=",
+    "valid": false
+  },
+  {
+    "query": "before=%2042",
+    "valid": false
+  },
+  {
+    "query": "before=4_2",
+    "valid": false
+  }
+]

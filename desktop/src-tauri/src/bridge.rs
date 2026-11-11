@@ -2970,24 +2970,17 @@ mod tests {
     #[test]
     fn operation_history_cursor_is_paired_and_read_only() {
         let id = format!("op_{}", "a".repeat(32));
-        for query in [
-            format!("before=42&before_id={id}"),
-            format!("before_id={id}&before=42.5"),
-            "before=42".into(),
-        ] {
-            assert!(validate_request(&request("GET", &format!("/operations?{query}"))).is_ok());
-        }
-        for query in [
-            format!("before_id={id}"),
-            format!("before=NaN&before_id={id}"),
-            format!("before=inf&before_id={id}"),
-            format!("before=-1&before_id={id}"),
-            format!("before=42&before=41&before_id={id}"),
-            format!("before=42&before_id={id}&before_id={id}"),
-            "before=42&before_id=invalid".into(),
-        ] {
-            assert!(
-                validate_request(&request("GET", &format!("/operations?{query}"))).is_err(),
+        // Python HTTP/service tests consume this exact file too. Changes to
+        // accepted/rejected cursor vectors cannot drift between copied tables.
+        let vectors: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/operation-history-cursors.json"
+        ))
+        .unwrap();
+        for vector in vectors.as_array().unwrap() {
+            let query = vector["query"].as_str().unwrap();
+            assert_eq!(
+                validate_request(&request("GET", &format!("/operations?{query}"))).is_ok(),
+                vector["valid"].as_bool().unwrap(),
                 "{query}"
             );
         }

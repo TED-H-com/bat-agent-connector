@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Validate operation-history cursors centrally: reject repeated, empty, non-finite
+  or non-positive timestamps and malformed paired operation IDs while preserving
+  timestamp-only pagination and unrelated HTTP query compatibility. Python and
+  native tests share the same cursor vectors.
+
 - Keep credential-bearing repository URLs and staged credential handles out of
   managed-setup drafts. Project active drafts and proven legacy migration copies,
   including completed migrations, without restoring consumed drafts. Recover staged submissions through
