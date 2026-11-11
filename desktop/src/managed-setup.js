@@ -605,8 +605,8 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       t('setup_operation_receipt', {status: operation.status === 'succeeded' ? t('setup_operation_done') : operationStatusLabel(operation.status)})));
     if (damaged()) {
       receipt.append(h('p', {class: 'note'}, t('setup_scrubbed_request')),
-        h('p', {style: 'overflow-wrap:anywhere', 'data-setup-original-key': ''}, t('setup_original_key', {key: saved.intent.key || '—'})));
-      if (saved.intent.operation_id) receipt.append(h('p', {style: 'overflow-wrap:anywhere'}, t('setup_original_id', {id: saved.intent.operation_id})));
+        h('p', {class: 'setup-original-identity', 'data-setup-original-key': ''}, t('setup_original_key', {key: saved.intent.key || '—'})));
+      if (saved.intent.operation_id) receipt.append(h('p', {class: 'setup-original-identity'}, t('setup_original_id', {id: saved.intent.operation_id})));
       if (!usableKey()) receipt.append(h('p', {class: 'note'}, t('setup_scrubbed_no_key')));
       else if (noOriginalVisible) receipt.append(h('p', {class: 'note'}, t('setup_original_not_visible')), h('p', {class: 'note'}, t('setup_discard_explanation')));
       else if (!operation) receipt.append(h('p', {class: 'note'}, t('setup_scrubbed_check')));

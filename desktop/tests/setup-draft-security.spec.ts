@@ -62,6 +62,18 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     expect(state.posts[0].idempotency_key).toBe('legacy-original-key');
   });
 
+  test('long original identity wraps at 390px under the Dashboard CSP', async ({page}) => {
+    const key = 'legacy-' + 'a'.repeat(193), state = await legacyDraft(page, true, key);
+    state.operation.status = 'running';
+    await page.reload(); await openSetupAdvanced(page);
+    await expect(page.locator('[data-setup-operation]')).toHaveCount(1);
+    const identity = page.locator('[data-setup-original-key]');
+    await expect(identity).toContainText(key);
+    expect(await identity.evaluate(node => getComputedStyle(node).overflowWrap)).toBe('anywhere');
+    await expect(originalCheck(page)).toBeEnabled();
+    await assertReadOnly(page, state);
+  });
+
   for (const status of ['succeeded', 'failed', 'cancelled', 'accepted', 'running', 'uncertain', 'needs_attention', 'idle', 'ACK'])
     test(`scrubbed original ${status} reconciles read-only and survives reload`, async ({page}) => {
       const state = await legacyDraft(page); state.operation.status = status;
