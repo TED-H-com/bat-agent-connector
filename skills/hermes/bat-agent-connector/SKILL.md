@@ -1,7 +1,7 @@
 ---
 name: bat-agent-connector
 description: Use this when you need to check on, read, wait for, or (only when explicitly enabled and asked) nudge Claude Code / Codex agent sessions running in Better Agent Terminal (BAT), or fan a project plan out into parallel BAT worktree sessions.
-version: 0.2.17
+version: 0.2.18
 license: MIT
 metadata:
   workflow_version: "2026-10-18.2"
@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "ebd7b08ddfbacd718b612c7025919dfe742d2a2ce5cb3a73ad0daa26122446e0"
+  canonical_sha256: "49797482b06605b825b2eb0733daa564ac02bd5b40ca3f35383e471dd1d882da"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents

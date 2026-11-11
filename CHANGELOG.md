@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.18 / Desktop 0.1.14 (2026-11-11)
+
 - Resize the Workbench preview's work list with pointer or keyboard controls in
   English and zh-TW. Keep a separate numeric width preference through temporary
   narrowing and mobile navigation; cancel unfinished drags when changing Work.
@@ -27,6 +29,11 @@
   index for later withdrawal after source revocation. Recheck current authority
   and relationship identity; preserve original operation recovery, the 500-record
   limit and English/zh-TW parity without saving conversation text.
+
+- Advance both package versions and move the latest-stable core upgrade fixture
+  to published 0.2.17, retaining the earlier 0.2.12 baseline and existing identity,
+  workspace and history checks. Release preparation does not imply publication
+  or owner, native-installation or live BAT/model acceptance.
 
 ## 0.2.17 / Desktop 0.1.13 (2026-11-09)
 
