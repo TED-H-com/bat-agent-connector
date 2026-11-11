@@ -28,6 +28,34 @@ Local checks pass 614 Node, 658 related browser and 12 targeted Python cases;
 38 unrelated API cases were deselected. Full Python, Python 3.10 and native/live
 checks were not run in this worker task.
 
+## 2026-11-10：完成訊息的引用複製（分支整合）
+
+`takeover/conversation-quote-copy-20261110` 接手 #481，以 merge 保留原提交，
+納入主線至 `70224183`。共用對話閱讀器只在單則訊息明確 completed 且未 denied／deferred
+時提供「複製引用」；session idle、讀取完整度或 ACK 均不取代完成證據。
+複製只移除一層引用符號，保留巢狀符號、Markdown、空白及 LF／CRLF。
+狀態刷新保留文字選取、焦點與閱讀位置，剪貼簿失敗沿用受身分及撤權保護的手動複製。
+
+整合審查另修正兩個邊界：被移除的按鈕不會因文字恢復相同內容而重新生效；
+引用解析由對話明確啟用，PM 計畫文件維持原引用符號與結構，不把引用內的標題／待辦
+誤當正式文件結構。沒有新增中央寫入、backend、schema 或 localStorage 正文。
+合約及限制見[共用前端](../design/shared-frontend.md#first-adoption-slice-conversation-reading)。
+
+本機 Ruff、74 項相關 Python 3.13 測試、618 項 Node 測試及 226 項主要 UI 回歸通過，
+涵蓋英文／zh-TW、HTTP／注入 IPC、390px、formatter、quote、conversation 與 reader-pinning。
+另 437 項相關 UI 首輪為 435 通過、2 項初始化逾時；該次建置與測試重疊。
+固定產物後，重跑受影響的兩個完整 specs，107 項全通過且未修改斷言或 timeout；
+合計 663 個不同 UI 案例均有通過紀錄，不把重跑重複計數或隱去首輪失敗。
+共用前端／browser 建置與提交後產物一致性通過；舊按鈕缺陷另有修正前失敗的回歸證據。
+依本輪分工未跑 Python 全套或 3.10；CI、原生剪貼簿、實體手機及真人驗收仍須分開。
+本段只記錄分支整合，尚未合併主線、發布或安裝；E00–E11、R0–R5、A01–A40
+及 PM v1.2 未修訂待辦均保留，持續開發授權不等於 R0／R1 接受。
+
+The quote-copy branch merges current main through `70224183`, preserves exact
+quote text and message-local completion, retires removed controls, and keeps PM
+document formatting unchanged. Local browser/injected IPC evidence is separate
+from mainline delivery, installation and native or owner acceptance.
+
 ## 2026-11-10：Work 閱讀端保存清理識別資料（已合併未發布）
 
 [#511](https://github.com/TED-H-com/bat-agent-connector/pull/511) 已合併為
