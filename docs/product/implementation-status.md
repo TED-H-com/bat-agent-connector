@@ -1,5 +1,33 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-10：工作台清單調寬整合候選
+
+PR #480 的接手分支 `takeover/workbench-resize-20261110` 合併目前主線，
+保留 Classic 預設與同一份共用前端。Workbench 清單沿用 Classic resizer，
+只保存獨立數值寬度；窄視窗／手機往返與窄視窗重載不覆寫偏好。
+補上兩個桌面 Work 之間切換也取消拖曳的修正，原搜尋、選取、草稿及操作 key 保留。
+來源、界線與參考歸屬見[清單契約](../design/workbench.md)及
+[既有研究](../research/2026-10-25-cantus-project-hub.md)。
+
+本輪本機 614 項 Node、658 項相關 Playwright 與 12 項 Dashboard／靜態服務
+Python 測試通過，沒有失敗或略過；另有 38 項 API 測試因只選 Dashboard 而未選入。
+共用前端 build、browser 產物核對與 Ruff 通過。介面 fixtures 涵蓋英文／繁中、
+HTTP／注入 IPC、Classic、390px、清單寬度／取消、草稿與原 key、晚到讀取隔離。
+未執行 Python 全套、Python 3.10、原生建置或真 BAT／模型操作；完整測試留待本候選 PR CI。
+
+這是 E03／UX01–03 的呈現增量，不新增中央權威或匯入 Hub 程式／依賴。
+分支驗證不代表已合併至 main、發布、安裝、owner／實體手機或真 BAT／模型驗收；
+E00–E11、R0–R5、A01–A40 及未修訂 PM v1.2 待辦保持開放。
+
+November 10 integration candidate: PR #480 reuses the shared resizer for the
+Workbench list, preserves independent numeric preferences through narrowing and
+reload, and cancels unfinished drags when switching between desktop Work routes.
+Classic remains the default. Branch validation is separate from main integration,
+publication, installation and owner/device/live acceptance.
+Local checks pass 614 Node, 658 related browser and 12 targeted Python cases;
+38 unrelated API cases were deselected. Full Python, Python 3.10 and native/live
+checks were not run in this worker task.
+
 ## 2026-11-10：Work 閱讀端保存清理識別資料（已合併未發布）
 
 [#511](https://github.com/TED-H-com/bat-agent-connector/pull/511) 已合併為

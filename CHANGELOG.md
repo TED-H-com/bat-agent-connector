@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Resize the Workbench preview's work list with pointer or keyboard controls in
+  English and zh-TW. Keep a separate numeric width preference through temporary
+  narrowing and mobile navigation; cancel unfinished drags when changing Work.
+  Reuse the Classic resizer and preserve existing selection, drafts and operations.
+
 - Explicitly save a readable Work-side relationship ID into the existing cleanup
   index for later withdrawal after source revocation. Recheck current authority
   and relationship identity; preserve original operation recovery, the 500-record
