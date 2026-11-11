@@ -13,7 +13,7 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
   const state = {actor: null as string | null, serverId: 'setup-central', principalId: 'setup-person', managed: managedStatusFixture(), managedCalls: [] as string[], stopBusy: false, stopBusyGeneric: false, stopPending: false, startStillStopping: false, startBusy: false,
     posts: [] as any[], operationReads: [] as any[], operationPages: null as any[] | null, operationReadStatus: 200,
     holdOperation: false, releaseOperation: null as (() => void) | null, previews: [] as any[], staged: [] as any[], discoveries: [] as any[], discoveryVersion: 1, configuredProfile:'default',
-    discoveryProfiles: null as any[] | null, discoveryWorkspaces: null as any[] | null, lost: false, refused: false, previewRefused: false,
+    discoveryProfiles: null as any[] | null, discoveryWorkspaces: null as any[] | null, lost: false, lostUnapplied: false, refused: false, previewRefused: false,
     admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, connectionStatus: null as string | null, connected: true, extraHosts: [] as any[], repositories: [] as any[], reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profiles: null as any[] | null, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
   if (evidence) {state.saved = true; state.operation = evidence.operation; state.configuredHost = evidence.operation.target.host;}
   const caps = () => ({...base.caps(), ...(evidence ? {actor: evidence.operation.actor} : {}), ...(state.actor ? {actor: state.actor} : {}), scopes: state.scopes, hosts: state.saved ? [{host:state.configuredHost}] : [],
@@ -78,6 +78,9 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
       if (state.refused) return {status:state.refusalStatus,data:{error:{code:state.refusalCode,message:state.refusalMessage, ...(state.admissionRefused ? {admission_refused:true} : {})}}};
       if (state.drop && state.posts.length === 1) return {status:0,data:{}};
       const lost = state.lost && state.posts.length === 1;
+      // A 503 hides either outcome. By default the request was applied and only its reply was lost;
+      // lostUnapplied models a request that never took effect, so nothing is configured until it is replayed.
+      if (lost && state.lostUnapplied) return {status:503,data:{error:{code:'LOST_REPLY',message:'The reply was lost.'}}};
       state.saved = true;
       if (input.body.action === 'setup.host') {state.configuredHost = input.body.target.host;state.configuredUrl = input.body.params.url || 'wss://demo.example:9876/';}
       if (input.body.action === 'setup.verification') state.verification = input.body.params;

@@ -63,7 +63,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     expect(state.posts[0].body.params.import_profile_id).toBe('two');
   });
   test('automatic setup recovers an uncertain result using the exact original request', async ({page}) => {
-    const state = await managedSetupFixture(page, native, locale); state.lost = true;
+    const state = await managedSetupFixture(page, native, locale); state.lost = true; state.lostUnapplied = true;
     await page.goto('/dashboard/'); await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(page.locator('[data-error-summary]')).toHaveText(locale === 'en' ? 'This request could not be completed. Check Details.' : '無法完成此要求，請查看詳細資料。');
     const original = structuredClone(state.posts[0]);
