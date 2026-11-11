@@ -254,7 +254,7 @@ test('selecting B rejects a late exact response for A',async({page})=>{
   f.state.saved.get(next.operation_id).assessment.document.rationale='Selected B rationale';
   await installBodyCompletedCounter(page);await open(page,{...base,dispatch:f.dispatch});
   const source=page.locator('[data-result-requirement="recovery"]');
-  for(const summary of await source.locator(':scope > details > summary').filter({hasText:'Original conclusion'}).all())await summary.click();
+  await source.locator(':scope > details > summary').filter({hasText:'Original conclusion'}).first().click();
   let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
   const path=`/quality-reviews/${f.ref.review_id}/assessments/${f.ref.operation_id}`;
   try{
