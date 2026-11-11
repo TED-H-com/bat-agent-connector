@@ -57,6 +57,18 @@
           ],
           "runner": false,
           "context_packages": true,
+          "plan_impact": {
+            "version": 1,
+            "read_only": true,
+            "read": "pm_plan_impact_preview",
+            "required_scopes": [
+              "observe"
+            ],
+            "max_bindings": 50,
+            "max_subjects": 100,
+            "max_candidate_rows": 1000,
+            "max_bytes": 153600
+          },
           "accepted_context_bundle": {
             "schema": "pm_context_bundle_v1",
             "context_version": 2,
@@ -672,6 +684,18 @@
     "workspace": {
       "workspace_id": "ws_11111111111111111111111111111111",
       "context_packages": true,
+      "plan_impact": {
+        "version": 1,
+        "read_only": true,
+        "read": "pm_plan_impact_preview",
+        "required_scopes": [
+          "observe"
+        ],
+        "max_bindings": 50,
+        "max_subjects": 100,
+        "max_candidate_rows": 1000,
+        "max_bytes": 153600
+      },
       "plan_drafting": true,
       "plan_adoption": true,
       "plan_adoption_available": false,
@@ -1259,6 +1283,18 @@
           ],
           "runner": false,
           "context_packages": true,
+          "plan_impact": {
+            "version": 1,
+            "read_only": true,
+            "read": "pm_plan_impact_preview",
+            "required_scopes": [
+              "observe"
+            ],
+            "max_bindings": 50,
+            "max_subjects": 100,
+            "max_candidate_rows": 1000,
+            "max_bytes": 153600
+          },
           "accepted_context_bundle": {
             "schema": "pm_context_bundle_v1",
             "context_version": 2,
@@ -1872,6 +1908,18 @@
     "workspace": {
       "workspace_id": "ws_11111111111111111111111111111111",
       "context_packages": true,
+      "plan_impact": {
+        "version": 1,
+        "read_only": true,
+        "read": "pm_plan_impact_preview",
+        "required_scopes": [
+          "observe"
+        ],
+        "max_bindings": 50,
+        "max_subjects": 100,
+        "max_candidate_rows": 1000,
+        "max_bytes": 153600
+      },
       "plan_drafting": true,
       "plan_adoption": true,
       "plan_adoption_available": false,
@@ -2457,6 +2505,18 @@
           ],
           "runner": false,
           "context_packages": true,
+          "plan_impact": {
+            "version": 1,
+            "read_only": true,
+            "read": "pm_plan_impact_preview",
+            "required_scopes": [
+              "observe"
+            ],
+            "max_bindings": 50,
+            "max_subjects": 100,
+            "max_candidate_rows": 1000,
+            "max_bytes": 153600
+          },
           "accepted_context_bundle": {
             "schema": "pm_context_bundle_v1",
             "context_version": 2,
@@ -3072,6 +3132,18 @@
     "workspace": {
       "workspace_id": "ws_11111111111111111111111111111111",
       "context_packages": true,
+      "plan_impact": {
+        "version": 1,
+        "read_only": true,
+        "read": "pm_plan_impact_preview",
+        "required_scopes": [
+          "observe"
+        ],
+        "max_bindings": 50,
+        "max_subjects": 100,
+        "max_candidate_rows": 1000,
+        "max_bytes": 153600
+      },
       "plan_drafting": true,
       "plan_adoption": true,
       "plan_adoption_available": false,
@@ -3657,6 +3729,18 @@
           ],
           "runner": false,
           "context_packages": true,
+          "plan_impact": {
+            "version": 1,
+            "read_only": true,
+            "read": "pm_plan_impact_preview",
+            "required_scopes": [
+              "observe"
+            ],
+            "max_bindings": 50,
+            "max_subjects": 100,
+            "max_candidate_rows": 1000,
+            "max_bytes": 153600
+          },
           "accepted_context_bundle": {
             "schema": "pm_context_bundle_v1",
             "context_version": 2,
@@ -4250,6 +4334,18 @@
     "workspace": {
       "workspace_id": "ws_11111111111111111111111111111111",
       "context_packages": true,
+      "plan_impact": {
+        "version": 1,
+        "read_only": true,
+        "read": "pm_plan_impact_preview",
+        "required_scopes": [
+          "observe"
+        ],
+        "max_bindings": 50,
+        "max_subjects": 100,
+        "max_candidate_rows": 1000,
+        "max_bytes": 153600
+      },
       "plan_drafting": true,
       "plan_adoption": true,
       "plan_adoption_available": false,
