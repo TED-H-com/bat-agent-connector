@@ -20,11 +20,12 @@ async def envelope(w, att):
         {'workspace_id': w['workspace_id'], 'attempt_id': att['attempt_id']})
 
 
-async def send_direct(w, att, key):
+async def send_direct(w, att, key, *, queue=False):
     ops = w['d'].ops
     op, _ = ops.create(STARTER_OWNER, action='session.send',
         target={'host': 'h1', 'session_id': att['session_id']},
-        params={'text': 'Synthetic direct instruction'}, preconditions={}, idempotency_key=key)
+        params={'text': 'Synthetic direct instruction', **({'queue': True} if queue else {})},
+        preconditions={}, idempotency_key=key)
     await settle_operations(ops)
     op = ops.get(op['operation_id'])
     assert op['status'] == 'succeeded', (op['error_code'], op['status_reason'])

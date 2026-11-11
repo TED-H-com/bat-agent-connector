@@ -1329,6 +1329,7 @@ class AttemptResultCollector:
         self._memo: dict[str, dict[str, Any]] = {}
         self._last_checked_at: dict[str, float] = {}
         self.last_check: dict[str, dict[str, Any]] = {}
+        self.direct_last_check: dict[str, dict[str, Any]] = {}
         self.last_digest_bytes: bytes | None = None
         self.digest_bytes_by_attempt: dict[str, bytes] = {}
 
@@ -1543,6 +1544,34 @@ class AttemptResultCollector:
         candidates.sort(key=lambda c: (self._last_checked_at.get(c["attempt_id"], 0.0), c["sequence"]))
         return candidates[: max(0, self.max_per_pass)]
 
+    def _record_direct_check(self, attempt_id: str, outcome: str) -> None:
+        self.direct_last_check[attempt_id] = {"checked_at": time.time(), "outcome": outcome}
+
+    def _direct_candidate(self, cand: dict[str, Any]) -> dict[str, Any] | None:
+        """Select at most one direct input after the unchanged existing step."""
+        from . import pm_direct_inputs
+        from .pm_work_follow_up import _has_turn_boundary_receipt
+
+        # No receipt queries or check writes when no eligible direct input exists.
+        inputs = pm_direct_inputs.eligible(self.ops.db, cand["handoff_operation_id"],
+            {"host": cand["host"], "session_id": cand["session_id"]})
+        if len(inputs) > pm_direct_inputs.MAX_DIRECT_INPUTS:
+            self._record_direct_check(cand["attempt_id"], "direct_input_limit")
+            return None
+        if not inputs:
+            return None
+        if not _has_turn_boundary_receipt(self.ops.db, cand["workspace_id"],
+                cand["attempt_id"], cand["turn_marker"]):
+            self._record_direct_check(cand["attempt_id"], "existing_turn_not_collected")
+            return None
+        for value in inputs:
+            if not _has_turn_boundary_receipt(self.ops.db, cand["workspace_id"],
+                    cand["attempt_id"], value["marker"]):
+                return {**cand, "turn_marker": value["marker"],
+                        "receipt_operation_id": value["operation_id"], "direct_marker": value}
+        self._record_direct_check(cand["attempt_id"], "unchanged")
+        return None
+
     async def _collect_candidate(self, cand: dict[str, Any], *, budget_s: float) -> dict[str, Any] | None:
         attempt_id = cand["attempt_id"]
         workspace_id = cand["workspace_id"]
@@ -1554,7 +1583,10 @@ class AttemptResultCollector:
         obs_row = cand["obs_row"]
         obs_tuple = cand["obs_tuple"]
 
-        self._last_checked_at[attempt_id] = time.monotonic()
+        direct = "direct_marker" in cand
+        check = self._record_direct_check if direct else self._record_check
+        if not direct:
+            self._last_checked_at[attempt_id] = time.monotonic()
 
         # Re-verify registry ownership right before reading
         current_reg = registry.get(host, session_id)
@@ -1567,7 +1599,7 @@ class AttemptResultCollector:
                 and not controller_authority.same_controller(current_reg.get("controller_authority"), handoff_ctrl)
             )
         ):
-            self._record_check(attempt_id, "registry_mismatch")
+            check(attempt_id, "registry_mismatch")
             return None
 
         read_res = await service.session_read(
@@ -1583,13 +1615,18 @@ class AttemptResultCollector:
 
         # 0.1 If user echo is not visible, write no receipt
         raw_attr = read_res.get("turn_attribution")
-        if raw_attr != "correlated":
-            self._record_check(attempt_id, "turn_marker_not_visible")
+        queued_direct_done = (
+            bool((cand.get("direct_marker") or {}).get("queued"))
+            and raw_attr == "correlated_after_prior_turn"
+            and read_res.get("turn_done") is True and read_res.get("pending") is None
+        )
+        if raw_attr != "correlated" and not queued_direct_done:
+            check(attempt_id, "turn_marker_not_visible")
             return None
 
         # Boundary rule (§2.2 and r3): never write mid-turn
         if bool(read_res.get("streaming")):
-            self._record_check(attempt_id, "mid_turn")
+            check(attempt_id, "mid_turn")
             return None
 
         obs_body: dict[str, Any] = {}
@@ -1628,7 +1665,7 @@ class AttemptResultCollector:
         elif turn_done_ready:
             boundary = "turn_done"
         else:
-            self._record_check(attempt_id, "no_boundary")
+            check(attempt_id, "no_boundary")
             return None
 
         last_message_id = ""
@@ -1659,10 +1696,11 @@ class AttemptResultCollector:
             (workspace_id, attempt_id),
         ).fetchone()
         if latest is not None and latest["source_position"] == source_position and latest["digest"] == digest:
-            if obs_tuple is not None:
+            if obs_tuple is not None and not direct:
                 self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
-            self._record_check(attempt_id, "unchanged")
-            self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
+            check(attempt_id, "unchanged")
+            if not direct:
+                self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
             return None
 
         rid = new_result_id()
@@ -1737,13 +1775,14 @@ class AttemptResultCollector:
             start_operation_id=cand["start_operation_id"],
             session={"host": host, "session_id": session_id},
         )
-        if obs_tuple is not None:
+        if obs_tuple is not None and not direct:
             self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
-        self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
+        if not direct:
+            self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
         if inserted:
-            self._record_check(attempt_id, "recorded")
+            check(attempt_id, "recorded")
             return stored
-        self._record_check(attempt_id, "unchanged")
+        check(attempt_id, "unchanged")
         return None
 
     def _wake_follow_up_if_idle(self, host: str, session_id: str, *, boundary: str, read_res: dict) -> None:
@@ -1780,6 +1819,22 @@ class AttemptResultCollector:
                 except (BatError, ConnectionLost, InvokeTimeout, asyncio.TimeoutError):
                     self._record_check(cand["attempt_id"], "bat_error")
                     continue
+                # Only candidates surviving the existing memo short-circuit reach
+                # this point. The direct step neither uses that memo nor wakes a queue.
+                rem = self.pass_budget_s - (time.monotonic() - started)
+                if rem <= 0:
+                    break
+                direct = self._direct_candidate(cand)
+                rem = self.pass_budget_s - (time.monotonic() - started)
+                if direct is None or rem <= 0:
+                    continue
+                try:
+                    row = await asyncio.wait_for(
+                        self._collect_candidate(direct, budget_s=rem), timeout=rem)
+                    if row is not None:
+                        collected.append(row)
+                except (BatError, ConnectionLost, InvokeTimeout, asyncio.TimeoutError):
+                    self._record_direct_check(cand["attempt_id"], "bat_error")
             return collected
 
 
