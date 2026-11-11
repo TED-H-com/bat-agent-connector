@@ -1060,3 +1060,30 @@ for(const locale of ['en','zh-TW'] as const)test(`refused original returns keybo
     expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
   }finally{await context.close();}
 });
+
+for(const locale of ['en','zh-TW'] as const)test(`repeated keyboard expansion keeps one Overview original body and the review draft ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),zh=locale==='zh-TW';
+  const base=fixture(locale),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  try{
+    await boot(page,{...base,dispatch:f.dispatch});
+    const source=page.locator('[data-overview-delivery-assessment]');
+    await source.locator('summary').click();await page.locator('[data-assessment-open]').click();
+    const reader=page.locator('[data-original-assessment]:visible'),exact=reader.locator('details').first();
+    await reader.getByRole('button',{name:zh?'審閱這份成果':'Review this result',exact:true}).click();
+    await reader.locator('[data-quality-assess]>summary').click();
+    const reason=reader.getByRole('textbox',{name:zh?'這次評估的理由':'Reason for this assessment',exact:true});
+    await reason.fill('Keep this deliberate unsaved review.');const pin=await page.evaluate(()=>location.hash);
+    for(let i=0;i<3;i++){
+      await source.locator(':scope > summary').focus();await page.keyboard.press('Enter');
+      await expect(source).toHaveAttribute('open','');await expect(exact).not.toHaveAttribute('open','');
+      await expect(source.locator(':scope > summary')).toBeFocused();
+      await exact.locator(':scope > summary').focus();await page.keyboard.press('Enter');
+      await expect(exact).toHaveAttribute('open','');await expect(source).not.toHaveAttribute('open','');
+      await expect(exact.locator(':scope > summary')).toBeFocused();
+      await expect(reason).toHaveValue('Keep this deliberate unsaved review.');
+      expect(await page.evaluate(()=>location.hash)).toBe(pin);
+    }
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{await context.close();}
+});

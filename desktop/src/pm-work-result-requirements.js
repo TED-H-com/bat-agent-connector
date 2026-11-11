@@ -1,3 +1,19 @@
+// Coordinate only original bodies, leaving evidence disclosures and the review
+// editor intact. Capture handles non-bubbling toggle events after every render.
+export function exclusiveOriginalAssessments(root) {
+  const selector = 'details[data-original-assessment-body], details[data-overview-delivery-assessment]';
+  root.addEventListener('toggle', event => {
+    const opened = event.target;
+    if (!opened.matches?.(selector) || !opened.open) return;
+    const active = root.ownerDocument.activeElement;
+    let displaced = false;
+    for (const other of root.querySelectorAll(selector)) if (other !== opened && other.open) {
+      displaced ||= other.contains(active); other.open = false;
+    }
+    if (displaced) opened.querySelector(':scope > summary')?.focus({preventScroll: true});
+  }, true);
+}
+
 export function originalAssessment({h, t, assessment, requirementId = null, key = 'original', open = new Set(), shortcut = null}) {
   const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t('wres_unknown');
   const verdict = value => label(value, ['accepted', 'rejected', 'unassessed', 'not_defined']);
@@ -26,13 +42,15 @@ export function originalAssessment({h, t, assessment, requirementId = null, key 
         label(entry.verification?.status, ['passed','failed','unavailable','unknown'])),
       record(`${assessmentKey}:proof:${index}`, {criterion, reference: entry.reference, verification: entry.verification}));
   });
-  return details(assessmentKey, summary,
+  const body = details(assessmentKey, summary,
     line('wres_req_assessed_by', text(assessment.assessed_by)),
     line('wres_req_dod', verdict(original.dod)),
     typeof assessment.qualified === 'boolean' ? note(t(assessment.qualified ? 'wres_req_qualified' : 'wres_req_not_qualified')) : null,
     ...reasons, note(original.rationale), ...criteria,
     assessment.revocation ? note(t('wres_req_revoked')) : null,
     operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment), shortcut);
+  body.dataset.originalAssessmentBody = '';
+  return body;
 }
 
 // Read only the relations resolved by the Result's original central handoff.

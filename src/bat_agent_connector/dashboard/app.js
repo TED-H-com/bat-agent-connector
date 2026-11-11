@@ -21262,6 +21262,20 @@ function assessmentPresentations(scope, onWithdraw) {
 }
 //#endregion
 //#region src/pm-work-result-requirements.js
+function exclusiveOriginalAssessments(root) {
+	const selector = "details[data-original-assessment-body], details[data-overview-delivery-assessment]";
+	root.addEventListener("toggle", (event) => {
+		const opened = event.target;
+		if (!opened.matches?.(selector) || !opened.open) return;
+		const active = root.ownerDocument.activeElement;
+		let displaced = false;
+		for (const other of root.querySelectorAll(selector)) if (other !== opened && other.open) {
+			displaced ||= other.contains(active);
+			other.open = false;
+		}
+		if (displaced) opened.querySelector(":scope > summary")?.focus({ preventScroll: true });
+	}, true);
+}
 function originalAssessment({ h, t, assessment, requirementId = null, key = "original", open = new Set(), shortcut = null }) {
 	const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t("wres_unknown");
 	const verdict = (value) => label(value, [
@@ -21308,7 +21322,9 @@ function originalAssessment({ h, t, assessment, requirementId = null, key = "ori
 			verification: entry.verification
 		}));
 	});
-	return details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), typeof assessment.qualified === "boolean" ? note(t(assessment.qualified ? "wres_req_qualified" : "wres_req_not_qualified")) : null, ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment), shortcut);
+	const body = details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), typeof assessment.qualified === "boolean" ? note(t(assessment.qualified ? "wres_req_qualified" : "wres_req_not_qualified")) : null, ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment), shortcut);
+	body.dataset.originalAssessmentBody = "";
+	return body;
 }
 function resultRequirements({ h, t, section, open = new Set(), assessmentShortcut = null }) {
 	if (!section) return null;
@@ -23790,6 +23806,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, serverId, caps, errorB
 		class: "pm-work-result-panel",
 		"data-work-result": ""
 	});
+	exclusiveOriginalAssessments(panelElement);
 	panelElement.hidden = true;
 	const publish = createWorkPublish({
 		h,
@@ -32934,6 +32951,7 @@ function workspaceOverview(options) {
 		class: "pm-overview",
 		"data-pm-overview": ""
 	}, savedBar, status, content);
+	exclusiveOriginalAssessments(box);
 	const sources = assessmentPresentations({
 		partition: namespace,
 		workspace_id: workspaceId

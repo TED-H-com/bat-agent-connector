@@ -269,3 +269,25 @@ test('a held pinned reread during save cannot replace the newer refresh or resub
     await expect.poll(async()=>new URLSearchParams((await page.evaluate(()=>location.hash)).split('?')[1]).get('qa_version')).toBe('3');
   }finally{release();}
 });
+
+for(const locale of ['en','zh-TW'] as const)test(`repeated keyboard expansion keeps one Result original body and the review draft ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),zh=locale==='zh-TW';
+  const f=assessmentRoundtrip(workResultFixture(),resultWorkspace,resultWork(1));
+  try{
+    const reader=await pinned(page,f,zh),source=page.locator('[data-assessment-open]').locator('..'),exact=reader.locator('details').first();
+    await reader.locator('[data-quality-assess]>summary').click();
+    const reason=reader.getByRole('textbox',{name:zh?'這次評估的理由':'Reason for this assessment',exact:true});
+    await reason.fill('Keep this deliberate unsaved review.');const pin=await page.evaluate(()=>location.hash);
+    for(let i=0;i<3;i++){
+      await source.locator(':scope > summary').focus();await page.keyboard.press('Enter');
+      await expect(source).toHaveAttribute('open','');await expect(exact).not.toHaveAttribute('open','');
+      await expect(source.locator(':scope > summary')).toBeFocused();
+      await exact.locator(':scope > summary').focus();await page.keyboard.press('Enter');
+      await expect(exact).toHaveAttribute('open','');await expect(source).not.toHaveAttribute('open','');
+      await expect(exact.locator(':scope > summary')).toBeFocused();
+      await expect(reason).toHaveValue('Keep this deliberate unsaved review.');
+      expect(await page.evaluate(()=>location.hash)).toBe(pin);
+    }
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{await context.close();}
+});

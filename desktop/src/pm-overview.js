@@ -1,3 +1,4 @@
+import {exclusiveOriginalAssessments} from './pm-work-result-requirements.js';
 import {assessmentPresentations, assessmentSourceRefused} from './pm-assessment-source-fence.js';
 import {originalAssessmentReader} from './pm-original-assessment.js';
 import {overviewAssessment} from './pm-overview-assessment.js';
@@ -31,6 +32,7 @@ export function workspaceOverview(options) {
   const meta = h('span', {'data-overview-meta': ''});
   const content = h('div', {class: 'pm-overview-content', 'data-overview-content': ''}), status = h('div', {role: 'status'}), savedBar = h('div', {class: 'pm-overview-saved', hidden: true});
   const box = h('section', {class: 'pm-overview', 'data-pm-overview': ''}, savedBar, status, content);
+  exclusiveOriginalAssessments(box);
   const sources = assessmentPresentations({partition: namespace, workspace_id: workspaceId}, () => {
     serial++; projection = saved = null; signature = ''; content.replaceChildren();
   });

@@ -6,7 +6,7 @@ import {timeStamp} from './ui/stamps.js';
 import {sessionHref} from './session-navigation.js';
 import {createWorkPublish, publicationDeliveryLine, publicationPrLine} from './pm-work-publish.js';
 import {createWorkQuality} from './pm-work-quality.js';
-import {resultRequirements} from './pm-work-result-requirements.js';
+import {resultRequirements, exclusiveOriginalAssessments} from './pm-work-result-requirements.js';
 
 const KNOWN_STATES = new Set([
   'accepted',
@@ -87,6 +87,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, serverId, caps, 
   const canDiff = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.diff);
 
   const panelElement = h('div', {class: 'pm-work-result-panel', 'data-work-result': ''});
+  exclusiveOriginalAssessments(panelElement);
   panelElement.hidden = true;
   const publish = createWorkPublish({h, t, form, namespace, caps, errorBox});
   const qualityHost = h('div');
