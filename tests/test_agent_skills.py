@@ -141,11 +141,16 @@ async def test_skill_tool_references_and_recovery_parameters_match_discovered_sc
         text = (ROOT / generator.SOURCE).read_text()
         referenced = set(re.findall(r"\b([a-z]+_[a-z_]+)\(", text))
         assert referenced <= tools.keys(), f"Unknown tool references: {referenced - tools.keys()}"
+        assert "pm_history_cleanup_list" in referenced
+        assert tools["pm_history_cleanup_list"]["additionalProperties"] is False
+        assert tools["pm_history_cleanup_list"]["properties"]["after"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
+        assert "features.external_history.relationships.cleanup_discovery.version == 1" in text
         # The reconnect/lost-ACK/manual-source scenarios need these exact inputs;
         # a renamed/removed parameter must invalidate the skill's instructions.
         expected = {
             "capabilities_get": set(),
             "pm_quality_assessment_get": {"workspace_id", "review_id", "operation_id", "version", "document_digest"},
+            "pm_history_cleanup_list": {"workspace_id", "work_item_id", "after", "limit"},
             "pm_follow_up_assessments_list": {"workspace_id", "intake_id", "after", "limit"},
             "pm_follow_up_assessment_get": {"workspace_id", "assessment_id"},
             "pm_brief_export_get": {"workspace_id", "snapshot_id", "format", "locale"},

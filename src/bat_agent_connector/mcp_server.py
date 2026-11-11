@@ -21,6 +21,7 @@ from typing import Any, Literal
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
 from mcp_types import ToolAnnotations
 from pydantic import StrictInt
 
@@ -40,6 +41,17 @@ from .errors import BatError, WriteRefused
 from .fleet import Fleet
 from .redact import redact
 from .task_daemon import request as task_request
+
+
+class _CleanupCursorMetadata(FuncMetadata):
+    def pre_parse_json(self, data: dict[str, Any]) -> dict[str, Any]:
+        parsed = super().pre_parse_json(data)
+        # This opaque string is not JSON-in-a-string. Preserve explicit JSON null,
+        # but let central validation refuse strings such as "null" and "[]".
+        if 'after' in data:
+            parsed['after'] = data['after']
+        return parsed
+
 
 READ_TOOLS = [
     "work_status", "work_result", "work_events",
@@ -91,7 +103,7 @@ READ_TOOLS = [
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
-    "pm_history_excerpt_preview", "pm_history_excerpt_get", "pm_history_links_list", "pm_history_link_get", "pm_history_associations_list",
+    "pm_history_excerpt_preview", "pm_history_excerpt_get", "pm_history_links_list", "pm_history_link_get", "pm_history_associations_list", "pm_history_cleanup_list",
     "pm_overview_get", "pm_dependencies_get", "pm_dependencies_revisions_list", "pm_dependencies_impact_get", "pm_resources_get", "pm_history_sources_list", "pm_history_get", "pm_register_list", "pm_register_get", "pm_schedule_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
     "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
     "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
@@ -808,6 +820,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read fixed history material under current workspace and explicit source access."""
         return await pm_daemon("pm_history_link_get", workspace_id=workspace_id, link_id=link_id)
 
+    async def pm_history_cleanup_list(workspace_id: str, work_item_id: str, after: str | None = None, limit: StrictInt = 50) -> dict[str, Any]:
+        """Read active relationship IDs this member may withdraw in one visible Work (observe/manage).
+
+        Includes readable sources; returns only link_id, work_item_id and version.
+        Follow non-null opaque link-ID cursors even on empty pages. No source access is granted.
+        """
+        return await pm_daemon("pm_history_cleanup_list", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
+
     async def pm_history_associations_list(workspace_id: str, source_id: str, entry_id: str, after: StrictInt = 0, limit: StrictInt = 50) -> dict[str, Any]:
         """Read fixed history material under current workspace and explicit source access."""
         return await pm_daemon("pm_history_associations_list", workspace_id=workspace_id, source_id=source_id, entry_id=entry_id, after=after, limit=limit)
@@ -1300,6 +1320,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
     exact_assessment_args.model_config['extra'] = 'forbid'
     exact_assessment_args.model_rebuild(force=True)
     exact_assessment_tool.parameters = exact_assessment_args.model_json_schema()
+    mcp.add_tool(_wrap(pm_history_cleanup_list), name="pm_history_cleanup_list", annotations=ro)
+    cleanup_tool = mcp._tool_manager.get_tool("pm_history_cleanup_list")
+    assert cleanup_tool is not None
+    cleanup_args = cleanup_tool.fn_metadata.arg_model
+    cleanup_args.model_config['extra'] = 'forbid'
+    cleanup_args.model_rebuild(force=True)
+    cleanup_tool.parameters = cleanup_args.model_json_schema()
+    cleanup_tool.fn_metadata = _CleanupCursorMetadata(**cleanup_tool.fn_metadata.model_dump())
 
     if not read_only:
         async def work_continue_from_repository(repository: str, host: str, workspace_id: str, source_ref: str,

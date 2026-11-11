@@ -1053,7 +1053,10 @@
             "pm.history.link",
             "pm.history.unlink"
           ],
-          "derive_ready": false
+          "derive_ready": false,
+          "cleanup_discovery": {
+            "version": 1
+          }
         }
       },
       "pm_schedule": {

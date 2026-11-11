@@ -8,6 +8,11 @@
 
 ## Unreleased
 
+- Let API and MCP clients discover withdrawable external-conversation relationship
+  IDs for a selected Work with observe/manage scope and current cleanup authority,
+  including after source access is revoked. Return only link/Work IDs and versions,
+  without source identities or conversation content; no discovery UI is added yet.
+
 ## 0.2.18 / Desktop 0.1.14 (2026-11-11)
 
 - Update the desktop updater plugin to Tauri updater 2.14.1, with patched archive
