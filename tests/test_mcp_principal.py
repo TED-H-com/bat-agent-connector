@@ -64,6 +64,7 @@ async def test_agent_profile_omits_all_direct_fleet_tools_even_on_privileged_hos
         assert {"capabilities_get", "inventory_sessions", "work_status", "work_result", "work_events"} <= names
         assert ("session_start" in names) is (not read_only)
         assert {"workspaces_list", "session_read", "session_wait"} <= names
+        assert "pm_history_cleanup_list" in names
         if read_only:
             assert not names & (TASK_WRITES | set(OPERATION_TOOLS) | CENTRAL_ORCHESTRATION)
         else:
