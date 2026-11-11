@@ -48,7 +48,9 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, n
         target.parentElement.querySelector('[data-assessment-return-note]')?.remove();
         target.after(h('p', {role: 'status', 'data-assessment-return-note': ''}, t('pmq_return_changed')));
       }
-      if (target) {if (!target.matches('button,a,input,select,textarea')) target.tabIndex = -1; target.focus({preventScroll: true});}
+      if (target) {
+        for (let ancestor = target.parentElement; ancestor; ancestor = ancestor.parentElement) if (ancestor.tagName === 'DETAILS') ancestor.open = true;
+        if (!target.matches('button,a,input,select,textarea')) target.tabIndex = -1; target.focus({preventScroll: true});}
     }
   }
   const back = h('button', {type: 'button', class: 'ui-button secondary', onclick: () => close({focus: true, forget: true})}, t('pmq_return_origin'));

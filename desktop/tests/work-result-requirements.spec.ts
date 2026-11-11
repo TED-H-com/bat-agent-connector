@@ -215,6 +215,11 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test(`ex
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();
     await expect(control).toBeFocused();
+    await control.click(); await expect(reader).toBeVisible(); await page.reload();
+    await expect(reader).toContainText(zh?'符合原品質要求':'Meets the original quality requirements');
+    await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();
+    await expect(control).toBeFocused();
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
     expect(await page.evaluate(()=>Object.entries(localStorage).some(([key,value])=>key.includes('assessment-selection')||value.includes('qa_result_digest')))).toBe(false);
   }finally{await context.close();}
 });
@@ -317,4 +322,22 @@ test('a late exact Result read cannot restore content after source refusal',asyn
     await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
     expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
   }finally{release();}
+});
+
+
+test('a successful reread restores Result context after a temporary failure while pinned',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));let unavailable=false;
+  const dispatch=async(input:any)=>unavailable&&input.path.endsWith('/result')
+    ?{status:503,data:{error:{code:'SERVICE_UNAVAILABLE',message:'Result temporarily unavailable'}}}:f.dispatch(input);
+  await open(page,{...base,dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  unavailable=true;base.emitResultRecorded(attemptId);
+  await expect(reader.locator('[data-api-error]')).toBeVisible();
+  await expect(page.locator('[data-result-requirement="recovery"]')).toHaveCount(0);
+  unavailable=false;base.emitResultRecorded(attemptId);
+  await expect(page.locator('[data-result-requirement="recovery"]')).toBeVisible();
+  await expect(reader).toContainText('Original conclusion: accepted');
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
 });

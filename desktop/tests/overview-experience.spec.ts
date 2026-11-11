@@ -973,6 +973,10 @@ for(const locale of ['en','zh-TW'])for(const native of [false,true])test(`accept
     expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();await expect(source).toBeFocused();
+    await source.click();await expect(reader).toBeVisible();await page.reload();
+    await expect(reader).toContainText(zh?'原結論：接受':'Original conclusion: accepted');
+    await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();await expect(source).toBeFocused();
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
   }finally{await context.close();}
 });
 

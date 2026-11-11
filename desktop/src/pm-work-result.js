@@ -204,6 +204,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace) : null;
       if (requested?.origin === 'result' && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id
         && requested.attempt_id === attemptId && !matchesResult(requested, data)) {
+        lastStale = true;
         publish.dispose(); quality.dispose(); panelElement.replaceChildren(h('h3', {tabindex: -1}, t('wres_heading')), original.element); updateVisibility(true);
         if (original.selected()) void original.refresh(); else original.restore('result');
         return;
@@ -240,6 +241,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       }
 
       if (original.selected()) {
+        lastStale = true;
         publish.dispose(); quality.dispose(); original.fail(err);
         panelElement.replaceChildren(h('h3', {tabindex: -1}, t('wres_heading')), original.element); updateVisibility(true); return;
       }
