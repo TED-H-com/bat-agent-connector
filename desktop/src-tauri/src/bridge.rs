@@ -2072,10 +2072,13 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
         }
         if key == "before_id" || path == "/operations" && key == "before" {
             let valid = if key == "before_id" {
-                Regex::new(r"^op_[0-9a-f]{32}$").unwrap().is_match(&value)
+                value.len() == 35
+                    && value.starts_with("op_")
+                    && value[3..]
+                        .bytes()
+                        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
             } else {
-                value.len() <= 64
-                    && value.parse::<f64>().is_ok_and(|n| n.is_finite() && n > 0.0)
+                value.len() <= 64 && value.parse::<f64>().is_ok_and(|n| n.is_finite() && n > 0.0)
             };
             if input.method != "GET"
                 || path != "/operations"
