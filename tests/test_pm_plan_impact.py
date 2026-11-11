@@ -165,7 +165,8 @@ async def test_impact_bounds_fail_explicitly_never_truncate(selected, monkeypatc
         monkeypatch.setattr(impact, bound, 1)
     with pytest.raises(OperationError) as error:
         read(selected, selected['impact_selector'])
-    assert error.value.code == 'PM_IMPACT_TOO_LARGE' and error.value.status == 413
+    expected = ('PM_IMPACT_SOURCE_UNAVAILABLE', 404) if bound == 'MAX_CANDIDATES' else ('PM_IMPACT_TOO_LARGE', 413)
+    assert (error.value.code, error.value.status) == expected
 
 
 async def test_impact_binding_selection_and_baseline_are_exact(selected):

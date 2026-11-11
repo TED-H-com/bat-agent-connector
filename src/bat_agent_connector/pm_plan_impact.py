@@ -31,7 +31,8 @@ def capabilities():
 
 
 def _unavailable():
-    return OperationError("PM_IMPACT_SOURCE_UNAVAILABLE", "The selected impact sources are unavailable", 404)
+    return OperationError("PM_IMPACT_SOURCE_UNAVAILABLE",
+        "The selected impact sources are unavailable or cannot be established within the read's bounds; select fewer bindings", 404)
 
 
 def _proof(condition):
@@ -117,11 +118,47 @@ def _candidates(ops, workspace_id, work_ids, cursor, bindings):
         if not _eligible(ops, ops._row(row["original_operation_id"]), bindings, cursor):
             continue
         inspected += 1
-        _bound(inspected <= MAX_CANDIDATES)
-        group = groups.setdefault(row["original_operation_id"], {})
-        _proof(row["kind"] not in group)
-        group[row["kind"]] = {**dict(row), "body": json.loads(row["body"])}
+        if inspected > MAX_CANDIDATES:
+            raise _unavailable()
+        group = groups.setdefault(row["original_operation_id"], [])
+        group.append({**dict(row), "body": json.loads(row["body"])})
     return groups
+
+
+def _authorize(ops, principal, wid, oid, events):
+    """Authorize every source before interpreting proof or materializing rows.
+
+    Original records locate sources, even if their proof contradicts them. They
+    never replace retained events as creation/association evidence.
+    """
+    operation = _source(ops.get, oid, steps=False, principal=principal)
+    action = operation["action"]
+    saved = operation["external_refs"].get("admission_binding", {})
+    package_ids = set()
+    if action == "pm.work_package.create":
+        package_ids.update(row[0] for row in ops.db.execute(
+            "SELECT package_id FROM pm_work_packages WHERE operation_id=?", (oid,)))
+        package_ids.update(e["resource_id"] for e in events if e["kind"] == "pm.work_package.created")
+    elif action in {"pm.issue.publish", "pm.issue.cancel"}:
+        intent = saved.get("issue_intent", {})
+        package_ids.add(intent.get("package_ref", {}).get("package_id"))
+        if any(e["kind"] == "pm.issue.recorded" for e in events):
+            _source(pm_issue_mappings.get_mapping, ops, principal, wid, intent.get("mapping_id"))
+    elif action == "repository.continue":
+        package_ids.add(saved.get("pm_handoff", {}).get("contract", {}).get("package_ref", {}).get("package_id"))
+    elif action == "work.start":
+        row = ops.db.execute("SELECT attempt_id FROM work_attempts WHERE start_operation_id=?", (oid,)).fetchone()
+        if row is None:
+            raise _unavailable()
+        _source(pm_work_start.get_attempt, ops, principal, wid, row[0])
+        # Use the immutable relation only to locate sources; _subject validates it.
+        for link in ops.db.execute("SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'", (oid,)):
+            child = _source(ops.get, link[0], steps=False, principal=principal)
+            package_ids.add(child["external_refs"].get("admission_binding", {}).get("pm_handoff", {})
+                            .get("contract", {}).get("package_ref", {}).get("package_id"))
+    for pid in sorted(package_ids, key=lambda value: str(value)):
+        _package(ops, principal, wid, pid)
+    return operation
 
 
 def _event(event, resource_type, resource_id, **fields):
@@ -272,6 +309,9 @@ def preview(ops, principal, workspace_id, snapshot_id, from_revision_id, to_revi
         if {w["binding"]["binding_id"] for w in selected} != set(binding_ids):
             raise OperationError("PM_IMPACT_BINDING_MISMATCH", "Select bindings from this saved snapshot", 409)
         cursor = snapshot["journal_cursor"]
+        groups = _candidates(ops, workspace_id, sorted({w["work_item_id"] for w in selected}), cursor, set(binding_ids))
+        operations = {oid: _authorize(ops, principal, workspace_id, oid, events)
+                      for oid, events in sorted(groups.items())}
         try:
             comparison = diff.compare(ops, principal, workspace_id, from_revision_id, to_revision_id,
                                       binding_ids=binding_ids, journal_cursor=cursor)["comparison"]
@@ -279,11 +319,12 @@ def preview(ops, principal, workspace_id, snapshot_id, from_revision_id, to_revi
             if error.code == "PM_DIFF_TOO_LARGE":
                 _bound(False)  # The comparison alone already exceeds the smaller matrix bound.
             raise
-        groups = _candidates(ops, workspace_id, sorted({w["work_item_id"] for w in selected}), cursor, set(binding_ids))
         candidates = {c["binding"]["binding_id"]: c for c in comparison["impact_candidates"]}
         subjects = []
-        for oid, events in sorted(groups.items()):
-            operation = _source(ops.get, oid, steps=False, principal=principal)
+        for oid, rows in sorted(groups.items()):
+            events = {e["kind"]: e for e in rows}
+            _proof(len(events) == len(rows))
+            operation = operations[oid]
             try:
                 subject = _subject(ops, principal, workspace_id, set(binding_ids), operation, events)
             except (KeyError, TypeError, ValueError):

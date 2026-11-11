@@ -133,3 +133,24 @@ async def test_impact_revoked_membership_returns_only_generic_central_refusal(se
         assert params['snapshot_id'] not in str(error.value)
     finally:
         await fleet.close()
+
+
+@pytest.mark.parametrize('limit', ['subjects', 'candidates'])
+@pytest.mark.parametrize('hidden', ['first', 'last', 'none'])
+async def test_impact_real_bound_errors_have_identical_transport_code_and_message(selected, monkeypatch, limit, hidden):
+    from tests.test_pm_plan_impact_limits import overflow
+    w, d = selected, selected['d']
+    params = await overflow(w, limit, hidden)
+    auth = token(d, OWNER.actor, 'observe')
+    server, fleet = mcp(w, monkeypatch, auth)
+    try:
+        with pytest.raises(OperationError) as central:
+            impact.preview(d.ops, OWNER, **params)
+        code, message, status = central.value.code, central.value.message, central.value.status
+        assert await http(w['port'], 'GET', path(params), tok=auth) == (status, {'error': {'code': code, 'message': message}})
+        assert await rpc(w, auth, METHOD, params) == {'error': code, 'message': message}
+        with pytest.raises(ToolError) as error:
+            await server.call_tool(METHOD, params)
+        assert code in str(error.value) and message in str(error.value)
+    finally:
+        await fleet.close()

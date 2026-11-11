@@ -95,8 +95,20 @@ workaround. Task reordering never changes the issue identity.
 Limits: 1–50 selected bindings, 100 total joined subjects, 1,000 retained candidate
 event rows inspected, and 150 KiB for the complete response including digest.
 An admission and its later domain event each consume one candidate-row slot;
-subjects deduplicate by original operation/type. Bounds are enforced before
-returning anything, with `PM_IMPACT_TOO_LARGE` (413). No truncated or paginated
+subjects deduplicate by original operation/type. Excluded bindings invoke no
+reader and contribute no subject, error or candidate count. Original immutable
+envelopes/relations establish eligibility privately; an Attempt without a
+retained, assignable finish remains selected as `association_unknown`.
+
+Request validation (422), snapshot/plan source denial, and baseline/binding
+selection mismatch (409) may precede selected-subject authorization. Every other
+derived refusal, including comparison errors, ambiguous/contradictory proof and
+subject/byte bounds, follows authorization of the entire selected source closure.
+Exhausting discovery before that closure is established returns the same generic
+404 as source denial, regardless of discovery order or readability so far:
+"The selected impact sources are unavailable or cannot be established within the
+read's bounds; select fewer bindings". Only overflows established after closure
+authorization return `PM_IMPACT_TOO_LARGE` (413). No truncated or paginated
 matrix is returned. A person may explicitly select a smaller subset.
 
 Coverage reports `work: selected_bindings_only`, `project_complete:false`,
