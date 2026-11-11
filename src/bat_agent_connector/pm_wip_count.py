@@ -36,6 +36,8 @@ MANAGEMENT_SQL = """SELECT o.operation_id FROM management_applied m JOIN operati
         OR o.action='work_item.update' AND json_type(o.params,'$.archived') IS NULL)
     ORDER BY m.rowid LIMIT ?"""
 LINKS_SQL = "SELECT * FROM work_item_links WHERE work_item_id=? AND removed_at IS NULL ORDER BY link_id LIMIT ?"
+LINEAGE_SQL = """SELECT resource_id FROM pm_source_lineage
+    WHERE original_operation_id=? AND resource_type='operation' LIMIT ?"""
 
 
 class _Unavailable(Exception):
@@ -138,12 +140,17 @@ class _Collector:
         key = wi, op["operation_id"], attempt["attempt_id"] if attempt else None
         if key in self.executions:
             return self.executions[key]
+        associated = ([self.source(row[0]) for row in self.rows(LINEAGE_SQL, (op['operation_id'],))]
+                      if attempt else [])
         steps = self.steps(op)
         released = self.unsent(op, steps)
+        for later in associated:
+            if released and later['action'] in {'session.send', 'session.answer', 'session.interrupt'}:
+                released = self.input_unsent(later, self.steps(later))
         if not released and self.works[wi][1] and op["status"] == "succeeded":
             if not pm_work_start._uncertain_db(self.db, op["operation_id"]):
                 if attempt:
-                    released = self.attempt_complete(attempt, op)
+                    released = self.attempt_complete(attempt, op, associated)
                 elif pm_execution_runtime.relation(self.ops, op) is not None:
                     proof = pm_execution_runtime.proof(self.ops, self.principal, op)
                     released = bool(proof and pm_execution_runtime._settled(self.ops, op, proof["observation_operation_id"]))
@@ -152,8 +159,36 @@ class _Collector:
             self.groups["unresolved_execution"].add(wi)
         return released
 
-    def attempt_complete(self, attempt, handoff):
+    def input_unsent(self, op, steps):
+        if op['action'] == 'session.send':
+            return self.unsent(op, steps)
+        return (op['status'] in {'cancelled', 'failed'} and not steps
+                and not pm_work_start._uncertain_db(self.db, op['operation_id']))
+
+    def attempt_complete(self, attempt, handoff, associated):
         """Apply only saved original generation/turn evidence; never query runtime."""
+        if not pm_execution_runtime._settled(self.ops, handoff, handoff['operation_id']):
+            return False
+        later_markers = set()
+        for op in associated:
+            if op['operation_id'] == handoff['operation_id']:
+                continue
+            if op['action'] not in {'session.send', 'session.answer', 'session.interrupt'}:
+                continue  # All descendants were authorized and checked by original settlement above.
+            steps = self.steps(op)
+            if self.input_unsent(op, steps):
+                continue
+            if op['action'] != 'session.send':
+                # These controls have no independently correlated new-turn result contract.
+                return False
+            send = next((row for row in steps if row['name'] == 'send'), None)
+            if op['status'] != 'succeeded' or send is None or send['status'] != 'succeeded':
+                return False
+            request, response = pm_evidence._body(send['request']), pm_evidence._body(send['response'])
+            marker = request.get('message_id')
+            if not marker or response.get('accepted') is not True or response.get('message_id') != marker:
+                return False
+            later_markers.add(marker)
         if not pm_attempt_results.installed(self.db) or not pm_work_follow_up.installed(self.db):
             return False
         aid = attempt["attempt_id"]
@@ -182,19 +217,22 @@ class _Collector:
             marker = row["message_id"]
         receipts = self.rows("SELECT * FROM session_results WHERE workspace_id=? AND attempt_id=? ORDER BY sequence DESC LIMIT ?",
                              (self.wid, aid))
-        matched = False
+        required = later_markers | {marker}
+        matched = set()
         for row in receipts:
             self.source(row["operation_id"])
             doc = pm_evidence._body(row["document"])
             pos = pm_attempt_results.parse_source_position(row["source_position"])
-            if pos.get("turn_marker") != marker and doc.get("turn_marker") != marker:
+            result_marker = pos.get("turn_marker") or doc.get("turn_marker")
+            if result_marker not in required:
                 continue
             if (row["source_key"] != f"bat:{host}:{sid}" or row["source_generation"] != generation
                     or doc.get("turn_attribution", (doc.get("turn_progress") or {}).get("turn_attribution")) != "correlated"):
                 return False
-            matched = True
+            matched.add(result_marker)
         # Existing terminal boundary predicate, after exact original-source checks.
-        return matched and pm_work_follow_up._has_turn_boundary_receipt(self.db, self.wid, aid, marker)
+        return required <= matched and all(pm_work_follow_up._has_turn_boundary_receipt(self.db, self.wid, aid, turn)
+                                           for turn in required)
 
     def start(self, op, attempt=None):
         intent = pm_work_start._intent(op)

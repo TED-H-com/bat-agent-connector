@@ -40,7 +40,24 @@ of sessions, Attempts, operations or batch parallel slots.
 
 Reuse original Work Attempt/session-result identity, source-generation and send
 marker evidence and follow-up receipt predicates. A receipt for another turn or
-generation cannot release capacity; later queued input keeps the hold. For batch
+generation cannot release capacity; later queued input keeps the hold. Before
+Attempt release (including unsent-original release), enumerate every operation associated with the original execution
+in `pm_source_lineage`, authorize each source and charge both lineage rows and
+original operations to the record budget. Source authorization also applies while
+management is open or reopened, even when its WIP already occupies the same unit. Reuse the existing settled-lineage
+predicate, including its conservative 256-descendant settlement limit. This scans
+all action kinds, not just `work_inputs` or a `session.send` filter. Hidden sources
+and record overflow use the same generic unknown response.
+
+Session input/control kinds are `session.send`, `session.answer` (both answers and
+permissions) and `session.interrupt`. Later sends, including direct host/session
+sends, require terminal original send receipts and correlated terminal result
+receipts for their exact markers and original generation. Accepted or uncertain
+sends retain the hold; a cancelled-before-execution input can release on original
+unsent evidence. Answer/interrupt operations without independently correlated
+turn evidence remain held conservatively; a terminal ACK does not invent that
+missing contract. Other associated actions use the existing settlement predicate.
+For batch
 execution reuse original runtime completion and settled-lineage predicates;
 fixed verification alone is insufficient. Unsupported/older completion evidence
 keeps an identified commitment held. This read neither gathers new evidence nor
