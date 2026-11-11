@@ -698,6 +698,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
   const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
     ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({h, t, api, alive, namespace, serverId, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
+      returnHeading: () => heading.querySelector('h1'),
       onCompare: () => {openReport('compare'); void brief.prepareReports().then(() => brief.reportActions.compare());},
       onHeader: ({meta, phase, active}) => {overviewMeta.hidden = !active; overviewMeta.replaceChildren(meta);
         if (active) {phasePill.hidden = !phase; phasePill.textContent = phase || ''; }},

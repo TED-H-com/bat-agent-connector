@@ -1038,3 +1038,25 @@ test('Open current Result navigates from Overview and reads the selected Work Re
   expect(await page.evaluate(()=>location.hash)).toBe('#/pm/'+base.ids.workspaceId+'/board?select='+row.work_item_id);
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
 });
+
+import {pmQualityReviewsStrings} from '../src/pm-quality-reviews-strings.js';
+for(const locale of ['en','zh-TW'] as const)test(`refused original returns keyboard focus to the Overview heading ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),copy=pmQualityReviewsStrings[locale];
+  const base=fixture(locale),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  try{
+    await boot(page,{...base,dispatch:f.dispatch});
+    await page.locator('[data-overview-delivery-assessment] summary').click();await page.locator('[data-assessment-open]').click();
+    const reader=page.locator('[data-original-assessment]:visible');await expect(reader.locator('h4').first()).toBeFocused();
+    f.state.denied=true;base.state.cursor++;
+    await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
+    await expect(reader.locator('[data-api-error]')).toBeVisible();
+    await reader.getByRole('button',{name:copy.pmq_return_origin,exact:true}).focus();await page.keyboard.press('Enter');
+    await expect(page.locator('main h1').first()).toBeFocused();
+    await expect(page.locator('main h1').first()).not.toBeEmpty();
+    await expect(page.locator('[data-assessment-return-note][role=status]')).toHaveText(copy.pmq_return_changed);
+    await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
+    await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{await context.close();}
+});

@@ -32951,7 +32951,7 @@ function workspaceOverview(options) {
 		},
 		returnFocus: () => {
 			const selected = original.selected();
-			return [...box.querySelectorAll("[data-assessment-open]")].find((node) => node.dataset.assessmentOpen === (selected?.return_operation_id || selected?.operation_id)) || box.querySelector("h2, h3");
+			return [...box.querySelectorAll("[data-assessment-open]")].find((node) => node.dataset.assessmentOpen === (selected?.return_operation_id || selected?.operation_id)) || options.returnHeading?.() || box.querySelector("h2, h3");
 		}
 	});
 	box.append(original.element);
@@ -57621,6 +57621,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		errorBox,
 		caps,
 		canRead: () => loaded && Boolean(workspace),
+		returnHeading: () => heading.querySelector("h1"),
 		onCompare: () => {
 			openReport("compare");
 			brief.prepareReports().then(() => brief.reportActions.compare());

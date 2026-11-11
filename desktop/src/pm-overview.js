@@ -39,7 +39,7 @@ export function workspaceOverview(options) {
   }, returnFocus: () => {
     const selected = original.selected();
     return [...box.querySelectorAll('[data-assessment-open]')].find(node => node.dataset.assessmentOpen === (selected?.return_operation_id || selected?.operation_id))
-      || box.querySelector('h2, h3');
+      || options.returnHeading?.() || box.querySelector('h2, h3');
   }});
   box.append(original.element);
   const reportTools = h('div', {class: 'pm-report-tools', 'data-pm-report-tools': ''});
