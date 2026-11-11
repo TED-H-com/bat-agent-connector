@@ -19,6 +19,7 @@ from .operations import OperationError
 # selects new development work. Their existing scope/source/owner checks still run.
 RECORD_ACTIONS = frozenset({
     'pm.history.link', 'pm.history.unlink',
+    'pm.wip_policy.save',
     'pm.workspace.adapter.select',
     'pm.work_batch.evidence.record',
     'pm.maintenance.repair.evidence.record',

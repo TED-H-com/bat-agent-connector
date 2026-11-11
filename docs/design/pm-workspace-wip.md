@@ -14,8 +14,9 @@ increment. Enforcement is not available; `enforced` is unsupported.
 bindings, independent of pagination, filters or card rendering. `C` contains
 unresolved original executions and accepted selections, including before a child
 or Work binding exists. Multiple Attempts, wrappers, links and selections of the
-same Work consume one unit. Historical execution keeps its original workspace;
-rebinding, removing a link or archiving cannot erase original execution evidence.
+same Work consume one unit. Covered admissions keep their original workspace and evidence regardless of
+rebinding, link removal or archiving. Only currently active explicit links
+(`removed_at IS NULL`) contribute linked activity; removed links are outside scope.
 
 The fixed first-match breakdown order is `management_wip`,
 `unresolved_execution`, `accepted_selection`. Each Work belongs to exactly one
@@ -30,7 +31,7 @@ of sessions, Attempts, operations or batch parallel slots.
 | `work.start` accepted | Its Work counts, including legacy Attempts and pre-child acceptance. |
 | Batch / adopt-and-start accepted | Every distinct selected Work counts at parent acceptance, including entries beyond current parallel/start limits. Parent and children are not extra units. |
 | Direct PM `repository.continue` | Its original fixed package identifies the Work and workspace. |
-| Explicit execution/task/command/session link | Original linked execution holds its associated Work; removed links do not prove completion. Uncorrelated execution remains held. |
+| Active explicit execution/task/session link (including a task’s send commands) | Linked execution holds its associated Work. Removing the link excludes that linked activity; covered admissions remain independently counted. Uncorrelated active execution remains held. |
 | Accepted, running, waiting, needs-attention, uncertain | Retain the hold. ACK, successful dispatch, idle, gone, process-ended display and elapsed time do not release it. |
 | Completion evidence | Execution release requires management closure AND original correlated terminal evidence AND no later queued/sent/unresolved input. |
 | Failed/cancelled before sending | Release only with terminal original operation/child evidence proving no send or uncertain external effect. Management WIP remains independent. |
@@ -69,7 +70,7 @@ later hidden-source or overflow condition. Conservative retained holds do not
 need a completion guess.
 
 Always return `outside_scope: ["unassociated_external_work",
-"host_resource_capacity", "model_cost"]`. Unassociated external/manual activity
+"removed_link_activity", "host_resource_capacity", "model_cost"]`. Unassociated external/manual activity
 is not inferred from paths, host names or sessions. Workload remains its separate
 maintenance safety signal. The Kanban page `wip` remains `returned_page` with
 `limit: null`. Only when a saved policy exists does Kanban's `wip_limit` capability
@@ -105,8 +106,12 @@ Append-only `pm_workspace_wip_policies` stores revision, previous digest, canoni
 document/digest, actor, original operation ID and time. UPDATE/DELETE triggers
 protect history; UNIQUE(workspace_id, revision) and UNIQUE(operation_id) protect
 CAS/replay. DDL is idempotent, allocates no user_version and needs no data step or
-backfill. This is the only new table. At most three `pm_wip_…` indexes cover
-original-source scans; each implementation index needs a query-plan test.
+backfill. This is the only new table. At most four new indexes are authorized.
+The implementation uses `pm_wip_operations_workspace`, `pm_wip_management_work`,
+`pm_wip_commands_task` for linked task sends, and the neutral
+`pm_run_state_session` for the existing visibility predicate.
+Active links use the existing `work_item_links_active` partial index. Each
+contributing query needs a query-plan test.
 
 Read requires `observe` and current workspace membership. Save requires
 `observe` + `manage` and workspace owner (`decide`), with shared explicit
@@ -130,7 +135,7 @@ separately. Omitted revision selects the latest policy; absent policy is null.
  "selected_policy_revision":0,"effective_policy_revision":0,
  "observed_at":0,"journal_cursor":0,
  "coverage":{"status":"complete","reasons":[],
-   "outside_scope":["unassociated_external_work","host_resource_capacity","model_cost"]},
+   "outside_scope":["unassociated_external_work","removed_link_activity","host_resource_capacity","model_cost"]},
  "used":0,"breakdown":{"management_wip":0,"unresolved_execution":0,"accepted_selection":0},
  "remaining":null,"over_limit":null,"admission_checked":false}
 ```
