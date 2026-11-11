@@ -87,7 +87,8 @@ json_extract(body,'$.target.mapping_id')) ELSE json_extract(body,'$.work_item_id
   'pm.issue.recorded') OR (kind='operation.accepted' AND resource_type='operation'
   AND json_extract(body,'$.action') IN ('pm.work_package.create','work.start',
   'pm.issue.publish','pm.issue.cancel'))`. Unrelated kinds/actions create no index
-  entries. Both Work and cancellation-mapping event arms use equality on W/R and
+  entries; inserts still evaluate the partial predicate and therefore incur work.
+  Both Work and cancellation-mapping event arms use equality on W/R and
   an index range `seq <= cursor`; neither scans the global event prefix.
 - `CREATE INDEX IF NOT EXISTS pm_impact_issue_work ON
   pm_issue_revisions(workspace_id,work_item_id,mapping_id)` supplies distinct
@@ -109,6 +110,16 @@ cursor consume the candidate budget; excluded bindings and post-cursor rows do
 not. Private Attempt eligibility reads at most two matching retained finishes:
 one can assign a binding, two establish ambiguity without repeatedly loading all
 duplicate proofs. There is no ordering by `created_at` or substitution of current heads.
+
+The plan startup schema also installs `CREATE INDEX IF NOT EXISTS
+pm_plan_adoption_revision ON pm_plan_adoptions(workspace_id,revision_id,created_at)`.
+It serves the original-source operation, prior scope revision and displayed
+adoption lookups in `pm_plans`; the preview never installs it. Lookups select the
+maximum timestamp using this index, then its first rowid, preserving the old
+scan's result for tied historical rows without a temporary sort. Ordinary adoption
+rejects adopting the same revision again; original-operation replay returns the
+saved result. Different revisions may share a timestamp, and the schema also
+permits historical duplicate revisions, so tie preservation remains explicit.
 
 After complete source authorization, an incremental UTF-8 wire-size budget checks
 the fixed response shell and each subject before appending it. Encoding stops as
@@ -158,7 +169,16 @@ envelopes/relations establish eligibility privately; an Attempt without a
 retained, assignable finish remains selected as `association_unknown`.
 
 Request validation (422), snapshot/plan source denial, and baseline/binding
-selection mismatch (409) may precede selected-subject authorization. Every other
+selection mismatch (409) may precede selected-source preflight. Preflight includes
+the saved snapshot's selected Work rows and their source references, its copied
+coverage, both fixed plan documents, and the exact selected binding records. The
+existing shared `pm_source_lineage.require_document` barrier checks these inputs
+before comparison; subject authorization also checks every copied reference from
+original operation targets, fixed packages and exact issue revisions. Mutable
+Attempt projections and unselected Work lineage are not substituted for these
+fixed inputs. Existing snapshot, plan and subject readers keep their checks. The
+complete result retains its final shared lineage guard as defense in depth; no
+response reference relies on that final guard alone. Every other
 derived refusal, including comparison errors, ambiguous/contradictory proof and
 subject/byte bounds, follows authorization of the entire selected source closure.
 Exhausting discovery before that closure is established returns the same generic
