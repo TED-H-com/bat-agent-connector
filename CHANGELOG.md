@@ -9,12 +9,17 @@
 
 - Keep credential-bearing repository URLs and staged credential handles out of
   managed-setup drafts. Project active drafts and proven legacy migration copies,
-  including completed migrations, without restoring consumed drafts. Recover staged submissions through
-  central operation reads with their original key and ID, without resubmitting a
-  changed request. Browser and desktop share English/zh-TW validation and recovery.
+  including completed migrations, without restoring consumed drafts. Recover staged
+  submissions through central operation reads with their original key and ID, without
+  resubmitting a changed request. Browser and desktop share English/zh-TW validation and recovery.
   Damaged legacy requests expose read-only original-request checks. Terminal results
   allow the next change; an exhausted list permits an explicit local discard with
   a new key for later setup. Partial, failed or mismatched reads remain locked.
+
+- Strictly validate loopback Host authorities for the API and static Dashboard,
+  including canonical IPv4 octets, IPv6 brackets and port bounds. Refuse malformed
+  API Origins with `403 BAD_ORIGIN`, preserving exact configured origin exceptions,
+  existing authentication and CORS behavior; no new static Dashboard Origin gate.
 
 - Explicitly save a readable Work-side relationship ID into the existing cleanup
   index for later withdrawal after source revocation. Recheck current authority
