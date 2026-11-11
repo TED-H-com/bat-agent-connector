@@ -85,7 +85,7 @@ for(const native of [false,true]) test(`discovered withdrawal persists before se
     const result=await dispatch(input);if(input.path==='/bootstrap')result.data.sync.server_id=server;return result;
   };
   await open(page,native,f);await choose(page);await read(page).click();await expect(rows(page)).toHaveCount(1);
-  f.state.lost=true;await withdraw(page).click();await expect(recover(page)).toBeEnabled();
+  f.state.lost=true;await withdraw(page).click();await expect(cleanup(page).locator('[data-api-error]')).toBeVisible();await expect(recover(page)).toBeEnabled();
   const original=structuredClone(f.state.writes[0]);
   const saved=await page.evaluate(()=>Object.entries(localStorage).filter(([key])=>key.includes('.history-cleanup.')));
   expect(saved).toHaveLength(1);expect(JSON.parse(saved[0][1])).toEqual({version:1,values:{},intent:{key:original.idempotency_key,request:original.body}});
@@ -170,7 +170,7 @@ test('failed first storage write blocks POST and retry keeps the original discov
 test('500 pending requests block a new discovery intent without eviction and allow original recovery',async({page})=>{
   const f=discoveryFixture();f.discovery.pages=[{links:[{link_id:linkId,work_item_id:workId(1),version:1}],next_after:linkId}];
   await open(page,false,f);await choose(page);await read(page).click();await expect(rows(page)).toHaveCount(1);
-  f.state.lost=true;await withdraw(page).click();await expect(recover(page)).toBeEnabled();
+  f.state.lost=true;await withdraw(page).click();await expect(cleanup(page).locator('[data-api-error]')).toBeVisible();await expect(recover(page)).toBeEnabled();
   const original=structuredClone(f.state.writes[0]),fresh='hxl_'+'d'.repeat(32);
   const before=await page.evaluate(()=>{
     const [key,raw]=Object.entries(localStorage).find(([key])=>key.includes('.history-cleanup.'))!;
@@ -194,7 +194,7 @@ test('500 pending requests block a new discovery intent without eviction and all
 });
 test('discovery dedupes saved metadata and a pending intent without replacing its version or key',async({page})=>{
   const f=discoveryFixture();await open(page,false,f);await choose(page);await read(page).click();await expect(rows(page)).toHaveCount(1);
-  f.state.lost=true;await withdraw(page).click();await expect(recover(page)).toBeEnabled();const original=structuredClone(f.state.writes[0]);
+  f.state.lost=true;await withdraw(page).click();await expect(cleanup(page).locator('[data-api-error]')).toBeVisible();await expect(recover(page)).toBeEnabled();const original=structuredClone(f.state.writes[0]);
   const saved=await page.evaluate(({workspaceId,work,link,source,entry})=>{
     const [key,raw]=Object.entries(localStorage).find(([key])=>key.includes('.history-cleanup.'))!;
     const prefix=key.slice(0,key.indexOf('.history-cleanup.'));
@@ -202,7 +202,8 @@ test('discovery dedupes saved metadata and a pending intent without replacing it
     return {key,raw};
   },{workspaceId,work:workId(1),link:linkId,source:f.ref.source_id,entry:f.ref.entry_id});
   f.discovery.pages=[{links:[{link_id:linkId,work_item_id:workId(1),version:9}],next_after:null}];
-  await again(page).click();await expect(rows(page)).toHaveCount(1);await expect(rows(page)).toContainText('Last read version 1');
+  await again(page).click();await expect(again(page)).toBeEnabled();
+  await expect(rows(page)).toHaveCount(1);await expect(rows(page)).toContainText('Last read version 1');
   expect(await page.evaluate(key=>localStorage.getItem(key),saved.key)).toBe(saved.raw);
   await recover(page).click();await expect(cleanup(page)).toContainText('Relationship withdrawn.');expect(f.state.writes[1]).toEqual(original);
 });
@@ -249,6 +250,7 @@ test(`pending withdrawal keeps its owner while discovery changes: ${change} ${na
   const originalRow=rows(page).filter({hasText:linkId});
   await originalRow.getByRole('button',{name:STRINGS[locale].exh_unlink,exact:true}).click();
   await expect.poll(()=>entered).toBe(true);
+  await expect(originalRow.getByRole('button',{name:STRINGS[locale].exh_unlink,exact:true})).toBeDisabled();
   const saved=await page.evaluate(()=>Object.entries(localStorage).find(([key])=>key.includes('.history-cleanup.'))!);
   const intent=JSON.parse(saved[1]).intent;
   // Object identity proves the same form owns the held request across redraws.
@@ -257,6 +259,7 @@ test(`pending withdrawal keeps its owner while discovery changes: ${change} ${na
     if(change==='membership'){
       removed=true;await page.locator('[data-pm-refresh]').click();
       await expect.poll(()=>authorityReads).toBeGreaterThan(0);
+      await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
       await expect(discovery(page)).toBeHidden();await expect(rows(page)).toHaveCount(0);
     } else {
       if(change==='work')await discovery(page).getByRole('combobox').selectOption(workId(2));
@@ -283,13 +286,15 @@ test(`pending withdrawal keeps its owner while discovery changes: ${change} ${na
     // The held dispatch has not reached the fixture recorder yet.
     expect(posts).toEqual([]);
   } finally {finishRead?.();release();}
-  await expect.poll(()=>f.state.writes.length).toBe(1);
-  expect(f.state.writes[0].idempotency_key).toBe(intent.key);
-  expect(f.state.writes[0].body).toEqual(intent.request);
   if(change==='membership'){
+    // The original form is hidden after authority loss. Its matching persisted
+    // receipt is the collection barrier; never wait for this intent to disappear.
     await expect.poll(async()=>JSON.parse((await page.evaluate(key=>localStorage.getItem(key),saved[0]))!).intent.operation_id).toMatch(/^op_/);
     const retained=JSON.parse((await page.evaluate(key=>localStorage.getItem(key),saved[0]))!).intent;
     expect(retained.key).toBe(intent.key);expect(retained.request).toEqual(intent.request);
   }else await expect(cleanup(page)).toContainText(STRINGS[locale].exh_cleanup_done);
+  expect(f.state.writes).toHaveLength(1);
+  expect(f.state.writes[0].idempotency_key).toBe(intent.key);
+  expect(f.state.writes[0].body).toEqual(intent.request);
   expect(f.discovery.requests.filter(request=>request.method!=='GET')).toHaveLength(1);
 });

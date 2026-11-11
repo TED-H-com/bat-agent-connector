@@ -30,7 +30,7 @@ for(const native of [false,true]) for(const locale of ['en','zh-TW'] as const) t
   f.state.deny=true;f.maintenance.hiddenSource=true;await page.reload();await savedList(page,locale);
   const recover=cleanup(page).getByRole('button',{name:STRINGS[locale].pm_check_original,exact:true});
   await expect(recover).toBeEnabled();expect(f.state.writes).toHaveLength(0);
-  const reads=f.state.reads.length;f.state.lost=true;await recover.click();await expect(recover).toBeEnabled();
+  const reads=f.state.reads.length;f.state.lost=true;await recover.click();await expect(cleanup(page).locator('[data-api-error]')).toBeVisible();await expect(recover).toBeEnabled();
   expect(f.state.writes[0].body).toEqual(original.saved.intent.request);expect(f.state.writes[0].idempotency_key).toBe(original.saved.intent.key);
   expect(f.state.reads.slice(reads)).toEqual([]);expect(f.state.links).toHaveLength(0);
   f.base.base.state.actor='another-owner';f.base.base.state.principal='person-2';f.base.base.state.role='owner';
@@ -47,14 +47,20 @@ test('source inspector resolves a source-independent original instead of allocat
   const f=maintenanceFixture();await open(page,false,f);await expect(relations(page).locator('[data-history-link]')).toHaveCount(1);
   const original=await seed(page);await page.reload();await reopen(page);
   await relations(page).getByRole('button',{name:STRINGS.en.pm_check_original,exact:true}).click();
-  await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].idempotency_key).toBe(original.saved.intent.key);
+  // The inspector's successful receipt refreshes the relationship list before
+  // showing its empty state. A received POST alone does not mean the draft cleared.
+  await expect(relations(page)).toContainText(STRINGS.en.exh_no_links);
+  await expect(relations(page).locator('[data-history-link]')).toHaveCount(0);
+  expect(await page.evaluate(key=>localStorage.getItem(key),original.key)).toBeNull();
+  expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].idempotency_key).toBe(original.saved.intent.key);
   expect(f.state.writes[0].body).toEqual(original.saved.intent.request);
   expect(await page.evaluate(()=>Object.keys(localStorage).filter(key=>key.includes('.history.') && key.includes('.pm.history.unlink.')))).toEqual([]);
 });
 test('orphaned old-format intent recovers after both saved index and marker disappear',async({page})=>{
   const f=maintenanceFixture();await open(page,false,f);await expect(relations(page).locator('[data-history-link]')).toHaveCount(1);
   f.state.lost=true;await relations(page).getByRole('button',{name:'Withdraw relationship',exact:true}).click();
-  await expect(relations(page).getByRole('button',{name:STRINGS.en.pm_check_original,exact:true})).toBeVisible();
+  await expect(relations(page).locator('[data-api-error]')).toBeVisible();
+  await expect(relations(page).getByRole('button',{name:STRINGS.en.pm_check_original,exact:true})).toBeEnabled();
   await page.evaluate(()=>{for(const key of Object.keys(localStorage)) if(key.includes('.history-known.') || key.endsWith('.withdrawals')) localStorage.removeItem(key);});
   f.state.deny=true;f.maintenance.hiddenSource=true;await page.reload();await savedListDesktop(page);
   await cleanup(page).getByRole('button',{name:STRINGS.en.pm_check_original,exact:true}).click();
