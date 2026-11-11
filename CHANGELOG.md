@@ -6,8 +6,6 @@
   Result reference under existing authorization. This read explicitly leaves
   applicability to the current candidate unevaluated; no UI is added yet.
 
-## Unreleased
-
 - Let API and MCP clients discover withdrawable external-conversation relationship
   IDs for a selected Work with observe/manage scope and current cleanup authority,
   including after source access is revoked. Return only link/Work IDs and versions,
