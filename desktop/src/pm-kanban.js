@@ -1,3 +1,4 @@
+import {parseAssessmentSelection, matchesAttempt} from './pm-assessment-selection.js';
 import {boardGitHubPanel, boardGitHubLink} from './board-github.js';
 import {h} from './ui/dom.js';
 import {button, searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState, inlineError} from './ui/components.js';
@@ -15,7 +16,7 @@ import {workHistoryPanel} from './pm-work-history.js';
 import {retiredView, viewLeft} from './pm-retired.js';
 
 // Central management columns stay separate from execution, quality and delivery.
-export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, workspace = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
+export function workspaceKanban({t, api, alive, serverId, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, workspace = () => null, embedded = false, workspaceSettled = () => Promise.resolve()}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, 'board');
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
@@ -61,7 +62,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         const resultCap = caps()?.features?.pm_workspaces?.work_attempt_results;
         if (resultCap?.version === 1) {
           resultPanel = workResultPanel({
-            h, t, api, alive, workspaceId, caps, errorBox, form, namespace,
+            h, t, api, alive, workspaceId, caps, errorBox, form, namespace, serverId,
             onVisibility: visible => {
               const attemptSection = detail.element?.body?.querySelector('[data-work-section="attempt-result"]');
               if (attemptSection) {
@@ -74,8 +75,17 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         startPanel = workStartPanel({
           h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: () => plan,
           onStartableChange: updateHeaderButton,
-          onLatestAttempt: attempt => {
-            resultPanel?.setAttempt(attempt);
+          onLatestAttempt: async attempt => {
+            const pin = parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace);
+            if (caps()?.features?.pm_workspaces?.quality_reviews?.exact_assessment_read === true && pin?.origin === 'result' && pin.workspace_id === workspaceId && pin.work_item_id === selected) {
+              const ticket = detailSerial;
+              try {
+                const data = await api('GET', `${endpoint}/work-attempts/${pin.attempt_id}`); alive();
+                if (ticket !== detailSerial || selected !== pin.work_item_id) return;
+                if (!matchesAttempt(pin, data)) throw Error(t('pmq_invalid'));
+                await resultPanel?.setAttempt(data.attempt);
+              } catch {if(ticket === detailSerial) resultPanel?.withdraw();}
+            } else resultPanel?.setAttempt(attempt);
           },
         });
       }

@@ -10,7 +10,7 @@ import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
 import {locale} from './i18n.js';
 import {findingFromNative, findingName} from './ui/finding-name.js';
-import {sessionOrigin} from './session-navigation.js';
+import {persistedDiscussionOrigin, sessionOrigin} from './session-navigation.js';
 import {viewState} from './ui/view-state.js';
 import {settleRefreshes} from './state/events.ts';
 import {skeleton, searchField, pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu, emptyState, statusPill} from './ui/components.js';
@@ -418,7 +418,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 // Test fixtures rewrite the declaration above to an export. This alias stays a second export.
 export {durableForm as pmDurableForm};
 
-export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
+export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
   if (!pmAvailable(caps())) {main.append(renderPmAvailability(h('div'), {h, t, state: pmAvailability({caps: caps(), kind: 'workspace'})})); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
@@ -579,12 +579,16 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     index.push(id);
     while (index.length > 40) localStorage.removeItem(originKey + index.shift());
     for (const key of Object.keys(localStorage)) if (key.startsWith(originKey) && key !== indexKey && !index.includes(key.slice(originKey.length))) localStorage.removeItem(key);
-    localStorage.setItem(originKey + id, JSON.stringify(origin));
+    localStorage.setItem(originKey + id, JSON.stringify(persistedDiscussionOrigin(origin)));
     localStorage.setItem(indexKey, JSON.stringify(index));
   };
   const backLink = () => {
     let savedOrigin = {};
-    try {savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};} catch {}
+    try {
+      const raw = localStorage.getItem(originKey + threadId);
+      savedOrigin = persistedDiscussionOrigin(JSON.parse(raw) || {});
+      if (raw && raw !== JSON.stringify(savedOrigin)) localStorage.setItem(originKey + threadId, JSON.stringify(savedOrigin));
+    } catch {}
     const source = parseDiscussRefs(new URLSearchParams({from: launch.from || savedOrigin.from || '', report: launch.report || savedOrigin.report || ''}));
     const origin = source.from || 'discussions';
     const session = sessionOrigin(origin);
@@ -693,7 +697,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   heading.querySelector('.ui-page-heading').append(overviewMeta);
   const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
-    ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
+    ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({h, t, api, alive, namespace, serverId, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
+      returnHeading: () => heading.querySelector('h1'),
       onCompare: () => {openReport('compare'); void brief.prepareReports().then(() => brief.reportActions.compare());},
       onHeader: ({meta, phase, active}) => {overviewMeta.hidden = !active; overviewMeta.replaceChildren(meta);
         if (active) {phasePill.hidden = !phase; phasePill.textContent = phase || ''; }},
@@ -741,7 +746,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       && caps()?.scopes?.some(scope => scope === 'observe' || scope === 'admin')}) : null;
   if (schedule) body.insertBefore(schedule.element, content);
   const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
-    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
+    ? workspaceKanban({h,t,api,alive,namespace,serverId,workspaceId,workspace:()=>workspace,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
@@ -1730,7 +1735,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const text = input('pd_message', {multiline: true, max: 12000, required: threadId === 'new'}); text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
           let titleDraft = null;
           const create = form({action: 'pm.thread.create', pruneEmpty: true, target: {workspace_id: workspaceId}, fields: {title: name, content: text},
-            namespace: threadId === 'new' ? namespace + '.discussion.' + JSON.stringify(launch) : namespace,
+            namespace: threadId === 'new' ? namespace + '.discussion.' + JSON.stringify(persistedDiscussionOrigin(launch)) : namespace,
             params: values => ({title: values.title.trim(), ...(launch.refs.length ? {context: launch.refs} : {})}), preconditions: () => ({expected_version: workspace.version}),
             permitted: () => permitted(false) && !draftSourceUnavailable, recoverPermitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
             onStateChange: () => titleDraft?.updateState(),

@@ -1,3 +1,4 @@
+import {installBodyCompletedCounter, countCompletedBodies, syncHeldBodyCompletion} from './page-sync.ts';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
@@ -954,4 +955,135 @@ for (const width of [390, 1440]) test(`sidebar milestone opens the matching Sche
   const selected = page.locator('[data-schedule-select][aria-selected=true]'); await expect(selected).toHaveAttribute('aria-label', milestone.title);
   const id = await selected.getAttribute('data-schedule-select'); await page.keyboard.press('Escape');
   const row = page.locator(`[data-schedule-select="${id}"]`); await expect(row).toBeFocused(); await expect(row).toBeInViewport(); expect(f.state.writes).toEqual([]);
+});
+
+import {assessmentRoundtrip} from './assessment-roundtrip-fixture.ts';
+for(const locale of ['en','zh-TW'])for(const native of [false,true])for(const width of [390,1440])test(`accepted delivery opens the exact original assessment ${locale} ${native?'IPC':'HTTP'} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage();
+  const base=fixture(locale),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id),zh=locale==='zh-TW';row.assessment_ref=f.ref;
+  try{
+    await boot(page,{...base,dispatch:f.dispatch},native);
+    await page.locator('[data-overview-delivery-assessment] summary').click();
+    const source=page.locator('[data-overview-delivery-assessment] [data-assessment-open]');await source.click();
+    const reader=page.locator('[data-original-assessment]:visible');
+    await expect(reader.locator('h4').first()).toBeFocused();
+    await expect(page.locator('[data-overview-delivery-assessment][open]')).toHaveCount(0);
+    await expect(reader).toContainText(zh?'原結論：接受':'Original conclusion: accepted');
+    const reads=f.state.requests.filter(input=>input.path.includes('/assessments/'));
+    expect(reads).toHaveLength(1);expect(reads[0].path).toContain(f.ref.operation_id+'?version=2&document_digest='+f.ref.document_digest);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();await expect(source).toBeFocused();
+    await source.click();await expect(reader).toBeVisible();await page.reload();
+    await expect(reader).toContainText(zh?'原結論：接受':'Original conclusion: accepted');
+    await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();await expect(source).toBeFocused();
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{await context.close();}
+});
+
+test('a late exact response cannot restore a withdrawn delivery assessment',async({page})=>{
+  const base=fixture(),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  await installBodyCompletedCounter(page);await boot(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-overview-delivery-assessment] summary').click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes('/assessments/')).length).toBe(1);
+    f.state.hold=null;f.state.denied=true;base.state.data.recent_deliveries=[];base.state.cursor++;
+    await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
+    await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+    const path='/assessments/'+f.ref.operation_id,before=await countCompletedBodies(page,path);
+    release();await syncHeldBodyCompletion(page,path,before);
+    await expect(page.locator('[data-original-assessment]')).not.toContainText('Original conclusion: accepted');
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});
+
+test('an exact refusal removes the whole Overview source disclosure',async({page})=>{
+  const base=fixture(),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  await boot(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-overview-delivery-assessment] summary').click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  await expect(page.locator('[data-overview-delivery-assessment]')).not.toHaveAttribute('open','');
+  f.state.denied=true;base.state.cursor++;
+  await expect.poll(()=>page.locator('main').innerHTML()).not.toContain(f.ref.operation_id);
+  await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+  await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+import {workResultFixture as resultFixture} from './work-result-fixture.ts';
+test('Open current Result navigates from Overview and reads the selected Work Result',async({page})=>{
+  const base=fixture(),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const work=resultFixture(),workCaps=(await work.dispatch({method:'GET',path:'/capabilities'})).data;
+  const enhanced={...base,dispatch:async(input:any)=>{
+    const response=await base.dispatch(input);
+    if(['/bootstrap','/capabilities'].includes(input.path)){
+      const caps=input.path==='/bootstrap'?response.data.capabilities:response.data;
+      Object.assign(caps.features.pm_workspaces,{work_start:workCaps.features.pm_workspaces.work_start,work_attempt_results:workCaps.features.pm_workspaces.work_attempt_results});
+    }
+    return response;
+  }};
+  const f=assessmentRoundtrip(enhanced,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  await boot(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-overview-delivery-assessment] summary').click();await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  f.state.envelope.sources.result_id='res_'+'2'.repeat(32);base.state.cursor++;
+  await reader.getByRole('link',{name:'Open current Result',exact:true}).click();
+  await expect(page.locator('[data-result-requirements]')).toBeVisible();
+  expect(await page.evaluate(()=>location.hash)).toBe('#/pm/'+base.ids.workspaceId+'/board?select='+row.work_item_id);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+import {pmQualityReviewsStrings} from '../src/pm-quality-reviews-strings.js';
+for(const locale of ['en','zh-TW'] as const)test(`refused original returns keyboard focus to the Overview heading ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),copy=pmQualityReviewsStrings[locale];
+  const base=fixture(locale),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  try{
+    await boot(page,{...base,dispatch:f.dispatch});
+    await page.locator('[data-overview-delivery-assessment] summary').click();await page.locator('[data-assessment-open]').click();
+    const reader=page.locator('[data-original-assessment]:visible');await expect(reader.locator('h4').first()).toBeFocused();
+    f.state.denied=true;base.state.cursor++;
+    await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
+    await expect(reader.locator('[data-api-error]')).toBeVisible();
+    await reader.getByRole('button',{name:copy.pmq_return_origin,exact:true}).focus();await page.keyboard.press('Enter');
+    await expect(page.locator('main h1').first()).toBeFocused();
+    await expect(page.locator('main h1').first()).not.toBeEmpty();
+    await expect(page.locator('[data-assessment-return-note][role=status]')).toHaveText(copy.pmq_return_changed);
+    await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
+    await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{await context.close();}
+});
+
+for(const locale of ['en','zh-TW'] as const)test(`repeated keyboard expansion keeps one Overview original body and the review draft ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),zh=locale==='zh-TW';
+  const base=fixture(locale),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  try{
+    await boot(page,{...base,dispatch:f.dispatch});
+    const source=page.locator('[data-overview-delivery-assessment]');
+    await source.locator('summary').click();await page.locator('[data-assessment-open]').click();
+    const reader=page.locator('[data-original-assessment]:visible'),exact=reader.locator('details').first();
+    await reader.getByRole('button',{name:zh?'審閱這份成果':'Review this result',exact:true}).click();
+    await reader.locator('[data-quality-assess]>summary').click();
+    const reason=reader.getByRole('textbox',{name:zh?'這次評估的理由':'Reason for this assessment',exact:true});
+    await reason.fill('Keep this deliberate unsaved review.');const pin=await page.evaluate(()=>location.hash);
+    for(let i=0;i<3;i++){
+      await source.locator(':scope > summary').focus();await page.keyboard.press('Enter');
+      await expect(source).toHaveAttribute('open','');await expect(exact).not.toHaveAttribute('open','');
+      await expect(source.locator(':scope > summary')).toBeFocused();
+      await exact.locator(':scope > summary').focus();await page.keyboard.press('Enter');
+      await expect(exact).toHaveAttribute('open','');await expect(source).not.toHaveAttribute('open','');
+      await expect(exact.locator(':scope > summary')).toBeFocused();
+      await expect(reason).toHaveValue('Keep this deliberate unsaved review.');
+      expect(await page.evaluate(()=>location.hash)).toBe(pin);
+    }
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{await context.close();}
 });

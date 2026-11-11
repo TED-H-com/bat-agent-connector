@@ -270,3 +270,20 @@ test('an interrupted migration refuses partial destination data without replay o
   assert.throws(() => migrateManagedStorage(identity, local, session), /migration/);
   assert.deepEqual([...local.values], before);
 });
+
+// Exact assessment navigation uses typed URL/memory state, never a storage family.
+import {assessmentQuery, parseAssessmentSelection} from '../src/pm-assessment-selection.js';
+test('new_assessment_pin_is_not_written_to_local_storage', () => {
+  const pin = {partition:target, workspace_id:'ws_'+'1'.repeat(32), work_item_id:'wi_'+'1'.repeat(20),
+    review_id:'pmqr_'+'1'.repeat(32), operation_id:'op_'+'1'.repeat(32), version:2,
+    document_digest:'a'.repeat(64), origin:'overview'};
+  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,get:()=>{throw Error('Selection must not access localStorage');}});
+  try {
+    assert.equal(parseAssessmentSelection(assessmentQuery(pin,target),target)?.operation_id,pin.operation_id);
+    assert.equal(parseAssessmentSelection(assessmentQuery(pin,target),old()),null);
+  } finally {
+    if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);
+    else delete (globalThis as any).localStorage;
+  }
+});
