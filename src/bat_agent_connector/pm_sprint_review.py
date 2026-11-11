@@ -252,4 +252,58 @@ def operation_access(db, principal, op):
         meeting = {**op['target'], 'context_revision_id': saved['context_revision_id']}
         resolve(reader, principal, meeting, context['document'], saved['basis'])
     if binding.get('sprint_review_draft_id'):
-        access_draft(reader, principal, wid, binding['sprint_review_draft_id'])
+        draft = access_draft(reader, principal, wid, binding['sprint_review_draft_id'])
+        if 'sprint_review_decisions' in binding:
+            decisions(reader, principal, wid, draft, op['params']['decision_ids'], binding['sprint_review_decisions'])
+
+
+def proposal(ops, principal, wid, ref):
+    exact(ref, ('meeting_id', 'draft_revision_id', 'draft_digest', 'decision_id'))
+    draft = access_draft(ops, principal, wid, ref['draft_revision_id'])
+    if draft['meeting_id'] != ref['meeting_id'] or draft['document_digest'] != ref['draft_digest']:
+        raise mismatch()
+    decision = next((d for d in draft['document']['decisions'] if d['id'] == ref['decision_id']), None)
+    if not draft['document'].get('guided_review') or decision is None:
+        raise mismatch()
+    return draft, decision
+
+
+def decision_required():
+    return OperationError('PM_SPRINT_REVIEW_DECISION_REQUIRED', 'Record each selected direction through governance', 409)
+
+
+def decisions(ops, principal, wid, draft, selected, references):
+    from . import pm_governance
+    pm_meetings._list(references, 'governance decisions', 10)
+    by_id = {}
+    for ref in references:
+        exact(ref, ('decision_id', 'revision_id', 'document_digest'))
+        revision = pm_governance._revision(ops.db, ref['revision_id'])
+        record = pm_governance._record(ops.db, wid, revision['record_id'])
+        pm_governance._access(ops, principal, record)
+        original = {'meeting_id':draft['meeting_id'], 'draft_revision_id':draft['revision_id'],
+                    'draft_digest':draft['document_digest'], 'decision_id':ref['decision_id']}
+        _, proposed = proposal(ops, principal, wid, original)
+        doc = revision['document']
+        if (revision['document_digest'] != ref['document_digest'] or record['context'].get('review_proposal_ref') != original
+                or doc['owner_actor'] != proposed['owner_actor']):
+            raise mismatch()
+        if revision['action'] != 'pm.governance.decide' or not doc['decision']:
+            raise decision_required()
+        if ref['decision_id'] in by_id:
+            raise mismatch()
+        by_id[ref['decision_id']] = {**ref, 'record_id':record['record_id'], 'recorded_by':doc['decision']['recorded_by'],
+                                    'disposition':doc['decision']['disposition'], 'owner_actor':doc['owner_actor']}
+    if set(by_id) != set(selected):
+        raise decision_required()
+    return by_id
+
+
+def completion_access(ops, principal, wid, completion):
+    doc = completion['document']
+    draft = access_draft(ops, principal, wid, doc['draft_revision_id'])
+    if draft['document'].get('guided_review'):
+        refs = doc.get('governance_decisions', [])
+        decisions(ops, principal, wid, draft, [r['decision_id'] for r in refs],
+                  [{k:r[k] for k in ('decision_id','revision_id','document_digest')} for r in refs])
+    return completion

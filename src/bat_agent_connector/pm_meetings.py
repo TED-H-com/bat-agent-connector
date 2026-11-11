@@ -143,6 +143,11 @@ def _access(ops, principal, meeting):
         from .pm_sprint_review import access_draft
         if _document(ops.db, 'pm_meeting_drafts', 'revision_id', meeting['draft_revision_id'])['document'].get('guided_review'):
             access_draft(ops, principal, meeting['workspace_id'], meeting['draft_revision_id'])
+    if meeting.get('completion_id'):
+        completion = _document(ops.db, 'pm_meeting_completions', 'completion_id', meeting['completion_id'])
+        if completion['document'].get('guided_review'):
+            from .pm_sprint_review import completion_access
+            completion_access(ops, principal, meeting['workspace_id'], completion)
     return context, snapshot
 
 
@@ -234,7 +239,7 @@ def _draft(ops, principal, meeting, context, snapshot, params):
         return _refs(ops, meeting, context, snapshot, refs)
     decisions, seen = [], set()
     for item in _list(params.get('decisions', []), 'decisions', 10):
-        _only(item, ('id', 'text', 'rationale', 'alternatives', 'source_refs'))
+        _only(item, ('id', 'text', 'rationale', 'alternatives', 'source_refs') + (('owner_actor', 'follow_up_ids') if 'review_basis' in params else ()))
         decisions.append({'id': _key(item.get('id'), seen, 'decisions'), 'text': _text(item.get('text'), 'decision'),
             'rationale': _text(item.get('rationale'), 'decision rationale'),
             'alternatives': _texts(item.get('alternatives', []), 'alternatives', 5),
@@ -260,6 +265,14 @@ def _draft(ops, principal, meeting, context, snapshot, params):
             raise _bad('INVALID_PARAMS', 'Guided basis belongs only to Sprint Review')
         if params['output'].get('feedback'):
             raise _bad('INVALID_PARAMS', 'Guided feedback is derived from exact source references')
+        for saved, authored in zip(decisions, params.get('decisions', []), strict=True):
+            owner = authored.get('owner_actor')
+            if not isinstance(owner, str) or pm_sprints._role(ops.db, meeting['workspace_id'], owner) not in {'owner', 'contributor'}:
+                raise _bad('FORBIDDEN', 'Review decisions need a current accountable workspace writer', 403)
+            ids = pm_sprints._ids(authored.get('follow_up_ids', []), 'follow_up_ids', 10)
+            if not ids or set(ids) - {f['id'] for f in follow_ups}:
+                raise _bad('INVALID_PARAMS', 'Associate each Review decision with its explicit follow-up')
+            saved.update(owner_actor=owner, follow_up_ids=ids)
         result['guided_review'] = freeze(ops, principal, meeting, context, params['review_basis'])
         result['output']['feedback'] = [row['content'] for row in result['guided_review']['feedback']]
     if meeting['kind'] == 'retro' and follow_ups and result['output']['no_improvement_rationale']:
@@ -274,7 +287,7 @@ def _owner(ops, principal, meeting, context):
 
 
 def _complete(ops, principal, meeting, context, params):
-    _only(params, ('draft_revision_id', 'discussion_summary', 'decision_ids', 'rationale'))
+    _only(params, ('draft_revision_id', 'discussion_summary', 'decision_ids', 'rationale', 'governance_decisions'))
     _owner(ops, principal, meeting, context)
     if not meeting['draft_revision_id'] or params.get('draft_revision_id') != meeting['draft_revision_id']:
         raise _bad('PM_MEETING_DRAFT_CHANGED', 'Complete the exact current discussion draft', 409)
@@ -300,7 +313,13 @@ def _complete(ops, principal, meeting, context, params):
     for follow_up in document['follow_ups']:
         if pm_sprints._role(ops.db, meeting['workspace_id'], follow_up['owner_actor']) not in {'owner', 'contributor'}:
             raise _bad('FORBIDDEN', 'A proposed follow-up owner no longer has workspace write access', 403)
-    return {'discussion_summary': _text(params.get('discussion_summary'), 'discussion summary', 8000),
+    proofs = None
+    if document.get('guided_review'):
+        from .pm_sprint_review import decisions
+        proofs = decisions(ops, principal, meeting['workspace_id'], draft, decision_ids, params.get('governance_decisions', []))
+    elif 'governance_decisions' in params:
+        raise _bad('INVALID_PARAMS', 'Governance proof belongs to a guided Review')
+    result = {'discussion_summary': _text(params.get('discussion_summary'), 'discussion summary', 8000),
             'rationale': params['rationale'], 'draft_revision_id': draft['revision_id'], 'draft_digest': draft['document_digest'],
             'context_revision_id': meeting['context_revision_id'], 'notes_through_sequence': note,
             'completion_basis': 'explicit_designated_owner_record', 'attendance_verified': False,
@@ -310,6 +329,13 @@ def _complete(ops, principal, meeting, context, params):
                            'work_item_created': False, 'scheduler_registered': False} for item in document['follow_ups']],
             'meeting_completed': True, 'quality': 'unassessed', 'counts_as_done': False,
             'scope_applied': False, 'execution_authorized': False, 'scrum_conformance': 'not_established'}
+    if proofs is not None:
+        result['governance_decisions'] = list(proofs.values())
+        for decision in result['decisions']:
+            if decision['id'] in proofs:
+                decision.update({k:proofs[decision['id']][k] for k in ('recorded_by','disposition','owner_actor')})
+        result['guided_review'] = {'draft_revision_id':draft['revision_id'], 'draft_digest':draft['document_digest']}
+    return result
 
 
 def _check(ops, principal, action, target, params, pre):
@@ -452,7 +478,7 @@ def operation_visible(db, principal, operation):
 
 def _admitter(action):
     def admit(ops, principal, target, params, pre):
-        meeting, _ = _check(ops, principal, action, target, params, pre)
+        meeting, document = _check(ops, principal, action, target, params, pre)
         binding = {'principal': pm_workspace.principal_binding(principal),
                    'meeting_context_revision_id': meeting['context_revision_id'] if meeting else None}
         if 'review_basis' in params:
@@ -461,6 +487,8 @@ def _admitter(action):
             draft = _document(ops.db, 'pm_meeting_drafts', 'revision_id', meeting['draft_revision_id'])
             if 'guided_review' in draft['document']:
                 binding['sprint_review_draft_id'] = draft['revision_id']
+        if action == 'pm.meeting.complete' and document.get('guided_review'):
+            binding['sprint_review_decisions'] = params.get('governance_decisions', [])
         return binding
     return admit
 

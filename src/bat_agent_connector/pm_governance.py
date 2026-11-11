@@ -116,6 +116,9 @@ def _snapshot(ops, principal, wid, snapshot_id, digest=None):
 
 
 def _access(ops, principal, record):
+    if record['context'].get('review_proposal_ref'):
+        from .pm_sprint_review import proposal
+        proposal(ops, principal, record['workspace_id'], record['context']['review_proposal_ref'])
     ref = record['context']['snapshot_ref']
     return _snapshot(ops, principal, record['workspace_id'], ref['snapshot_id'], ref['snapshot_digest'])
 
@@ -253,7 +256,7 @@ def _check(ops, principal, action, target, params, pre):
     wid = target['workspace_id']
     _member(ops, principal, wid, write=True, decide=action in ACTIONS[2:])
     if create:
-        _only(params, (*FIELDS, 'kind', 'root_cause_key', 'snapshot_id'))
+        _only(params, (*FIELDS, 'kind', 'root_cause_key', 'snapshot_id', 'review_proposal_ref'))
         if set(pre) != {'expected_plan_version'} or type(pre['expected_plan_version']) is not int:
             raise _bad('PRECONDITION_REQUIRED', 'Supply the current plan head version')
         if pm_plans.head(ops.db, wid)['version'] != pre['expected_plan_version']:
@@ -264,14 +267,26 @@ def _check(ops, principal, action, target, params, pre):
         key = _text(params.get('root_cause_key'), 'root_cause_key', 120)
         snapshot = _snapshot(ops, principal, wid, params.get('snapshot_id'))
         document = _document(ops, principal, wid, kind, snapshot, params)
+        context = _context(snapshot)
+        if 'review_proposal_ref' in params:
+            from .pm_sprint_review import mismatch, proposal
+            fixed, proposed = proposal(ops, principal, wid, params['review_proposal_ref'])
+            if (kind != 'change' or document['owner_actor'] != proposed['owner_actor']
+                    or document['description'] != proposed['text']
+                    or fixed['document']['guided_review']['coverage']['snapshot']['snapshot_id'] != snapshot['snapshot_id']):
+                raise mismatch()
+            context['review_proposal_ref'] = params['review_proposal_ref']
         prior = ops.db.execute('SELECT record_id FROM pm_governance_records WHERE workspace_id=? AND kind=? AND root_cause_key=?', (wid, kind, key)).fetchone()
         if prior:
             record = _record(ops.db, wid, prior[0])
             _access(ops, principal, record)
+            if record['context'].get('review_proposal_ref') != context.get('review_proposal_ref'):
+                from .pm_sprint_review import mismatch
+                raise mismatch()
             return record, None, True
         overlaps = _overlaps(ops, principal, wid, kind, document['sources'])
         document['disambiguation'] = _disambiguate(params, overlaps)
-        return {'workspace_id': wid, 'kind': kind, 'root_cause_key': key, 'context': _context(snapshot)}, document, False
+        return {'workspace_id': wid, 'kind': kind, 'root_cause_key': key, 'context': context}, document, False
     record = _record(ops.db, wid, target['record_id'])
     snapshot = _access(ops, principal, record)
     if set(pre) != {'expected_version'} or type(pre['expected_version']) is not int or pre['expected_version'] != record['version']:
@@ -412,6 +427,10 @@ def operation_visible(db, principal, operation):
         result_context = (original['external_refs'] or {}).get('governance_result_context')
         if result_context:
             refs.append(result_context['snapshot_ref'])
+        for saved_context in (context, result_context):
+            if saved_context and saved_context.get('review_proposal_ref'):
+                from .pm_sprint_review import proposal
+                proposal(_SourceReader(db), principal, wid, saved_context['review_proposal_ref'])
         return all(_snapshot_visible(db, principal, wid, ref) for ref in refs)
     except (OperationError, KeyError, ValueError, TypeError):
         return False
