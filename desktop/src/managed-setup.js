@@ -97,10 +97,13 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   // They must recover the original key before any new request is permitted.
   if (saved.intent?.refused) {saved.intent.problemCode = saved.intent.refused; delete saved.intent.refused;}
   const storedDraft = JSON.stringify(saved);
+  // Write the storage projection itself, never the working draft: `saved` later holds the
+  // pending request, whose staged credential reference must stay in page memory only.
+  const projectedDraft = JSON.stringify(setupDraftForStorage(saved));
   saved = setupDraftForStorage(saved);
   let draftStorageError;
-  if (JSON.stringify(saved) !== storedDraft) {
-    try {guard(); localStorage.setItem(key, JSON.stringify(saved));} catch (error) {draftStorageError = error;}
+  if (projectedDraft !== storedDraft) {
+    try {guard(); localStorage.setItem(key, projectedDraft);} catch (error) {draftStorageError = error;}
   }
   if (saved.intent?.lookup_only && saved.intent.lookup_request) {
     saved.intent.request = saved.intent.lookup_request;

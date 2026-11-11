@@ -60019,11 +60019,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		delete saved.intent.refused;
 	}
 	const storedDraft = JSON.stringify(saved);
+	const projectedDraft = JSON.stringify(setupDraftForStorage(saved));
 	saved = setupDraftForStorage(saved);
 	let draftStorageError;
-	if (JSON.stringify(saved) !== storedDraft) try {
+	if (projectedDraft !== storedDraft) try {
 		guard();
-		localStorage.setItem(key, JSON.stringify(saved));
+		localStorage.setItem(key, projectedDraft);
 	} catch (error) {
 		draftStorageError = error;
 	}
