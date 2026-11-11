@@ -2070,6 +2070,22 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
         if key.chars().chain(value.chars()).any(char::is_control) {
             return Err("Control characters in central query are refused".into());
         }
+        if key == "before_id" || path == "/operations" && key == "before" {
+            let valid = if key == "before_id" {
+                Regex::new(r"^op_[0-9a-f]{32}$").unwrap().is_match(&value)
+            } else {
+                value.len() <= 64
+                    && value.parse::<f64>().is_ok_and(|n| n.is_finite() && n > 0.0)
+            };
+            if input.method != "GET"
+                || path != "/operations"
+                || !valid
+                || !query_keys.insert(key.to_string())
+            {
+                return Err("Invalid operation history cursor".into());
+            }
+            continue;
+        }
         if pm {
             let profile_list = path.ends_with("/work-profiles");
             let thread_list = path.ends_with("/threads");
@@ -2860,6 +2876,9 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Central query parameter is not allowed".into());
         }
     }
+    if query_keys.contains("before_id") && !query_keys.contains("before") {
+        return Err("Operation history cursor requires before and before_id together".into());
+    }
     if path.starts_with("/sessions/") && path.ends_with("/messages") {
         let retained = url::form_urlencoded::parse(query.as_bytes())
             .any(|(key, value)| key == "source" && value == "retained");
@@ -2948,6 +2967,38 @@ mod tests {
         sync::mpsc,
         thread,
     };
+    #[test]
+    fn operation_history_cursor_is_paired_and_read_only() {
+        let id = format!("op_{}", "a".repeat(32));
+        for query in [
+            format!("before=42&before_id={id}"),
+            format!("before_id={id}&before=42.5"),
+            "before=42".into(),
+        ] {
+            assert!(validate_request(&request("GET", &format!("/operations?{query}"))).is_ok());
+        }
+        for query in [
+            format!("before_id={id}"),
+            format!("before=NaN&before_id={id}"),
+            format!("before=inf&before_id={id}"),
+            format!("before=-1&before_id={id}"),
+            format!("before=42&before=41&before_id={id}"),
+            format!("before=42&before_id={id}&before_id={id}"),
+            "before=42&before_id=invalid".into(),
+        ] {
+            assert!(
+                validate_request(&request("GET", &format!("/operations?{query}"))).is_err(),
+                "{query}"
+            );
+        }
+        for path in ["/operations", "/sessions", "/managed/setup"] {
+            let path = format!("{path}?before=42&before_id={id}");
+            assert!(validate_request(&request("POST", &path)).is_err());
+            if !path.starts_with("/operations?") {
+                assert!(validate_request(&request("GET", &path)).is_err());
+            }
+        }
+    }
     #[test]
     fn retained_session_reads_use_fixed_snapshot_selectors() {
         let root = "/sessions/demo/session-full-id/messages";

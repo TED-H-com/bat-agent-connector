@@ -1,9 +1,12 @@
+import {validSetupEndpoint, validSetupHostId, validSetupRemoteUrl, setupDraftForStorage, setupRequestForStorage} from './setup-draft-storage.js';
+export {validSetupEndpoint, validSetupHostId, validSetupRemoteUrl, setupDraftForStorage} from './setup-draft-storage.js';
 import {operationStatusLabel} from './global-labels.js';
 import {timeLabel, timeStamp} from './ui/stamps.js';
 import {displayFact, healthLabel} from './health-display.js';
 import {healthReadError} from './health-fact.js';
 import {claimObservationRenewal} from './observation-renewal.js';
 import {patch} from './ui/patch.js';
+import {operationPage} from './operation-page.js';
 // BAT v3.2.15 renderer/src/utils/connection-url.ts grammar. Trust comes from
 // BAT's own copied fingerprint, never a network probe or a loopback assumption.
 export function normalizeSetupFingerprint(value) {
@@ -24,37 +27,6 @@ export function parseBatConnectionUrl(value) {
     return {endpoint: `wss://${url.hostname}:${port}`, fingerprint, token,
       loopback: ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname.toLowerCase())};
   } catch {return null;}
-}
-export function validSetupEndpoint(value) {
-  try {
-    const url = new URL(value);
-    return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) &&
-      url.protocol === 'wss:' && !!url.hostname && Number(explicitPort(value)) > 0 && !url.username && !url.password &&
-      !value.includes('?') && !value.includes('#') && /^wss:\/\/[^/]+\/?$/i.test(value);
-  } catch {return false;}
-}
-export const validSetupHostId = value => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
-// Guided repository setup accepts the credential-free GitHub forms in config._integrate_url.
-export const validSetupRemoteUrl = value => typeof value === 'string' && !/\s/.test(value) &&
-  /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/)[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}(?:\.git)?$/i.test(value);
-const setupDraftFields = ['host', 'url', 'fingerprint', 'profile_id', 'import_profile_id', 'managed_roots', 'ssh_alias',
-  'repository', 'repository_host', 'workspace_id', 'remote_url', 'verification_project', 'verification_executable',
-  'verification_arguments', 'verification_timeout', 'verification_base', 'writes', 'orchestrate', 'shared_clone_worktrees',
-  'allow_integrate', 'allow_merge', 'allow_pr_update', 'intent'];
-export function setupDraftForStorage(draft) {
-  const saved = Object.fromEntries(setupDraftFields.filter(name => Object.hasOwn(draft, name)).map(name => [name, draft[name]]));
-  const unsafeEndpoint = value => typeof value === 'string' && /[?@#]/.test(value);
-  if (unsafeEndpoint(saved.url)) saved.url = '';
-  if (typeof saved.remote_url === 'string' && !validSetupRemoteUrl(saved.remote_url)) saved.remote_url = '';
-  const request = saved.intent?.request, params = request?.params;
-  if (unsafeEndpoint(params?.url) || params?.remote_url !== undefined && !validSetupRemoteUrl(params.remote_url)) {
-    // Older clients persisted these before central refused admission. Retain the
-    // original identity, but never replay an altered request or create a new key.
-    saved.intent = {key: saved.intent.key, operation_id: saved.intent.operation_id, problemCode: 'INVALID_CONFIGURATION',
-      request: {action: request.action, target: request.target, preconditions: request.preconditions}};
-  }
-  // Staged references in valid intents are necessary for exact-request recovery.
-  return saved;
 }
 const connectionFacets = ['transport', 'service', 'trust_sign_in', 'connection'];
 const connectionReasons = new Set(['never_observed', 'host_unreachable', 'host_not_refreshed', 'DISCOVERY_SCOPE_CHANGED',
@@ -129,6 +101,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   let draftStorageError;
   if (JSON.stringify(saved) !== storedDraft) {
     try {guard(); localStorage.setItem(key, JSON.stringify(saved));} catch (error) {draftStorageError = error;}
+  }
+  if (saved.intent?.lookup_only && saved.intent.lookup_request) {
+    saved.intent.request = saved.intent.lookup_request;
+    delete saved.intent.lookup_request;
   }
   const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
   function canonical(value) {
@@ -667,15 +643,16 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       try {persist();} catch (error) {delete saved.intent; throw error;}
       review = null;
       paintAutomaticStatus();
-      await sendOriginal(); sourceRefresh = true; await refresh();
+      await sendOriginal(true); sourceRefresh = true; await refresh();
     } catch (error) {handleSubmissionError(error, 'host', {sourceRefresh});}
     finally {busy = false; if (alive()) update();}
   }
   function accept(candidate) {
     const intent = saved.intent;
     if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor || candidate.action !== intent.request.action ||
-        !equal(candidate.target, intent.request.target) || !equal(candidate.params, intent.request.params) ||
-        !equal(candidate.preconditions, intent.request.preconditions) ||
+        !(intent.lookup_only ? equal(setupRequestForStorage({action: candidate.action, target: candidate.target,
+          params: candidate.params, preconditions: candidate.preconditions}), intent.request) :
+          equal({action: candidate.action, target: candidate.target, params: candidate.params, preconditions: candidate.preconditions}, intent.request)) ||
         candidate.idempotency_key !== intent.key ||
         intent.operation_id && candidate.operation_id !== intent.operation_id) throw Error(t("setup_receipt_mismatch"));
     operation = candidate; intent.operation_id = candidate.operation_id; persist();
@@ -686,10 +663,30 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     }
     update();
   }
-  async function sendOriginal() {
+  let lookupKey = null, lookupCursor = null;
+  async function findOriginal(intent) {
+    if (lookupKey !== intent.key) {lookupKey = intent.key; lookupCursor = null;}
+    // Each read is bounded. Continue explicitly from the last cursor if a long
+    // history needs another batch; an incomplete/empty read never admits work.
+    for (let page = 0; page < 20; page++) {
+      const cursor = lookupCursor ? `&before=${lookupCursor.time}&before_id=${encodeURIComponent(lookupCursor.id)}` : '';
+      const result = await api('GET', `/operations?action=${encodeURIComponent(intent.request.action)}&actor=${encodeURIComponent(caps().actor)}&limit=200${cursor}`);
+      guard();
+      const parsed = operationPage(result, lookupCursor);
+      if (!parsed || parsed.next && parsed.next.id === null) throw Error(t('setup_receipt_mismatch'));
+      const matches = parsed.operations.filter(row => row.actor === caps().actor && row.idempotency_key === intent.key);
+      if (matches.length > 1) throw Error(t('setup_receipt_mismatch'));
+      if (matches.length) {lookupCursor = null; return matches[0];}
+      lookupCursor = parsed.next;
+      if (!lookupCursor) break;
+    }
+    throw Error(t('setup_lookup_pending'));
+  }
+  async function sendOriginal(submit = false) {
     const intent = saved.intent;
+    const lookup = intent.lookup_only || !submit && intent.request.params.secret_ref;
     const result = intent.operation_id ? await api("GET", `/operations/${encodeURIComponent(intent.operation_id)}`)
-      : await api("POST", "/operations?wait=3", intent.request, intent.key);
+      : lookup ? {operation: await findOriginal(intent)} : await api("POST", "/operations?wait=3", intent.request, intent.key);
     guard(); accept(result.operation);
   }
   async function recover() {
@@ -759,7 +756,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         showReview(response.preview, request); return;
       }
       saved.intent = {key: crypto.randomUUID(), request};
-      persist(); automaticStatus.textContent = t('setup_saving'); await sendOriginal(); sourceRefresh = true; await refresh();
+      persist(); automaticStatus.textContent = t('setup_saving'); await sendOriginal(true); sourceRefresh = true; await refresh();
     } catch (error) {
       if (kind === 'host' && serial !== reviewSerial) return;
       handleSubmissionError(error, kind, {sourceRefresh});

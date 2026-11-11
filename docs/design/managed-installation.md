@@ -16,6 +16,76 @@ This contract covers the ordinary local installation and its advanced external-c
 
 Existing external-central configuration stays selected. **Advanced: join an existing central** requires explicit native confirmation and separate credential enrollment. It preserves the existing owned background service and never forwards its credential to the new address. Failure to reach an external service cannot provision a second database.
 
+## Setup draft privacy and original-operation recovery
+
+The shared browser/desktop setup form projects every localStorage write and every
+restored draft through an explicit field and type allow-list, including nested
+request targets, parameters, preconditions and verification command arrays.
+Password inputs, pasted BAT links, unknown fields and staged `secret_ref` values
+are never stored. Repository remotes must use credential-free `github.com` HTTPS,
+SCP-style `git@github.com:owner/repo` or `ssh://git@github.com/owner/repo` syntax.
+Userinfo credentials, query strings and fragments are rejected before staging or
+admission and removed from old drafts. An unsafe legacy request keeps its original
+key/operation ID but is blocked from replay; removing a field never creates a new
+request under its old key.
+
+Managed-origin migration uses this same projection before copying a proven setup
+scope, scrubbing that source entry as well as its destination. A failed scrub
+blocks the copy. Other scopes are not scanned or rewritten; other draft families
+retain their existing byte-for-byte migration contract.
+
+A staging handle is a random 128-bit identifier for private credential and metadata
+files under the managed installation. Staging and setup admission require the
+installation's original personal actor/principal and `manage`; resolution checks
+the installation principal, credential kind, integrity hash and one-hour expiry.
+The principal ID hashes actor, the complete scope set and the admin bit; a different
+token with that same tuple matches, while merely retaining `manage` does not.
+It is **not single-use or bound to a target, operation key or exact request**.
+An authorized caller can reuse it before expiry. Already admitted work resolves
+it after expiry; configuration and pending operations protect referenced files
+from opportunistic cleanup during later staging. Expiry is not deletion or
+revocation. There is no public credential redemption endpoint returning bytes.
+
+Possession of the handle alone bypasses no authentication. However, a storage
+reader who can also act as the installation principal could use it to select an
+existing credential for a different setup request without knowing that credential.
+Principal binding and expiry do not justify treating this selector as harmless
+at rest. Setup therefore stores a permanent `lookup_only` marker in place of the
+handle, with the non-secret projection in `lookup_request`. The stored `request`
+contains only its action so older clients' intent validation also blocks replay;
+they cannot mistake the projection for a complete request. The full request exists only in page memory and the central operation
+journal. The initial authorized submit uses that exact in-memory request/key.
+
+After a lost reply, **Check request / 查回請求** reads the existing operations list
+filtered by action and current actor, matching the original key; a known operation
+ID uses its detail GET. Central's unique actor/key record is the authority for the
+original request, whose non-secret projection, actor, key and known ID must match
+before accepting it. These reads do not run admission or credential resolution;
+expired or already-used handles do not prevent recovery. A projected request is
+never POSTed, even when nothing is found. Empty, partial, failed or unauthorized
+reads retain the key and lock the original intent; they cannot prove non-admission
+or permit replacement. Each check reads at most 20 pages of 200 records, follows
+both timestamp and ID cursors (including empty visibility-filtered pages), and can
+continue from the in-memory cursor on another explicit check. Reload starts the
+read again. Existing account/connection namespaces and response guards remain in
+force. Requests without a staged handle retain exact-request idempotent recovery.
+The native bridge permits the existing paired `before`/`before_id` cursor only
+for operations GET, checking the timestamp, operation ID and duplicate selectors.
+
+共用設定表單在寫入及還原草稿時，依欄位與型別白名單檢查巢狀資料；不保存密碼、
+含憑證的網址或 `secret_ref`。暫存引用雖綁定安裝身分、種類及一小時期限，卻不是
+一次性，也未綁定特定目標或請求；已受理操作及設定仍可保留並使用它，因此不能
+把到期當成撤銷。首次送出沿用記憶體中的完整請求與原 key；草稿只保存非秘密投影
+及 `lookup_only`。回覆遺失後以原 actor/key 查中央紀錄，已有 ID 則直接讀取該操作，
+不把刪減過的請求重新送出。未找到、讀取失敗或權限不足時保留原 key 並繼續鎖定，
+不得另建請求；再次「查回請求」只讀取，不重新暫存或套用設定。舊格式不安全的
+網址或未知巢狀欄位會清除並阻止重播，原 key/operation ID 保留供檢查。
+已驗證身分的舊位址遷移也會清理設定草稿的來源與目的資料；清理失敗便停止複製。
+其他身分與草稿種類維持原遷移界線。原生讀取沿用中央的時間與 ID 成對分頁游標。
+
+This changes setup privacy/recovery within the existing E/UX work, not E00–E11,
+R0–R5 or A01–A40 acceptance. Unrevised PM v1.2 requirements remain open.
+
 ## Setup connection readout
 
 `GET /managed/setup` adds `connection_observation` to each configured host. GET
@@ -310,7 +380,8 @@ or sessionStorage. Exactly one legacy loopback-port scope must have an exact
 `batc.sync.<scope>` key whose encoded server, principal and actor all match the
 verified bootstrap. The checkpoint key delimits the old identity; an action suffix
 on a draft alone is insufficient. Only that complete scope is copied, byte for
-byte, including nested form namespaces. Nothing is submitted or automatically
+byte, including nested form namespaces, except the setup privacy projection
+described above. Nothing is submitted or automatically
 retried as part of migration. A matching retained draft can therefore reappear
 after an upgrade even if it looked lost on the previous port.
 

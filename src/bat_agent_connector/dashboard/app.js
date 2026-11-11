@@ -11163,6 +11163,7 @@ var init_i18n = __esmMin((() => {
 			setup_required: "請填寫此欄位。",
 			setup_invalid_fingerprint: "請輸入 64 個十六進位字元的 SHA-256 憑證指紋，可含冒號。",
 			setup_retained_request: "原設定請求仍保留。請先查回這筆請求，再進行其他變更。",
+			setup_lookup_pending: "尚未找到原設定操作。原請求代號仍保留；再次查回只會讀取 Connector 紀錄，不會重新送出設定或暫存憑證。",
 			setup_view_sessions: "查看工作階段",
 			error_generic: "無法完成此要求，請查看詳細資料。",
 			error_generic_short: "無法完成此要求。",
@@ -12969,6 +12970,7 @@ var init_i18n = __esmMin((() => {
 			setup_required: "Fill in this field.",
 			setup_invalid_fingerprint: "Enter a SHA-256 fingerprint with 64 hexadecimal characters; colons are allowed.",
 			setup_retained_request: "The original request is kept. Check it before making another change.",
+			setup_lookup_pending: "The original setup operation has not been found. Its key is retained. Check again to read Connector records; this never resubmits setup or stages a credential.",
 			setup_view_sessions: "View sessions",
 			error_generic: "This request could not be completed. Check Details.",
 			error_generic_short: "This request could not be completed.",
@@ -14963,9 +14965,9 @@ var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
 //#region src/state/sessions.js
-var text$6 = (value) => typeof value === "string" ? value : "";
+var text$7 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
-	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
+	const host = text$7(session.host), id = text$7(session.workspace_id), name = text$7(session.workspace);
 	return {
 		key: JSON.stringify([
 			host,
@@ -15000,7 +15002,7 @@ function matchesSession(session, query) {
 		session.model,
 		session.worktree_branch,
 		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$6).join("\n").toLocaleLowerCase();
+	].map(text$7).join("\n").toLocaleLowerCase();
 	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
 }
 function runtimeStale(session) {
@@ -18134,7 +18136,7 @@ var frontendBuild = Object.freeze({ frontend_digest: frontendDigest("__BATC_FRON
 //#region src/version-projection.js
 var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
 var commit = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) && [40, 64].includes(value.length) ? value : null;
-var digest$12 = frontendDigest;
+var digest$13 = frontendDigest;
 var frontendLoadedAt = new Date().toISOString();
 var time = (value) => {
 	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
@@ -18165,7 +18167,7 @@ var fact$1 = (id, value, source, at, period, extra = {}) => {
 	const selected = {
 		version: version$2(value?.version),
 		commit: commit(value?.commit),
-		digest: digest$12(value?.digest)
+		digest: digest$13(value?.digest)
 	};
 	const observed_at = time(at), observed = Object.values(selected).some(Boolean) || observed_at !== null;
 	return {
@@ -18197,7 +18199,7 @@ function versionProjection(input = {}) {
 		code: updateCode(update.last.code),
 		at: time(update.last.at)
 	} : null;
-	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$12(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
+	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$13(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
 	const rows = [
 		released("desktop_released", input.desktop && candidate ? {
 			version: candidate.version,
@@ -20059,7 +20061,7 @@ function historyRecords(storage, namespace, workspaceId) {
 }
 //#endregion
 //#region src/pm-work-history.js
-var digest$11 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+var digest$12 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 var keys$3 = (value, names) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join(",") === [...names].sort().join(",");
 var refFields = [
 	"schema",
@@ -20125,7 +20127,7 @@ function workHistoryPanel({ h, t, api, alive, workspaceId, workspace, caps, name
 			"source_digest",
 			"content_digest",
 			"excerpt_digest"
-		].every((key) => digest$11(ref[key]))) throw mismatch();
+		].every((key) => digest$12(ref[key]))) throw mismatch();
 		const selection = ref.selection;
 		if (selection?.kind === "entry") {
 			if (!keys$3(selection, ["kind"])) throw mismatch();
@@ -20625,13 +20627,13 @@ var QUIET_CODES = new Set([
 	"CONNECTION_CHANGED"
 ]);
 var radioSerial = 0;
-var text$5 = (value) => typeof value === "string" && value.length > 0;
+var text$6 = (value) => typeof value === "string" && value.length > 0;
 var sha$6 = (value) => typeof value === "string" && SHA40.test(value);
 var bytes = (value) => new TextEncoder().encode(value).length;
 function exactTarget$1(target) {
 	if (!target || typeof target !== "object" || Array.isArray(target)) return null;
 	if (Object.keys(target).length !== TARGET_KEYS.length) return null;
-	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$5(target[key]))) return null;
+	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$6(target[key]))) return null;
 	if (!/^ws_[0-9a-f]{32}$/.test(target.workspace_id) || !OP_ID.test(target.source_operation_id)) return null;
 	return {
 		workspace_id: target.workspace_id,
@@ -20693,7 +20695,7 @@ function classifyPublicationEntry(envelope) {
 	const target = exactTarget$1(row.target);
 	const prefilled = row.prefilled_params && typeof row.prefilled_params === "object" && !Array.isArray(row.prefilled_params) ? row.prefilled_params : {};
 	const candidate = sha$6(prefilled.candidate_sha) ? prefilled.candidate_sha : "";
-	const baseRef = text$5(prefilled.base_ref) ? prefilled.base_ref : "";
+	const baseRef = text$6(prefilled.base_ref) ? prefilled.base_ref : "";
 	const preconditions = exactPreconditions(row.preconditions);
 	const scopes = Array.isArray(row.required_scopes) ? row.required_scopes.filter((item) => typeof item === "string") : [];
 	if (!target || envelope?.workspace_id && target.workspace_id !== envelope.workspace_id || envelope?.identity?.execution_operation_id && target.source_operation_id !== envelope.identity.execution_operation_id) return {
@@ -20773,7 +20775,7 @@ function publicationPrLine(h, t, pr) {
 	if (!pr || typeof pr !== "object") return null;
 	const opId = operationId$5(pr.publication_operation_id);
 	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
-	const repo = text$5(pr.repository) ? pr.repository : "";
+	const repo = text$6(pr.repository) ? pr.repository : "";
 	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
 	const item = h("li", {});
 	if (opId) {
@@ -20789,9 +20791,9 @@ function publicationPrLine(h, t, pr) {
 }
 function publicationDeliveryLine(h, t, pr, envelope, attempt) {
 	if (!operationId$5(pr?.publication_operation_id)) return null;
-	const host = text$5(attempt?.session?.host) ? attempt.session.host : text$5(attempt?.native_session?.host) ? attempt.native_session.host : "";
-	const source = text$5(pr.child_operation_id) ? pr.child_operation_id : text$5(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
-	const repo = text$5(pr.repository) ? pr.repository : "";
+	const host = text$6(attempt?.session?.host) ? attempt.session.host : text$6(attempt?.native_session?.host) ? attempt.native_session.host : "";
+	const source = text$6(pr.child_operation_id) ? pr.child_operation_id : text$6(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
+	const repo = text$6(pr.repository) ? pr.repository : "";
 	if (!host || !source || !repo) return null;
 	return h("p", { "data-work-publish-delivery": "" }, h("a", { href: `#/delivery/${encodeURIComponent(host)}/execution/${encodeURIComponent(source)}/${encodeURIComponent(repo)}` }, t("nav_delivery")), " ", t("wpub_delivery_link"));
 }
@@ -21192,7 +21194,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 //#region src/pm-execution-verification.js
 var ACTION$5 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
-var digest$10 = /^[0-9a-f]{64}$/;
+var digest$11 = /^[0-9a-f]{64}$/;
 var operation$2 = /^op_[0-9a-f]{32}$/;
 function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {}, fixedResult = null, allowedAction = () => true }) {
 	let sources = [], selected = "", generation = 0, ready = false, configuration = null, editor = null;
@@ -21285,7 +21287,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		try {
 			const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/executions/${selected}/verification-config`);
 			if (!valid(ticket)) return;
-			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$10.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$10.test(value.command_digest) || value.candidate_commit !== null && !sha$5.test(value.candidate_commit) || value.tree_hash !== null && !sha$5.test(value.tree_hash)) throw Error(t("pmq_invalid"));
+			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$11.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$11.test(value.command_digest) || value.candidate_commit !== null && !sha$5.test(value.candidate_commit) || value.tree_hash !== null && !sha$5.test(value.tree_hash)) throw Error(t("pmq_invalid"));
 			configuration = value;
 			ready = true;
 			status.replaceChildren();
@@ -21599,7 +21601,7 @@ var CREATE = "pm.quality.review.create";
 var RECORD$2 = "pm.quality.review.record";
 var REVOKE = "pm.quality.review.revoke";
 var sha$4 = /^[0-9a-f]{40}$/;
-var digest$9 = /^[0-9a-f]{64}$/;
+var digest$10 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
 var ordered$1 = (value) => Array.isArray(value) ? value.map(ordered$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered$1(value[key])])) : value;
@@ -21756,7 +21758,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		throw Error(t("pmq_history_bound"));
 	}
 	function checkReview(row) {
-		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$9.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$9.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
+		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$10.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$10.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
 		return row;
 	}
 	function packageFor(id) {
@@ -22263,7 +22265,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const receipt = saved.verification;
 				if (saved.workspace_id !== workspaceId) throw error();
 				if (!receipt) continue;
-				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$9.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$4.test(receipt.reference.candidate_commit) || !sha$4.test(receipt.reference.tree_hash) || !digest$9.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
+				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$10.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$4.test(receipt.reference.candidate_commit) || !sha$4.test(receipt.reference.tree_hash) || !digest$10.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
 				proofs.push({
 					key: op.operation_id,
 					label: `${t("pmq_runner")} · ${receipt.reference.candidate_commit.slice(0, 12)} · ${op.operation_id}`,
@@ -22280,7 +22282,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const data = await request("GET", `${base}/evidence/${entry.evidence_id}`);
 				if (!valid(ticket)) return;
 				const e = data.evidence, f = e?.document?.facts;
-				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$4.test(f.candidate_commit) || !sha$4.test(f.tree_hash) || !digest$9.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
+				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$4.test(f.candidate_commit) || !sha$4.test(f.tree_hash) || !digest$10.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
 				proofs.push({
 					key: entry.evidence_id,
 					label: `${t("pmq_runner")} · #${f.verification_id} · ${f.candidate_commit.slice(0, 12)}`,
@@ -22299,7 +22301,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			for (const delivery of deliveries) for (const source of delivery.integration?.sources || []) {
 				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$4.test(source.delivered_sha) || !operation$1.test(source.source_id)) continue;
 				for (const observation of observations) {
-					if (!digest$9.test(observation.document_digest)) throw error();
+					if (!digest$10.test(observation.document_digest)) throw error();
 					proofs.push({
 						key: `${delivery.operation_id}:${source.seq}:${observation.observation_id}`,
 						source_operation_id: source.source_id,
@@ -22380,7 +22382,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		onUnavailable: failure,
 		onConfiguration: (value) => {
 			if (model) {
-				model.configuration = value?.available && digest$9.test(value.command_digest) ? value : null;
+				model.configuration = value?.available && digest$10.test(value.command_digest) ? value : null;
 				matrixKey = "";
 				create?.sync();
 			}
@@ -24885,7 +24887,7 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, matchesWor
 //#endregion
 //#region src/pm-external-history-links.js
 var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
-var digest$8 = (value) => /^[0-9a-f]{64}$/.test(value || "");
+var digest$9 = (value) => /^[0-9a-f]{64}$/.test(value || "");
 function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, cleanup, sourceId, entry, onUnavailable }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const draftNamespace = `${namespace}.history.${JSON.stringify([sourceId, entry.entry_id])}`;
@@ -24909,7 +24911,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	const canLink = () => current(generation) && supported("pm.history.link") && permitted(false) && ["owner", "contributor"].includes(workspace()?.membership?.role);
 	const canUnlink = (link) => current(generation) && supported("pm.history.unlink") && Boolean(workspace()?.membership) && (workspace()?.membership?.role === "owner" || link.created_by === caps()?.actor);
 	const mismatch = () => Error(t("pm_scope_mismatch"));
-	const matches = (ref) => ref?.schema === "external_history_ref/v1" && ref.server_id === workspace()?.server_id && ref.workspace_id === workspaceId && ref.source_id === sourceId && ref.entry_id === entry.entry_id && ref.content_digest === entry.content_digest && digest$8(ref.source_digest) && digest$8(ref.excerpt_digest);
+	const matches = (ref) => ref?.schema === "external_history_ref/v1" && ref.server_id === workspace()?.server_id && ref.workspace_id === workspaceId && ref.source_id === sourceId && ref.entry_id === entry.entry_id && ref.content_digest === entry.content_digest && digest$9(ref.source_digest) && digest$9(ref.excerpt_digest);
 	function fail(error, ticket) {
 		if (!current(ticket)) return;
 		onUnavailable(error);
@@ -35723,7 +35725,7 @@ var defaults = {
 };
 var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
-var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
+var text$5 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
 function cyclic(requirements) {
 	const graph = new Map(requirements.map((row) => [row.id, row.depends_on])), active = new Set(), done = new Set();
@@ -35992,10 +35994,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
 			const d = p.document;
-			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
+			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$5(d.title, 160) || !text$5(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$5(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$5(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$5(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -36018,9 +36020,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$5(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$5(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$5(row))) return "pcp_missing";
+		if (!active || !record$5(value) || !text$5(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$5(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$5(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
-		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
+		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$5(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
@@ -36932,7 +36934,7 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 //#endregion
 //#region src/pm-spec-materialization.js
 var id = /^pmsp_[0-9a-f]{32}$/;
-var digest$7 = /^[0-9a-f]{64}$/;
+var digest$8 = /^[0-9a-f]{64}$/;
 var sha$3 = /^[0-9a-f]{40}$/;
 var artifactRef = (row) => Object.fromEntries([
 	"artifact_id",
@@ -36943,9 +36945,9 @@ function checkSpecMaterialization(value, workspaceId, selected, { full = false, 
 	const fail = () => {
 		throw Error("PM_SPEC_RESPONSE_MISMATCH");
 	}, row = value;
-	if (!row || row.workspace_id !== workspaceId || row.package_id !== selected.package_id || !id.test(row.materialization_id) || !digest$7.test(row.document_digest) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !/^art_[0-9a-f]{32}$/.test(row.artifact_ref?.artifact_id) || !Number.isSafeInteger(row.artifact_ref.revision) || row.artifact_ref.revision < 1 || row.artifact_ref.digest !== row.document_digest) fail();
+	if (!row || row.workspace_id !== workspaceId || row.package_id !== selected.package_id || !id.test(row.materialization_id) || !digest$8.test(row.document_digest) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !/^art_[0-9a-f]{32}$/.test(row.artifact_ref?.artifact_id) || !Number.isSafeInteger(row.artifact_ref.revision) || row.artifact_ref.revision < 1 || row.artifact_ref.digest !== row.document_digest) fail();
 	const receipt = row.git_receipt;
-	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$3.test(receipt.commit_sha) || !sha$3.test(receipt.tree_sha) || !digest$7.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$7.test(value))) fail();
+	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$3.test(receipt.commit_sha) || !sha$3.test(receipt.tree_sha) || !digest$8.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$8.test(value))) fail();
 	if (original && (JSON.stringify(fixedSpecSelection(row, workspaceId)) !== JSON.stringify(fixedSpecSelection(original, workspaceId)) || row.operation_id !== original.operation_id || receipt.commit_sha !== original.git_receipt.commit_sha || receipt.document_digest !== original.git_receipt.document_digest)) fail();
 	if (full) {
 		const doc = row.document, ref = doc?.package_ref;
@@ -37155,7 +37157,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 		withdraw();
 		if (!row) return;
 		try {
-			if (row.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(row.package_id) || !digest$7.test(row.document_digest) || row.document?.workspace_id !== workspaceId || row.document.package_id !== row.package_id || !/^pmscope_[0-9a-f]{32}$/.test(row.document.context?.plan_ref?.scope_revision)) throw Error(t("psm_invalid"));
+			if (row.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(row.package_id) || !digest$8.test(row.document_digest) || row.document?.workspace_id !== workspaceId || row.document.package_id !== row.package_id || !/^pmscope_[0-9a-f]{32}$/.test(row.document.context?.plan_ref?.scope_revision)) throw Error(t("psm_invalid"));
 			selected = row;
 			bind(row);
 			await refresh();
@@ -37286,7 +37288,7 @@ var profile = {
 var same$6 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var clone = (value) => structuredClone(value);
 var sha$2 = /^[0-9a-f]{40}$/;
-var digest$6 = /^[0-9a-f]{64}$/;
+var digest$7 = /^[0-9a-f]{64}$/;
 var op$1 = /^op_[0-9a-f]{32}$/;
 function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, reviewedHandoff = () => null }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, navigation = `batc.pm.batch-selection.${namespace}.${workspaceId}`;
@@ -37874,7 +37876,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		if (!valid(ticket) || !data) return;
 		observations = data.rows;
 		evidenceFiltered ||= data.filtered;
-		for (const row of observations) if (!/^pmgh_[0-9a-f]{32}$/.test(row.observation_id) || !digest$6.test(row.document_digest) || row.workspace_id !== workspaceId) throw error();
+		for (const row of observations) if (!/^pmgh_[0-9a-f]{32}$/.test(row.observation_id) || !digest$7.test(row.document_digest) || row.workspace_id !== workspaceId) throw error();
 		const deliveries = [];
 		for (const entry of githubEntries) {
 			const data = await pages(`${base}/work/${encodeURIComponent(entry.work_item_id)}/deliveries`, "deliveries", "next_after", "source_visibility_filtered", (data) => {
@@ -51562,7 +51564,7 @@ var RECORD = "pm.maintenance.repair.evidence.record";
 var same$4 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var op = /^op_[0-9a-f]{32}$/;
 var sha$1 = /^[0-9a-f]{40}$/;
-var digest$5 = /^[0-9a-f]{64}$/;
+var digest$6 = /^[0-9a-f]{64}$/;
 function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, labelled, errorBox, namespace }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, key = `batc.pm.repair-selection.${namespace}.${workspaceId}`;
 	let epoch = 0, ready = false, policy = null, baseline = null, lifecycle = null, findings = null, repair = null, start = null, proof = null, firstStart = false, proofReady = false;
@@ -51967,7 +51969,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 				const receipt = data.verification;
 				if (!receipt) continue;
 				const ref = receipt.reference;
-				if (receipt.workspace_id !== workspaceId || receipt.operation_id !== source.operation_id || receipt.execution_operation_id !== row.child.operation_id || receipt.profile !== "observed_runner_v1" || !digest$5.test(receipt.receipt_digest) || ref?.verification_operation_id !== source.operation_id || !sha$1.test(ref.candidate_commit) || !sha$1.test(ref.tree_hash) || ref.candidate_commit !== source.params.candidate_commit || ref.tree_hash !== source.params.tree_hash) throw invalid();
+				if (receipt.workspace_id !== workspaceId || receipt.operation_id !== source.operation_id || receipt.execution_operation_id !== row.child.operation_id || receipt.profile !== "observed_runner_v1" || !digest$6.test(receipt.receipt_digest) || ref?.verification_operation_id !== source.operation_id || !sha$1.test(ref.candidate_commit) || !sha$1.test(ref.tree_hash) || ref.candidate_commit !== source.params.candidate_commit || ref.tree_hash !== source.params.tree_hash) throw invalid();
 				choices.set("verification:" + source.operation_id, {
 					selection: {
 						kind: "verification",
@@ -51988,7 +51990,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 				version: assessment.version,
 				document_digest: assessment.document_digest
 			};
-			if (!/^pmqr_[0-9a-f]{32}$/.test(ref.review_id) || !op.test(ref.operation_id) || !digest$5.test(ref.document_digest) || !Number.isSafeInteger(ref.version)) throw invalid();
+			if (!/^pmqr_[0-9a-f]{32}$/.test(ref.review_id) || !op.test(ref.operation_id) || !digest$6.test(ref.document_digest) || !Number.isSafeInteger(ref.version)) throw invalid();
 			choices.set("quality:" + ref.operation_id, {
 				selection: {
 					kind: "quality",
@@ -52009,7 +52011,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 					document_digest: item.document_digest,
 					native_pr_id: receipt.native_pr_id
 				};
-				if (!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id) || !digest$5.test(ref.document_digest)) throw invalid();
+				if (!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id) || !digest$6.test(ref.document_digest)) throw invalid();
 				choices.set("required_ci:" + ref.observation_id, {
 					selection: {
 						kind: "required_ci",
@@ -59715,6 +59717,159 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 	};
 }
 //#endregion
+//#region src/setup-draft-storage.js
+var explicitPort$1 = (value) => value.replace(/^wss?:\/\//i, "").split(/[/?#]/, 1)[0].match(/:(\d+)$/)?.[1];
+function validSetupEndpoint(value) {
+	try {
+		const url = new URL(value);
+		return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) && url.protocol === "wss:" && !!url.hostname && Number(explicitPort$1(value)) > 0 && !url.username && !url.password && !value.includes("?") && !value.includes("#") && /^wss:\/\/[^/]+\/?$/i.test(value);
+	} catch {
+		return false;
+	}
+}
+var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
+var validSetupRemoteUrl = (value) => typeof value === "string" && !/\s/.test(value) && /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/)[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}(?:\.git)?$/i.test(value);
+var setupDraftFields = [
+	"host",
+	"url",
+	"fingerprint",
+	"profile_id",
+	"import_profile_id",
+	"managed_roots",
+	"ssh_alias",
+	"repository",
+	"repository_host",
+	"workspace_id",
+	"remote_url",
+	"verification_project",
+	"verification_executable",
+	"verification_arguments",
+	"verification_timeout",
+	"writes",
+	"orchestrate",
+	"shared_clone_worktrees",
+	"allow_integrate",
+	"allow_merge",
+	"allow_pr_update"
+];
+var setupFlags = new Set([
+	"writes",
+	"orchestrate",
+	"shared_clone_worktrees",
+	"allow_integrate",
+	"allow_merge",
+	"allow_pr_update"
+]);
+var object$7 = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+var text$4 = (value) => typeof value === "string";
+var digest$5 = (value) => text$4(value) && /^[0-9a-f]{64}$/.test(value);
+var strings = (value) => Array.isArray(value) && value.every(text$4);
+var commands = (value) => object$7(value) && Object.values(value).every(strings);
+var verificationFields = {
+	commands,
+	timeout_s: Number.isInteger
+};
+var requestFields = {
+	"setup.host": {
+		url: validSetupEndpoint,
+		fingerprint: text$4,
+		profile_id: text$4,
+		import_profile_id: text$4,
+		writes: (value) => typeof value === "boolean",
+		orchestrate: (value) => typeof value === "boolean",
+		shared_clone_worktrees: (value) => typeof value === "boolean",
+		managed_roots: strings,
+		ssh_alias: text$4,
+		git: (value) => ["ssh", "local"].includes(value),
+		local_confirmation: (value) => typeof value === "boolean",
+		source_digest: digest$5
+	},
+	"setup.repository": {
+		host: text$4,
+		workspace_id: text$4,
+		remote_url: validSetupRemoteUrl,
+		allow_integrate: (value) => typeof value === "boolean",
+		allow_merge: (value) => typeof value === "boolean",
+		allow_pr_update: (value) => typeof value === "boolean"
+	},
+	"setup.verification": verificationFields
+};
+var matchesFields = (value, schema) => object$7(value) && Object.entries(value).every(([key, entry]) => Object.hasOwn(schema, key) && schema[key](entry));
+function setupRequestForStorage(request) {
+	const schema = Object.hasOwn(requestFields, request?.action) ? requestFields[request.action] : null;
+	const target = request?.action === "setup.host" ? { host: text$4 } : request?.action === "setup.repository" ? { repository: text$4 } : {};
+	if (!schema || !matchesFields(request, {
+		action: text$4,
+		target: (value) => matchesFields(value, target),
+		params: (value) => matchesFields(value, {
+			...schema,
+			secret_ref: (value) => text$4(value) && /^setup_[0-9a-f]{32}$/.test(value)
+		}),
+		preconditions: (value) => matchesFields(value, {
+			config_revision: digest$5,
+			review_digest: digest$5
+		})
+	})) return null;
+	if (!object$7(request.params)) return null;
+	return {
+		action: request.action,
+		target: structuredClone(request.target),
+		params: Object.fromEntries(Object.keys(schema).filter((name) => Object.hasOwn(request.params, name)).map((name) => [name, structuredClone(request.params[name])])),
+		preconditions: structuredClone(request.preconditions)
+	};
+}
+function setupDraftForStorage(draft) {
+	const saved = Object.fromEntries(setupDraftFields.filter((name) => Object.hasOwn(draft, name) && (setupFlags.has(name) ? typeof draft[name] === "boolean" : text$4(draft[name]))).map((name) => [name, draft[name]]));
+	if (saved.url && !validSetupEndpoint(saved.url)) saved.url = "";
+	if (typeof saved.remote_url === "string" && !validSetupRemoteUrl(saved.remote_url)) saved.remote_url = "";
+	if (matchesFields(draft.verification_base, {
+		...verificationFields,
+		revision: digest$5
+	})) saved.verification_base = structuredClone(draft.verification_base);
+	if (draft.intent) {
+		const intent = draft.intent;
+		const original = intent.lookup_only === true && intent.lookup_request ? intent.lookup_request : intent.request;
+		const request = setupRequestForStorage(original);
+		saved.intent = Object.fromEntries([
+			"key",
+			"operation_id",
+			"problemCode"
+		].filter((name) => text$4(intent[name])).map((name) => [name, intent[name]]));
+		if (request) {
+			if (intent.lookup_only === true || original.params.secret_ref) {
+				saved.intent.lookup_only = true;
+				saved.intent.lookup_request = request;
+				saved.intent.request = { action: request.action };
+			} else saved.intent.request = request;
+		} else {
+			saved.intent.problemCode = "INVALID_CONFIGURATION";
+			saved.intent.request = { action: Object.hasOwn(requestFields, intent.request?.action) ? intent.request.action : "" };
+		}
+	}
+	return saved;
+}
+//#endregion
+//#region src/operation-page.js
+var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+function operationPage(result, previous = null) {
+	if (!Array.isArray(result?.operations) || result.operations.some((op) => !operationId$4(op?.operation_id))) return null;
+	const time = result.next_before ?? null, id = result.next_before_id ?? null;
+	if (time === null) return id === null ? {
+		operations: result.operations,
+		next: null
+	} : null;
+	const paired = Object.hasOwn(result, "next_before_id");
+	if (typeof time !== "number" || !Number.isFinite(time) || time <= 0 || paired && !operationId$4(id)) return null;
+	if (previous && !(time < previous.time || time === previous.time && previous.id !== null && id !== null && id < previous.id)) return null;
+	return {
+		operations: result.operations,
+		next: {
+			time,
+			id
+		}
+	};
+}
+//#endregion
 //#region src/managed-setup.js
 init_health_fact();
 function normalizeSetupFingerprint(value) {
@@ -59743,59 +59898,6 @@ function parseBatConnectionUrl(value) {
 	} catch {
 		return null;
 	}
-}
-function validSetupEndpoint(value) {
-	try {
-		const url = new URL(value);
-		return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) && url.protocol === "wss:" && !!url.hostname && Number(explicitPort(value)) > 0 && !url.username && !url.password && !value.includes("?") && !value.includes("#") && /^wss:\/\/[^/]+\/?$/i.test(value);
-	} catch {
-		return false;
-	}
-}
-var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
-var validSetupRemoteUrl = (value) => typeof value === "string" && !/\s/.test(value) && /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/)[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}(?:\.git)?$/i.test(value);
-var setupDraftFields = [
-	"host",
-	"url",
-	"fingerprint",
-	"profile_id",
-	"import_profile_id",
-	"managed_roots",
-	"ssh_alias",
-	"repository",
-	"repository_host",
-	"workspace_id",
-	"remote_url",
-	"verification_project",
-	"verification_executable",
-	"verification_arguments",
-	"verification_timeout",
-	"verification_base",
-	"writes",
-	"orchestrate",
-	"shared_clone_worktrees",
-	"allow_integrate",
-	"allow_merge",
-	"allow_pr_update",
-	"intent"
-];
-function setupDraftForStorage(draft) {
-	const saved = Object.fromEntries(setupDraftFields.filter((name) => Object.hasOwn(draft, name)).map((name) => [name, draft[name]]));
-	const unsafeEndpoint = (value) => typeof value === "string" && /[?@#]/.test(value);
-	if (unsafeEndpoint(saved.url)) saved.url = "";
-	if (typeof saved.remote_url === "string" && !validSetupRemoteUrl(saved.remote_url)) saved.remote_url = "";
-	const request = saved.intent?.request, params = request?.params;
-	if (unsafeEndpoint(params?.url) || params?.remote_url !== void 0 && !validSetupRemoteUrl(params.remote_url)) saved.intent = {
-		key: saved.intent.key,
-		operation_id: saved.intent.operation_id,
-		problemCode: "INVALID_CONFIGURATION",
-		request: {
-			action: request.action,
-			target: request.target,
-			preconditions: request.preconditions
-		}
-	};
-	return saved;
 }
 var connectionFacets = [
 	"transport",
@@ -59906,6 +60008,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		localStorage.setItem(key, JSON.stringify(saved));
 	} catch (error) {
 		draftStorageError = error;
+	}
+	if (saved.intent?.lookup_only && saved.intent.lookup_request) {
+		saved.intent.request = saved.intent.lookup_request;
+		delete saved.intent.lookup_request;
 	}
 	const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 	function canonical(value) {
@@ -60853,7 +60959,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 			review = null;
 			paintAutomaticStatus();
-			await sendOriginal();
+			await sendOriginal(true);
 			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
@@ -60865,7 +60971,17 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function accept(candidate) {
 		const intent = saved.intent;
-		if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor || candidate.action !== intent.request.action || !equal(candidate.target, intent.request.target) || !equal(candidate.params, intent.request.params) || !equal(candidate.preconditions, intent.request.preconditions) || candidate.idempotency_key !== intent.key || intent.operation_id && candidate.operation_id !== intent.operation_id) throw Error(t("setup_receipt_mismatch"));
+		if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor || candidate.action !== intent.request.action || !(intent.lookup_only ? equal(setupRequestForStorage({
+			action: candidate.action,
+			target: candidate.target,
+			params: candidate.params,
+			preconditions: candidate.preconditions
+		}), intent.request) : equal({
+			action: candidate.action,
+			target: candidate.target,
+			params: candidate.params,
+			preconditions: candidate.preconditions
+		}, intent.request)) || candidate.idempotency_key !== intent.key || intent.operation_id && candidate.operation_id !== intent.operation_id) throw Error(t("setup_receipt_mismatch"));
 		operation = candidate;
 		intent.operation_id = candidate.operation_id;
 		persist();
@@ -60876,9 +60992,33 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 		update();
 	}
-	async function sendOriginal() {
+	let lookupKey = null, lookupCursor = null;
+	async function findOriginal(intent) {
+		if (lookupKey !== intent.key) {
+			lookupKey = intent.key;
+			lookupCursor = null;
+		}
+		for (let page = 0; page < 20; page++) {
+			const cursor = lookupCursor ? `&before=${lookupCursor.time}&before_id=${encodeURIComponent(lookupCursor.id)}` : "";
+			const result = await api("GET", `/operations?action=${encodeURIComponent(intent.request.action)}&actor=${encodeURIComponent(caps().actor)}&limit=200${cursor}`);
+			guard();
+			const parsed = operationPage(result, lookupCursor);
+			if (!parsed || parsed.next && parsed.next.id === null) throw Error(t("setup_receipt_mismatch"));
+			const matches = parsed.operations.filter((row) => row.actor === caps().actor && row.idempotency_key === intent.key);
+			if (matches.length > 1) throw Error(t("setup_receipt_mismatch"));
+			if (matches.length) {
+				lookupCursor = null;
+				return matches[0];
+			}
+			lookupCursor = parsed.next;
+			if (!lookupCursor) break;
+		}
+		throw Error(t("setup_lookup_pending"));
+	}
+	async function sendOriginal(submit = false) {
 		const intent = saved.intent;
-		const result = intent.operation_id ? await api("GET", `/operations/${encodeURIComponent(intent.operation_id)}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
+		const lookup = intent.lookup_only || !submit && intent.request.params.secret_ref;
+		const result = intent.operation_id ? await api("GET", `/operations/${encodeURIComponent(intent.operation_id)}`) : lookup ? { operation: await findOriginal(intent) } : await api("POST", "/operations?wait=3", intent.request, intent.key);
 		guard();
 		accept(result.operation);
 	}
@@ -60993,7 +61133,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			};
 			persist();
 			automaticStatus.textContent = t("setup_saving");
-			await sendOriginal();
+			await sendOriginal(true);
 			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
@@ -67041,7 +67181,7 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 //#region src/capture.js
 var record$3 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var digest$2 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var previewId = (value) => typeof value === "string" && /^acpv_[0-9a-f]{32}$/.test(value);
 var previewToken = (value) => typeof value === "string" && value.length > 0 && value.length <= 24576;
 var validPreview$3 = (doc) => record$3(doc) && record$3(doc.source) && record$3(doc.evidence) && [
@@ -67068,10 +67208,10 @@ function restore$2(value, source) {
 	if (validPreview$3(value.preview)) saved.preview = value.preview;
 	const intent = value.intent, request = intent?.request;
 	const usable = request?.action === "artifact.capture" && previewId(request.target?.preview_id) && previewToken(request.params?.preview_token) && digest$2(request.preconditions?.expected_fingerprint) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
-	if (usable || operationId$4(intent?.operation_id)) saved.intent = {
+	if (usable || operationId$3(intent?.operation_id)) saved.intent = {
 		key: usable ? intent.key : null,
 		request: usable ? request : null,
-		operation_id: operationId$4(intent.operation_id) ? intent.operation_id : null,
+		operation_id: operationId$3(intent.operation_id) ? intent.operation_id : null,
 		reviewed_digest: digest$2(intent.reviewed_digest) ? intent.reviewed_digest : saved.preview?.evidence.digest
 	};
 	return saved;
@@ -67184,7 +67324,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	const accept = async (operation) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !operationId$4(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
+		if (!intent || !operationId$3(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
 		saved.operation = operation;
 		saved.intent.operation_id = operation.operation_id;
 		persist();
@@ -67773,27 +67913,6 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		box,
 		update,
 		refresh
-	};
-}
-//#endregion
-//#region src/operation-page.js
-var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
-function operationPage(result, previous = null) {
-	if (!Array.isArray(result?.operations) || result.operations.some((op) => !operationId$3(op?.operation_id))) return null;
-	const time = result.next_before ?? null, id = result.next_before_id ?? null;
-	if (time === null) return id === null ? {
-		operations: result.operations,
-		next: null
-	} : null;
-	const paired = Object.hasOwn(result, "next_before_id");
-	if (typeof time !== "number" || !Number.isFinite(time) || time <= 0 || paired && !operationId$3(id)) return null;
-	if (previous && !(time < previous.time || time === previous.time && previous.id !== null && id !== null && id < previous.id)) return null;
-	return {
-		operations: result.operations,
-		next: {
-			time,
-			id
-		}
 	};
 }
 //#endregion
@@ -71847,7 +71966,15 @@ function migrateManagedStorage(identity, local, session) {
 		if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
 	}
 	const copies = areas.flatMap((storage, area) => allKeys[area].flatMap((key) => {
-		const destination = rebase(key, source, target), value = storage.getItem(key);
+		const destination = rebase(key, source, target);
+		let value = storage.getItem(key);
+		if (key === `batc.managed.setup.${source}` && value !== null) {
+			const draft = JSON.parse(value);
+			if (!draft || typeof draft !== "object" || Array.isArray(draft)) throw Error("Invalid managed setup draft; migration is blocked");
+			const projected = JSON.stringify(setupDraftForStorage(draft));
+			if (projected !== value) storage.setItem(key, projected);
+			value = projected;
+		}
 		return destination !== null && value !== null ? [{
 			storage,
 			destination,

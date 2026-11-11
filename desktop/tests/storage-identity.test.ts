@@ -33,6 +33,39 @@ test('managed identity is independent of address and isolates every identity com
     storageScope('https://two.example/', identity.actor, identity.server_id, identity.principal_id));
 });
 
+test('managed migration scrubs setup source and destination without replaying or copying selectors', () => {
+  for (const unsafe of [false, true]) {
+    const {local, session} = stores(old());
+    const sourceKey = `batc.managed.setup.${old()}`;
+    const intent = {key: 'original-key', operation_id: 'op_' + 'a'.repeat(32), request: {
+      action: 'setup.repository', target: {repository: 'o/r'}, params: {
+        remote_url: unsafe ? 'https://synthetic-secret@github.com/o/r' : 'https://github.com/o/r',
+        secret_ref: 'setup_' + 'b'.repeat(32)}, preconditions: {config_revision: 'c'.repeat(64)}}};
+    local.setItem(sourceKey, JSON.stringify({intent, github_secret: 'synthetic-secret'}));
+    migrateManagedStorage(identity, local, session);
+    const source = local.getItem(sourceKey)!;
+    assert.equal(local.getItem(`batc.managed.setup.${target}`), source);
+    assert(!source.includes('synthetic-secret'));
+    assert(!source.includes('setup_' + 'b'.repeat(32)));
+    const saved = JSON.parse(source).intent;
+    assert.equal(saved.key, intent.key);
+    assert.equal(saved.operation_id, intent.operation_id);
+    if (unsafe) assert.equal(saved.problemCode, 'INVALID_CONFIGURATION');
+    else assert.equal(saved.lookup_only, true);
+  }
+});
+
+test('failed privacy scrub blocks migration without copying the unsafe source', () => {
+  const {local, session} = stores(old());
+  const sourceKey = `batc.managed.setup.${old()}`;
+  local.setItem(sourceKey, JSON.stringify({remote_url: 'https://synthetic-secret@github.com/o/r'}));
+  const setItem = local.setItem.bind(local);
+  local.setItem = (key, value) => {if (key === sourceKey) throw Error('fixture quota'); setItem(key, value);};
+  assert.throws(() => migrateManagedStorage(identity, local, session), /fixture quota/);
+  assert.equal(local.getItem(`batc.managed.setup.${target}`), null);
+  assert.equal(local.getItem(`batc.storage-migration.${target}`), null);
+});
+
 test('one exact legacy identity copies every scoped key byte for byte and retains originals and mapping', () => {
   const {local, session} = stores(old());
   // All audited families, including nested PM selectors and derived form namespaces.

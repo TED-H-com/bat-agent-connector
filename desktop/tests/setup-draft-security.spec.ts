@@ -22,9 +22,9 @@ async function repositoryForm(page: Page) {
   return form;
 }
 
-for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup draft credentials`, () => {
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.describe(`${locale} ${native ? 'IPC' : 'HTTP'} setup draft credentials`, () => {
   for (const [index, remote] of unsafeRemotes.entries()) test(`credential remote ${index} never enters storage or admission`, async ({page}) => {
-    const state = await managedSetupFixture(page, false, locale);
+    const state = await managedSetupFixture(page, native, locale);
     const form = await repositoryForm(page);
     await field(page, 'remote_url').fill(remote);
     await field(page, 'github_secret').fill('synthetic-github-secret');
@@ -43,7 +43,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup draft crede
 
   for (const remote of ['https://github.com/o/r.git', 'git@github.com:o/r.git', 'ssh://git@github.com/o/r.git'])
     test(`safe remote survives reload: ${remote}`, async ({page}) => {
-      const state = await managedSetupFixture(page, false, locale);
+      const state = await managedSetupFixture(page, native, locale);
       const form = await repositoryForm(page);
       await field(page, 'remote_url').fill(remote);
       await field(page, 'github_secret').fill('synthetic-github-secret');
@@ -60,7 +60,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup draft crede
     });
 
   test('legacy unsafe intent is scrubbed without replacing its original key or replaying', async ({page}) => {
-    const state = await managedSetupFixture(page, false, locale);
+    const state = await managedSetupFixture(page, native, locale);
     await repositoryForm(page);
     // This is the exact pre-admission shape the older UI wrote, not a valid server receipt.
     await page.evaluate(remote => {
@@ -81,9 +81,9 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup draft crede
     await expect(field(page, 'repository')).toBeDisabled();
   });
 
-  test('paste, staging, submit, expiry and reload keep only the original staged-reference request', async ({page}) => {
+  test('paste, staging, lost reply and expiry recover the original operation without storing or reposting its handle', async ({page}) => {
     await page.clock.install();
-    const state = await managedSetupFixture(page, false, locale); state.lost = true;
+    const state = await managedSetupFixture(page, native, locale); state.lost = true;
     await page.goto('/dashboard/#/settings'); await openSetupAdvanced(page);
     const link = `wss://demo.example:9876?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`;
     await field(page, 'connection_url').fill(link);
@@ -100,8 +100,11 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup draft crede
     await expect(recover).toBeEnabled();
     expect(state.posts).toHaveLength(1);
     const original = await draft(page);
-    expect(original.intent.request).toEqual(state.posts[0].body);
-    expect(original.intent.request.params.secret_ref).toBe('setup_' + 'b'.repeat(32));
+    const {secret_ref, ...params} = state.posts[0].body.params;
+    expect(original.intent.lookup_request).toEqual({...state.posts[0].body, params});
+    expect(original.intent.request).toEqual({action: state.posts[0].body.action});
+    expect(original.intent.lookup_only).toBe(true);
+    expect(await storage(page)).not.toContain(secret_ref);
     expect(await storage(page)).not.toContain('synthetic-bat-secret');
     await page.clock.fastForward(3600_001);
     expect((await draft(page)).intent).toEqual(original.intent);
@@ -111,13 +114,129 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup draft crede
     expect(state.posts).toHaveLength(1); // Reload itself never submits.
     await recover.click();
     await expect(page.locator('[data-setup-operation]')).toHaveAttribute('href', '#/op/' + 'op_' + 'c'.repeat(32));
-    expect(state.posts).toHaveLength(2);
-    expect(state.posts[1].idempotency_key).toBe(original.intent.key);
-    expect(state.posts[1].body).toEqual(original.intent.request);
+    expect(state.posts).toHaveLength(1);
+    expect(state.operation.idempotency_key).toBe(original.intent.key);
+    expect(state.operationReads.some(read => read.path.startsWith('/operations?'))).toBe(true);
     expect(state.staged).toHaveLength(1);
     expect(await storage(page)).not.toContain('synthetic-bat-secret');
     await page.reload(); await openSetupAdvanced(page);
     await expect(page.locator('[data-setup-operation]')).toHaveAttribute('href', '#/op/' + 'op_' + 'c'.repeat(32));
-    expect(state.posts).toHaveLength(2); // A known operation is recovered by GET.
+    expect(state.posts).toHaveLength(1); // A known operation is recovered by GET.
+    expect(await storage(page)).not.toContain(secret_ref);
+  });
+
+  async function lostRepository(page: Page) {
+    const state = await managedSetupFixture(page, native, locale); state.lost = true;
+    const form = await repositoryForm(page);
+    await field(page, 'remote_url').fill('https://github.com/o/r.git');
+    await field(page, 'github_secret').fill('synthetic-github-secret');
+    await form.locator('button[type=submit]').click();
+    const recover = page.getByRole('button', {name: locale === 'en' ? 'Check request' : '查回請求', exact: true});
+    await expect(recover).toBeEnabled();
+    expect(state.posts).toHaveLength(1);
+    return {state, recover, original: await draft(page)};
+  }
+
+  test('legacy staged request is scrubbed and recovered by its original key across filtered pages', async ({page}) => {
+    const {state, recover, original} = await lostRepository(page);
+    await page.evaluate(request => {
+      const key = Object.keys(localStorage).find(key => key.startsWith('batc.managed.setup.'))!;
+      const saved = JSON.parse(localStorage.getItem(key)!);
+      saved.intent.request = request; delete saved.intent.lookup_only;
+      saved.intent.unexpected = {token: 'synthetic-legacy-secret'};
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, state.posts[0].body);
+    state.operationPages = [{operations: [], next_before: 123, next_before_id: 'op_' + 'd'.repeat(32)},
+      {operations: [state.operation], next_before: null, next_before_id: null}];
+    await page.reload(); await openSetupAdvanced(page);
+    expect(await storage(page)).not.toContain('setup_' + 'b'.repeat(32));
+    expect(await storage(page)).not.toContain('synthetic-legacy-secret');
+    await recover.click();
+    await expect(page.locator('[data-setup-operation]')).toHaveAttribute('href', '#/op/' + state.operation.operation_id);
+    expect(state.operationReads[1].path).toContain('before=123&before_id=op_' + 'd'.repeat(32));
+    expect((await draft(page)).intent.key).toBe(original.intent.key);
+    expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
+  });
+
+  test('missing original operation stays locked and read-only at 390px', async ({page}) => {
+    await page.setViewportSize({width: 390, height: 844});
+    const {state, recover, original} = await lostRepository(page);
+    state.operation = null;
+    await page.reload(); await openSetupAdvanced(page); await recover.click();
+    await expect(page.locator('[data-managed-setup]')).toContainText(locale === 'en'
+      ? 'The original setup operation has not been found.' : '尚未找到原設定操作。');
+    await expect(field(page, 'repository')).toBeDisabled();
+    await recover.click();
+    expect((await draft(page)).intent).toEqual(original.intent);
+    expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+
+  test('bounded lookup continues from its cursor without creating a replacement', async ({page}) => {
+    const {state, recover, original} = await lostRepository(page);
+    state.operationPages = Array.from({length: 20}, (_, index) => ({operations: [], next_before: 100 - index, next_before_id: 'op_' + 'd'.repeat(32)}));
+    await page.reload(); await openSetupAdvanced(page); await recover.click();
+    await expect(page.locator('[data-managed-setup]')).toContainText(locale === 'en'
+      ? 'The original setup operation has not been found.' : '尚未找到原設定操作。');
+    expect(state.operationReads).toHaveLength(20);
+    expect((await draft(page)).intent).toEqual(original.intent);
+    await recover.click();
+    await expect(page.locator('[data-setup-operation]')).toHaveAttribute('href', '#/op/' + state.operation.operation_id);
+    expect(state.operationReads[20].path).toContain('before=81&before_id=op_');
+    expect(state.posts).toHaveLength(1);
+  });
+
+  test('withdrawn observation permission cannot cause a new admission', async ({page}) => {
+    const {state, recover, original} = await lostRepository(page);
+    state.scopes = ['manage'];
+    await page.reload(); await openSetupAdvanced(page); await recover.click();
+    await expect(recover).toBeEnabled();
+    expect((await draft(page)).intent).toEqual(original.intent);
+    expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
+    await expect(field(page, 'repository')).toBeDisabled();
+  });
+
+  test('late operation read after leaving setup cannot change its retained intent', async ({page}) => {
+    const {state, recover, original} = await lostRepository(page);
+    await page.reload(); await openSetupAdvanced(page);
+    state.holdOperation = true;
+    await recover.click();
+    await expect.poll(() => !!state.releaseOperation).toBe(true);
+    await page.evaluate(() => {location.hash = '#/sessions';});
+    await expect(page.locator('[data-managed-setup]')).toHaveCount(0);
+    state.releaseOperation!(); state.holdOperation = false;
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    expect((await draft(page)).intent).toEqual(original.intent);
+    expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
+  });
+
+  for (const identity of ['account', 'connection']) test(`${identity} switch isolates the original staged intent`, async ({page}) => {
+    const {state, recover, original} = await lostRepository(page);
+    if (identity === 'account') {state.actor = 'other-person'; state.principalId = 'other-person-id';}
+    else state.serverId = 'other-central';
+    await page.reload(); await openSetupAdvanced(page);
+    await expect(field(page, 'repository')).toBeEditable();
+    await expect(recover).toBeHidden();
+    expect(state.operationReads).toEqual([]);
+    state.actor = null; state.principalId = 'setup-person'; state.serverId = 'setup-central';
+    await page.reload(); await openSetupAdvanced(page); await recover.click();
+    await expect(page.locator('[data-setup-operation]')).toHaveAttribute('href', '#/op/' + state.operation.operation_id);
+    expect((await draft(page)).intent.key).toBe(original.intent.key);
+    expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
+  });
+
+  for (const mismatch of ['actor', 'key', 'request', 'duplicate', 'cursor']) test(`lookup rejects ${mismatch} without resubmitting`, async ({page}) => {
+    const {state, recover, original} = await lostRepository(page);
+    await page.reload(); await openSetupAdvanced(page);
+    if (mismatch === 'actor') state.operation.actor = 'other-person';
+    if (mismatch === 'key') state.operation.idempotency_key = 'other-key';
+    if (mismatch === 'request') state.operation.params.remote_url = 'https://github.com/o/other.git';
+    if (mismatch === 'duplicate') state.operationPages = [{operations: [state.operation, state.operation]}];
+    if (mismatch === 'cursor') state.operationPages = [{operations: [], next_before: 123, next_before_id: 'invalid'}];
+    await recover.click();
+    await expect(recover).toBeEnabled();
+    await expect(page.locator('[data-setup-operation]')).toHaveCount(0);
+    expect((await draft(page)).intent).toEqual(original.intent);
+    expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
   });
 });

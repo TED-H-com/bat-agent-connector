@@ -1,4 +1,5 @@
 import {storageScope} from './events.ts';
+import {setupDraftForStorage} from '../setup-draft-storage.js';
 
 export interface StorageIdentity {server_id: string; principal_id: string; actor: string}
 
@@ -75,7 +76,19 @@ export function migrateManagedStorage(identity: StorageIdentity, local: Storage,
     if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
   }
   const copies = areas.flatMap((storage, area) => allKeys[area].flatMap(key => {
-    const destination = rebase(key, source, target), value = storage.getItem(key);
+    const destination = rebase(key, source, target);
+    let value = storage.getItem(key);
+    if (key === `batc.managed.setup.${source}` && value !== null) {
+      // Setup privacy is the only exception to byte-for-byte migration. Scrub
+      // the proven source too, preserving original keys/IDs and lookup-only
+      // recovery, so retained old-origin data cannot keep a credential selector.
+      const draft = JSON.parse(value);
+      if (!draft || typeof draft !== 'object' || Array.isArray(draft))
+        throw Error('Invalid managed setup draft; migration is blocked');
+      const projected = JSON.stringify(setupDraftForStorage(draft));
+      if (projected !== value) storage.setItem(key, projected);
+      value = projected;
+    }
     return destination !== null && value !== null ? [{storage, destination, value}] : [];
   }));
   // Unrecognized legacy key envelopes remain untouched, without a false receipt.
