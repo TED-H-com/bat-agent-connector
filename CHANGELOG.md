@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Keep credential-bearing repository URLs and staged credential handles out of
-  managed-setup drafts. Scrub legacy drafts and recover staged submissions through
+  managed-setup drafts. Project active drafts and proven legacy migration copies,
+  including completed migrations, without restoring consumed drafts. Recover staged submissions through
   central operation reads with their original key and ID, without resubmitting a
   changed request. Browser and desktop share English/zh-TW validation and recovery.
 

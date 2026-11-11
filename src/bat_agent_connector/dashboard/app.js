@@ -71943,15 +71943,25 @@ function matchingLegacySources(identity, keys) {
 }
 function migrateManagedStorage(identity, local, session) {
 	const target = managedStorageScope(identity), marker = `batc.storage-migration.${target}`;
+	const areas = [local, session], allKeys = areas.map(keys);
+	const matching = matchingLegacySources(identity, allKeys[0]);
+	function scrubSetup(source) {
+		for (const scope of [source, target]) for (const storage of areas) {
+			const key = `batc.managed.setup.${scope}`, value = storage.getItem(key);
+			if (value === null) continue;
+			const draft = JSON.parse(value);
+			if (!draft || typeof draft !== "object" || Array.isArray(draft)) throw Error("Invalid managed setup draft; migration is blocked");
+			const projected = JSON.stringify(setupDraftForStorage(draft));
+			if (projected !== value) storage.setItem(key, projected);
+		}
+	}
 	const receipt = local.getItem(marker);
 	if (receipt !== null) {
 		const saved = JSON.parse(receipt);
 		if (saved?.version !== 1 || saved.target !== target || saved.status !== "complete") throw Error("Local storage migration is incomplete; original data is retained");
+		if (matching.some((candidate) => candidate.scope === saved.source && !candidate.ambiguous)) scrubSetup(saved.source);
 		return;
 	}
-	const areas = [local, session], allKeys = areas.map(keys);
-	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
-	const matching = matchingLegacySources(identity, allKeys[0]);
 	if (matching.length !== 1 || matching[0].ambiguous) return;
 	const source = matching[0].scope;
 	for (const key of allKeys.flat()) {
@@ -71965,16 +71975,11 @@ function migrateManagedStorage(identity, local, session) {
 		}
 		if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
 	}
+	scrubSetup(source);
+	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
 	const copies = areas.flatMap((storage, area) => allKeys[area].flatMap((key) => {
 		const destination = rebase(key, source, target);
-		let value = storage.getItem(key);
-		if (key === `batc.managed.setup.${source}` && value !== null) {
-			const draft = JSON.parse(value);
-			if (!draft || typeof draft !== "object" || Array.isArray(draft)) throw Error("Invalid managed setup draft; migration is blocked");
-			const projected = JSON.stringify(setupDraftForStorage(draft));
-			if (projected !== value) storage.setItem(key, projected);
-			value = projected;
-		}
+		const value = storage.getItem(key);
 		return destination !== null && value !== null ? [{
 			storage,
 			destination,

@@ -385,7 +385,7 @@ described above. Nothing is submitted or automatically
 retried as part of migration. A matching retained draft can therefore reappear
 after an upgrade even if it looked lost on the previous port.
 
-The originals remain unchanged for rollback. A local
+The originals remain unchanged for rollback, except for the setup privacy projection. A local
 `batc.storage-migration.<new-scope>` receipt records source, destination, version
 and copy status. A completed receipt prevents deleted/consumed drafts and keys from
 being imported again. A failed copy rolls back only its exact newly written values;
@@ -393,12 +393,22 @@ an interrupted copy or failed rollback retains its marker and refuses activation
 instead of reading a draft separated from its original operation key. This case
 needs explicit recovery; automatic repair is not supported.
 
+Setup privacy cleanup runs independently of copying, including upgrades with a
+version-1 completed receipt and occupied destinations. A receipt's source must
+match the verified server/principal/actor and have its exact, unambiguous legacy
+checkpoint proof. Only that source and the existing target setup entries in
+localStorage and sessionStorage are projected. Missing or consumed targets stay
+absent; original operation keys and IDs stay unchanged. Without a receipt, the
+existing unique-source and orphan-port checks still apply before cleanup. A scrub
+write failure stops activation before copying or updating a receipt; the next
+startup retries. A completed receipt proves copying, not successful cleanup.
+
 Multiple matching old ports are **not** merged or ranked, even when their values
 look identical or one port only has orphan drafts/tab preferences without a
 checkpoint. Existing destination data, missing old checkpoint keys, legacy
 keys without server/principal proof, unrecognized legacy key envelopes, ambiguous namespace boundaries, non-loopback
 endpoints and different identities are left in place. Reverting to the old frontend can still read original old-port keys
-when connected at that original endpoint, but later edits in the new scope are not
+when connected at that original endpoint (with setup credentials scrubbed), but later edits in the new scope are not
 copied back automatically.
 
 `batc.sync.<scope>` stores only `{cursor, token}`, not a last-used time or a

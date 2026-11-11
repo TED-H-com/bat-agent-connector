@@ -66,6 +66,83 @@ test('failed privacy scrub blocks migration without copying the unsafe source', 
   assert.equal(local.getItem(`batc.storage-migration.${target}`), null);
 });
 
+for (const area of ['local', 'session'] as const) for (const kind of ['url', 'handle'])
+  test(`completed migration cleans ${kind} copies in ${area} without resurrecting consumed targets`, () => {
+    const pair = stores(old()), storage = pair[area];
+    const sourceKey = `batc.managed.setup.${old()}`, targetKey = `batc.managed.setup.${target}`;
+    const marker = `batc.storage-migration.${target}`;
+    const secret = kind === 'url' ? 'synthetic-legacy-secret' : 'setup_' + 'b'.repeat(32);
+    const intent = {key: 'original-key', operation_id: 'op_' + 'a'.repeat(32), request: {
+      action: 'setup.repository', target: {repository: 'o/r'}, params: kind === 'url'
+        ? {remote_url: `https://${secret}@github.com/o/r`}
+        : {remote_url: 'https://github.com/o/r', secret_ref: secret}, preconditions: {config_revision: 'c'.repeat(64)}}};
+    for (const consumed of [false, true]) {
+      storage.setItem(sourceKey, JSON.stringify({intent}));
+      if (consumed) storage.removeItem(targetKey);
+      else storage.setItem(targetKey, JSON.stringify({intent}));
+      const receipt = JSON.stringify({version: 1, source: old(), target, status: 'complete'});
+      pair.local.setItem(marker, receipt);
+      migrateManagedStorage(identity, pair.local, pair.session);
+      for (const key of consumed ? [sourceKey] : [sourceKey, targetKey]) {
+        const value = storage.getItem(key)!;
+        assert(!value.includes(secret));
+        const saved = JSON.parse(value).intent;
+        assert.equal(saved.key, intent.key); assert.equal(saved.operation_id, intent.operation_id);
+        assert.equal(kind === 'url' ? saved.problemCode : saved.lookup_only, kind === 'url' ? 'INVALID_CONFIGURATION' : true);
+      }
+      if (consumed) assert.equal(storage.getItem(targetKey), null);
+      assert.equal(pair.local.getItem(marker), receipt);
+      const before = [new Map(pair.local.values), new Map(pair.session.values)];
+      migrateManagedStorage(identity, pair.local, pair.session);
+      assert.deepEqual([pair.local.values, pair.session.values], before);
+    }
+  });
+
+test('completed migration scrub failure stops before other writes and retries next start', () => {
+  for (const area of ['local', 'session'] as const) for (const failure of ['source', 'target']) {
+    const pair = stores(old()), storage = pair[area];
+    const sourceKey = `batc.managed.setup.${old()}`, targetKey = `batc.managed.setup.${target}`;
+    const unsafe = JSON.stringify({remote_url: 'https://synthetic-secret@github.com/o/r'});
+    storage.setItem(sourceKey, unsafe); storage.setItem(targetKey, unsafe);
+    pair.local.setItem(`batc.storage-migration.${target}`, JSON.stringify({version: 1, source: old(), target, status: 'complete'}));
+    const before = [new Map(pair.local.values), new Map(pair.session.values)];
+    const write = storage.setItem.bind(storage);
+    storage.setItem = (key, value) => {if (key === (failure === 'source' ? sourceKey : targetKey)) throw Error('fixture quota'); write(key, value);};
+    assert.throws(() => migrateManagedStorage(identity, pair.local, pair.session), /fixture quota/);
+    // Earlier privacy writes stay scrubbed; no unrelated data or receipt changes.
+    if (failure === 'target') before[area === 'local' ? 0 : 1].set(sourceKey, '{"remote_url":""}');
+    assert.deepEqual([pair.local.values, pair.session.values], before);
+    storage.setItem = write;
+    migrateManagedStorage(identity, pair.local, pair.session);
+    assert.equal(storage.getItem(sourceKey), '{"remote_url":""}');
+    assert.equal(storage.getItem(targetKey), '{"remote_url":""}');
+  }
+});
+
+test('completed receipt requires its exact source identity and checkpoint proof before cleanup', () => {
+  for (const source of [old(41001, {...identity, actor: 'other'}), old(41002)]) {
+    const {local, session} = stores(old());
+    if (source.includes('other')) local.setItem(`batc.sync.${source}`, '{"cursor":1,"token":"other-proof"}');
+    local.setItem(`batc.storage-migration.${target}`, JSON.stringify({version: 1, source, target, status: 'complete'}));
+    for (const storage of [local, session]) for (const scope of [source, old(), target])
+      storage.setItem(`batc.managed.setup.${scope}`, '{"remote_url":"https://synthetic-secret@github.com/o/r"}');
+    const before = [new Map(local.values), new Map(session.values)];
+    migrateManagedStorage(identity, local, session);
+    assert.deepEqual([local.values, session.values], before);
+  }
+});
+
+test('occupied target still cleans proven setup copies without importing other drafts', () => {
+  const {local, session} = stores(old());
+  for (const storage of [local, session]) for (const scope of [old(), target])
+    storage.setItem(`batc.managed.setup.${scope}`, '{"remote_url":"https://synthetic-secret@github.com/o/r"}');
+  migrateManagedStorage(identity, local, session);
+  for (const storage of [local, session]) for (const scope of [old(), target])
+    assert.equal(storage.getItem(`batc.managed.setup.${scope}`), '{"remote_url":""}');
+  assert.equal(local.getItem(`batc.draft.${target}.send.demo.session-1`), null);
+  assert.equal(local.getItem(`batc.storage-migration.${target}`), null);
+});
+
 test('one exact legacy identity copies every scoped key byte for byte and retains originals and mapping', () => {
   const {local, session} = stores(old());
   // All audited families, including nested PM selectors and derived form namespaces.
