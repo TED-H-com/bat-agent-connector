@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Update the desktop updater plugin to Tauri updater 2.14.1, with patched archive
+  handling for ZIP-wrapped Windows desktop updates (`zip` 9.5.1).
+
 - Strictly validate loopback Host authorities for the API and static Dashboard,
   including canonical IPv4 octets, IPv6 brackets and port bounds. Refuse malformed
   API Origins with `403 BAD_ORIGIN`, preserving exact configured origin exceptions,
