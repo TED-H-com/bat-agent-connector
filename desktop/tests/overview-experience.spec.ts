@@ -1,3 +1,4 @@
+import {installBodyCompletedCounter, countCompletedBodies, syncHeldBodyCompletion} from './page-sync.ts';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
@@ -957,8 +958,8 @@ for (const width of [390, 1440]) test(`sidebar milestone opens the matching Sche
 });
 
 import {assessmentRoundtrip} from './assessment-roundtrip-fixture.ts';
-for(const locale of ['en','zh-TW'])for(const native of [false,true])test(`accepted delivery opens the exact original assessment ${locale} ${native?'IPC':'HTTP'}`,async({browser,baseURL})=>{
-  const context=await browser.newContext({baseURL,locale,viewport:{width:native?390:1440,height:900}}),page=await context.newPage();
+for(const locale of ['en','zh-TW'])for(const native of [false,true])for(const width of [390,1440])test(`accepted delivery opens the exact original assessment ${locale} ${native?'IPC':'HTTP'} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage();
   const base=fixture(locale),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
   const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id),zh=locale==='zh-TW';row.assessment_ref=f.ref;
   try{
@@ -967,6 +968,7 @@ for(const locale of ['en','zh-TW'])for(const native of [false,true])test(`accept
     const source=page.locator('[data-overview-delivery-assessment] [data-assessment-open]');await source.click();
     const reader=page.locator('[data-original-assessment]:visible');
     await expect(reader.locator('h4').first()).toBeFocused();
+    await expect(page.locator('[data-overview-delivery-assessment][open]')).toHaveCount(0);
     await expect(reader).toContainText(zh?'原結論：接受':'Original conclusion: accepted');
     const reads=f.state.requests.filter(input=>input.path.includes('/assessments/'));
     expect(reads).toHaveLength(1);expect(reads[0].path).toContain(f.ref.operation_id+'?version=2&document_digest='+f.ref.document_digest);
@@ -983,7 +985,7 @@ for(const locale of ['en','zh-TW'])for(const native of [false,true])test(`accept
 test('a late exact response cannot restore a withdrawn delivery assessment',async({page})=>{
   const base=fixture(),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
   const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
-  await boot(page,{...base,dispatch:f.dispatch});
+  await installBodyCompletedCounter(page);await boot(page,{...base,dispatch:f.dispatch});
   await page.locator('[data-overview-delivery-assessment] summary').click();
   let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
   try{
@@ -992,7 +994,8 @@ test('a late exact response cannot restore a withdrawn delivery assessment',asyn
     f.state.hold=null;f.state.denied=true;base.state.data.recent_deliveries=[];base.state.cursor++;
     await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
     await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
-    release();
+    const path='/assessments/'+f.ref.operation_id,before=await countCompletedBodies(page,path);
+    release();await syncHeldBodyCompletion(page,path,before);
     await expect(page.locator('[data-original-assessment]')).not.toContainText('Original conclusion: accepted');
     expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
   }finally{release();}

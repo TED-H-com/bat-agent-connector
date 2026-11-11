@@ -198,8 +198,8 @@ for (const locale of ['en', 'zh-TW'] as const) {
 }
 
 import {assessmentRoundtrip} from './assessment-roundtrip-fixture.ts';
-for (const locale of ['en','zh-TW']) for (const native of [false,true]) test(`exact assessment returns to its requirement ${locale} ${native?'IPC':'HTTP'}`,async({browser,baseURL})=>{
-  const context=await browser.newContext({baseURL,locale,viewport:{width:native?390:1440,height:900}}),page=await context.newPage();
+for (const locale of ['en','zh-TW']) for (const native of [false,true]) for (const width of [390,1440]) test(`exact assessment returns to its requirement ${locale} ${native?'IPC':'HTTP'} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage();
   const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1)),zh=locale==='zh-TW';
   try{
     await open(page,{...base,dispatch:f.dispatch},native);
@@ -209,6 +209,7 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test(`ex
     await control.click();
     const reader=page.locator('[data-original-assessment]:visible');
     await expect(reader.locator('h4').first()).toBeFocused();
+    await expect(source.locator('details[open]')).toHaveCount(0);
     await expect(reader).toContainText(zh?'符合原品質要求':'Meets the original quality requirements');
     await expect(reader.getByRole('button',{name:zh?'審閱這份成果':'Review this result',exact:true})).toBeVisible();
     expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
@@ -423,4 +424,54 @@ for(const mismatch of ['original','result','historical'] as const)test(`requirem
   }
   await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+test('Back retires a pending pinned assessment before its body arrives',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await installBodyCompletedCounter(page);await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path='/assessments/'+f.ref.operation_id;
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    await page.goBack();await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+    const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
+    await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+    await expect(page.locator('[data-pm-action="pm.quality.review.record"]')).toHaveCount(0);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});
+
+test('a new account cannot restore a pending original assessment from the retired connection',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));let switched=false;
+  const dispatch=async(input:any)=>{
+    const reply=await f.dispatch(input);
+    if(switched&&['/bootstrap','/capabilities'].includes(input.path)){
+      const caps=input.path==='/bootstrap'?reply.data.capabilities:reply.data;caps.actor='second-reader';
+      if(input.path==='/bootstrap')reply.data.sync.principal_id='second-reader';
+    }
+    return reply;
+  };
+  await installBodyCompletedCounter(page);await open(page,{...base,dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path='/assessments/'+f.ref.operation_id;
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    const pinnedRoute=await page.evaluate(()=>location.hash);
+    await page.evaluate(()=>{location.hash='#/settings';});
+    await page.getByRole('button',{name:'Disconnect',exact:true}).click();switched=true;
+    await page.locator('input[type=password]').fill('second-fixture-token');
+    await page.getByRole('button',{name:'Connect',exact:true}).click();await expect(page).toHaveURL(/#\/home$/);
+    const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
+    await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+    f.state.hold=null;f.state.envelope.requirements.items=[];
+    await page.evaluate(hash=>{location.hash=hash;},pinnedRoute);
+    await expect(page.locator('[data-work-result]')).toBeVisible();
+    await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+    expect(f.state.requests.filter(input=>input.path.includes(path))).toHaveLength(1);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
 });
