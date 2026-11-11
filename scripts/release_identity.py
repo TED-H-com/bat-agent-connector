@@ -135,7 +135,10 @@ def _package(path, wheel):
             raise NotImplementedError  # No filesystem or executable imports.
 
     version = ArchiveDistribution().version
-    info = _json(files[package + "build-info.json"]) if package + "build-info.json" in files else {}
+    provenance = package + "skill/build-info.json" if wheel else package + "build-info.json"
+    if provenance not in files:
+        provenance = package + "build-info.json"
+    info = _json(files[provenance]) if provenance in files else {}
     _require(set(info) <= {"commit"}, "PRODUCER_RECORD_INVALID")
     return files, package, version, _commit(info.get("commit"))
 

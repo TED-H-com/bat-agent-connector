@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildDiagnostics, pathTemplate, errorRing, scrubDiagnostics, clientIdentity, buildLine} from '../src/diagnostics.js';
+import {buildDiagnostics, pathTemplate, errorRing, scrubDiagnostics, clientIdentity, buildLine, nativeFailureCode} from '../src/diagnostics.js';
 import {diagnosticsStrings} from '../src/diagnostics-strings.js';
 import {readFileSync} from 'node:fs';
 const bootstrap=JSON.parse(readFileSync(new URL('../../tests/fixtures/managed-bootstrap.json',import.meta.url),'utf8'));
@@ -79,10 +79,37 @@ test('missing sources and unreported metrics stay unknown; reasons are optional'
  const out=buildDiagnostics({});assert.equal(out.sessions.loaded,null);assert.equal(out.operations,null);assert.deepEqual(out.hosts,[]);assert.equal(out.sources.hosts,'not_available');
  const locations=buildDiagnostics({os:'windows'}).log_locations;
  assert.equal(locations.basis,'default_templates_only');assert.deepEqual(Object.keys(locations.state_database.managed_desktop),['linux','macos','windows']);
- assert.equal(locations.state_database.managed_desktop.linux,'~/.local/share/io.betteragent.dashboard/central/state/tasks.sqlite3');
- assert.equal(locations.state_database.managed_desktop.windows,'%LOCALAPPDATA%\\io.betteragent.dashboard\\central\\state\\tasks.sqlite3');
+ assert.equal(locations.state_database.managed_desktop.linux,'~/.local/share/io.betteragent.dashboard/managed-central/state/tasks.sqlite3');
+ assert.equal(locations.state_database.managed_desktop.windows,'%LOCALAPPDATA%\\io.betteragent.dashboard\\managed-central\\state\\tasks.sqlite3');
  assert.equal(locations.state_database.standalone.macos,'~/.local/state/bat-agent-connector/tasks.sqlite3');
+ assert.equal(locations.managed_service_log.windows,'%LOCALAPPDATA%\\io.betteragent.dashboard\\managed-central\\service.log');
+ assert.equal(locations.managed_service_log.linux,'~/.local/share/io.betteragent.dashboard/managed-central/service.log');
+ assert.equal(locations.managed_service_log.macos,'~/Library/Application Support/io.betteragent.dashboard/managed-central/service.log');
  assert.equal(buildDiagnostics({sessions:[{}]}).sessions.loaded,null);assert.equal(buildDiagnostics({sessions:[{}]}).sessions.history_reasons,null);assert.equal(buildDiagnostics({sessions:[{}]}).sessions.pending,null);assert.equal(buildDiagnostics({sessions:[{stale:false,fields_stale:true}]}).sessions.stale,1);assert.equal(buildDiagnostics({sessions:[{}]}).sessions.unreported.loaded,1);
+});
+test('disconnected native startup retains only status facts and codes',()=>{
+ const native={configuration_source:'managed',connected:false,credential_available:false,error:'MANAGED_RUNTIME_START_FAILED: private-box.internal C:\\Users\\Example Person\\private',
+  endpoint:'http://192.0.2.8',expected_actor:'private-actor',configuration_file:'C:\\Users\\Example Person\\private',token:'batc_planted_secret'};
+ const managed={mode:'managed',ready:false,background:false,error:new Error('JOURNAL_NEWER_DATA_STEP: private recovery details'),
+  lifecycle:{state:'stop_pending',requested_at:1},server_id:'private-server',principal_id:'private-principal'};
+ const out=buildDiagnostics({desktop:true,nativeConnectionRead:{data:native,at},managedConnectionRead:{data:managed,at},managedRuntime:managed});
+ assert.deepEqual(out.desktop_connection,{status_read:{status:'available',http_status:null,code:null,read_at:at},
+  configuration_source:'managed',connected:false,credential_available:false,error_code:'MANAGED_RUNTIME_START_FAILED',
+  managed_runtime:{status_read:{status:'available',http_status:null,code:null,read_at:at},mode:'managed',ready:false,background:false,lifecycle:'stop_pending',error_code:'JOURNAL_NEWER_DATA_STEP'}});
+ assert.doesNotMatch(JSON.stringify(out),/private|192\.0\.2\.8|Example Person|batc_planted/);
+ assert.equal(out.source_reads.capabilities.status,'not_attempted');assert.deepEqual(out.recent_errors,[]);
+ assert.equal(buildDiagnostics({}).desktop_connection,null);
+ assert.equal(buildDiagnostics({desktop:true}).desktop_connection.connected,null);
+ assert.equal(buildDiagnostics({desktop:true}).desktop_connection.status_read.status,'not_attempted');
+});
+test('native read failures cannot become HTTP statuses or carry arbitrary messages',()=>{
+ const out=buildDiagnostics({desktop:true,nativeConnectionRead:{error:{code:'NATIVE_STATUS_UNAVAILABLE'},at},managedConnectionRead:{error:{code:'MANAGED_STATUS_UNAVAILABLE'},at}});
+ assert.deepEqual(out.desktop_connection.status_read,{status:'failed',http_status:null,code:'NATIVE_STATUS_UNAVAILABLE',read_at:at});
+ assert.equal(out.desktop_connection.managed_runtime.status_read.code,'MANAGED_STATUS_UNAVAILABLE');
+ assert.equal(out.desktop_connection.error_code,null);
+ for(const input of [null,{},'private text','https://private-box.internal','C:\\Users\\example','secret=foo','MANAGED_BAD/secret'])assert.equal(nativeFailureCode(input),null);
+ assert.equal(nativeFailureCode('MANAGED_RUNTIME_START_FAILED'),'MANAGED_RUNTIME_START_FAILED');
+ assert.equal(nativeFailureCode(new Error('JOURNAL_NEWER_DATA_STEP: journal records a newer step')),'JOURNAL_NEWER_DATA_STEP');
 });
 test('identity shows known and unknown commits in both languages',()=>{
  for(const lang of ['en','zh-TW']){

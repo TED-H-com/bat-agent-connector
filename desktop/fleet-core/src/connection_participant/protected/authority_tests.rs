@@ -496,7 +496,7 @@ fn link_directory(target: &Path, path: &Path) {
         .unwrap_or_else(|error| panic!("symlink {path:?} -> {target:?}: {error:?}"));
     #[cfg(windows)]
     {
-        let output = std::process::Command::new("cmd.exe")
+        let output = crate::hidden_process::hidden_command("cmd.exe")
             .args(["/d", "/c", "mklink", "/J"])
             .arg(path)
             .arg(target)

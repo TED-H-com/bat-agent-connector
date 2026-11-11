@@ -3,7 +3,7 @@ import {eventDelivery, httpEventDelivery} from './event-delivery.mjs';
 // See docs/design/two-service-isolation.md for the native boundary and evidence.
 import assert from 'node:assert/strict';
 import {storageSnapshot, assertStoragePreserved} from './storage-snapshot.ts';
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {once} from 'node:events';
 import {mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {homedir} from 'node:os';

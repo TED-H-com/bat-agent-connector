@@ -1,5 +1,5 @@
 // Owner journey against TaskDaemon HTTP, never a demo API fixture.
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
 import {mkdir, mkdtemp, rm} from 'node:fs/promises';

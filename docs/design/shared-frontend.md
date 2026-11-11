@@ -97,6 +97,21 @@ counts, retain their paging depth on refresh, and keep prior rows with a stale-r
 notice on failure. This capability is additive; older centrals keep the attention
 categories without offering unsupported reading controls.
 
+Operation history follows the central `next_before` / `next_before_id` pair as
+`before` / `before_id`, including operations with the same creation timestamp.
+An empty visibility-filtered page can still have continuation: show that no visible
+operations have been loaded yet and keep the explicit Load earlier action. Each
+click reads one more page; refresh rebuilds the loaded page depth from fresh cursors
+without changing search, status filters or a selected operation still in that window.
+Do not infer the cursor from visible rows or automatically drain hidden pages.
+Malformed or non-advancing pairs retain the previous window with an error until
+refresh succeeds. Older centrals without `next_before_id` retain timestamp-only
+pagination. Reads and opening the original operation issue no mutation requests.
+
+操作紀錄成對沿用中央時間與 ID 續頁值；可見結果為空仍可明確載入較早分頁，
+不會自動掃完整份清單。刷新保留已載入深度、搜尋、篩選及仍在視窗內的原操作選取；
+續頁錯誤保留原有結果並提示重新整理。HTTP／IPC fixtures 不代表原生或實機驗收。
+
 ## Project dispatch
 
 The project detail links to a shared [published-version composer](repository-sync.md).

@@ -20,6 +20,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from bat_agent_connector import hidden_process
+
 from . import platform_files
 from ._bounded import capture
 from .config import state_dir
@@ -174,7 +176,7 @@ class ObservedVerifier:
         else:
             cmd = argv
             working_dir = cwd
-        proc = await asyncio.create_subprocess_exec(*cmd, cwd=working_dir,
+        proc = await hidden_process.create_subprocess_exec(*cmd, cwd=working_dir,
                                                     stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.DEVNULL)
         try:
@@ -226,7 +228,7 @@ class ObservedVerifier:
         async def run() -> int:
             nonlocal proc, captured, tail
             platform_args = {"creationflags": CREATE_SUSPENDED} if tree else {"start_new_session": True}
-            proc = await asyncio.create_subprocess_exec(*cmd, cwd=working_dir, **platform_args,
+            proc = await hidden_process.create_subprocess_exec(*cmd, cwd=working_dir, **platform_args,
                                                         stdout=asyncio.subprocess.PIPE,
                                                         stderr=asyncio.subprocess.STDOUT)
             if tree:
@@ -274,7 +276,7 @@ class ObservedVerifier:
                 pass
         if alias:
             # The remote group may still hold the SSH output pipe; kill it first.
-            killer = await asyncio.create_subprocess_exec(*_remote_kill_command(alias, marker),
+            killer = await hidden_process.create_subprocess_exec(*_remote_kill_command(alias, marker),
                                                           stdout=asyncio.subprocess.PIPE,
                                                           stderr=asyncio.subprocess.DEVNULL)
             try:

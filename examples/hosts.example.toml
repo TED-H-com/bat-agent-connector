@@ -94,3 +94,13 @@ timeout_s = 3.0
 # model = "jev-latest"
 # base_url = "https://api.typesafe.ai"
 # api_key_env = "TYPESAFE_API_KEY"
+
+# Optional read-only, on-demand deployment observations. No installs or remote writes.
+# Configure independently on each querying machine; SSH aliases are machine-local.
+# Requires an administrator-provisioned local SSH alias and trusted known-host entry.
+# [managed_setup.ssh_hosts]
+# buildbox = "example-buildbox-ssh"
+# [[deploy_status.hosts]]
+# host = "buildbox"
+# deploy_dirs = ["/srv/example-deployment"] # absolute directories only; no discovery
+# unit_patterns = ["example-*.service"]   # additional service-name globs

@@ -94,8 +94,8 @@ def test_offline_wheel_keeps_candidate_commit(clean_wheel, tmp_path):
     assert _installed_identity(wheel, tmp_path) == {
         "version": __version__, "commit": head, "source": "package"}
     with zipfile.ZipFile(wheel) as archive:
-        assert archive.namelist().count("bat_agent_connector/build-info.json") == 1
-        assert json.loads(archive.read("bat_agent_connector/build-info.json")) == {"commit": head}
+        assert archive.namelist().count("bat_agent_connector/skill/build-info.json") == 1
+        assert json.loads(archive.read("bat_agent_connector/skill/build-info.json")) == {"commit": head}
         assert archive.read("bat_agent_connector/skill/SKILL.md") == (
             repo / "skills/bat-agent-connector/SKILL.md"
         ).read_bytes()
@@ -112,7 +112,7 @@ def test_loaded_wheel_snapshot_keeps_embedded_provenance_after_metadata_changes(
 import json
 from pathlib import Path
 from bat_agent_connector import build_identity as identity
-Path(identity.__file__).with_name('build-info.json').write_text(json.dumps({'commit': None}))
+Path(identity.__file__).with_name('skill').joinpath('build-info.json').write_text(json.dumps({'commit': None}))
 print(json.dumps({'loaded': identity.build_identity(), 'read': identity._read_build_identity()}))
 """
     observed = json.loads(_command([str(tmp_path / "installed/bin/python"), "-I", "-c", script],
@@ -121,20 +121,22 @@ print(json.dumps({'loaded': identity.build_identity(), 'read': identity._read_bu
     assert observed["read"] == {"version": __version__, "commit": None, "source": "package"}
 
 
-@pytest.mark.parametrize("tamper", [None, "wrong-commit", "malformed", "extra-field", "extra-file", "source-file", "symlink"])
+@pytest.mark.parametrize("tamper", [None, "wrong-commit", "null", "malformed", "extra-field", "extra-file", "source-file", "symlink"])
 def test_update_source_verification_accepts_only_producer_provenance(clean_wheel, tmp_path, tamper):
     _, repo, head, wheel = clean_wheel
     assert _installed_identity(wheel, tmp_path)["commit"] == head
     package = next((tmp_path / "installed/lib").glob("python*/site-packages/bat_agent_connector"))
-    info = package / "build-info.json"
+    info = package / "skill/build-info.json"
     original_files = package_files(package)
-    assert "build-info.json" in original_files
+    assert "build-info.json" not in original_files
     # Mutate a real hook-produced record only for rejection cases; no metadata
     # fixture stands in for the producer.
     if tamper == "wrong-commit":
         doc = json.loads(info.read_text())
         doc["commit"] = "0" * 40
         info.write_text(json.dumps(doc))
+    elif tamper == "null":
+        info.write_text(json.dumps({"commit": None}))
     elif tamper == "malformed":
         info.write_text("{")
     elif tamper == "extra-field":
@@ -150,12 +152,12 @@ def test_update_source_verification_accepts_only_producer_provenance(clean_wheel
         target = tmp_path / "original-build-info.json"
         info.rename(target)
         info.symlink_to(target)
-    if tamper in {"wrong-commit", "malformed", "extra-field"}:
-        assert digest_files(package_files(package)) != digest_files(original_files)
+    if tamper in {"wrong-commit", "null", "malformed", "extra-field"}:
+        assert digest_files(package_files(package)) == digest_files(original_files)
     if tamper is None:
         verify_source_package(repo / "src/bat_agent_connector", package, head)
     else:
-        code = "installed_identity_mismatch" if tamper in {"wrong-commit", "malformed", "extra-field"} else (
+        code = "installed_identity_mismatch" if tamper in {"wrong-commit", "null", "malformed", "extra-field"} else (
             "package_symlink_refused" if tamper == "symlink" else "installed_source_mismatch")
         with pytest.raises(UpdateError, match=code):
             verify_source_package(repo / "src/bat_agent_connector", package, head)
@@ -192,7 +194,7 @@ def test_clean_checkout_rejects_mismatching_override(tmp_path):
     override = "b" * 40 if head != "b" * 40 else "c" * 40
     wheel = _build(repo, tmp_path, commit=override)
     with zipfile.ZipFile(wheel) as archive:
-        assert json.loads(archive.read("bat_agent_connector/build-info.json")) == {"commit": None}
+        assert json.loads(archive.read("bat_agent_connector/skill/build-info.json")) == {"commit": None}
     assert _installed_identity(wheel, tmp_path) == {
         "version": __version__, "commit": None, "source": "package"}
 
@@ -301,10 +303,10 @@ def test_sdist_preserves_provenance_without_borrowing_an_enclosing_checkout(tmp_
         "version": __version__, "commit": None if dirty else head, "source": "package"}
 
 
-def test_frozen_resolver_reads_real_build_metadata(clean_wheel, tmp_path):
+def test_frozen_resolver_does_not_read_wheel_skill_metadata(clean_wheel, tmp_path):
     _, _, head, wheel = clean_wheel
     assert _installed_identity(wheel, tmp_path, frozen=True) == {
-        "version": __version__, "commit": head, "source": "bundled"}
+        "version": __version__, "commit": None, "source": "bundled"}
 
 
 def test_sdist_cannot_be_relabelled_by_a_different_override(clean_wheel, tmp_path):
@@ -352,7 +354,7 @@ def test_real_vcs_install_reconciles_embedded_identity(tmp_path, conflict):
     # must likewise come from the actual Hatch build, including the conflict.
     identity = _installed_identity(f"git+{repo.as_uri()}@{head}", tmp_path)
     site = next((tmp_path / "installed/lib").glob("python*/site-packages"))
-    assert json.loads((site / "bat_agent_connector/build-info.json").read_text()) == {"commit": source_commit}
+    assert json.loads((site / "bat_agent_connector/skill/build-info.json").read_text()) == {"commit": source_commit}
     direct_url = next(site.glob("bat_agent_connector-*.dist-info/direct_url.json"))
     assert json.loads(direct_url.read_text())["vcs_info"]["commit_id"] == head
     assert identity == {"version": __version__, "commit": None if conflict else head, "source": "vcs"}
@@ -381,7 +383,7 @@ def test_unknown_loaded_commit_stays_unknown_when_metadata_later_appears(monkeyp
     assert loaded.build_identity() == original
 
 
-@pytest.mark.parametrize("relative", ["build-info.json", "__init__.py"])
+@pytest.mark.parametrize("relative", ["skill/build-info.json", "__init__.py"])
 def test_mutable_installs_do_not_share_files_with_each_other_or_the_cache(clean_wheel, tmp_path, relative):
     _, _, head, wheel = clean_wheel
     expected = {"version": __version__, "commit": head, "source": "package"}
@@ -396,10 +398,22 @@ def test_mutable_installs_do_not_share_files_with_each_other_or_the_cache(clean_
     assert first.stat().st_nlink == second.stat().st_nlink == 1
     assert not first.samefile(second)
     # Mutate real producer output exactly as the snapshot/tamper cases do.
-    first.write_bytes(b'{"commit": null}' if relative == "build-info.json" else original + b"\n# changed\n")
+    first.write_bytes(b'{"commit": null}' if relative == "skill/build-info.json" else original + b"\n# changed\n")
     assert second.read_bytes() == original
     third = tmp_path / "third"
     third.mkdir()
     assert _installed_identity(wheel, third) == expected
     installed = next((third / "installed/lib").glob("python*/site-packages/bat_agent_connector"))
     assert (installed / relative).read_bytes() == original
+
+
+def test_update_source_verification_tolerates_legacy_location(clean_wheel, tmp_path):
+    _, repo, head, wheel = clean_wheel
+    with zipfile.ZipFile(wheel) as archive:
+        archive.extractall(tmp_path)
+    package = tmp_path / "bat_agent_connector"
+    (package / "skill/build-info.json").rename(package / "build-info.json")
+    verify_source_package(repo / "src/bat_agent_connector", package, head)
+    (package / "build-info.json").write_text(json.dumps({"commit": None}))
+    with pytest.raises(UpdateError, match="installed_identity_mismatch"):
+        verify_source_package(repo / "src/bat_agent_connector", package, head)

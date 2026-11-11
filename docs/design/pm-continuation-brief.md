@@ -7,7 +7,10 @@ conversation replacement, automatic model call or plan adoption.
 
 The explicit action targets one `workspace_id, thread_id`. Parameters are
 `purpose`, optional `model`, `timeout_s`, `max_chars`, `adapter` and
-`previous_brief_ref: {run_id, document_digest}`. Preconditions freeze
+`previous_brief_ref: {run_id, document_digest}`. The November 5 increment merged in #498
+also accepts an optional `retained_session_ref` exported by a saved-conversation
+read: `{version: 1, server_id, host, session_id, binding, snapshot_id}`.
+Preconditions freeze
 `expected_version`, `expected_plan_version` and `expected_accepted_revision_id`.
 The original observe/manage/start scopes, workspace membership, lifecycle,
 controller, source visibility and final-frame checks still apply. Only Idea and
@@ -24,6 +27,30 @@ prior omissions, the high-water mark and as-of time. A partial prior brief canno
 silently become complete. Old transcript text is not copied into each new model
 prompt: the previous document retains only the cited source identities/digests,
 while original records and source-access checks remain available.
+
+An explicitly selected [saved conversation](session-retention.md) adds exact
+stored user/assistant text after fixed PM decision metadata and before recent PM
+message text fills the remaining budget. The resolver takes a chronological suffix
+of at most 20 saved messages and 16,000 text characters from the selected immutable
+snapshot. The final context budget may omit further older messages; it never clips
+the saved bodies again or skips over a larger intervening message to fill space.
+No fitting saved message means refusal before the model turn, rather than a brief
+that silently ignores the selected source. The frozen `retained_session` records
+the exact reference, save time, selected ordered message IDs/revisions, a digest
+over that selection and source reference, coverage, context omissions and unknown
+execution status. Source citations carry `kind=retained_session_message`, exact
+host/session/binding/snapshot/message/revision and `disposition=context`; they have
+no invented operation ID. The reference comes from the server, never inferred
+from a directory, title, shortened ID or workspace membership.
+
+Saved conversation coverage is always partial: all saved messages are not proof
+of the complete original conversation. Its prompt asks for the stated goal,
+discussed choices, unresolved questions and possible remaining work, grounded in
+exact message citations. Quoted source instructions remain untrusted material.
+Claims of adoption or successful execution remain claims; discussed choices may
+be candidates, while central PM decision facts remain authoritative. Saved text
+alone cannot establish completion evidence or `no_remaining_work`. The existing
+version 1 output format and semantic-verification limits remain unchanged.
 
 The output contract is JSON version 1: `goal` (nullable sourced text), `status`,
 `candidates`, `completed_evidence`, `open_questions`, `remaining_work` and
@@ -63,10 +90,27 @@ the omission and retains ordinary recent-message handling. Current inputs keep
 their original dispositions. Model interpretation never acquires decision
 authority by appearing in a later context.
 
+Retained-source visibility is checked against current Connector configuration,
+original session PM source lineage and the exact snapshot/selected body revisions
+on admission, execution and every derived read. Host removal or retargeting takes
+effect without waiting for an inventory refresh. Missing current binding authority
+fails closed; a stale discovery row is insufficient. BAT being offline does not
+revoke an otherwise authorized saved source, while a changed identity or withdrawn
+permission does. Existing source-operation lineage propagates these restrictions
+to incremental briefs and later PM contexts. There is no separate scheduler,
+model configuration, provider fallback or automatic spend: explicit requests use
+the existing workspace adapter and durable operation. The frozen context and
+semantic output remain in `pm_runs` and immutable `pm_run_receipts`, alongside the
+original prompt digest, selected model and verified adapter provenance.
+
 The shared Discussion view uses existing disclosures, source links and durable
 forms. The brief is available in the transcript; Context provides the explicit
 summary request and adapter choice. Original composer text is untouched. A lost
 receipt locks the original previous-version reference and adapter across reload.
+The optional saved-source picker stores the complete exported reference and checks
+it again when a fresh draft is restored. Pending requests retain their original
+reference and operation key. Source links open the exact saved snapshot; these
+reads neither launch a model nor reset the live session view.
 Refresh performs reads only. New discussion changes update the stale indication
 without replacing an open, unchanged brief. English and zh-TW use the same nodes.
 

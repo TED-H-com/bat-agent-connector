@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Linux local pytest wrapper. All fixture bytes stay on the selected disk.
+set -euo pipefail
+
+private_tmp=false
+if [[ ${1:-} == --private-tmp ]]; then
+    private_tmp=true
+    shift
+fi
+if (( $# == 0 )); then
+    echo 'Usage: pytest-disktmp [--private-tmp] uv run [--python VERSION] pytest [ARGS...]' >&2
+    exit 2
+fi
+for arg in "$@"; do
+    if [[ $arg == --basetemp || $arg == --basetemp=* ]]; then
+        echo 'pytest-disktmp owns --basetemp; omit that argument.' >&2
+        exit 2
+    fi
+done
+if $private_tmp && ! command -v bwrap >/dev/null; then
+    echo '--private-tmp requires bubblewrap (bwrap) and enabled user namespaces.' >&2
+    exit 2
+fi
+
+disk_root=${PYTEST_DISK_ROOT:-"$HOME/agent-work/tmp/pytest"}
+mkdir -p -- "$disk_root"
+disk_root=$(realpath -- "$disk_root")
+filesystem=$(stat -f -c %T -- "$disk_root")
+case $filesystem in
+    tmpfs|ramfs)
+        echo 'pytest-disktmp requires a disk filesystem, not tmpfs/ramfs.' >&2
+        exit 2
+        ;;
+esac
+case_dir=$(mktemp -d -- "$disk_root/wr.XXXXXX")
+trap 'rm -rf -- "$case_dir"' EXIT
+if $private_tmp; then
+    # The private root is also ours: in an unprivileged user namespace, the
+    # host's root UID may be unmapped, which a real ownership check must reject.
+    # Root mount points and /tmp both live on disk. Expose accessible host paths
+    # for the usual tools; this is fixture isolation, not a security sandbox.
+    mkdir -m 700 -- "$case_dir/root" "$case_dir/tmp"
+    namespace=(bwrap --bind "$case_dir/root" / --dev-bind /dev /dev --bind "$case_dir/tmp" /tmp)
+    shopt -s nullglob
+    for entry in /* /.[!.]* /..?*; do
+        case $entry in /dev|/tmp) continue ;; esac
+        if [[ -L $entry ]]; then
+            namespace+=(--symlink "$(readlink -- "$entry")" "$entry")
+        elif [[ -r $entry && ( -f $entry || ( -d $entry && -x $entry ) ) ]]; then
+            namespace+=(--bind "$entry" "$entry")
+        fi
+    done
+    export TMPDIR=/tmp
+    "${namespace[@]}" --die-with-parent "$@" --basetemp=/tmp/b
+else
+    export TMPDIR="$case_dir"
+    "$@" --basetemp="$case_dir/b"
+fi

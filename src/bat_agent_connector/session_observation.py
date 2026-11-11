@@ -23,7 +23,7 @@ MAX_ACTIVE = 32
 MAX_PER_ACTOR = 4
 MAX_PER_HOST = 8
 _COMMON = {"host", "session_id", "after"}
-_READ = {"last_n", "offset", "include_tools", "max_chars", "max_message_chars"}
+_READ = {"last_n", "offset", "include_tools", "max_chars", "max_message_chars", "source", "snapshot_id"}
 _WAIT = {"until", "timeout_s", "require_new"}
 
 
@@ -52,6 +52,16 @@ def validate(method: str, params: dict) -> dict:
                               or any(ord(c) < 32 or ord(c) == 127 for c in after)):
         invalid("after must be a bounded turn marker string")
     if method == "session_read":
+        source = out.get("source", "live")
+        if source not in ("live", "retained"):
+            invalid("source must be live or retained")
+        snapshot_id = out.get("snapshot_id")
+        if snapshot_id is not None:
+            import re
+            if not isinstance(snapshot_id, str) or not re.fullmatch(r"[a-f0-9]{64}", snapshot_id):
+                invalid("snapshot_id must be a saved snapshot digest")
+        if source == "retained" and after is not None or source == "live" and snapshot_id is not None:
+            invalid("saved history cannot be used as a live turn observation")
         for name, default, low, high in (("last_n", 20, 1, service.MAX_LAST_N),
                                           ("max_chars", 12000, 500, service.MAX_READ_CHARS),
                                           ("max_message_chars", 2000, 100, service.MAX_READ_CHARS),
@@ -202,6 +212,12 @@ class SessionObservation:
         authorize()
         if self._closed:
             raise OperationError("OBSERVATION_CLOSED", "central observation is stopping", 503)
+        if method == "session_read" and params.get("source") == "retained":
+            result = self.daemon.session_archive.read(principal, **params)
+            authorize()
+            return result
+        params.pop("source", None)
+        params.pop("snapshot_id", None)
         if (self.active >= MAX_ACTIVE or self.by_actor[actor] >= MAX_PER_ACTOR
                 or self.by_host[host] >= MAX_PER_HOST):
             raise OperationError("OBSERVATION_BUSY", "too many active session observations", 429)

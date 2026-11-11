@@ -72,6 +72,9 @@ confirmation to an already authorized UI action.
 - Run local pytest through `pytest-disktmp uv run pytest -q ...` (also supports
   `uv run --python 3.10 pytest ...`). The wrapper creates a unique disk basetemp under
   `~/agent-work/tmp/pytest/` and removes it on exit.
+- The repository wrapper is `scripts/pytest-disktmp`. On Linux, if a shared ancestor
+  is group-writable, use its `--private-tmp` option for Fleet bootstrap checks;
+  see `CONTRIBUTING.md`. Keep the real ownership checks and shared permissions intact.
 - If a basetemp must be supplied directly, use a unique directory under
   `~/agent-work/tmp/pytest/` and remove that directory when the run finishes.
 - Stop and remove task-owned test databases and containers after the task; do not leave

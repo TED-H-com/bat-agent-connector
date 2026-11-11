@@ -13,11 +13,13 @@ pub mod connection_setup;
 pub mod creation_evidence;
 pub mod credential;
 pub mod discovery;
+pub mod errlog;
 pub mod installation;
 pub mod inventory;
 pub mod migration;
 mod migration_io;
 pub mod monitor_launch;
+pub mod monitor_log;
 pub mod ownership;
 #[cfg(test)]
 #[path = "../tests/support/powershell.rs"]
@@ -75,3 +77,7 @@ pub fn digest(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     format!("{:x}", Sha256::digest(bytes))
 }
+
+pub mod hidden_process;
+
+extern crate self as bat_fleet_core;

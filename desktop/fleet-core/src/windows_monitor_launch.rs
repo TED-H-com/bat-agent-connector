@@ -13,7 +13,7 @@ use crate::{
 };
 use std::{
     os::windows::process::CommandExt,
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
 };
 use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
@@ -86,14 +86,14 @@ impl Platform for WindowsLaunch<'_> {
         {
             return Err(SpawnFailure::NotStarted);
         }
-        let mut command = Command::new(self.native.executable());
+        let mut command = crate::hidden_process::hidden_command(self.native.executable());
         command
             .args(self.native.arguments())
             .current_dir(self.installation.client_root())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW)
+            .creation_flags(crate::hidden_process::hidden_flags(CREATE_NO_WINDOW))
             .env_clear();
         // No inherited central/BAT/proxy token; user stores are resolved afresh by the supervisor.
         command.envs(crate::monitor_launch::environment(std::env::vars_os()));

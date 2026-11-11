@@ -1,5 +1,5 @@
 // Generated shared UI, real central HTTP/readonly capture helper, temporary source and mock BAT.
-import {spawn} from "node:child_process";
+import {spawn} from "../../scripts/hidden-child-process.mjs";
 import {createInterface} from "node:readline";
 import {mkdir} from "node:fs/promises";
 import {resolve} from "node:path";
