@@ -86,7 +86,7 @@ READ_TOOLS = [
 
     "pm_work_deliveries_list",
     "pm_execution_verification_configuration", "pm_execution_verification_get",
-    "pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get", "pm_quality_reviews_list", "pm_quality_review_get", "pm_work_quality_get", "pm_pr_publication_get",
+    "pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get", "pm_quality_reviews_list", "pm_quality_review_get", "pm_quality_assessment_get", "pm_work_quality_get", "pm_pr_publication_get",
     "pm_work_batches_list", "pm_work_batch_get", "pm_maintenance_findings_current_get",
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
@@ -726,6 +726,12 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read original source-gated acceptance and DoD review evidence."""
         return await pm_daemon("pm_quality_review_get", workspace_id=workspace_id, review_id=review_id)
 
+    async def pm_quality_assessment_get(workspace_id: str, review_id: str, operation_id: str,
+                                        version: StrictInt, document_digest: str) -> dict[str, Any]:
+        """Read one exact immutable quality assessment; current applicability is not evaluated."""
+        return await pm_daemon("pm_quality_assessment_get", workspace_id=workspace_id, review_id=review_id,
+                               operation_id=operation_id, version=version, document_digest=document_digest)
+
     async def pm_work_quality_get(workspace_id: str, work_item_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Read original source-gated acceptance and DoD review evidence."""
         return await pm_daemon("pm_work_quality_get", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
@@ -1259,7 +1265,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
 
                pm_work_deliveries_list,
                pm_execution_verification_configuration, pm_execution_verification_get,
-               pm_maintenance_repairs_list, pm_maintenance_repair_current_get, pm_maintenance_repair_get, pm_quality_reviews_list, pm_quality_review_get, pm_work_quality_get, pm_pr_publication_get,
+               pm_maintenance_repairs_list, pm_maintenance_repair_current_get, pm_maintenance_repair_get, pm_quality_reviews_list, pm_quality_review_get, pm_quality_assessment_get, pm_work_quality_get, pm_pr_publication_get,
                pm_work_batches_list, pm_work_batch_get, pm_maintenance_findings_current_get,
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
@@ -1285,6 +1291,15 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_roadmap_get, pm_roadmap_revisions_list, pm_roadmap_revision_get,
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
+
+    # This fixed receipt selector must not let the SDK discard unknown fields.
+    # Configure only its generated argument model; other tool contracts stay as-is.
+    exact_assessment_tool = mcp._tool_manager.get_tool("pm_quality_assessment_get")
+    assert exact_assessment_tool is not None
+    exact_assessment_args = exact_assessment_tool.fn_metadata.arg_model
+    exact_assessment_args.model_config['extra'] = 'forbid'
+    exact_assessment_args.model_rebuild(force=True)
+    exact_assessment_tool.parameters = exact_assessment_args.model_json_schema()
 
     if not read_only:
         async def work_continue_from_repository(repository: str, host: str, workspace_id: str, source_ref: str,

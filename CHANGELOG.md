@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Let API and MCP clients reopen the exact original PM assessment named by a
+  Result reference under existing authorization. This read explicitly leaves
+  applicability to the current candidate unevaluated; no UI is added yet.
+
+## Unreleased
+
 ## 0.2.18 / Desktop 0.1.14 (2026-11-11)
 
 - Update the desktop updater plugin to Tauri updater 2.14.1, with patched archive

@@ -73,7 +73,7 @@ def install(ops):
 
 
 def capabilities():
-    return {'actions': list(ACTIONS), 'version': 1, 'verification_profiles': sorted(sources.verification.PROFILES),
+    return {'actions': list(ACTIONS), 'version': 1, 'exact_assessment_read': True, 'verification_profiles': sorted(sources.verification.PROFILES),
         'discussion_contexts': ['quality_assessment'],
         'max_criteria': sources.MAX_CRITERIA, 'max_assessments': MAX_HISTORY, 'max_records': MAX_HISTORY + 1, 'responsibility': 'owner_appointed_original_reviewer',
         'verification_alone_is_acceptance': False, 'execution_authorized': False}
