@@ -4,6 +4,20 @@
 
 ## 0.2.18 / Desktop 0.1.14 (2026-11-11)
 
+- Validate operation-history cursors centrally: reject repeated, empty, non-finite
+  or non-positive timestamps and malformed paired operation IDs while preserving
+  timestamp-only pagination and unrelated HTTP query compatibility. Python and
+  native tests share the same cursor vectors.
+
+- Keep credential-bearing repository URLs and staged credential handles out of
+  managed-setup drafts. Project active drafts and proven legacy migration copies,
+  including completed migrations, without restoring consumed drafts. Recover staged
+  submissions through central operation reads with their original key and ID, without
+  resubmitting a changed request. Browser and desktop share English/zh-TW validation and recovery.
+  Damaged legacy requests expose read-only original-request checks. Terminal results
+  allow the next change; an exhausted list permits an explicit local discard with
+  a new key for later setup. Partial, failed or mismatched reads remain locked.
+
 - Resize the Workbench preview's work list with pointer or keyboard controls in
   English and zh-TW. Keep a separate numeric width preference through temporary
   narrowing and mobile navigation; cancel unfinished drags when changing Work.

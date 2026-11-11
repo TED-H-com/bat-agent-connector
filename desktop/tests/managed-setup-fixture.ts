@@ -10,19 +10,20 @@ const hostGolden = JSON.parse(readFileSync(new URL('../../tests/fixtures/managed
 export async function managedSetupFixture(page: Page, native: boolean, locale: string | null = 'en',
   evidence?: {state: any, operation: any}) {
   const base = attentionFixture();
-  const state = {managed: managedStatusFixture(), managedCalls: [] as string[], stopBusy: false, stopBusyGeneric: false, stopPending: false, startStillStopping: false, startBusy: false,
-    posts: [] as any[], previews: [] as any[], staged: [] as any[], discoveries: [] as any[], discoveryVersion: 1, configuredProfile:'default',
-    discoveryProfiles: null as any[] | null, discoveryWorkspaces: null as any[] | null, lost: false, refused: false, previewRefused: false,
+  const state = {actor: null as string | null, serverId: 'setup-central', principalId: 'setup-person', managed: managedStatusFixture(), managedCalls: [] as string[], stopBusy: false, stopBusyGeneric: false, stopPending: false, startStillStopping: false, startBusy: false,
+    posts: [] as any[], operationReads: [] as any[], operationPages: null as any[] | null, operationReadStatus: 200,
+    holdOperation: false, releaseOperation: null as (() => void) | null, previews: [] as any[], staged: [] as any[], discoveries: [] as any[], discoveryVersion: 1, configuredProfile:'default',
+    discoveryProfiles: null as any[] | null, discoveryWorkspaces: null as any[] | null, lost: false, lostUnapplied: false, refused: false, previewRefused: false,
     admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, connectionStatus: null as string | null, connected: true, extraHosts: [] as any[], repositories: [] as any[], reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profiles: null as any[] | null, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
   if (evidence) {state.saved = true; state.operation = evidence.operation; state.configuredHost = evidence.operation.target.host;}
-  const caps = () => ({...base.caps(), ...(evidence ? {actor: evidence.operation.actor} : {}), scopes: state.scopes, hosts: state.saved ? [{host:state.configuredHost}] : [],
+  const caps = () => ({...base.caps(), ...(evidence ? {actor: evidence.operation.actor} : {}), ...(state.actor ? {actor: state.actor} : {}), scopes: state.scopes, hosts: state.saved ? [{host:state.configuredHost}] : [],
     managed_installation: {runtime_version:'0.2.4', background:true},
     actions: [{action:'setup.host', allowed:state.allowed}, {action:'setup.repository', allowed:state.allowed}, {action:'setup.verification', allowed:state.allowed}]});
   const dispatch = async (input: any) => {
     const url = new URL(input.path, 'http://fixture'), path = url.pathname;
     if (path === '/capabilities') return {status:200, data:caps()};
     if (path === '/bootstrap') return {status:200, data:{capabilities:caps(), sync:{version:1,
-      server_id:'setup-central', principal_id:'setup-person', checkpoint:{cursor:0,token:'setup-0'}}}};
+      server_id:state.serverId, principal_id:state.principalId, checkpoint:{cursor:0,token:'setup-0'}}}};
     if (path === '/managed/setup') {
       state.reads++;
       if (evidence) return {status: 200, data: structuredClone(evidence.state)};
@@ -58,17 +59,34 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
       preview.source.reference = params.secret_ref || params.import_profile_id || input.body.target.host;
       return {status:200, data:{preview}};
     }
-    if (path.startsWith('/operations/') && state.operation) return {status:200,data:{operation:state.operation}};
+    if (path === '/operations' && input.method === 'GET') {
+      state.operationReads.push(input);
+      if (state.operationReadStatus !== 200) return {status:state.operationReadStatus,data:{error:{code:'UNAVAILABLE',message:'Fixture read unavailable'}}};
+      if (!state.scopes.includes('observe')) return {status:403,data:{error:{code:'FORBIDDEN',message:'Observation is unavailable'}}};
+      const data = structuredClone(state.operationPages?.shift() || {operations:state.operation ? [state.operation] : [], next_before:null, next_before_id:null});
+      if (state.holdOperation) await new Promise<void>(resolve => {state.releaseOperation = resolve;});
+      return {status:200,data};
+    }
+    if (path.startsWith('/operations/') && state.operation) {
+      state.operationReads.push(input);
+      const operation = structuredClone(state.operation);
+      if (state.holdOperation) await new Promise<void>(resolve => {state.releaseOperation = resolve;});
+      return {status:200,data:{operation}};
+    }
     if (path === '/operations' && input.method === 'POST') {
       state.posts.push(input);
       if (state.refused) return {status:state.refusalStatus,data:{error:{code:state.refusalCode,message:state.refusalMessage, ...(state.admissionRefused ? {admission_refused:true} : {})}}};
       if (state.drop && state.posts.length === 1) return {status:0,data:{}};
-      if (state.lost && state.posts.length === 1) return {status:503,data:{error:{code:'LOST_REPLY',message:'The reply was lost.'}}};
+      const lost = state.lost && state.posts.length === 1;
+      // A 503 hides either outcome. By default the request was applied and only its reply was lost;
+      // lostUnapplied models a request that never took effect, so nothing is configured until it is replayed.
+      if (lost && state.lostUnapplied) return {status:503,data:{error:{code:'LOST_REPLY',message:'The reply was lost.'}}};
       state.saved = true;
       if (input.body.action === 'setup.host') {state.configuredHost = input.body.target.host;state.configuredUrl = input.body.params.url || 'wss://demo.example:9876/';}
       if (input.body.action === 'setup.verification') state.verification = input.body.params;
       state.operation = {...input.body,actor:state.badActor ? 'other' : caps().actor,operation_id:'op_'+'c'.repeat(32),
         idempotency_key:input.idempotency_key,status:'succeeded',result:{configured:true,revision:state.revision}};
+      if (lost) return {status:503,data:{error:{code:'LOST_REPLY',message:'The reply was lost.'}}};
       return {status:200,data:{operation:state.operation}};
     }
     return base.dispatch(input);
@@ -82,6 +100,7 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
   }, evidence.operation);
   if (native) {
     await page.exposeFunction('setupConnector', dispatch);
+    await page.exposeFunction('setupCaps', caps);
     await page.exposeFunction('setupManagedControl', (input: any) => {
       state.managedCalls.push(input.action);
       if (input.action === 'stop') {
@@ -98,7 +117,7 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
     await page.addInitScript(c => Object.assign(window,{isTauri:true,__TAURI_INTERNALS__:{
       invoke:async (command:string,args:any) => {
         if(command==='native_status') return {endpoint:'http://127.0.0.1:9870',credential_available:true};
-        if(command==='connector_connect') return c;
+        if(command==='connector_connect') return (window as any).setupCaps();
         if(command==='connector_request') return (window as any).setupConnector(args.input);
         if(command==='managed_control') return (window as any).setupManagedControl(args.input);
         if(command==='connector_disconnect') return null;

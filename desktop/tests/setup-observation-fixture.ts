@@ -4,12 +4,13 @@ import {expect, type Page} from '@playwright/test';
 // output; only the HTTP peer and shell's existing tick are represented here.
 export async function mountSetupObservation(page: Page, body: any, operation: any, locale: string,
   onRead?: (route: any, count: number) => Promise<void>,
-  options: {draft?: any, onWrite?: (route: any) => Promise<void>, manualTicks?: boolean} = {}) {
+  options: {draft?: any, onWrite?: (route: any) => Promise<void>, onOperationRead?: (route: any) => Promise<void>, manualTicks?: boolean} = {}) {
   const reads: string[] = [], posts: string[] = [];
   page.on('request', request => {if (request.method() === 'POST') posts.push(request.url());});
   await page.route('**/api/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() !== 'GET' && options.onWrite) {await options.onWrite(route); return;}
+    if (route.request().method() === 'GET' && path.endsWith('/operations') && options.onOperationRead) {await options.onOperationRead(route); return;}
     reads.push(path);
     expect(route.request().method()).toBe('GET');
     if (path.endsWith('/managed/setup') && onRead) {

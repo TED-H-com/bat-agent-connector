@@ -1,7 +1,85 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {normalizeSetupFingerprint, parseBatConnectionUrl, validSetupEndpoint, validSetupHostId} from '../src/managed-setup.js';
+import {normalizeSetupFingerprint, parseBatConnectionUrl, validSetupEndpoint, validSetupHostId,
+  validSetupRemoteUrl, setupDraftForStorage} from '../src/managed-setup.js';
+
+test('repository drafts accept credential-free HTTPS and SSH, never credential URLs', () => {
+  for (const url of ['https://github.com/o/r.git', 'git@github.com:o/r.git', 'ssh://git@github.com/o/r',
+    'HTTPS://GITHUB.COM/O/R.GIT']) {
+    assert.equal(validSetupRemoteUrl(url), true);
+    assert.equal(setupDraftForStorage({remote_url: url}).remote_url, url);
+  }
+  for (const url of ['https://user:synthetic-secret@github.com/o/r.git', 'https://synthetic-secret@github.com/o/r',
+    'https://github.com/o/r?token=synthetic-secret', 'https://github.com/o/r#synthetic-secret',
+    'ssh://git:synthetic-secret@github.com/o/r', 'git@github.com:o/r?token=synthetic-secret',
+    'https://github.com/o/r\n', 'https://github.com/o/r%3Ftoken=synthetic-secret']) {
+    assert.equal(validSetupRemoteUrl(url), false);
+    assert.equal(setupDraftForStorage({remote_url: url}).remote_url, '');
+  }
+});
+test('draft projection removes staged selectors and keeps original-key read recovery', () => {
+  const intent = {key: 'original-key', request: {action: 'setup.repository', target: {repository: 'o/r'},
+    params: {remote_url: 'https://github.com/o/r.git', secret_ref: 'setup_' + 'b'.repeat(32)},
+    preconditions: {config_revision: 'a'.repeat(64)}}};
+  const draft = {host: 'demo', writes: false, intent, bat_secret: 'synthetic-bat-secret',
+    github_secret: 'synthetic-github-secret', connection_url: 'wss://demo.example:9876?token=synthetic-secret',
+    unexpected: 'synthetic-secret'};
+  const expected = {host: 'demo', writes: false, intent: {key: intent.key, lookup_only: true,
+    request: {action: intent.request.action}, lookup_request: {...intent.request, params: {remote_url: intent.request.params.remote_url}}}};
+  assert.deepEqual(setupDraftForStorage(draft), expected);
+  assert.deepEqual(setupDraftForStorage(expected), expected);
+  // Old clients require request.params/target/preconditions before any replay.
+  assert.equal(setupDraftForStorage(draft).intent.request.params, undefined);
+  assert.equal(intent.request.params.secret_ref, 'setup_' + 'b'.repeat(32));
+  assert.equal(draft.bat_secret, 'synthetic-bat-secret');
+});
+test('projection allow-lists nested requests and rejects unknown fields without changing their key', () => {
+  const request = {action: 'setup.host', target: {host: 'demo'}, params: {
+    url: 'wss://demo.example:9876', fingerprint: 'a'.repeat(64), managed_roots: ['/managed'],
+    secret_ref: 'setup_' + 'b'.repeat(32)}, preconditions: {config_revision: 'a'.repeat(64)}};
+  const extra = {unexpected: {secret: 'synthetic-secret'}};
+  for (const broken of [{...request, ...extra}, {...request, params: {...request.params, ...extra}},
+    {...request, target: {...request.target, ...extra}}, {...request, preconditions: {...request.preconditions, ...extra}},
+    {...request, params: {...request.params, managed_roots: [extra]}},
+    {...request, params: {...request.params, profile_id: extra}},
+    {action: 'setup.verification', target: {}, params: {commands: {demo: ['node', extra]}, timeout_s: 300}, preconditions: request.preconditions}]) {
+    const result = setupDraftForStorage({intent: {key: 'original-key', operation_id: 'op_' + 'c'.repeat(32), request: broken}});
+    assert.equal(result.intent.key, 'original-key');
+    assert.equal(result.intent.operation_id, 'op_' + 'c'.repeat(32));
+    assert.equal(result.intent.problemCode, 'INVALID_CONFIGURATION');
+    assert.equal(result.intent.request.params, undefined);
+    assert(!JSON.stringify(result).includes('synthetic-secret'));
+  }
+  assert.deepEqual(setupDraftForStorage({host: extra, writes: extra, verification_base: {commands: extra}}), {});
+});
+test('unredacted requests and nested verification drafts remain exact and independent', () => {
+  for (const [action, target, params] of [
+    ['setup.host', {host: 'demo'}, {import_profile_id: 'profile-demo', managed_roots: ['/managed'], writes: false}],
+    ['setup.repository', {repository: 'o/r'}, {host: 'demo', remote_url: 'https://github.com/o/r'}],
+    ['setup.verification', {}, {commands: {project: ['node', '--test']}, timeout_s: 300}],
+  ] as const) {
+    const draft = {intent: {key: 'original-key', request: {action, target, params, preconditions: {config_revision: 'a'.repeat(64)}}},
+      verification_base: {revision: 'a'.repeat(64), commands: {project: ['node', '--test']}, timeout_s: 300}};
+    assert.deepEqual(setupDraftForStorage(draft), draft);
+    assert.notEqual(setupDraftForStorage(draft).verification_base.commands, draft.verification_base.commands);
+  }
+});
+test('legacy credential-bearing intents retain identity but cannot become a different replay', () => {
+  for (const params of [{remote_url: 'https://user:synthetic-secret@github.com/o/r.git'},
+    {url: 'wss://demo.example:9876?token=synthetic-secret'}]) {
+    const intent = {key: 'original-key', operation_id: 'op_' + 'c'.repeat(32), request: {
+      action: 'remote_url' in params ? 'setup.repository' : 'setup.host', target: {}, params,
+      preconditions: {config_revision: 'a'.repeat(64)}}};
+    const projected = setupDraftForStorage({intent});
+    assert.equal(projected.intent.key, intent.key);
+    assert.equal(projected.intent.operation_id, intent.operation_id);
+    assert.equal(projected.intent.request.params, undefined);
+    assert.equal(projected.intent.problemCode, 'INVALID_CONFIGURATION');
+    assert(!JSON.stringify(projected).includes('synthetic-secret'));
+    assert.deepEqual(setupDraftForStorage(projected), projected);
+  }
+});
 
 const fingerprint = 'ab'.repeat(32);
 for (const prefix of ['wss://', 'ws://', '']) test(`BAT URL grammar ${prefix || 'scheme-less'} and default port`, () => {

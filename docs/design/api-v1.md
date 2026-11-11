@@ -55,6 +55,23 @@ MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confir
 
 ## Operation
 
+`GET /operations` 的歷史游標沿用時間加 ID 排序：`before` 必須為有限正數，
+十進位字串最多 64 bytes；選填的 `before_id` 必須為 `op_` 加 32 位小寫十六進位，
+且同時有 `before`。重複或空的 cursor 欄位回既有 `422 INVALID_FILTER`；
+只提供時間的舊 client 仍可使用。驗證由 OperationService 共用，HTTP 保留原始
+cursor 值供中央檢查；未知 query keys 與其他參數維持既有相容行為。
+目前 daemon `op_list` 與 MCP `operations_list` 不接收 cursor，不擴充其參數。
+Python 與 Rust 測試使用同一份 `tests/fixtures/operation-history-cursors.json`，
+Node route inventory 只驗證路由，不代表 Rust query 驗證已執行。
+
+Operation history accepts a finite positive `before` (at most 64 bytes) and an
+optional `before_id` of `op_` plus 32 lowercase hex digits, paired with `before`.
+Repeated or empty cursor fields use the existing `422 INVALID_FILTER` response.
+Timestamp-only callers, unknown HTTP query keys and other parameters remain
+compatible. HTTP passes raw cursor values to the shared OperationService validator.
+Daemon/MCP list methods currently expose no cursor. Python and native tests consume
+the same cursor vectors; Node route inventory is not native query validation.
+
 HTTP `POST /operations?wait=…`、RPC `op_submit(wait_s=…)` 與 MCP
 `operation_submit` 等待後，必須以目前 caller 再讀原 operation；等待期間的
 PM membership／原始來源撤權會拒絕回傳 params、result 與 external refs。

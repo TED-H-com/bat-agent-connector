@@ -1,4 +1,5 @@
 import {storageScope} from './events.ts';
+import {setupDraftForStorage} from '../setup-draft-storage.js';
 
 export interface StorageIdentity {server_id: string; principal_id: string; actor: string}
 
@@ -49,18 +50,33 @@ export function matchingLegacySources(identity: StorageIdentity, keys: string[])
 // or checkpoint is saved. Copy one complete scope; never merge individual forms.
 export function migrateManagedStorage(identity: StorageIdentity, local: Storage, session: Storage): void {
   const target = managedStorageScope(identity), marker = `batc.storage-migration.${target}`;
+  const areas = [local, session], allKeys = areas.map(keys);
+  const matching = matchingLegacySources(identity, allKeys[0]);
+  function scrubSetup(source: string) {
+    // Privacy cleanup is independent of copying. Only these proven scopes and
+    // existing entries are projected; a consumed target must stay absent. A
+    // failed write propagates immediately, before any migration/receipt writes.
+    // The receipt records copying, never cleanup: every startup retries this.
+    for (const scope of [source, target]) for (const storage of areas) {
+      const key = `batc.managed.setup.${scope}`, value = storage.getItem(key);
+      if (value === null) continue;
+      const draft = JSON.parse(value);
+      if (!draft || typeof draft !== 'object' || Array.isArray(draft))
+        throw Error('Invalid managed setup draft; migration is blocked');
+      const projected = JSON.stringify(setupDraftForStorage(draft));
+      if (projected !== value) storage.setItem(key, projected);
+    }
+  }
   const receipt = local.getItem(marker);
   if (receipt !== null) {
     const saved = JSON.parse(receipt);
     if (saved?.version !== 1 || saved.target !== target || saved.status !== 'complete')
       throw Error('Local storage migration is incomplete; original data is retained');
+    if (matching.some(candidate => candidate.scope === saved.source && !candidate.ambiguous)) scrubSetup(saved.source);
     return; // Never resurrect a draft/key that has since been consumed or removed.
   }
-  const areas = [local, session], allKeys = areas.map(keys);
-  if (allKeys.some(list => list.some(key => rebase(key, target, target) !== null))) return;
   // The exact checkpoint key delimits all four old identity fields. A draft's
   // action/workspace suffix alone cannot prove where its actor field ends.
-  const matching = matchingLegacySources(identity, allKeys[0]);
   if (matching.length !== 1 || matching[0].ambiguous) return;
   const source = matching[0].scope;
   // An orphan draft or tab preference from another port is still another scope,
@@ -74,8 +90,11 @@ export function migrateManagedStorage(identity: StorageIdentity, local: Storage,
     catch {continue;}
     if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
   }
+  scrubSetup(source);
+  if (allKeys.some(list => list.some(key => rebase(key, target, target) !== null))) return;
   const copies = areas.flatMap((storage, area) => allKeys[area].flatMap(key => {
-    const destination = rebase(key, source, target), value = storage.getItem(key);
+    const destination = rebase(key, source, target);
+    const value = storage.getItem(key);
     return destination !== null && value !== null ? [{storage, destination, value}] : [];
   }));
   // Unrecognized legacy key envelopes remain untouched, without a false receipt.
