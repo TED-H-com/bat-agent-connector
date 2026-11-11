@@ -1135,7 +1135,19 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_cleanup_version: "Last read version {version}",
 			exh_cleanup_done: "Relationship withdrawn.",
 			exh_cleanup_invalid: "Saved relationship metadata could not be read. Original requests have been kept.",
-			exh_cleanup_limit: "This device keeps up to 500 known IDs. Some relationships may be absent if storage is full or unavailable; existing recovery records are kept."
+			exh_cleanup_limit: "This device keeps up to 500 known IDs. Some relationships may be absent if storage is full or unavailable; existing recovery records are kept.",
+			exh_cleanup_discover: "Find relationships to withdraw",
+			exh_cleanup_discover_help: "Choose a Work to list every relationship you may withdraw now, including ones whose source you can still read. Conversation content and source details are not shown. Results are a point-in-time view, not a reservation.",
+			exh_cleanup_read_ids: "Read cleanup IDs",
+			exh_cleanup_read_again: "Read again",
+			exh_cleanup_discovered: "Available to withdraw in this Work",
+			exh_cleanup_none: "No relationships are currently available for you to withdraw in this Work.",
+			exh_cleanup_empty_page: "No relationships on this page. More may remain.",
+			exh_cleanup_read_limit: "The page limit was reached. More relationships may remain.",
+			exh_cleanup_read_error: "Cleanup IDs could not be read safely. Saved original requests have been kept.",
+			exh_cleanup_conflict: "The relationship changed. Read this Work again before reviewing a new request. Your original request is unchanged.",
+			exh_cleanup_recovery_full: "500 withdrawal requests are saved. Recover existing requests before starting another. No saved request was removed.",
+			exh_cleanup_recovery_invalid: "Saved withdrawal data could not be read safely. Nothing was sent or replaced."
 		},
 		"zh-TW": {
 			exh_remember: "保存關聯 ID 供日後撤回",
@@ -1243,7 +1255,19 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_cleanup_version: "上次讀取為第 {version} 版",
 			exh_cleanup_done: "已撤回關聯。",
 			exh_cleanup_invalid: "無法讀取已保存的關聯資料，原請求仍保留。",
-			exh_cleanup_limit: "此裝置最多保存 500 個關聯識別資料。空間已滿或無法儲存時，部分關聯可能未列出；既有復原紀錄仍保留。"
+			exh_cleanup_limit: "此裝置最多保存 500 個關聯識別資料。空間已滿或無法儲存時，部分關聯可能未列出；既有復原紀錄仍保留。",
+			exh_cleanup_discover: "尋找可撤回的關聯",
+			exh_cleanup_discover_help: "選擇工作，列出你目前可撤回的所有關聯，包括來源仍可讀取的關聯。不顯示對話內容或來源詳細資料。結果只反映讀取當下的狀態，不會保留撤回資格。",
+			exh_cleanup_read_ids: "讀取可撤回的關聯 ID",
+			exh_cleanup_read_again: "重新讀取",
+			exh_cleanup_discovered: "此工作中可撤回的關聯",
+			exh_cleanup_none: "目前此工作中沒有你可撤回的關聯。",
+			exh_cleanup_empty_page: "此頁沒有關聯，後面可能仍有其他關聯。",
+			exh_cleanup_read_limit: "已達讀取頁數上限，可能仍有其他關聯。",
+			exh_cleanup_read_error: "無法安全讀取可撤回的關聯 ID，已保存的原請求仍保留。",
+			exh_cleanup_conflict: "關聯已變更。請重新讀取此工作，再檢閱新請求；原請求維持不變。",
+			exh_cleanup_recovery_full: "已保存 500 筆撤回請求。請先恢復既有請求，再建立新請求；未移除任何已保存的請求。",
+			exh_cleanup_recovery_invalid: "無法安全讀取已保存的撤回資料；未送出或取代任何請求。"
 		}
 	};
 }));
@@ -25481,9 +25505,9 @@ var action = "pm.history.unlink";
 var separator = `.${action}.`;
 var limit = 500;
 var object$8 = (value) => value !== null && typeof value === "object" && [Object.prototype, null].includes(Object.getPrototypeOf(value));
-var exact$1 = (value, keys) => object$8(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+var exact$2 = (value, keys) => object$8(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
 var same$10 = (a, b) => a === b || object$8(a) && object$8(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$10(a[key], b[key]));
-var invalid = () => Object.assign(Error("HISTORY_RECOVERY_INVALID"), { code: "HISTORY_RECOVERY_INVALID" });
+var invalid$1 = () => Object.assign(Error("HISTORY_RECOVERY_INVALID"), { code: "HISTORY_RECOVERY_INVALID" });
 var changed = () => Object.assign(Error("HISTORY_RECOVERY_CHANGED"), { code: "HISTORY_RECOVERY_CHANGED" });
 var full = () => Object.assign(Error("HISTORY_RECOVERY_FULL"), { code: "HISTORY_RECOVERY_FULL" });
 var id$1 = (value, pattern) => typeof value === "string" && pattern.test(value);
@@ -25495,15 +25519,15 @@ function targetOf(row, workspaceId) {
 		work_item_id: row?.work_item_id,
 		link_id: row?.link_id
 	};
-	if (row?.workspace_id !== void 0 && row.workspace_id !== workspaceId || !id$1(workspaceId, /^ws_[0-9a-f]{32}$/) || !id$1(target.work_item_id, /^wi_[0-9a-f]{20}$/) || !id$1(target.link_id, /^hxl_[0-9a-f]{32}$/)) throw invalid();
+	if (row?.workspace_id !== void 0 && row.workspace_id !== workspaceId || !id$1(workspaceId, /^ws_[0-9a-f]{32}$/) || !id$1(target.work_item_id, /^wi_[0-9a-f]{20}$/) || !id$1(target.link_id, /^hxl_[0-9a-f]{32}$/)) throw invalid$1();
 	return target;
 }
 function envelope(saved, target) {
-	if (!exact$1(saved, saved?.intent === void 0 ? ["version", "values"] : [
+	if (!exact$2(saved, saved?.intent === void 0 ? ["version", "values"] : [
 		"version",
 		"values",
 		"intent"
-	]) || saved.version !== 1 || !exact$1(saved.values, [])) throw invalid();
+	]) || saved.version !== 1 || !exact$2(saved.values, [])) throw invalid$1();
 	if (saved.intent === void 0) return;
 	const intent = saved.intent, request = intent?.request;
 	if (!object$8(intent) || Object.keys(intent).some((key) => ![
@@ -25511,19 +25535,19 @@ function envelope(saved, target) {
 		"request",
 		"operation_id",
 		"initialAdmissionRefused"
-	].includes(key)) || typeof intent.key !== "string" || !intent.key.trim() || intent.key.trim().length > 200 || Object.hasOwn(intent, "operation_id") && !id$1(intent.operation_id, /^op_[0-9a-f]{32}$/) || Object.hasOwn(intent, "initialAdmissionRefused") && typeof intent.initialAdmissionRefused !== "boolean" || !exact$1(request, [
+	].includes(key)) || typeof intent.key !== "string" || !intent.key.trim() || intent.key.trim().length > 200 || Object.hasOwn(intent, "operation_id") && !id$1(intent.operation_id, /^op_[0-9a-f]{32}$/) || Object.hasOwn(intent, "initialAdmissionRefused") && typeof intent.initialAdmissionRefused !== "boolean" || !exact$2(request, [
 		"action",
 		"target",
 		"params",
 		"preconditions"
-	]) || request.action !== action || !exact$1(request.target, [
+	]) || request.action !== action || !exact$2(request.target, [
 		"workspace_id",
 		"work_item_id",
 		"link_id"
-	]) || !same$10(request.target, target) || !exact$1(request.params, []) || !exact$1(request.preconditions, ["expected_link_version"]) || !version$2(request.preconditions.expected_link_version)) throw invalid();
+	]) || !same$10(request.target, target) || !exact$2(request.params, []) || !exact$2(request.preconditions, ["expected_link_version"]) || !version$2(request.preconditions.expected_link_version)) throw invalid$1();
 }
 function historyRecovery(storage, namespace, workspaceId) {
-	if (typeof namespace !== "string" || !namespace) throw invalid();
+	if (typeof namespace !== "string" || !namespace) throw invalid$1();
 	targetOf({
 		work_item_id: "wi_" + "0".repeat(20),
 		link_id: "hxl_" + "0".repeat(32)
@@ -25549,10 +25573,10 @@ function historyRecovery(storage, namespace, workspaceId) {
 		}]));
 		const seen = new Set(), keys = new Set();
 		const count = storage.length;
-		if (!Number.isSafeInteger(count) || count < 0) throw invalid();
+		if (!Number.isSafeInteger(count) || count < 0) throw invalid$1();
 		for (let i = 0; i < count; i++) {
 			const key = storage.key(i);
-			if (typeof key !== "string") throw invalid();
+			if (typeof key !== "string") throw invalid$1();
 			keys.add(key);
 		}
 		let pendingCount = 0;
@@ -25563,27 +25587,27 @@ function historyRecovery(storage, namespace, workspaceId) {
 			if (legacyName && !legacyName[2].startsWith(separator)) continue;
 			const split = key.lastIndexOf(separator);
 			if (split < 0) {
-				if (independent) throw invalid();
+				if (independent) throw invalid$1();
 				else continue;
 			}
 			const target = JSON.parse(key.slice(split + separator.length));
-			if (!id$1(target?.workspace_id, /^ws_[0-9a-f]{32}$/)) throw invalid();
+			if (!id$1(target?.workspace_id, /^ws_[0-9a-f]{32}$/)) throw invalid$1();
 			if (target.workspace_id !== workspaceId) {
-				if (independent) throw invalid();
+				if (independent) throw invalid$1();
 				else continue;
 			}
-			if (!exact$1(target, [
+			if (!exact$2(target, [
 				"workspace_id",
 				"work_item_id",
 				"link_id"
-			]) || !same$10(target, targetOf(target, workspaceId)) || JSON.stringify(target) !== key.slice(split + separator.length)) throw invalid();
+			]) || !same$10(target, targetOf(target, workspaceId)) || JSON.stringify(target) !== key.slice(split + separator.length)) throw invalid$1();
 			const draftNamespace = key.slice(8, split);
 			let source = {};
 			if (independent) {
-				if (draftNamespace !== cleanupNamespace) throw invalid();
+				if (draftNamespace !== cleanupNamespace) throw invalid$1();
 			} else {
 				const encoded = key.slice(legacyPrefix.length, split), identity = JSON.parse(encoded);
-				if (!Array.isArray(identity) || identity.length !== 2 || JSON.stringify(identity) !== encoded || !id$1(identity[0], /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/) || !id$1(identity[1], /^shi_[0-9a-f]{32}$/)) throw invalid();
+				if (!Array.isArray(identity) || identity.length !== 2 || JSON.stringify(identity) !== encoded || !id$1(identity[0], /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/) || !id$1(identity[1], /^shi_[0-9a-f]{32}$/)) throw invalid$1();
 				source = {
 					source_id: identity[0],
 					entry_id: identity[1]
@@ -25594,10 +25618,10 @@ function historyRecovery(storage, namespace, workspaceId) {
 			const saved = JSON.parse(raw);
 			envelope(saved, target);
 			if (!saved.intent) continue;
-			if (seen.has(target.link_id) || independent && ++pendingCount > limit) throw invalid();
+			if (seen.has(target.link_id) || independent && ++pendingCount > limit) throw invalid$1();
 			seen.add(target.link_id);
 			const known = byId.get(target.link_id);
-			if (known && known.row.work_item_id !== target.work_item_id) throw invalid();
+			if (known && known.row.work_item_id !== target.work_item_id) throw invalid$1();
 			const row = {
 				...known?.row,
 				...source,
@@ -25611,12 +25635,12 @@ function historyRecovery(storage, namespace, workspaceId) {
 		}
 		return [...byId.values()];
 	}
-	function resolve(value) {
+	function resolve(value, { reviewVersion = false } = {}) {
 		const target = targetOf(value, workspaceId);
-		if (!version$2(value?.version)) throw invalid();
+		if (!version$2(value?.version)) throw invalid$1();
 		const legacy = value.source_id !== void 0 || value.entry_id !== void 0 || value.fixed_ref !== void 0;
-		if (legacy && (!id$1(value.source_id ?? value.fixed_ref?.source_id, /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/) || !id$1(value.entry_id ?? value.fixed_ref?.entry_id, /^shi_[0-9a-f]{32}$/))) throw invalid();
-		if (!legacy && !exact$1(value, Object.hasOwn(value, "workspace_id") ? [
+		if (legacy && (!id$1(value.source_id ?? value.fixed_ref?.source_id, /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/) || !id$1(value.entry_id ?? value.fixed_ref?.entry_id, /^shi_[0-9a-f]{32}$/))) throw invalid$1();
+		if (!legacy && !exact$2(value, Object.hasOwn(value, "workspace_id") ? [
 			"workspace_id",
 			"work_item_id",
 			"link_id",
@@ -25625,11 +25649,17 @@ function historyRecovery(storage, namespace, workspaceId) {
 			"work_item_id",
 			"link_id",
 			"version"
-		])) throw invalid();
+		])) throw invalid$1();
 		const current = read().find((item) => item.row.link_id === target.link_id);
 		if (current) {
-			if (current.row.work_item_id !== target.work_item_id) throw invalid();
-			return current;
+			if (current.row.work_item_id !== target.work_item_id) throw invalid$1();
+			return reviewVersion && !current.intent ? {
+				...current,
+				row: {
+					...current.row,
+					version: value.version
+				}
+			} : current;
 		}
 		if (legacy) {
 			const row = historyRecord({
@@ -25645,8 +25675,8 @@ function historyRecovery(storage, namespace, workspaceId) {
 	}
 	function inspect(selected, owned, capacity = true) {
 		const rows = read(), current = rows.find((item) => item.row.link_id === selected.row.link_id);
-		if (current && current.row.work_item_id !== selected.row.work_item_id) throw invalid();
-		if (current?.intent && !sameIntent(current.intent, owned)) throw owned ? invalid() : changed();
+		if (current && current.row.work_item_id !== selected.row.work_item_id) throw invalid$1();
+		if (current?.intent && !sameIntent(current.intent, owned)) throw owned ? invalid$1() : changed();
 		if (current && current.storageKey !== selected.storageKey && (!owned || current.intent)) throw changed();
 		if (capacity && selected.sourceIndependent && !current?.intent && rows.filter((item) => item.sourceIndependent && item.intent).length >= limit) throw full();
 		return current;
@@ -25656,20 +25686,21 @@ function historyRecovery(storage, namespace, workspaceId) {
 		resolve,
 		admit: inspect,
 		beforePersist(selected, saved, storageKey, owned = saved.intent) {
-			if (storageKey !== selected.storageKey) throw invalid();
+			if (storageKey !== selected.storageKey) throw invalid$1();
 			envelope(saved, selected.target);
 			inspect(selected, owned, Boolean(saved.intent));
-			if (saved.intent && saved.intent.request.preconditions.expected_link_version !== selected.row.version) throw invalid();
+			if (saved.intent && saved.intent.request.preconditions.expected_link_version !== selected.row.version) throw invalid$1();
 		}
 	};
 }
-function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPermitted = permitted, beforeNew = () => {}, onResolve = () => {}, onError = () => false, onSaved = () => {}, errorBox, ...options }) {
+function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPermitted = permitted, beforeNew = () => {}, onResolve = () => {}, onError = () => false, onSaved = () => {}, errorBox, reviewVersion = false, ...options }) {
 	const box = h("div"), notice = h("div", { role: "status" });
 	let editor, selected, owned, disposed = false, queued = false, completed = false, needsRead = false, lastError = null;
 	function report(error) {
 		if (lastError === error.code) return;
 		lastError = error.code;
-		notice.replaceChildren(errorBox(Error(t(error.code === "HISTORY_RECOVERY_FULL" ? "exh_cleanup_limit" : "exh_cleanup_invalid")), {
+		const key = error.code === "HISTORY_RECOVERY_FULL" ? "full" : "invalid";
+		notice.replaceChildren(errorBox(Error(t(selected?.sourceIndependent ? `exh_cleanup_recovery_${key}` : key === "full" ? "exh_cleanup_limit" : "exh_cleanup_invalid")), {
 			within: notice,
 			sourceRefresh: false
 		}));
@@ -25689,7 +25720,8 @@ function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPe
 	function ready(recovering) {
 		if (disposed || completed || !(recovering ? recoverPermitted() : permitted())) return false;
 		try {
-			recovery.admit(selected, owned);
+			const stored = recovery.admit(selected, owned);
+			if (owned && !stored?.intent && editor && !editor.intentRequest()) owned = null;
 			return Boolean(owned) || !needsRead;
 		} catch (error) {
 			if (error.code === "HISTORY_RECOVERY_CHANGED" && !owned) remount();
@@ -25698,7 +25730,7 @@ function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPe
 		}
 	}
 	function mount() {
-		const next = recovery.resolve(row);
+		const next = recovery.resolve(row, { reviewVersion });
 		editor?.dispose();
 		selected = next;
 		owned = next.intent;
@@ -25723,7 +25755,7 @@ function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPe
 			recoverPermitted: () => ready(true),
 			beforePersist: (saved, key) => {
 				recovery.beforePersist(selected, saved, key, owned);
-				owned = saved.intent ? structuredClone(saved.intent) : null;
+				if (saved.intent) owned = structuredClone(saved.intent);
 			},
 			onError: (error) => {
 				if (["PM_HISTORY_LINK_CHANGED", "VERSION_CONFLICT"].includes(error.code)) needsRead = true;
@@ -25756,7 +25788,7 @@ function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPe
 }
 //#endregion
 //#region src/pm-external-history-links.js
-var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
+var workId$2 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
 var digest$9 = (value) => /^[0-9a-f]{64}$/.test(value || "");
 function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, cleanup, sourceId, entry, onUnavailable }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -25804,7 +25836,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	}
 	function pendingWithdrawals() {
 		const saved = JSON.parse(localStorage.getItem(withdrawalKey) || "[]");
-		if (!Array.isArray(saved) || saved.some((link) => !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || !workId$1(link.work_item_id) || !Number.isSafeInteger(link.version) || link.version < 1 || typeof link.created_by !== "string")) throw mismatch();
+		if (!Array.isArray(saved) || saved.some((link) => !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || !workId$2(link.work_item_id) || !Number.isSafeInteger(link.version) || link.version < 1 || typeof link.created_by !== "string")) throw mismatch();
 		return saved;
 	}
 	function rememberWithdrawal(link, remove = false) {
@@ -25994,7 +26026,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			if (!Array.isArray(data.links) || data.links.length > 20) throw mismatch();
 			const next = checkPage(data, cursor, "next_after");
 			const visible = await Promise.all(data.links.map(async (link) => {
-				if (link.workspace_id !== workspaceId || !workId$1(link.work_item_id) || !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || link.state !== "active" || !Number.isSafeInteger(link.version) || link.version < 1 || !matches(link.fixed_ref)) throw mismatch();
+				if (link.workspace_id !== workspaceId || !workId$2(link.work_item_id) || !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || link.state !== "active" || !Number.isSafeInteger(link.version) || link.version < 1 || !matches(link.fixed_ref)) throw mismatch();
 				const detail = await api("GET", `/work-items/${encodeURIComponent(link.work_item_id)}`);
 				if (detail.work_item?.work_item_id !== link.work_item_id || typeof detail.work_item.title !== "string") throw mismatch();
 				return {
@@ -26071,7 +26103,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	});
 	workRefresh.disabled = true;
 	function checkCard(card, id = card?.work_item_id) {
-		if (!workId$1(id) || card?.work_item_id !== id || card.work?.work_item_id !== id || typeof card.work.title !== "string" || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== id || card.work.project_id !== card.binding.project_id || !/^pmwb_[0-9a-f]{32}$/.test(card.binding.binding_id) || !Number.isSafeInteger(card.work.version) || card.work.version < 1) throw mismatch();
+		if (!workId$2(id) || card?.work_item_id !== id || card.work?.work_item_id !== id || typeof card.work.title !== "string" || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== id || card.work.project_id !== card.binding.project_id || !/^pmwb_[0-9a-f]{32}$/.test(card.binding.binding_id) || !Number.isSafeInteger(card.work.version) || card.work.version < 1) throw mismatch();
 		return card;
 	}
 	function choices() {
@@ -26126,7 +26158,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		workSelecting = true;
 		updateSelectionControls();
 		try {
-			if (id && !workId$1(id)) throw mismatch();
+			if (id && !workId$2(id)) throw mismatch();
 			if (id) localStorage.setItem(selectionKey, id);
 			else localStorage.removeItem(selectionKey);
 			if (!id) return;
@@ -26306,11 +26338,274 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	};
 }
 //#endregion
+//#region src/pm-history-discovery.js
+var linkId = (value) => typeof value === "string" && /^hxl_[0-9a-f]{32}$/.test(value);
+var workId$1 = (value) => typeof value === "string" && /^wi_[0-9a-f]{20}$/.test(value);
+var exact$1 = (value, keys) => value && !Array.isArray(value) && typeof value === "object" && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+var invalid = () => Error("HISTORY_CLEANUP_PAGE_INVALID");
+function cleanupPage(data, work, ids = new Set(), cursors = new Set()) {
+	if (!exact$1(data, ["links", "next_after"]) || !workId$1(work) || !Array.isArray(data.links) || data.links.length > 20 || data.next_after !== null && (!linkId(data.next_after) || cursors.has(data.next_after))) throw invalid();
+	const seen = new Set(ids), links = [];
+	for (const row of data.links) {
+		if (!exact$1(row, [
+			"link_id",
+			"work_item_id",
+			"version"
+		]) || !linkId(row.link_id) || row.work_item_id !== work || !Number.isSafeInteger(row.version) || row.version < 1 || seen.has(row.link_id)) throw invalid();
+		seen.add(row.link_id);
+		links.push({
+			link_id: row.link_id,
+			work_item_id: row.work_item_id,
+			version: row.version
+		});
+	}
+	return {
+		links,
+		next_after: data.next_after
+	};
+}
+function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, onChange }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let disposed = false, opened = false, epoch = 0, serial = 0, selected = "", busy = false, workBusy = false;
+	let after = null, workAfter = null, pages = 0, loaded = false, review = false;
+	const rows = new Map(), works = new Map(), ids = new Set(), cursors = new Set();
+	const status = h("div", { role: "status" }), workStatus = h("div", { role: "status" });
+	const select = h("select", {
+		"aria-label": t("exh_work"),
+		onchange: () => {
+			selected = works.has(select.value) ? select.value : "";
+			clearPages();
+			status.replaceChildren();
+			sync();
+			onChange();
+		}
+	});
+	const read = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_cleanup_read_ids"),
+		onclick: () => void readPage(true, false)
+	});
+	const again = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_cleanup_read_again"),
+		onclick: () => void readPage(true, true)
+	});
+	const more = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_more_links"),
+		onclick: () => void readPage(false, review)
+	});
+	const workMore = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_more_work"),
+		onclick: () => void readWorks(false)
+	});
+	const retryWorks = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_choose_work"),
+		onclick: () => void readWorks(true)
+	});
+	retryWorks.hidden = true;
+	const chooser = h("div", {
+		"data-history-cleanup-chooser": "",
+		hidden: true
+	}, h("p", { class: "ui-meta" }, t("exh_cleanup_discover_help")), h("label", {}, t("exh_work"), select), workStatus, h("div", { class: "exh-actions" }, workMore, retryWorks, read, again, more), status);
+	const discover = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_cleanup_discover"),
+		onclick: () => {
+			if (!available() || opened) return;
+			opened = true;
+			chooser.hidden = false;
+			discover.setAttribute("aria-expanded", "true");
+			readWorks(true);
+			select.focus();
+		}
+	});
+	discover.setAttribute("aria-expanded", "false");
+	const element = h("div", {
+		"data-history-discovery": "",
+		hidden: true
+	}, h("div", { class: "exh-actions" }, discover), chooser);
+	function available() {
+		try {
+			alive();
+		} catch {
+			return false;
+		}
+		return !disposed && enabled();
+	}
+	const current = (ticket) => available() && opened && ticket === epoch;
+	function clearPages() {
+		serial++;
+		busy = false;
+		after = null;
+		pages = 0;
+		loaded = review = false;
+		rows.clear();
+		ids.clear();
+		cursors.clear();
+	}
+	function sync() {
+		read.hidden = loaded;
+		again.hidden = !loaded;
+		read.disabled = again.disabled = !available() || !selected || busy;
+		more.hidden = !loaded || after === null || pages >= 25;
+		more.disabled = busy;
+		workMore.hidden = workAfter === null;
+		workMore.disabled = retryWorks.disabled = workBusy;
+		status.setAttribute("aria-busy", String(busy));
+	}
+	function choices() {
+		select.replaceChildren(h("option", { value: "" }, t("exh_select_work")), ...[...works.values()].map((card) => h("option", { value: card.work_item_id }, card.work.title)));
+		select.value = selected;
+	}
+	async function readWorks(reset) {
+		if (!available() || !opened || workBusy) return;
+		const ticket = epoch, cursor = reset ? 0 : workAfter;
+		if (!reset && cursor === null) return;
+		workBusy = true;
+		retryWorks.hidden = true;
+		sync();
+		workStatus.replaceChildren();
+		try {
+			const data = await api("GET", `${endpoint}/kanban?after=${cursor}&limit=20`);
+			if (!current(ticket)) return;
+			if (data.workspace_id !== workspaceId || !Array.isArray(data.cards) || data.cards.length > 20 || data.next_cursor !== null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= cursor)) throw invalid();
+			for (const card of data.cards) if (!workId$1(card?.work_item_id) || card.work?.work_item_id !== card.work_item_id || typeof card.work.title !== "string" || card.binding?.workspace_id !== workspaceId || card.binding.work_item_id !== card.work_item_id || card.work.project_id !== card.binding.project_id || !/^pmwb_[0-9a-f]{32}$/.test(card.binding.binding_id)) throw invalid();
+			if (reset) works.clear();
+			for (const card of data.cards) works.set(card.work_item_id, card);
+			workAfter = data.next_cursor;
+			if (selected && !works.has(selected)) {
+				selected = "";
+				clearPages();
+				onChange();
+			}
+			choices();
+			if (!works.size) workStatus.append(h("p", { class: "ui-meta" }, t("exh_no_work")));
+		} catch (error) {
+			if (current(ticket)) {
+				works.clear();
+				selected = "";
+				workAfter = null;
+				clearPages();
+				choices();
+				onChange();
+				retryWorks.hidden = false;
+				workStatus.replaceChildren(errorBox(error, {
+					summary: t("exh_cleanup_read_error"),
+					within: workStatus,
+					sourceRefresh: false
+				}));
+			}
+		} finally {
+			if (current(ticket)) {
+				workBusy = false;
+				sync();
+			}
+		}
+	}
+	async function readPage(reset, reviewVersion) {
+		if (!available() || !opened || !selected || busy || !reset && (after === null || pages >= 25)) return;
+		if (reset) {
+			clearPages();
+			review = reviewVersion;
+			onChange();
+		}
+		const ticket = epoch, request = ++serial, work = selected, cursor = reset ? null : after;
+		busy = true;
+		status.replaceChildren();
+		sync();
+		try {
+			const data = await api("GET", `${endpoint}/work/${encodeURIComponent(work)}/external-links/cleanup?limit=20${cursor ? `&after=${encodeURIComponent(cursor)}` : ""}`);
+			if (!current(ticket) || request !== serial || selected !== work) return;
+			const page = cleanupPage(data, work, ids, cursors);
+			for (const row of page.links) {
+				rows.set(row.link_id, row);
+				ids.add(row.link_id);
+			}
+			after = page.next_after;
+			if (after !== null) cursors.add(after);
+			pages++;
+			loaded = true;
+			status.replaceChildren(h("p", { class: "ui-meta" }, t(rows.size ? "exh_cleanup_discovered" : after === null ? "exh_cleanup_none" : "exh_cleanup_empty_page")));
+			if (pages >= 25 && after !== null) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_read_limit")));
+			onChange("page");
+		} catch (error) {
+			if (current(ticket) && request === serial) {
+				clearPages();
+				onChange();
+				status.replaceChildren(errorBox(error, {
+					summary: t("exh_cleanup_read_error"),
+					within: status,
+					sourceRefresh: false
+				}));
+			}
+		} finally {
+			if (current(ticket) && (request === serial || !busy)) {
+				busy = false;
+				sync();
+			}
+		}
+	}
+	function reset() {
+		epoch++;
+		opened = workBusy = false;
+		selected = "";
+		workAfter = null;
+		works.clear();
+		clearPages();
+		choices();
+		chooser.hidden = true;
+		discover.setAttribute("aria-expanded", "false");
+		status.replaceChildren();
+		workStatus.replaceChildren();
+		sync();
+	}
+	return {
+		element,
+		rows,
+		reviewVersion: () => review,
+		has: (id) => available() && opened && rows.has(id),
+		invalidate() {
+			clearPages();
+			sync();
+			onChange();
+		},
+		forget(id) {
+			rows.delete(id);
+			serial++;
+			busy = false;
+			sync();
+		},
+		focus: () => {
+			(loaded ? again : discover).focus({ preventScroll: true });
+		},
+		update() {
+			element.hidden = !available();
+			if (element.hidden) reset();
+			else sync();
+		},
+		reset,
+		dispose() {
+			disposed = true;
+			reset();
+		}
+	};
+}
+//#endregion
 //#region src/pm-history-cleanup.js
-function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, form, errorBox }) {
+function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namespace, form, errorBox }) {
 	const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set();
 	const recovery = historyRecovery(localStorage, namespace, workspaceId);
-	let active = false, disposed = false, count = 20, limited = false;
+	let active = false, disposed = false, count = 20, limited = false, redraw = false;
+	const completed = new Set(), conflicts = new Set();
 	const status = h("div", { role: "status" }), rows = h("div");
 	const refresh = button({
 		variant: "ghost",
@@ -26327,10 +26622,27 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 			draw();
 		}
 	});
+	const discovery = historyDiscovery({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox,
+		enabled: () => supported() && caps()?.features?.external_history?.relationships?.cleanup_discovery?.version === 1,
+		onChange: (reason) => {
+			if (reason === "page" && discovery.reviewVersion()) try {
+				const pending = new Set(recovery.read().filter((value) => value.intent).map((value) => value.row.link_id));
+				for (const id of discovery.rows.keys()) if (!pending.has(id)) conflicts.delete(id);
+			} catch {}
+			redraw = true;
+			draw();
+		}
+	});
 	const element = h("details", {
 		"data-history-cleanup": "",
 		hidden: true
-	}, h("summary", {}, t("exh_cleanup")), h("p", { class: "ui-meta" }, t("exh_cleanup_help")), status, rows, h("div", { class: "exh-actions" }, refresh, more));
+	}, h("summary", {}, t("exh_cleanup")), h("p", { class: "ui-meta" }, t("exh_cleanup_help")), discovery.element, status, rows, h("div", { class: "exh-actions" }, refresh, more));
 	function supported(visible = true) {
 		try {
 			alive();
@@ -26377,6 +26689,7 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 		refresh.disabled = more.disabled = false;
 	}
 	function remove(row) {
+		discovery.forget(row.link_id);
 		records.remove(row.link_id);
 		if (!row.source_id || !row.entry_id) return;
 		const key = `batc.pm.${historyDraftNamespace(namespace, row)}.withdrawals`;
@@ -26386,16 +26699,21 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 	}
 	function draw() {
 		if (!supported() || !element.open || [...forms].some((value) => value.checking())) return;
+		redraw = false;
 		clearForms();
 		status.replaceChildren();
 		more.hidden = true;
 		try {
 			const known = records.read();
 			legacyPending();
-			const visible = recovery.read().filter((value) => value.intent ? supported() : allowed(value.row));
-			for (const value of visible.slice(0, count)) {
+			const local = recovery.read().filter((value) => value.intent ? supported() : allowed(value.row));
+			const visible = new Map(local.slice(0, count).map((value) => [value.row.link_id, value]));
+			for (const row of discovery.rows.values()) visible.set(row.link_id, recovery.resolve(row, { reviewVersion: discovery.reviewVersion() }));
+			for (const value of visible.values()) {
 				const row = value.row;
+				if (completed.has(row.link_id)) continue;
 				const version = h("p", { class: "ui-meta" }, t("exh_cleanup_version", { version: row.version }));
+				const discovered = discovery.has(row.link_id);
 				const editor = historyWithdrawalForm({
 					h,
 					t,
@@ -26403,7 +26721,8 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 					recovery,
 					row,
 					errorBox,
-					permitted: () => value.known && allowed(row),
+					reviewVersion: discovered && discovery.reviewVersion(),
+					permitted: () => !conflicts.has(row.link_id) && (value.known && allowed(row) || discovery.has(row.link_id)),
 					recoverPermitted: () => supported(),
 					label: "exh_unlink",
 					onResolve: (selected) => {
@@ -26414,13 +26733,30 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 						if (result?.link_id !== row.link_id || result.state !== "withdrawn" || result.version !== version + 1) throw Error(t("pm_scope_mismatch"));
 						remove(row);
 					},
+					onError: (error) => {
+						if (["PM_HISTORY_SOURCE_UNAVAILABLE", "FORBIDDEN"].includes(error.code)) discovery.invalidate();
+						if (["PM_HISTORY_LINK_CHANGED", "VERSION_CONFLICT"].includes(error.code)) {
+							conflicts.add(row.link_id);
+							discovery.forget(row.link_id);
+							status.replaceChildren(h("p", { role: "status" }, t("exh_cleanup_conflict")));
+						}
+						return false;
+					},
 					onSaved: () => {
 						alive();
+						completed.add(row.link_id);
+						if (editor.box.contains(document.activeElement)) {
+							if (discovered) discovery.focus();
+							else refresh.focus();
+						}
 						editor.box.hidden = true;
 						rowElement.prepend(h("p", { role: "status" }, t("exh_cleanup_done")));
 					},
 					onStateChange: () => {
 						refresh.disabled = more.disabled = [...forms].some((value) => value.checking());
+						if (redraw && !refresh.disabled) queueMicrotask(() => {
+							if (redraw) draw();
+						});
 					}
 				});
 				const rowElement = h("div", {
@@ -26434,8 +26770,9 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 				rows.append(rowElement);
 				editor.update();
 			}
-			more.hidden = visible.length <= count;
-			if (!visible.length) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_empty")));
+			more.hidden = local.length <= count;
+			if (!visible.size) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_empty")));
+			if (completed.size) status.append(h("p", { role: "status" }, t("exh_cleanup_done")));
 			if (limited || known.length >= 500) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_limit")));
 		} catch (error) {
 			clearForms();
@@ -26446,8 +26783,11 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 		}
 	}
 	element.addEventListener("toggle", () => {
-		if (element.open) draw();
-		else {
+		if (element.open) {
+			discovery.update();
+			draw();
+		} else {
+			discovery.reset();
 			clearForms();
 			status.replaceChildren();
 			count = 20;
@@ -26464,12 +26804,13 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 			}
 		},
 		remove(linkId) {
-			const row = recovery.read().find((value) => value.row.link_id === linkId)?.row;
+			const row = recovery.read().find((value) => value.row.link_id === linkId)?.row || discovery.rows.get(linkId);
 			if (row) remove(row);
 		},
 		setActive(value) {
 			active = value;
 			element.hidden = !supported();
+			discovery.update();
 			if (element.hidden) {
 				clearForms();
 				status.replaceChildren();
@@ -26478,6 +26819,7 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 		},
 		withdraw() {
 			active = false;
+			discovery.reset();
 			clearForms();
 			status.replaceChildren();
 			element.open = false;
@@ -26486,6 +26828,7 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 		dispose() {
 			disposed = true;
 			this.withdraw();
+			discovery.dispose();
 		}
 	};
 }
@@ -26506,6 +26849,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 	const cleanup = historyCleanup({
 		h,
 		t,
+		api,
 		alive,
 		workspaceId,
 		workspace,

@@ -92,7 +92,7 @@ export function historyRecovery(storage, namespace, workspaceId) {
     }
     return [...byId.values()];
   }
-  function resolve(value) {
+  function resolve(value, {reviewVersion = false} = {}) {
     const target = targetOf(value,workspaceId);
     if (!version(value?.version)) throw invalid();
     const legacy = value.source_id !== undefined || value.entry_id !== undefined || value.fixed_ref !== undefined;
@@ -102,7 +102,7 @@ export function historyRecovery(storage, namespace, workspaceId) {
     const current = read().find(item=>item.row.link_id === target.link_id);
     if (current) {
       if (current.row.work_item_id !== target.work_item_id) throw invalid();
-      return current;
+      return reviewVersion && !current.intent ? {...current,row:{...current.row,version:value.version}} : current;
     }
     if (legacy) {
       const row = historyRecord({...value,workspace_id:workspaceId});
@@ -132,13 +132,14 @@ export function historyRecovery(storage, namespace, workspaceId) {
 // One form owner per row. If an intent appeared since rendering, remount that
 // exact original instead of allocating another key. Remounting never sends POST.
 export function historyWithdrawalForm({h,t,form,recovery,row,permitted,recoverPermitted = permitted,
-  beforeNew = () => {}, onResolve = () => {}, onError = () => false, onSaved = () => {}, errorBox, ...options}) {
+  beforeNew = () => {}, onResolve = () => {}, onError = () => false, onSaved = () => {}, errorBox, reviewVersion = false, ...options}) {
   const box = h('div'), notice = h('div', {role:'status'});
   let editor, selected, owned, disposed = false, queued = false, completed = false, needsRead = false, lastError = null;
   function report(error) {
     if (lastError === error.code) return;
     lastError = error.code;
-    notice.replaceChildren(errorBox(Error(t(error.code === 'HISTORY_RECOVERY_FULL' ? 'exh_cleanup_limit' : 'exh_cleanup_invalid')), {within:notice,sourceRefresh:false}));
+    const key = error.code === 'HISTORY_RECOVERY_FULL' ? 'full' : 'invalid';
+    notice.replaceChildren(errorBox(Error(t(selected?.sourceIndependent ? `exh_cleanup_recovery_${key}` : key === 'full' ? 'exh_cleanup_limit' : 'exh_cleanup_invalid')), {within:notice,sourceRefresh:false}));
   }
   function remount() {
     if (queued || disposed) return;
@@ -148,7 +149,10 @@ export function historyWithdrawalForm({h,t,form,recovery,row,permitted,recoverPe
   function ready(recovering) {
     if (disposed || completed || !(recovering ? recoverPermitted() : permitted())) return false;
     try {
-      recovery.admit(selected,owned);
+      const stored = recovery.admit(selected,owned);
+      // A failed removeItem must keep the original owner; remounting its known
+      // receipt here would restart automatic GET recovery on every failed clear.
+      if (owned && !stored?.intent && editor && !editor.intentRequest()) owned = null;
       return Boolean(owned) || !needsRead;
     } catch (error) {
       if (error.code === 'HISTORY_RECOVERY_CHANGED' && !owned) remount(); else report(error);
@@ -156,14 +160,14 @@ export function historyWithdrawalForm({h,t,form,recovery,row,permitted,recoverPe
     }
   }
   function mount() {
-    const next = recovery.resolve(row);
+    const next = recovery.resolve(row,{reviewVersion});
     editor?.dispose(); selected = next; owned = next.intent; needsRead = Boolean(owned?.initialAdmissionRefused);
     notice.replaceChildren(); lastError = null; onResolve(next);
     editor = form({...options,namespace:next.namespace,action,target:next.target,fields:{},params:()=>({}),
       pruneEmpty:next.sourceIndependent,
       preconditions:()=>{recovery.admit(selected,owned); beforeNew(); return {expected_link_version:selected.row.version};},
       permitted:()=>ready(false),recoverPermitted:()=>ready(true),
-      beforePersist:(saved,key)=>{recovery.beforePersist(selected,saved,key,owned); owned = saved.intent ? structuredClone(saved.intent) : null;},
+      beforePersist:(saved,key)=>{recovery.beforePersist(selected,saved,key,owned); if (saved.intent) owned = structuredClone(saved.intent);},
       onError:error=>{
         if (['PM_HISTORY_LINK_CHANGED','VERSION_CONFLICT'].includes(error.code)) needsRead = true;
         if (typeof error.code === 'string' && error.code.startsWith('HISTORY_RECOVERY_')) {report(error); return true;}

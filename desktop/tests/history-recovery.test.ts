@@ -35,6 +35,18 @@ test('saved seven-field records keep the legacy namespace, version and serialize
   assert.equal(selected.namespace,historyDraftNamespace(namespace,known())); assert.equal(selected.row.version,1);
   assert.deepEqual([...storage.values],before);
 });
+test('explicit rereview can use a newer version without changing saved bytes or a pending intent',()=>{
+  const {storage,recovery}=fixture();
+  historyRecords(storage,namespace,ws).remember(known());
+  const before=[...storage.values],latest={...row(),version:7};
+  assert.equal(recovery.resolve(latest).row.version,1);
+  const reviewed=recovery.resolve(latest,{reviewVersion:true});
+  assert.equal(reviewed.row.version,7);assert.equal(reviewed.namespace,historyDraftNamespace(namespace,known()));
+  assert.deepEqual([...storage.values],before);
+  put(storage,row(),reviewed.namespace);
+  const original=recovery.resolve(latest,{reviewVersion:true});
+  assert.equal(original.row.version,1);assert.equal(original.intent.key,'original-key');
+});
 test('orphan legacy intent wins over saved metadata without markers and keeps target ordering',()=>{
   const {storage,recovery,records}=fixture();records.remember({...known(),version:7});
   const original=saved(),ordered={link_id:row().link_id,workspace_id:ws,work_item_id:wi};original.intent.request.target=ordered;

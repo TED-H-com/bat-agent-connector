@@ -13,7 +13,7 @@ export function workspaceExternalHistory({h, t, api, alive, workspaceId, errorBo
   const relationships = new Set();
   function clearEntries() {for (const value of relationships) value.dispose(); relationships.clear(); messages?.replaceChildren();}
   const status = h('div', {role: 'status'}), list = h('div', {class: 'exh-list'});
-  const cleanup = historyCleanup({h,t,alive,workspaceId,workspace,caps,namespace,form,errorBox});
+  const cleanup = historyCleanup({h,t,api,alive,workspaceId,workspace,caps,namespace,form,errorBox});
   const element = sectionCard({title: t('exh_title'), body: h('div', {}, h('p', {class: 'ui-meta'}, t('exh_help')), status, list, cleanup.element)});
   element.dataset.externalHistory = '';
   const sourceName = row => `${row.adapter?.startsWith('codex-') ? 'Codex' : row.adapter?.startsWith('claude-') ? 'Claude' : t('exh_source')} · ${row.source_id}`;
