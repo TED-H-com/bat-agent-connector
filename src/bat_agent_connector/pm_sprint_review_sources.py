@@ -13,8 +13,10 @@ def validate(ref):
     pm_sprint_review.exact(ref, FIELDS)
     if ref["kind"] != KIND:
         raise pm_sprint_review.mismatch()
-    for key in FIELDS:
-        pm_meetings._text(ref[key], key, 200)
+    pm_sprint_review.identifier(ref["meeting_id"], "pmmeet_")
+    pm_sprint_review.identifier(ref["completion_id"], "pmmc_")
+    pm_sprint_review.document_digest(ref["completion_digest"])
+    pm_sprint_review.item_key(ref["decision_id"])
     return ref
 
 

@@ -260,16 +260,18 @@ def _draft(ops, principal, meeting, context, snapshot, params):
               'rationale': _text(params.get('rationale'), 'rationale'), 'source_status': 'discussion_proposal',
               'quality': 'unassessed', 'meeting_completed': False, 'execution_authorized': False}
     if 'review_basis' in params:
-        from .pm_sprint_review import freeze
+        from .pm_sprint_review import freeze, item_key
         if meeting['kind'] != 'review':
             raise _bad('INVALID_PARAMS', 'Guided basis belongs only to Sprint Review')
         if params['output'].get('feedback'):
             raise _bad('INVALID_PARAMS', 'Guided feedback is derived from exact source references')
         for saved, authored in zip(decisions, params.get('decisions', []), strict=True):
-            owner = authored.get('owner_actor')
+            owner = _text(authored.get('owner_actor'), 'Review decision owner', 200)
             if not isinstance(owner, str) or pm_sprints._role(ops.db, meeting['workspace_id'], owner) not in {'owner', 'contributor'}:
                 raise _bad('FORBIDDEN', 'Review decisions need a current accountable workspace writer', 403)
             ids = pm_sprints._ids(authored.get('follow_up_ids', []), 'follow_up_ids', 10)
+            for identity in ids:
+                item_key(identity)
             if not ids or set(ids) - {f['id'] for f in follow_ups}:
                 raise _bad('INVALID_PARAMS', 'Associate each Review decision with its explicit follow-up')
             saved.update(owner_actor=owner, follow_up_ids=ids)

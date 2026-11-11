@@ -94,6 +94,16 @@ lineage barriers. Existing action-specific shape, membership and CAS order is
 unchanged. For guided sources, validate bounded shape, resolve source access and
 integrity, then check exact relationships, semantic completion and ownership,
 then whole-document size. Original-key authorization precedes fresh-action CAS.
+Every new typed selector is a bounded canonical string: producer-specific IDs
+use their exact prefix and 32 lowercase hex digits; document digests use 64 hex
+digits, Result digests `sha256:` plus 64, and candidate commits 40. Feedback,
+decision and follow-up keys retain the existing stable item-key syntax. Assessment
+versions are integers within the existing quality-history bound; actor names keep
+the existing bounded text/role policy. Malformed selectors return central
+`INVALID_PARAMS` (422) before their cache keys, SQL or source resolution, after
+the existing authorization/CAS barriers. Validate complete selector collections
+before resolving any member. This refusal is shared by OperationService, HTTP,
+RPC and MCP; it never falls through as SQLite ProgrammingError or HTTP 500.
 Repeat authoritative checks at effect time and before publication.
 `PM_SPRINT_REVIEW_REFERENCE_MISMATCH` is 409 for readable mismatched tuples;
 `PM_SPRINT_REVIEW_DECISION_REQUIRED` is 409 for absent governance proof;

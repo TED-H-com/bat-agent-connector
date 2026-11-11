@@ -36,7 +36,7 @@ async def test_fixed_receipt_is_not_replaced_by_latest_and_reads_do_not_write(st
     assert original["receipt"] == first
     assert original["work_item_id"] == att["work_item_id"]
     with pytest.raises(OperationError, match="PM_SPRINT_REVIEW_REFERENCE_MISMATCH"):
-        reads.read_fixed_receipt(*args[:-1], "incorrect")
+        reads.read_fixed_receipt(*args[:-1], "sha256:" + "0" * 64)
     assert (ops.db.total_changes, counts(), list(mock.invokes)) == before
 
 

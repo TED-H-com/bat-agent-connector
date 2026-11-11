@@ -272,9 +272,12 @@ def read_fixed_receipt(ops, principal, workspace_id, attempt_id, result_id, dige
     with _snapshot(ops.db):
         if not principal.allows('observe'):
             raise _bad('FORBIDDEN', 'Fixed Result reads require observe', 403)
+        pm_workspace.require_member(ops.db, principal, workspace_id)
+        from .pm_sprint_review import identifier, selector
+        identifier(attempt_id, 'att_')
+        identifier(result_id, 'res_')
+        selector(digest, 'Result digest', r'sha256:[0-9a-f]{64}')
         ctx = _attempt_context(ops, principal, workspace_id, attempt_id)
-        if not isinstance(result_id, str) or not isinstance(digest, str):
-            raise _bad('INVALID_PARAMS', 'Select an exact Result ID and digest')
         if not pm_attempt_results.installed(ops.db):
             raise _bad('NOT_FOUND', 'Original Result unavailable', 404)
         row = ops.db.execute('SELECT * FROM session_results WHERE workspace_id=? AND attempt_id=? AND result_id=?',

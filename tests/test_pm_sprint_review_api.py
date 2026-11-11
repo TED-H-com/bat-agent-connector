@@ -153,7 +153,7 @@ async def test_new_conflict_codes_keep_http_rpc_mcp_mapping(ops, served, monkeyp
 
         request = copy.deepcopy(request)
         request["idempotency_key"] = "wrong-review-reference-" + field
-        request["params"]["source_ref"][field] = "unrecorded"
+        request["params"]["source_ref"][field] = "0" * 64 if field == "completion_digest" else "unrecorded"
         request["preconditions"]["expected_version"] = 3
         auth = token(d, p.OWNER.actor, "observe", "manage")
         monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")

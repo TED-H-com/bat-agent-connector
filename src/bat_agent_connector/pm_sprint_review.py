@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 
 from . import pm_access, pm_meetings, pm_snapshots, pm_sprints, pm_workspace
@@ -29,6 +30,33 @@ def exact(value, fields):
         raise OperationError("INVALID_PARAMS", "Supply exact guided Review fields", 422)
 
 
+def selector(value, label, pattern):
+    """Validate caller selectors before memo keys, SQL or original-source reads."""
+    if not isinstance(value, str) or len(value) > 200 or re.fullmatch(pattern, value) is None:
+        raise OperationError("INVALID_PARAMS", f"Supply a bounded canonical {label}", 422)
+    return value
+
+
+def identifier(value, prefix):
+    return selector(value, prefix + "identifier", re.escape(prefix) + r"[0-9a-f]{32}")
+
+
+def document_digest(value):
+    return selector(value, "document digest", r"[0-9a-f]{64}")
+
+
+def item_key(value):
+    return selector(value, "item key", pm_sprints.ITEM_ID)
+
+
+def validate_proposal(ref):
+    exact(ref, ("meeting_id", "draft_revision_id", "draft_digest", "decision_id"))
+    identifier(ref["meeting_id"], "pmmeet_")
+    identifier(ref["draft_revision_id"], "pmmrev_")
+    document_digest(ref["draft_digest"])
+    item_key(ref["decision_id"])
+
+
 def items(value, label):
     return pm_meetings._list(value, label, MAX_SOURCES)
 
@@ -47,15 +75,24 @@ def validate(basis):
     seen = set()
     for row in basis["results"]:
         exact(row, ("attempt_id", "result_id", "digest", "assessment_ref"))
-        for key in ("attempt_id", "result_id", "digest"):
-            pm_meetings._text(row[key], key, 200)
+        identifier(row["attempt_id"], "att_")
+        identifier(row["result_id"], "res_")
+        selector(row["digest"], "Result digest", r"sha256:[0-9a-f]{64}")
         if row["result_id"] in seen:
             raise mismatch()
         seen.add(row["result_id"])
         if row["assessment_ref"] is not None:
             from .pm_quality_projections import REF_FIELDS
+            from .pm_quality_reviews import MAX_HISTORY
 
-            exact(row["assessment_ref"], REF_FIELDS)
+            ref = row["assessment_ref"]
+            exact(ref, REF_FIELDS)
+            identifier(ref["review_id"], "pmqr_")
+            identifier(ref["operation_id"], "op_")
+            document_digest(ref["document_digest"])
+            selector(ref["candidate_commit"], "candidate commit", r"[0-9a-f]{40}")
+            if type(ref["version"]) is not int or not 2 <= ref["version"] <= MAX_HISTORY + 1:
+                raise OperationError("INVALID_PARAMS", "Select a bounded assessment version", 422)
     seen, sources = set(), set()
     for row in basis["feedback_items"]:
         exact(row, ("id", "source_ref"))
@@ -65,23 +102,27 @@ def validate(basis):
             raise mismatch()
         if ref.get("kind") == "meeting_note":
             exact(ref, ("kind", "note_id"))
+            identifier(ref["note_id"], "pmmnote_")
         elif ref.get("kind") == "discussion_input":
             exact(ref, ("kind", "thread_id", "input_id", "operation_id"))
+            identifier(ref["thread_id"], "pmt_")
+            identifier(ref["input_id"], "pmi_")
+            identifier(ref["operation_id"], "op_")
         else:
             raise mismatch()
-        for value in ref.values():
-            pm_meetings._text(value, "feedback source", 200)
         identity = pm_snapshots._json(ref)
         if identity in sources:
             raise mismatch()
         sources.add(identity)
-    pm_sprints._ids(basis["governance_revision_ids"], "governance revisions", MAX_SOURCES)
+    for revision in pm_sprints._ids(basis["governance_revision_ids"], "governance revisions", MAX_SOURCES):
+        identifier(revision, "pmgrev_")
     ref = basis["follow_up_ref"]
     if ref is not None:
         exact(ref, ("intake_id", "document_digest", "issue_ids"))
-        pm_sprints._ids(ref["issue_ids"], "issues", MAX_SOURCES)
-        for key in ("intake_id", "document_digest"):
-            pm_meetings._text(ref[key], key, 200)
+        for issue in pm_sprints._ids(ref["issue_ids"], "issues", MAX_SOURCES):
+            identifier(issue, "pmfui_")
+        identifier(ref["intake_id"], "pmfu_")
+        document_digest(ref["document_digest"])
 
 
 def feedback(ops, principal, wid, meeting, context_id, selection):
@@ -437,7 +478,7 @@ def operation_access(db, principal, op):
 
 
 def proposal(ops, principal, wid, ref):
-    exact(ref, ("meeting_id", "draft_revision_id", "draft_digest", "decision_id"))
+    validate_proposal(ref)
     draft = access_draft(ops, principal, wid, ref["draft_revision_id"])
     if draft["meeting_id"] != ref["meeting_id"] or draft["document_digest"] != ref["draft_digest"]:
         raise mismatch()
@@ -457,9 +498,13 @@ def decisions(ops, principal, wid, draft, selected, references):
     from . import pm_governance
 
     pm_meetings._list(references, "governance decisions", 10)
-    by_id = {}
     for ref in references:
         exact(ref, ("decision_id", "revision_id", "document_digest"))
+        item_key(ref["decision_id"])
+        identifier(ref["revision_id"], "pmgrev_")
+        document_digest(ref["document_digest"])
+    by_id = {}
+    for ref in references:
         revision = pm_governance._revision(ops.db, ref["revision_id"])
         record = pm_governance._record(ops.db, wid, revision["record_id"])
         pm_governance._access(ops, principal, record)

@@ -154,6 +154,6 @@ async def test_planning_requires_original_completed_decision(ops, change):
     elif change == "supersedes":
         params["supersedes_input_id"] = request["params"]["source_ref"]["completion_id"]
     else:
-        params["source_ref"]["meeting_id"] = "pmm_" + "f" * 32
+        params["source_ref"]["meeting_id"] = "pmmeet_" + "f" * 32
     with pytest.raises(OperationError):
         ops.create(OWNER, **altered)
