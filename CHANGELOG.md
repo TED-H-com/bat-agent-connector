@@ -4,6 +4,9 @@
 
 ## 0.2.18 / Desktop 0.1.14 (2026-11-11)
 
+- Update the desktop updater plugin to Tauri updater 2.14.1, with patched archive
+  handling for ZIP-wrapped Windows desktop updates (`zip` 9.5.1).
+
 - Validate operation-history cursors centrally: reject repeated, empty, non-finite
   or non-positive timestamps and malformed paired operation IDs while preserving
   timestamp-only pagination and unrelated HTTP query compatibility. Python and
