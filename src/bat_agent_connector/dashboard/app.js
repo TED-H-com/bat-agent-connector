@@ -1553,6 +1553,8 @@ var init_workbench_strings = __esmMin((() => {
 			wc_details: "Evidence and details",
 			wc_list: "Work list",
 			wc_list_help: "Choose work from the project list.",
+			wc_list_resizer: "Resize work list",
+			wc_list_resizer_help: "Drag or use arrow keys to resize the work list. Double-click to reset.",
 			wc_board: "Board",
 			wc_session: "Session",
 			wc_project: "Project",
@@ -1614,6 +1616,8 @@ var init_workbench_strings = __esmMin((() => {
 			wc_details: "證據與詳情",
 			wc_list: "工作清單",
 			wc_list_help: "從專案清單選擇工作。",
+			wc_list_resizer: "調整工作清單寬度",
+			wc_list_resizer_help: "拖曳或使用方向鍵調整工作清單寬度，連按兩下恢復預設。",
 			wc_board: "看板",
 			wc_session: "工作階段",
 			wc_project: "專案",
@@ -2141,6 +2145,8 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_blockers: "Blockers",
 			ov_decisions: "Open decisions",
 			ov_recent_decisions: "Recently decided",
+			ov_original_assessment: "Original assessment",
+			ov_assessment_source: "This delivery cites this exact assessment.",
 			ov_accepted: "{accepted} of {total} accepted",
 			ov_requirements: "{n} requirements",
 			ov_adopted: "adopted {date}",
@@ -2206,6 +2212,8 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_blockers: "阻礙",
 			ov_decisions: "待決事項",
 			ov_recent_decisions: "近期決策",
+			ov_original_assessment: "原始評估",
+			ov_assessment_source: "此交付引用這筆原始評估。",
 			ov_accepted: "{total} 項中 {accepted} 項已驗收",
 			ov_requirements: "{n} 項需求",
 			ov_adopted: "{date}採用",
@@ -10288,6 +10296,38 @@ var workResultStrings;
 var init_pm_work_result_strings = __esmMin((() => {
 	workResultStrings = {
 		"zh-TW": {
+			wres_req_heading: "成果對應的需求",
+			wres_req_none: "沒有可見的明確需求關聯；這不表示成果不需要驗收。",
+			wres_req_selection: "以下列出原始評估；驗收或解除依賴需有明確選定的評估。",
+			wres_req_sources: "原始來源與證據",
+			wres_req_no_conclusion: "尚無驗收結論",
+			wres_req_verified_no_conclusion: "已驗證，尚無驗收結論",
+			wres_req_assessments_recorded: "已有評估紀錄，尚未選定",
+			wres_req_unavailable: "目前無法完整確認",
+			wres_req_accepted: "原結論：接受",
+			wres_req_rejected: "原結論：拒絕",
+			wres_req_unassessed: "原結論：未評估",
+			wres_req_not_defined: "未定義",
+			wres_req_applicable: "仍適用",
+			wres_req_no_longer_applies: "不再適用",
+			wres_req_applicability_changed: "來源或評估版本已變更，請查看原始證據。",
+			wres_req_assessed_by: "評估者",
+			wres_req_dod: "完成定義",
+			wres_req_criterion: "驗收條件",
+			wres_req_qualified: "符合原品質要求",
+			wres_req_not_qualified: "目前未符合原品質要求",
+			wres_req_revoked: "此審閱已撤回；原結論保留供追溯。",
+			wres_req_reviews_partial: "評估紀錄未完整涵蓋，不能據此判定沒有其他結論。",
+			wres_req_packages_partial: "相依工作未完整涵蓋，不能據此判定沒有其他依賴。",
+			wres_req_dependencies: "相依工作的就緒狀態",
+			wres_req_without_selection: "尚未選定評估",
+			wres_req_original_selection: "交接時明確選定的評估",
+			wres_req_selections_partial: "交接時選定的評估紀錄未完整涵蓋。",
+			wres_req_ready: "已就緒",
+			wres_req_blocked: "尚未就緒",
+			wres_req_passed: "通過",
+			wres_req_failed: "未通過",
+			wres_req_unknown: "未知",
 			wres_heading: "成果",
 			wres_invalid_envelope: "無法讀取這份成果。",
 			wres_state_accepted: "已受理",
@@ -10316,6 +10356,7 @@ var init_pm_work_result_strings = __esmMin((() => {
 			wres_pill_claimed_done: "代理表示已完成",
 			wres_check_verification: "驗證",
 			wres_verification_unverified: "未驗證",
+			wres_verification_unknown: "未知",
 			wres_verification_running: "驗證中",
 			wres_verification_verified: "已驗證",
 			wres_verification_failed: "驗證失敗",
@@ -10430,6 +10471,38 @@ var init_pm_work_result_strings = __esmMin((() => {
 			error_code_PM_DIFF_UNAVAILABLE: "無法自 BAT 讀取工作樹差異。"
 		},
 		en: {
+			wres_req_heading: "Requirements for this result",
+			wres_req_none: "No visible explicit requirement relation. This does not mean acceptance is unnecessary.",
+			wres_req_selection: "Original assessments are kept separately. No assessment has been selected here for acceptance or dependencies.",
+			wres_req_sources: "Original sources and evidence",
+			wres_req_no_conclusion: "No acceptance conclusion",
+			wres_req_verified_no_conclusion: "Verified, without an acceptance conclusion",
+			wres_req_assessments_recorded: "Assessments recorded, none selected",
+			wres_req_unavailable: "Could not fully establish the current state",
+			wres_req_accepted: "Original conclusion: accepted",
+			wres_req_rejected: "Original conclusion: rejected",
+			wres_req_unassessed: "Original conclusion: unassessed",
+			wres_req_not_defined: "Not defined",
+			wres_req_applicable: "Still applies",
+			wres_req_no_longer_applies: "No longer applies",
+			wres_req_applicability_changed: "The source or assessment version changed. Inspect the original evidence.",
+			wres_req_assessed_by: "Assessed by",
+			wres_req_dod: "Definition of Done",
+			wres_req_criterion: "Acceptance criterion",
+			wres_req_qualified: "Meets the original quality requirements",
+			wres_req_not_qualified: "Does not currently meet the original quality requirements",
+			wres_req_revoked: "This review was revoked. Its original conclusion remains in the history.",
+			wres_req_reviews_partial: "Assessment coverage is incomplete; other conclusions may exist.",
+			wres_req_packages_partial: "Dependent work coverage is incomplete; other dependencies may exist.",
+			wres_req_dependencies: "Dependent work readiness",
+			wres_req_without_selection: "Without a selected assessment",
+			wres_req_original_selection: "Assessment explicitly selected at handoff",
+			wres_req_selections_partial: "Coverage of original handoff selections is incomplete.",
+			wres_req_ready: "Ready",
+			wres_req_blocked: "Blocked",
+			wres_req_passed: "Passed",
+			wres_req_failed: "Failed",
+			wres_req_unknown: "Unknown",
 			wres_heading: "Result",
 			wres_invalid_envelope: "This result could not be read.",
 			wres_state_accepted: "Accepted",
@@ -10458,6 +10531,7 @@ var init_pm_work_result_strings = __esmMin((() => {
 			wres_pill_claimed_done: "The agent says it is done",
 			wres_check_verification: "Verification",
 			wres_verification_unverified: "Not verified",
+			wres_verification_unknown: "Unknown",
 			wres_verification_running: "Verifying",
 			wres_verification_verified: "Verified",
 			wres_verification_failed: "Verification failed",
@@ -11451,6 +11525,7 @@ var init_i18n = __esmMin((() => {
 			message_table: "訊息表格",
 			message_copy_code: "複製程式碼",
 			message_copy: "複製原文",
+			message_copy_quote: "複製引用",
 			message_copied: "已複製。",
 			message_copy_source: "要複製的原文",
 			message_copy_manual: "無法自動複製，請選取並複製以下原文。",
@@ -13258,6 +13333,7 @@ var init_i18n = __esmMin((() => {
 			message_table: "Message table",
 			message_copy_code: "Copy code",
 			message_copy: "Copy original",
+			message_copy_quote: "Copy quote",
 			message_copied: "Copied.",
 			message_copy_source: "Original text to copy",
 			message_copy_manual: "Automatic copy is unavailable. Select and copy the original text below.",
@@ -18943,6 +19019,339 @@ function projectNavigation({ t, namespace, workspaceId, views, current, discussi
 	}
 	return nav;
 }
+var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
+var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
+function isMobileLayout() {
+	if (typeof window === "undefined") return false;
+	return (window.innerWidth || document.documentElement?.clientWidth || 0) < 1e3;
+}
+function calcSidebarBounds(windowWidth = window.innerWidth) {
+	return {
+		minAllowed: 200,
+		maxAllowed: Math.min(500, Math.max(200, (windowWidth || 1024) - 360))
+	};
+}
+function setupSidebarResizer({ aside, workspace, t, layout = {} }) {
+	if (!aside || !workspace) return { dispose() {} };
+	const storageKey = layout.storageKey || "batc.sidebar.width";
+	const property = layout.property || "--workspace-sidebar-width";
+	const bounds = layout.bounds || calcSidebarBounds;
+	const defaultWidth = layout.defaultWidth || (() => window.innerWidth < 1200 ? 232 : 248);
+	const resetWidth = layout.resetWidth || (() => 248);
+	const enabled = () => !isMobileLayout() && (!layout.enabled || layout.enabled());
+	let savedWidth = defaultWidth(), customWidth = false;
+	try {
+		const raw = localStorage.getItem(storageKey);
+		if (raw !== null) {
+			const parsed = Number(raw);
+			if (Number.isFinite(parsed) && parsed >= 200) {
+				savedWidth = parsed;
+				customWidth = true;
+			}
+		}
+	} catch {}
+	const resizer = document.createElement("div");
+	resizer.className = "workspace-resizer";
+	resizer.setAttribute("role", "separator");
+	resizer.setAttribute("aria-orientation", "vertical");
+	resizer.setAttribute("tabindex", "0");
+	resizer.setAttribute("aria-label", t(layout.label || "workspace_resizer"));
+	resizer.title = t(layout.help || "workspace_resizer_help");
+	const applyWidth = (requestedWidth, persist = true) => {
+		if (!enabled()) {
+			resizer.removeAttribute("aria-valuenow");
+			return requestedWidth;
+		}
+		const { minAllowed, maxAllowed } = bounds();
+		const clamped = Math.max(minAllowed, Math.min(maxAllowed, requestedWidth));
+		workspace.style.setProperty(property, `${clamped}px`);
+		resizer.setAttribute("aria-valuenow", String(clamped));
+		resizer.setAttribute("aria-valuemin", String(minAllowed));
+		resizer.setAttribute("aria-valuemax", String(maxAllowed));
+		if (persist) {
+			customWidth = true;
+			savedWidth = clamped;
+			try {
+				localStorage.setItem(storageKey, String(clamped));
+			} catch {}
+		}
+		return clamped;
+	};
+	let currentWidth = applyWidth(savedWidth, false);
+	let isDragging = false;
+	let startX = 0;
+	let startWidth = currentWidth;
+	let activePointerId = null;
+	const onGlobalKeyDown = (event) => {
+		if (event.key === "Escape" && isDragging) {
+			cancelDrag();
+			event.preventDefault();
+		}
+	};
+	const cancelDrag = () => {
+		if (!isDragging) return;
+		window.removeEventListener("keydown", onGlobalKeyDown);
+		isDragging = false;
+		currentWidth = applyWidth(startWidth, false);
+		resizer.classList.remove("is-resizing");
+		document.body.classList.remove("workspace-resizing");
+		document.body.style.removeProperty("user-select");
+		if (activePointerId !== null) {
+			try {
+				resizer.releasePointerCapture(activePointerId);
+			} catch {}
+			activePointerId = null;
+		}
+	};
+	const onPointerDown = (event) => {
+		if (event.button !== 0 || !enabled()) return;
+		isDragging = true;
+		activePointerId = event.pointerId;
+		startX = event.clientX;
+		startWidth = currentWidth;
+		resizer.classList.add("is-resizing");
+		document.body.classList.add("workspace-resizing");
+		document.body.style.userSelect = "none";
+		window.addEventListener("keydown", onGlobalKeyDown);
+		try {
+			resizer.setPointerCapture(event.pointerId);
+		} catch {}
+		event.preventDefault();
+	};
+	const onPointerMove = (event) => {
+		if (!isDragging || event.pointerId !== activePointerId) return;
+		const delta = event.clientX - startX;
+		currentWidth = applyWidth(startWidth + delta, false);
+	};
+	const onPointerUp = (event) => {
+		if (!isDragging || event.pointerId !== activePointerId) return;
+		window.removeEventListener("keydown", onGlobalKeyDown);
+		const delta = event.clientX - startX;
+		currentWidth = applyWidth(startWidth + delta, true);
+		isDragging = false;
+		resizer.classList.remove("is-resizing");
+		document.body.classList.remove("workspace-resizing");
+		document.body.style.removeProperty("user-select");
+		if (activePointerId !== null) {
+			try {
+				resizer.releasePointerCapture(activePointerId);
+			} catch {}
+			activePointerId = null;
+		}
+	};
+	const onPointerCancel = () => {
+		cancelDrag();
+	};
+	const onKeyDown = (event) => {
+		if (event.key === "Escape") {
+			if (isDragging) {
+				cancelDrag();
+				event.preventDefault();
+			}
+			return;
+		}
+		if (!enabled()) return;
+		const { minAllowed, maxAllowed } = bounds();
+		let handled = false;
+		if (event.key === "ArrowLeft") {
+			currentWidth = applyWidth(currentWidth - (event.shiftKey ? 48 : 16), true);
+			handled = true;
+		} else if (event.key === "ArrowRight") {
+			currentWidth = applyWidth(currentWidth + (event.shiftKey ? 48 : 16), true);
+			handled = true;
+		} else if (event.key === "PageDown") {
+			currentWidth = applyWidth(currentWidth - 48, true);
+			handled = true;
+		} else if (event.key === "PageUp") {
+			currentWidth = applyWidth(currentWidth + 48, true);
+			handled = true;
+		} else if (event.key === "Home") {
+			currentWidth = applyWidth(minAllowed, true);
+			handled = true;
+		} else if (event.key === "End") {
+			currentWidth = applyWidth(maxAllowed, true);
+			handled = true;
+		}
+		if (handled) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	};
+	const onDblClick = () => {
+		if (enabled()) currentWidth = applyWidth(resetWidth(), true);
+	};
+	const refresh = () => {
+		if (!enabled()) cancelDrag();
+		if (!isDragging) currentWidth = applyWidth(customWidth ? savedWidth : defaultWidth(), false);
+	};
+	const onWindowResize = () => {
+		cancelDrag();
+		refresh();
+	};
+	resizer.addEventListener("pointerdown", onPointerDown);
+	resizer.addEventListener("pointermove", onPointerMove);
+	resizer.addEventListener("pointerup", onPointerUp);
+	resizer.addEventListener("pointercancel", onPointerCancel);
+	resizer.addEventListener("lostpointercapture", onPointerCancel);
+	resizer.addEventListener("keydown", onKeyDown);
+	resizer.addEventListener("dblclick", onDblClick);
+	window.addEventListener("resize", onWindowResize);
+	aside.appendChild(resizer);
+	return {
+		resizer,
+		refresh,
+		cancelDrag,
+		getWidth: () => currentWidth,
+		setWidth: (w) => {
+			currentWidth = applyWidth(w, true);
+			return currentWidth;
+		},
+		dispose() {
+			cancelDrag();
+			resizer.removeEventListener("pointerdown", onPointerDown);
+			resizer.removeEventListener("pointermove", onPointerMove);
+			resizer.removeEventListener("pointerup", onPointerUp);
+			resizer.removeEventListener("pointercancel", onPointerCancel);
+			resizer.removeEventListener("lostpointercapture", onPointerCancel);
+			resizer.removeEventListener("keydown", onKeyDown);
+			resizer.removeEventListener("dblclick", onDblClick);
+			window.removeEventListener("resize", onWindowResize);
+			resizer.remove();
+		}
+	};
+}
+function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
+	if (!head || !composer) return {
+		updateInfo() {},
+		updateDraft() {},
+		dispose() {}
+	};
+	let isDisposed = false;
+	const alive = () => {
+		if (isDisposed) return false;
+		try {
+			guard?.();
+			return true;
+		} catch {
+			return false;
+		}
+	};
+	let isInfoCollapsed = false;
+	try {
+		isInfoCollapsed = localStorage.getItem(KEY_MOBILE_INFO_COLLAPSED) === "true";
+	} catch {}
+	const infoToggle = document.createElement("button");
+	infoToggle.type = "button";
+	infoToggle.className = "mini workspace-info-toggle";
+	const renderInfoToggle = () => {
+		if (!alive()) return;
+		head.classList.toggle("workspace-info-collapsed", isInfoCollapsed);
+		infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
+		const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
+		infoToggle.setAttribute("aria-label", label);
+		infoToggle.replaceChildren(icon("info"));
+	};
+	infoToggle.addEventListener("click", () => {
+		if (!alive()) return;
+		isInfoCollapsed = !isInfoCollapsed;
+		try {
+			localStorage.setItem(KEY_MOBILE_INFO_COLLAPSED, String(isInfoCollapsed));
+		} catch {}
+		renderInfoToggle();
+	});
+	const updateInfo = () => {
+		if (!alive()) return;
+		if (infoRow) {
+			if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
+		} else if (!head.contains(infoToggle)) head.append(infoToggle);
+		renderInfoToggle();
+	};
+	let isComposerCollapsed = false;
+	try {
+		isComposerCollapsed = localStorage.getItem(KEY_MOBILE_COMPOSER_COLLAPSED) === "true";
+	} catch {}
+	const composerToggle = document.createElement("button");
+	composerToggle.type = "button";
+	composerToggle.className = "mini workspace-composer-toggle";
+	composerToggle.setAttribute("aria-controls", "workspace-message-input");
+	let boundArea = textarea || null;
+	let boundComposer = composer;
+	let boundRow = composerRow || null;
+	const renderComposerToggle = () => {
+		if (!alive()) return;
+		const hasDraft = (boundArea?.value || "").trim().length > 0;
+		boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
+		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
+		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
+		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
+		composerToggle.replaceChildren(icon("pencil"));
+		composerToggle.setAttribute("aria-label", baseText + draftSuffix);
+		composerToggle.classList.toggle("has-draft", hasDraft);
+	};
+	composerToggle.addEventListener("click", () => {
+		if (!alive()) return;
+		isComposerCollapsed = !isComposerCollapsed;
+		try {
+			localStorage.setItem(KEY_MOBILE_COMPOSER_COLLAPSED, String(isComposerCollapsed));
+		} catch {}
+		renderComposerToggle();
+		if (!isComposerCollapsed) boundArea?.focus({ preventScroll: true });
+		else composerToggle.focus({ preventScroll: true });
+	});
+	const onTextareaInput = () => {
+		renderComposerToggle();
+	};
+	const unbindArea = (node) => {
+		node?.removeEventListener("input", onTextareaInput);
+		node?.removeEventListener("change", onTextareaInput);
+	};
+	const bindArea = (node) => {
+		node?.addEventListener("input", onTextareaInput);
+		node?.addEventListener("change", onTextareaInput);
+	};
+	if (boundRow) {
+		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
+	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+	bindArea(boundArea);
+	updateInfo();
+	renderComposerToggle();
+	return {
+		infoToggle,
+		composerToggle,
+		updateInfo,
+		updateDraft: renderComposerToggle,
+		retarget({ textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = "" } = {}) {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			boundArea = nextArea;
+			if (nextComposer) boundComposer = nextComposer;
+			boundRow = nextRow;
+			if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
+			bindArea(boundArea);
+			composerToggle.remove();
+			if (boundRow) boundRow.append(composerToggle);
+			else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+			renderComposerToggle();
+		},
+		detachComposer() {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundArea = null;
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			composerToggle.remove();
+		},
+		dispose() {
+			isDisposed = true;
+			unbindArea(boundArea);
+			infoToggle.remove();
+			composerToggle.remove();
+			head.classList.remove("workspace-info-collapsed");
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			composer.classList.remove("workspace-composer-collapsed");
+		}
+	};
+}
 //#endregion
 //#region src/shell.js
 init_i18n();
@@ -18990,7 +19399,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		page: 0,
 		rail: 0
 	};
-	let listPlacement = null;
+	let listPlacement = null, listResizer = null;
 	contextList.addEventListener("scroll", () => {
 		if (listPlacement && contextList.getClientRects().length) listScroll[listPlacement] = contextList.scrollTop;
 	});
@@ -19028,6 +19437,10 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		for (const node of contextNodes) if (node.parentElement !== contextList) contextList.append(node);
 		if (placement !== listPlacement && placement) contextList.scrollTop = listScroll[placement];
 		listPlacement = placement;
+		if (listResizer) {
+			listResizer.resizer.hidden = placement !== "rail";
+			listResizer.refresh();
+		}
 		const workEntry = daily.querySelector("[data-daily=work]");
 		if (workEntry) workEntry.href = !media.matches ? "#/work-list" : workEntry.dataset.desktopHref;
 	}
@@ -19036,6 +19449,30 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	let menus = [], creator = null, phase = null;
 	let drawerOpener = toggle;
 	const media = matchMedia("(min-width: 1000px)");
+	if (candidate) {
+		const workspaceElement = document.getElementById("workspace");
+		const defaultWidth = () => window.innerWidth < 1280 ? 220 : 256;
+		listResizer = setupSidebarResizer({
+			aside: contextList,
+			workspace: workspaceElement,
+			t,
+			layout: {
+				storageKey: "batc.workbench.list.width",
+				property: "--wc-list-width",
+				defaultWidth,
+				resetWidth: defaultWidth,
+				label: "wc_list_resizer",
+				help: "wc_list_resizer_help",
+				enabled: () => listPlacement === "rail",
+				bounds: () => calcSidebarBounds(workspaceElement.clientWidth - aside.getBoundingClientRect().width - 8)
+			}
+		});
+		listResizer.resizer.classList.add("wc-list-resizer");
+		listResizer.resizer.setAttribute("aria-controls", "workbench-context-list");
+		contextList.id = "workbench-context-list";
+		listResizer.resizer.hidden = true;
+		contextList.after(listResizer.resizer);
+	}
 	const scrim = h$1("div", {
 		class: "shell-scrim",
 		hidden: true,
@@ -19431,6 +19868,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		refresh,
 		setRoute(name) {
 			currentRoute = name;
+			listResizer?.cancelDrag();
 			if (name === "pm") {
 				const routeView = location.hash.split("?")[0].split("/")[3];
 				currentView = routeView === "discussions" ? "discussions" : availableProjectViews(caps()).includes(routeView) ? routeView : lastProjectView(namespace, location.hash.split("/")[2]);
@@ -19439,6 +19877,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			closeDrawer(false);
 			navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === "projects");
 			render();
+			listResizer?.refresh();
 			if (candidate && name === "work-list") listTitle.focus({ preventScroll: true });
 		},
 		pending({ count, partial } = {}) {
@@ -19468,6 +19907,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			menus.forEach((control) => control.dispose());
 			tools.dispose();
 			closeDrawer(false);
+			listResizer?.dispose();
 			document.removeEventListener("keydown", keydown, true);
 			media.removeEventListener("change", resize);
 			scrim.remove();
@@ -22537,6 +22977,131 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 	};
 }
 //#endregion
+//#region src/pm-work-result-requirements.js
+function resultRequirements({ h, t, section, open = new Set() }) {
+	if (!section) return null;
+	const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t("wres_unknown");
+	const verdict = (value) => label(value, [
+		"accepted",
+		"rejected",
+		"unassessed",
+		"not_defined"
+	]);
+	const text = (value) => typeof value === "string" ? value : "";
+	const note = (value) => h("p", { class: "pm-note-text" }, text(value));
+	const source = (value) => h("code", { class: "pm-source" }, text(value));
+	const line = (key, value) => h("p", {}, t(key), ": ", value);
+	const details = (key, title, ...body) => h("details", {
+		"data-result-requirement-details": key,
+		...open.has(key) ? { open: true } : {}
+	}, h("summary", { "data-work-result-focus": `requirement:${key}` }, title), ...body);
+	const record = (key, value) => details(key, t("wres_req_sources"), h("pre", { class: "pm-note-text" }, JSON.stringify(value, null, 2)));
+	const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || "") ? h("a", {
+		href: `#/op/${id}`,
+		"data-work-result-focus": `requirement:operation:${key}`
+	}, t("wres_view_operation")) : null;
+	const element = h("section", {
+		"data-result-requirements": "",
+		class: "pm-work-result-requirements"
+	}, h("h4", {}, t("wres_req_heading")));
+	if (section.relation !== "explicit") {
+		element.append(note(t(section.relation === "none" ? "wres_req_none" : "wres_req_unavailable")));
+		return element;
+	}
+	element.append(note(t("wres_req_selection")), line("wres_check_verification", [
+		"unverified",
+		"running",
+		"verified",
+		"failed",
+		"stale",
+		"unknown"
+	].includes(section.verification) ? t(`wres_verification_${section.verification}`) : t("wres_unknown")));
+	if (section.coverage?.reviews_partial) element.append(note(t("wres_req_reviews_partial")));
+	if (section.coverage?.packages_partial) element.append(note(t("wres_req_packages_partial")));
+	element.append(record("binding", {
+		package_ref: section.package_ref,
+		plan_ref: section.plan_ref,
+		dod_ref: section.dod_ref,
+		candidate_commit: section.candidate_commit,
+		verification_evidence: section.verification_evidence
+	}));
+	for (const item of section.items || []) {
+		const key = JSON.stringify(["requirement", item.requirement_id]);
+		const row = h("article", { "data-result-requirement": item.requirement_id }, h("h5", {}, text(item.text)), source(item.requirement_id), note(label(item.state, [
+			"no_conclusion",
+			"verified_no_conclusion",
+			"assessments_recorded",
+			"unavailable"
+		])), record(`${key}:inputs`, {
+			source_input_id: item.source_input_id,
+			acceptance_input_ids: item.acceptance_input_ids,
+			link: item.link
+		}));
+		for (const assessment of item.assessments || []) {
+			const ref = assessment.reference || {}, original = assessment.original || {};
+			const assessmentKey = JSON.stringify([
+				key,
+				ref.review_id,
+				ref.operation_id,
+				ref.version,
+				ref.document_digest
+			]);
+			const summary = `${verdict(assessment.conclusion)} · ${t(assessment.applicable === true ? "wres_req_applicable" : "wres_req_no_longer_applies")}`;
+			const reasons = (assessment.applicability_reasons || []).map((reason) => {
+				const translated = t(`pmq_reason_${reason}`);
+				return note(translated === `pmq_reason_${reason}` ? t("wres_req_applicability_changed") : translated);
+			});
+			const criteria = (original.criteria || []).filter((entry) => entry.criterion?.kind === "dod" || entry.criterion?.requirement_id === item.requirement_id).map((entry, index) => {
+				const criterion = entry.criterion || {};
+				return details(`${assessmentKey}:criterion:${index}`, `${t(criterion.kind === "dod" ? "wres_req_dod" : "wres_req_criterion")}: ${text(criterion.input_id || criterion.criterion_id)} · ${verdict(entry.status)}`, note(entry.rationale), line("wres_check_verification", label(entry.verification?.status, [
+					"passed",
+					"failed",
+					"unavailable",
+					"unknown"
+				])), record(`${assessmentKey}:proof:${index}`, {
+					criterion,
+					reference: entry.reference,
+					verification: entry.verification
+				}));
+			});
+			row.append(details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), note(t(assessment.qualified === true ? "wres_req_qualified" : "wres_req_not_qualified")), ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment)));
+		}
+		element.append(row);
+	}
+	if (section.dependent_work?.length) {
+		const dependencies = details("dependencies", t("wres_req_dependencies"));
+		for (const work of section.dependent_work) {
+			const key = JSON.stringify([
+				"dependent",
+				work.work_item_id,
+				work.package_id,
+				work.document_digest
+			]);
+			const readiness = (value) => label(value?.status, [
+				"ready",
+				"blocked",
+				"unavailable",
+				"unknown"
+			]);
+			const body = h("article", { "data-result-dependent": work.package_id }, h("h5", {}, text(work.title)), line("wres_req_without_selection", readiness(work.readiness)));
+			if (!work.selections_complete) body.append(note(t("wres_req_selections_partial")));
+			for (const selected of work.selections || []) body.append(details(`${key}:${selected.execution_operation_id}`, `${t("wres_req_original_selection")}: ${readiness(selected.readiness)}`, operation(selected.execution_operation_id, `${key}:${selected.execution_operation_id}`), record(`${key}:${selected.execution_operation_id}:source`, selected)));
+			body.append(record(`${key}:source`, {
+				work_item_id: work.work_item_id,
+				package_id: work.package_id,
+				document_digest: work.document_digest,
+				prerequisite_ids: work.prerequisite_ids,
+				readiness: work.readiness,
+				link: work.link
+			}));
+			dependencies.append(body);
+		}
+		element.append(dependencies);
+	}
+	if (section.related?.length) element.append(record("related", section.related));
+	return element;
+}
+//#endregion
 //#region src/pm-work-result.js
 var KNOWN_STATES = new Set([
 	"accepted",
@@ -22857,6 +23422,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	}
 	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
 		const focusToken = saveFocus();
+		const requirementOpen = new Set(Array.from(panelElement.querySelectorAll("[data-result-requirement-details][open]"), (node) => node.getAttribute("data-result-requirement-details")));
 		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
 		if (existingTurns) turnsOpen = existingTurns.open;
 		const existingDetails = panelElement.querySelector("[data-work-result-details]");
@@ -23050,6 +23616,13 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
 		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
 		sections.push(dl);
+		const requirements = resultRequirements({
+			h,
+			t,
+			section: envelope.requirements,
+			open: requirementOpen
+		});
+		if (requirements) sections.push(requirements);
 		const changesBox = h("div", { class: "pm-work-result-changes" });
 		const ch = envelope.changes || {};
 		const summary = ch.summary || {};
@@ -30036,6 +30609,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 //#endregion
 //#region src/message-format.js
 var lineText = (line) => line.replace(/\r?\n$/, "");
+var quotePrefix = /^ {0,3}>[ \t]?/;
 function tableCells(line) {
 	let text = line.trim(), cell = "", ticks = 0, separators = 0;
 	const cells = [];
@@ -30066,7 +30640,7 @@ function tableCells(line) {
 	if (cell || !text.endsWith("|")) cells.push(cell.trim());
 	return separators ? cells : null;
 }
-function messageBlocks(source) {
+function messageBlocks(source, { quotes = false } = {}) {
 	if (source.length > 2e5) return [{
 		kind: "text",
 		text: source
@@ -30099,12 +30673,23 @@ function messageBlocks(source) {
 			});
 			continue;
 		}
+		if (quotes && quotePrefix.test(lines[i])) {
+			flush();
+			const body = [];
+			while (i < lines.length && quotePrefix.test(lines[i])) body.push(lines[i++].replace(quotePrefix, ""));
+			blocks.push({
+				kind: "quote",
+				text: body.join("")
+			});
+			continue;
+		}
 		const header = tableCells(lineText(lines[i])), divider = i + 1 < lines.length ? tableCells(lineText(lines[i + 1])) : null;
 		if (header?.length && header.length <= 40 && divider?.length === header.length && divider.every((cell) => /^:?-{3,}:?$/.test(cell))) {
 			flush();
 			const rows = [];
 			i += 2;
 			while (i < lines.length && rows.length < 100) {
+				if (quotes && quotePrefix.test(lines[i])) break;
 				const cells = tableCells(lineText(lines[i]));
 				if (!cells || cells.length !== header.length) break;
 				rows.push(cells);
@@ -30133,8 +30718,16 @@ function inline(h, text) {
 	nodes.push(text.slice(from));
 	return nodes;
 }
-function renderMessage(h, t, source, copy) {
-	return messageBlocks(source).map((block) => {
+function renderMessage(h, t, source, copy, { canCopyQuote = () => false } = {}) {
+	return messageBlocks(source, { quotes: true }).map((block) => {
+		if (block.kind === "quote") return h("blockquote", { class: "message-quote" }, h("div", { class: "message-quote-bar" }, h("button", {
+			class: "mini message-quote-copy",
+			type: "button",
+			hidden: !canCopyQuote(),
+			onclick: (event) => {
+				if (event.currentTarget.isConnected && canCopyQuote()) copy(block.text);
+			}
+		}, t("message_copy_quote"))), h("div", { class: "message-text" }, ...inline(h, block.text)));
 		if (block.kind === "code") return h("div", { class: "message-code" }, h("div", { class: "message-code-bar" }, h("span", { class: "muted" }, block.language || t("message_code")), h("button", {
 			class: "mini",
 			type: "button",
@@ -31361,13 +31954,13 @@ function workspaceOverview(options) {
 			body: h("div", {}, ...data.recent_deliveries.map((row) => h("div", {
 				class: "pm-overview-delivery",
 				"data-overview-delivery": row.work_item_id
-			}, itemLink({
+			}, h("div", { class: "pm-overview-delivery-body" }, itemLink({
 				...row,
 				ref: {
 					kind: "work_item",
 					id: row.work_item_id
 				}
-			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
+			}, "deliveries"), deliveryAssessment(row)), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
 				"work",
 				"quality",
 				"deliveries",
@@ -31375,6 +31968,43 @@ function workspaceOverview(options) {
 			]) : null)
 		});
 		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
+	}
+	function deliveryAssessment(row) {
+		const reference = row.assessment_ref;
+		if (row.state !== "accepted" || !reference || typeof reference !== "object" || Array.isArray(reference)) return null;
+		const ref = {
+			kind: "quality_assessment",
+			id: reference.operation_id,
+			review_id: reference.review_id,
+			document_digest: reference.document_digest
+		};
+		const key = JSON.stringify([
+			"delivery-assessment",
+			row.work_item_id,
+			reference.review_id,
+			reference.operation_id,
+			reference.version,
+			reference.document_digest,
+			reference.candidate_commit
+		]);
+		const controls = isContextRef(ref) ? h("div", { class: "pm-overview-progress-actions" }, h("a", {
+			class: "ui-button secondary ui-sm",
+			href: `#/op/${reference.operation_id}`,
+			"data-overview-link": `${key}:operation`
+		}, t("pm_operation")), options.caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes("quality_assessment") ? discussLink({
+			workspaceId,
+			refs: [ref],
+			title: row.title,
+			from: "overview"
+		}, { "data-overview-link": `${key}:discuss` }) : null) : null;
+		const node = disclosure({
+			label: t("ov_original_assessment"),
+			key: `${namespace}:${workspaceId}:${key}`,
+			body: h("div", {}, h("p", { class: "ui-meta" }, t("ov_assessment_source")), controls, h("pre", { class: "pm-brief-proof" }, JSON.stringify(reference, null, 2)))
+		});
+		node.dataset.overviewDeliveryAssessment = reference.operation_id || "";
+		node.querySelector("summary").dataset.overviewLink = `${key}:source`;
+		return node;
 	}
 	function closeReader() {
 		reader?.close();
@@ -61219,328 +61849,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 	};
 }
-var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
-var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
-var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
-function isMobileLayout() {
-	if (typeof window === "undefined") return false;
-	return (window.innerWidth || document.documentElement?.clientWidth || 0) < 1e3;
-}
-function calcSidebarBounds(windowWidth = window.innerWidth) {
-	return {
-		minAllowed: 200,
-		maxAllowed: Math.min(500, Math.max(200, (windowWidth || 1024) - 360))
-	};
-}
-function setupSidebarResizer({ aside, workspace, t }) {
-	if (!aside || !workspace) return { dispose() {} };
-	let savedWidth = window.innerWidth < 1200 ? 232 : 248, customWidth = false;
-	try {
-		const raw = localStorage.getItem(KEY_SIDEBAR_WIDTH);
-		if (raw !== null) {
-			const parsed = parseInt(raw, 10);
-			if (!Number.isNaN(parsed) && parsed >= 200) {
-				savedWidth = parsed;
-				customWidth = true;
-			}
-		}
-	} catch {}
-	const resizer = document.createElement("div");
-	resizer.className = "workspace-resizer";
-	resizer.setAttribute("role", "separator");
-	resizer.setAttribute("aria-orientation", "vertical");
-	resizer.setAttribute("tabindex", "0");
-	resizer.setAttribute("aria-label", t("workspace_resizer"));
-	resizer.title = t("workspace_resizer_help");
-	const applyWidth = (requestedWidth, persist = true) => {
-		if (isMobileLayout()) {
-			resizer.removeAttribute("aria-valuenow");
-			return requestedWidth;
-		}
-		const { minAllowed, maxAllowed } = calcSidebarBounds();
-		const clamped = Math.max(minAllowed, Math.min(maxAllowed, requestedWidth));
-		workspace.style.setProperty("--workspace-sidebar-width", `${clamped}px`);
-		resizer.setAttribute("aria-valuenow", String(clamped));
-		resizer.setAttribute("aria-valuemin", String(minAllowed));
-		resizer.setAttribute("aria-valuemax", String(maxAllowed));
-		if (persist) {
-			customWidth = true;
-			try {
-				localStorage.setItem(KEY_SIDEBAR_WIDTH, String(clamped));
-			} catch {}
-		}
-		return clamped;
-	};
-	let currentWidth = applyWidth(savedWidth, false);
-	let isDragging = false;
-	let startX = 0;
-	let startWidth = currentWidth;
-	let activePointerId = null;
-	const onGlobalKeyDown = (event) => {
-		if (event.key === "Escape" && isDragging) {
-			cancelDrag();
-			event.preventDefault();
-		}
-	};
-	const cancelDrag = () => {
-		if (!isDragging) return;
-		window.removeEventListener("keydown", onGlobalKeyDown);
-		isDragging = false;
-		currentWidth = applyWidth(startWidth, false);
-		resizer.classList.remove("is-resizing");
-		document.body.classList.remove("workspace-resizing");
-		document.body.style.removeProperty("user-select");
-		if (activePointerId !== null) {
-			try {
-				resizer.releasePointerCapture(activePointerId);
-			} catch {}
-			activePointerId = null;
-		}
-	};
-	const onPointerDown = (event) => {
-		if (event.button !== 0 || isMobileLayout()) return;
-		isDragging = true;
-		activePointerId = event.pointerId;
-		startX = event.clientX;
-		startWidth = currentWidth;
-		resizer.classList.add("is-resizing");
-		document.body.classList.add("workspace-resizing");
-		document.body.style.userSelect = "none";
-		window.addEventListener("keydown", onGlobalKeyDown);
-		try {
-			resizer.setPointerCapture(event.pointerId);
-		} catch {}
-		event.preventDefault();
-	};
-	const onPointerMove = (event) => {
-		if (!isDragging || event.pointerId !== activePointerId) return;
-		const delta = event.clientX - startX;
-		currentWidth = applyWidth(startWidth + delta, false);
-	};
-	const onPointerUp = (event) => {
-		if (!isDragging || event.pointerId !== activePointerId) return;
-		window.removeEventListener("keydown", onGlobalKeyDown);
-		const delta = event.clientX - startX;
-		currentWidth = applyWidth(startWidth + delta, true);
-		isDragging = false;
-		resizer.classList.remove("is-resizing");
-		document.body.classList.remove("workspace-resizing");
-		document.body.style.removeProperty("user-select");
-		if (activePointerId !== null) {
-			try {
-				resizer.releasePointerCapture(activePointerId);
-			} catch {}
-			activePointerId = null;
-		}
-	};
-	const onPointerCancel = () => {
-		cancelDrag();
-	};
-	const onKeyDown = (event) => {
-		if (event.key === "Escape") {
-			if (isDragging) {
-				cancelDrag();
-				event.preventDefault();
-			}
-			return;
-		}
-		if (isMobileLayout()) return;
-		const { minAllowed, maxAllowed } = calcSidebarBounds();
-		let handled = false;
-		if (event.key === "ArrowLeft") {
-			currentWidth = applyWidth(currentWidth - (event.shiftKey ? 48 : 16), true);
-			handled = true;
-		} else if (event.key === "ArrowRight") {
-			currentWidth = applyWidth(currentWidth + (event.shiftKey ? 48 : 16), true);
-			handled = true;
-		} else if (event.key === "PageDown") {
-			currentWidth = applyWidth(currentWidth - 48, true);
-			handled = true;
-		} else if (event.key === "PageUp") {
-			currentWidth = applyWidth(currentWidth + 48, true);
-			handled = true;
-		} else if (event.key === "Home") {
-			currentWidth = applyWidth(minAllowed, true);
-			handled = true;
-		} else if (event.key === "End") {
-			currentWidth = applyWidth(maxAllowed, true);
-			handled = true;
-		}
-		if (handled) {
-			event.preventDefault();
-			event.stopPropagation();
-		}
-	};
-	const onDblClick = () => {
-		if (!isMobileLayout()) currentWidth = applyWidth(248, true);
-	};
-	const onWindowResize = () => {
-		if (!customWidth) currentWidth = window.innerWidth < 1200 ? 232 : 248;
-		if (isMobileLayout()) cancelDrag();
-		if (!isMobileLayout()) currentWidth = applyWidth(currentWidth, false);
-	};
-	resizer.addEventListener("pointerdown", onPointerDown);
-	resizer.addEventListener("pointermove", onPointerMove);
-	resizer.addEventListener("pointerup", onPointerUp);
-	resizer.addEventListener("pointercancel", onPointerCancel);
-	resizer.addEventListener("lostpointercapture", onPointerCancel);
-	resizer.addEventListener("keydown", onKeyDown);
-	resizer.addEventListener("dblclick", onDblClick);
-	window.addEventListener("resize", onWindowResize);
-	aside.appendChild(resizer);
-	return {
-		resizer,
-		getWidth: () => currentWidth,
-		setWidth: (w) => {
-			currentWidth = applyWidth(w, true);
-			return currentWidth;
-		},
-		dispose() {
-			cancelDrag();
-			resizer.removeEventListener("pointerdown", onPointerDown);
-			resizer.removeEventListener("pointermove", onPointerMove);
-			resizer.removeEventListener("pointerup", onPointerUp);
-			resizer.removeEventListener("pointercancel", onPointerCancel);
-			resizer.removeEventListener("lostpointercapture", onPointerCancel);
-			resizer.removeEventListener("keydown", onKeyDown);
-			resizer.removeEventListener("dblclick", onDblClick);
-			window.removeEventListener("resize", onWindowResize);
-			resizer.remove();
-		}
-	};
-}
-function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
-	if (!head || !composer) return {
-		updateInfo() {},
-		updateDraft() {},
-		dispose() {}
-	};
-	let isDisposed = false;
-	const alive = () => {
-		if (isDisposed) return false;
-		try {
-			guard?.();
-			return true;
-		} catch {
-			return false;
-		}
-	};
-	let isInfoCollapsed = false;
-	try {
-		isInfoCollapsed = localStorage.getItem(KEY_MOBILE_INFO_COLLAPSED) === "true";
-	} catch {}
-	const infoToggle = document.createElement("button");
-	infoToggle.type = "button";
-	infoToggle.className = "mini workspace-info-toggle";
-	const renderInfoToggle = () => {
-		if (!alive()) return;
-		head.classList.toggle("workspace-info-collapsed", isInfoCollapsed);
-		infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
-		const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
-		infoToggle.setAttribute("aria-label", label);
-		infoToggle.replaceChildren(icon("info"));
-	};
-	infoToggle.addEventListener("click", () => {
-		if (!alive()) return;
-		isInfoCollapsed = !isInfoCollapsed;
-		try {
-			localStorage.setItem(KEY_MOBILE_INFO_COLLAPSED, String(isInfoCollapsed));
-		} catch {}
-		renderInfoToggle();
-	});
-	const updateInfo = () => {
-		if (!alive()) return;
-		if (infoRow) {
-			if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
-		} else if (!head.contains(infoToggle)) head.append(infoToggle);
-		renderInfoToggle();
-	};
-	let isComposerCollapsed = false;
-	try {
-		isComposerCollapsed = localStorage.getItem(KEY_MOBILE_COMPOSER_COLLAPSED) === "true";
-	} catch {}
-	const composerToggle = document.createElement("button");
-	composerToggle.type = "button";
-	composerToggle.className = "mini workspace-composer-toggle";
-	composerToggle.setAttribute("aria-controls", "workspace-message-input");
-	let boundArea = textarea || null;
-	let boundComposer = composer;
-	let boundRow = composerRow || null;
-	const renderComposerToggle = () => {
-		if (!alive()) return;
-		const hasDraft = (boundArea?.value || "").trim().length > 0;
-		boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
-		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
-		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
-		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
-		composerToggle.replaceChildren(icon("pencil"));
-		composerToggle.setAttribute("aria-label", baseText + draftSuffix);
-		composerToggle.classList.toggle("has-draft", hasDraft);
-	};
-	composerToggle.addEventListener("click", () => {
-		if (!alive()) return;
-		isComposerCollapsed = !isComposerCollapsed;
-		try {
-			localStorage.setItem(KEY_MOBILE_COMPOSER_COLLAPSED, String(isComposerCollapsed));
-		} catch {}
-		renderComposerToggle();
-		if (!isComposerCollapsed) boundArea?.focus({ preventScroll: true });
-		else composerToggle.focus({ preventScroll: true });
-	});
-	const onTextareaInput = () => {
-		renderComposerToggle();
-	};
-	const unbindArea = (node) => {
-		node?.removeEventListener("input", onTextareaInput);
-		node?.removeEventListener("change", onTextareaInput);
-	};
-	const bindArea = (node) => {
-		node?.addEventListener("input", onTextareaInput);
-		node?.addEventListener("change", onTextareaInput);
-	};
-	if (boundRow) {
-		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
-	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
-	bindArea(boundArea);
-	updateInfo();
-	renderComposerToggle();
-	return {
-		infoToggle,
-		composerToggle,
-		updateInfo,
-		updateDraft: renderComposerToggle,
-		retarget({ textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = "" } = {}) {
-			if (!alive()) return;
-			unbindArea(boundArea);
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			boundArea = nextArea;
-			if (nextComposer) boundComposer = nextComposer;
-			boundRow = nextRow;
-			if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
-			bindArea(boundArea);
-			composerToggle.remove();
-			if (boundRow) boundRow.append(composerToggle);
-			else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
-			renderComposerToggle();
-		},
-		detachComposer() {
-			if (!alive()) return;
-			unbindArea(boundArea);
-			boundArea = null;
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			composerToggle.remove();
-		},
-		dispose() {
-			isDisposed = true;
-			unbindArea(boundArea);
-			infoToggle.remove();
-			composerToggle.remove();
-			head.classList.remove("workspace-info-collapsed");
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			composer.classList.remove("workspace-composer-collapsed");
-		}
-	};
-}
 //#endregion
 //#region src/ui/viewport.js
 function observeViewport() {
@@ -62728,16 +63036,20 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.body.append(row.toolDetails);
 			} else if (tool && !completed && row.pill !== pillKey) row.toolDetails.open = true;
 			row.pill = pillKey;
+			const quoteCopyAllowed = message.status === "completed" && !message.denied && !message.deferred;
+			const updateQuoteCopy = row.text !== text || row.quoteCopyAllowed !== quoteCopyAllowed;
+			row.quoteCopyAllowed = quoteCopyAllowed;
 			if (row.text !== text) {
 				if (row.text !== null) added += 1;
-				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy));
 				row.text = text;
+				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy, { canCopyQuote: () => row.quoteCopyAllowed && row.text === text && row.node.isConnected }));
 				if (folded && row.toolDetails) {
 					const label = text.split("\n").find((item) => item.trim())?.trim() || t(tool ? "message_tool_details" : "message_system");
 					row.toolLabel.textContent = label;
 					row.toolDetails.querySelector("summary").title = Array.from(label).slice(0, 200).join("");
 				}
 			}
+			if (updateQuoteCopy) for (const button of row.body.querySelectorAll(".message-quote-copy")) button.hidden = !row.quoteCopyAllowed;
 			next.set(key, row);
 		}
 		const retained = new Set([...next.values()].map((row) => row.node));

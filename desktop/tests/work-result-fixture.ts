@@ -122,6 +122,7 @@ export function buildResultEnvelope(opts: any = {}) {
       runs: [],
       quality_reviews: {reviews: [], current: null},
     },
+    ...(opts.requirements !== undefined ? {requirements: opts.requirements} : {}),
     delivery: opts.delivery ?? {
       delivery_goal: opts.delivery_goal ?? 'pull_request',
       pull_requests: opts.pull_requests ?? [],
