@@ -125,7 +125,10 @@ def validate(basis):
         document_digest(ref["document_digest"])
 
 
-def feedback(ops, principal, wid, meeting, context_id, selection):
+SUCCESSOR_SQL = "SELECT 1 FROM pm_inputs WHERE supersedes_input_id=? LIMIT 1"
+
+
+def feedback(ops, principal, wid, meeting, context_id, selection, *, project=False):
     from . import pm_discussions
 
     ref = selection["source_ref"]
@@ -155,7 +158,14 @@ def feedback(ops, principal, wid, meeting, context_id, selection):
         source = pm_discussions._input_out(row, db=ops.db)
         content = row["value"]
     pm_meetings._text(content, "exact feedback", 4000)
-    return {"id": selection["id"], "reference": ref, "content": content, "original": source}
+    fact = {"id": selection["id"], "reference": ref, "content": content, "original": source}
+    if project and ref["kind"] == "discussion_input":
+        # Existence alone marks the selected original as historical. Never load
+        # successor identity or content, and never refresh this frozen fact on reads.
+        fact["superseded_at_selection"] = (
+            ops.db.execute(SUCCESSOR_SQL, (ref["input_id"],)).fetchone() is not None
+        )
+    return fact
 
 
 def resolve(ops, principal, meeting, context, basis, *, project=False):
@@ -300,7 +310,7 @@ def resolve(ops, principal, meeting, context, basis, *, project=False):
         budget()
     for value in basis["feedback_items"]:
         resolved["feedback"].append(
-            feedback(ops, principal, wid, meeting, meeting["context_revision_id"], value)
+            feedback(ops, principal, wid, meeting, meeting["context_revision_id"], value, project=project)
         )
         budget()
     if basis["governance_revision_ids"]:

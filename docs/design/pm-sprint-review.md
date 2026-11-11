@@ -25,6 +25,12 @@ Feedback selects `{id,source_ref}`: either `{kind:meeting_note,note_id}` in the
 fixed meeting context, or `{kind:discussion_input,thread_id,input_id,operation_id}`.
 The server preserves original text including whitespace and Unicode. Arbitrary
 quoted feedback in `output.feedback` is forbidden for a guided draft.
+Each selected discussion input freezes a boolean `superseded_at_selection`.
+An existing successor marks that exact input as historical without replacing it;
+later supersession never changes a frozen draft or completed Review. The bounded
+`SELECT 1 FROM pm_inputs WHERE supersedes_input_id=? LIMIT 1` uses the existing
+unique index. It reads no successor ID, author or content and grants no access
+to that successor. Read-time source gates do not refresh the frozen flag.
 `follow_up_ref` selects `{intake_id,document_digest,issue_ids}`; governance uses
 exact immutable revision IDs. Original IDs/digests and source times are retained.
 

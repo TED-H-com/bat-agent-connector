@@ -164,10 +164,6 @@ async def test_draft_byte_budget_and_questions(ops):
 
 
 def test_meeting_history_index_plan_and_schema_idempotency(ops):
-    import json
-    import os
-    from pathlib import Path
-
     query = "EXPLAIN QUERY PLAN SELECT sequence FROM pm_meeting_drafts WHERE meeting_id=? AND sequence>? ORDER BY sequence LIMIT ?"
     version = ops.db.execute("PRAGMA user_version").fetchone()[0]
     ops.db.execute("DROP INDEX pm_meeting_drafts_by_meeting")
@@ -178,10 +174,6 @@ def test_meeting_history_index_plan_and_schema_idempotency(ops):
     assert ops.db.execute("PRAGMA user_version").fetchone()[0] == version
     assert not any("pm_meeting_drafts_by_meeting" in str(r) for r in before)
     assert any("pm_meeting_drafts_by_meeting" in str(r) for r in after)
-    if os.environ.get("BAC_EVIDENCE"):
-        (Path(os.environ["BAC_EVIDENCE"]) / "r2" / "index-plan.json").write_text(
-            json.dumps({"query": query, "before": before, "after": after}, indent=2) + "\n"
-        )
 
 
 def test_exact_wire_bytes_with_cjk():
@@ -304,10 +296,6 @@ async def test_guided_roots_carry_workspace_and_explicit_source_operations(ops):
 
 
 async def test_feedback_read_cost_is_bounded_by_explicit_selection(ops):
-    import json
-    import os
-    from pathlib import Path
-
     _, _, _, target, selected = await prepared(ops)
     refs = selected["feedback_items"][:]
     for i in range(1, 20):
@@ -329,7 +317,3 @@ async def test_feedback_read_cost_is_bounded_by_explicit_selection(ops):
     # Each additional exact note needs bounded indexed authority and row reads;
     # repeated shared snapshot/plan predicates use the existing read memo.
     assert measured[20] <= measured[1] + 19 * 50
-    if os.environ.get("BAC_EVIDENCE"):
-        (Path(os.environ["BAC_EVIDENCE"]) / "r2" / "read-cost.json").write_text(
-            json.dumps(measured, indent=2) + "\n"
-        )
