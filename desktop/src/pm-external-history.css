@@ -7,6 +7,7 @@
 .exh-entry header { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
 .exh-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); }
 .exh-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
+[data-history-discovery] select { display: block; box-sizing: border-box; width: 100%; min-width: 0; }
 [data-history-links] { margin-block-start: var(--space-3); }
 [data-history-links] summary { cursor: pointer; padding-block: var(--space-2); }
 [data-history-links] select { display: block; width: 100%; min-width: 0; margin-block: var(--space-2); }

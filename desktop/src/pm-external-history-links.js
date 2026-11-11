@@ -2,6 +2,7 @@ import {button} from './ui/components.js';
 import {historyTextSelection, historySelectionKey, historyReferenceKey, matchesHistoryContent, navigateHistoryText} from './pm-history-selection.js';
 import {historyAttemptPicker} from './pm-history-attempt-picker.js';
 import {historyReplacement} from './pm-history-replacement.js';
+import {historyRecovery, historyWithdrawalForm} from './pm-history-recovery.js';
 
 const workId = value => /^wi_[0-9a-f]{20}$/.test(value || '');
 const digest = value => /^[0-9a-f]{64}$/.test(value || '');
@@ -13,6 +14,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
   const draftNamespace = `${namespace}.history.${identity}`;
   const selectionKey = `batc.pm.${draftNamespace}.work-selection`;
   const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
+  const recovery = historyRecovery(localStorage,namespace,workspaceId);
   let disposed = false, generation = 0, loaded = false, busy = false, after = null;
   let preview = null, selected = '', editor = null, choosing = false, workAfter = null, workBusy = false;
   let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null, replacement = null;
@@ -54,18 +56,24 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
     if (!remove) saved.push({link_id:link.link_id, work_item_id:link.work_item_id, version:link.version, created_by:link.created_by});
     if (saved.length) localStorage.setItem(withdrawalKey, JSON.stringify(saved)); else localStorage.removeItem(withdrawalKey);
   }
+  function pendingRecoveries() {
+    const pending = new Map(pendingWithdrawals().map(row=>[row.link_id,row]));
+    for (const value of recovery.read()) if (value.intent && value.row.source_id === sourceId && value.row.entry_id === entry.entry_id) {
+      pending.set(value.row.link_id,value.row);
+    }
+    return [...pending.values()];
+  }
   function withdrawal(link, active = true) {
-    const target = {workspace_id:workspaceId, work_item_id:link.work_item_id, link_id:link.link_id};
+    const row = {...link,workspace_id:workspaceId,source_id:sourceId,entry_id:entry.entry_id};
+    const selected = recovery.resolve(row);
     if (!active) {
       // An active-only server list may no longer contain a successfully withdrawn
       // link whose reply was lost. Recover its exact stored intent, never invent
       // a fresh request from this small index of opaque IDs.
-      const saved = JSON.parse(localStorage.getItem(`batc.pm.${draftNamespace}.pm.history.unlink.${JSON.stringify(target)}`) || 'null');
-      if (!saved?.intent) {rememberWithdrawal(link, true); return null;}
+      if (!selected.intent) {rememberWithdrawal(link, true); return null;}
     }
-    const remove = form({namespace:draftNamespace, action:'pm.history.unlink', target, fields:{}, params:()=>({}),
-      preconditions:()=>{rememberWithdrawal(link); return {expected_link_version:link.version};},
-      permitted:()=>active && canUnlink(link), recoverPermitted:()=>canUnlink(link), label:'exh_unlink',
+    const remove = historyWithdrawalForm({h,t,form,recovery,row,errorBox,beforeNew:()=>rememberWithdrawal(link),
+      permitted:()=>active && canUnlink(link), recoverPermitted:()=>current(generation) && supported('pm.history.unlink') && Boolean(workspace()?.membership), label:'exh_unlink',
       onBeforeSaved:result=>{
         if (result?.link_id !== link.link_id || result.state !== 'withdrawn' || result.version !== remove.intentRequest()?.preconditions.expected_link_version + 1) throw mismatch();
         cleanup.remove(link.link_id);
@@ -192,7 +200,7 @@ export function externalHistoryLinks({h, t, api, alive, workspaceId, workspace, 
       for (const value of recoveryForms) {value.dispose(); forms.delete(value);}
       recoveryForms.clear();
       rows.querySelectorAll('[data-history-withdrawal]').forEach(node=>node.remove());
-      for (const link of pendingWithdrawals()) if (!links.has(link.link_id) && canUnlink(link)) {
+      for (const link of pendingRecoveries()) if (!links.has(link.link_id)) {
         const recovery = withdrawal(link, false);
         if (recovery) rows.append(h('div', {class:'exh-relation', 'data-history-withdrawal':link.link_id}, h('p', {}, t('exh_withdrawal_pending')), recovery));
       }

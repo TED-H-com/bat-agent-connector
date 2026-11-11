@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {storageScope} from '../src/state/events.ts';
 import {managedStorageScope, migrateManagedStorage} from '../src/state/storage-identity.ts';
+import {historyRecovery} from '../src/pm-history-recovery.js';
 
 const identity = {server_id: 'fixture-server', principal_id: 'fixture-principal', actor: 'fixture.operator'};
 const old = (port = 41001, who = identity) => storageScope(`http://127.0.0.1:${port}/`, who.actor, who.server_id, who.principal_id);
@@ -31,6 +32,21 @@ test('managed identity is independent of address and isolates every identity com
   assert.notEqual(target, old());
   assert.notEqual(storageScope('https://one.example/', identity.actor, identity.server_id, identity.principal_id),
     storageScope('https://two.example/', identity.actor, identity.server_id, identity.principal_id));
+});
+
+test('source-independent withdrawal migrates with the complete scope and original request bytes',()=>{
+  const {local,session}=stores(old());
+  const workspace_id='ws_'+'a'.repeat(32),work_item_id='wi_'+'b'.repeat(20),link_id='hxl_'+'c'.repeat(32);
+  const request={action:'pm.history.unlink',target:{workspace_id,work_item_id,link_id},params:{},preconditions:{expected_link_version:1}};
+  const raw=JSON.stringify({version:1,values:{},intent:{key:'original-cleanup-key',request,operation_id:'op_'+'d'.repeat(32)}},null,2);
+  const key=`batc.pm.${old()}.history-cleanup.${workspace_id}.pm.history.unlink.${JSON.stringify(request.target)}`;
+  local.setItem(key,raw);migrateManagedStorage(identity,local,session);
+  const destination=key.replace(old(),target),found=historyRecovery(local,target,workspace_id).read();
+  assert.equal(local.getItem(key),raw);assert.equal(local.getItem(destination),raw);
+  assert.equal(found.length,1);assert.equal(found[0].storageKey,destination);
+  assert.deepEqual(found[0].intent.request,request);assert.equal(found[0].intent.key,'original-cleanup-key');
+  local.removeItem(destination);migrateManagedStorage(identity,local,session);
+  assert.equal(local.getItem(destination),null,'completed migration cannot resurrect a consumed pending intent');
 });
 
 test('managed migration scrubs setup source and destination without replaying or copying selectors', () => {
