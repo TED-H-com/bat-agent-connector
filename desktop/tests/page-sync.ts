@@ -8,13 +8,17 @@ export async function installBodyCompletedCounter(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const originalFetch = window.fetch;
     (window as any).__bodyCompletedUrls = [];
+    (window as any).__bodyRequests = [];
     window.fetch = async function(...args: any[]) {
-      const response = await originalFetch.apply(this, args as [any, any]);
       const url = typeof args[0] === 'string' ? args[0] : (args[0] && (args[0] as any).url) || '';
+      const requests = (window as any).__bodyRequests;
+      const entry = {id: requests.length + 1, url, parsed: false}; requests.push(entry);
+      const response = await originalFetch.apply(this, args as [any, any]);
       const originalJson = response.json.bind(response);
       response.json = async function() {
         const data = await originalJson();
         (window as any).__bodyCompletedUrls.push(url);
+        entry.parsed = true;
         return data;
       };
       return response;
@@ -61,5 +65,17 @@ export async function syncCompletedBodies(page: Page, prefix: string, targetCoun
     },
     {p: prefix, target: targetCount}
   );
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+}
+
+/** Capture actual fetch identities, not an aggregate that unrelated replies can satisfy. */
+export async function pendingBodyIds(page: Page, path: string): Promise<number[]> {
+  return page.evaluate(path => ((window as any).__bodyRequests || [])
+    .filter((entry: any) => entry.url.includes(path) && !entry.parsed).map((entry: any) => entry.id), path);
+}
+export async function syncBodyIds(page: Page, ids: number[]): Promise<void> {
+  if (!ids.length) throw new Error('A held response set must not be empty');
+  await page.waitForFunction(ids => ids.every(id =>
+    (window as any).__bodyRequests?.find((entry: any) => entry.id === id)?.parsed === true), ids);
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 }

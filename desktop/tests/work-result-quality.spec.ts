@@ -244,7 +244,7 @@ for(const native of [false,true])test(`unknown assessment reply and reload keep 
   await expect(reader.getByRole('button',{name:'View recorded assessment',exact:true})).toHaveCount(0);
 });
 
-import {installBodyCompletedCounter,countCompletedBodies,syncHeldBodyCompletion} from './page-sync.ts';
+import {installBodyCompletedCounter,pendingBodyIds,syncBodyIds} from './page-sync.ts';
 test('a held pinned reread during save cannot replace the newer refresh or resubmit',async({page})=>{
   const base=workResultFixture(),f=assessmentRoundtrip(base,resultWorkspace,resultWork(1));
   await installBodyCompletedCounter(page);const reader=await pinned(page,f),form=reader.locator(`[data-pm-action="${RECORD}"]`);
@@ -255,11 +255,13 @@ test('a held pinned reread during save cannot replace the newer refresh or resub
   let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
   try{
     await form.locator('button[type=submit]').click();
-    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBeGreaterThan(1);
+    await expect.poll(()=>pendingBodyIds(page,path)).toHaveLength(2);
+    const held=await pendingBodyIds(page,path);
     const key=f.state.requests.find(input=>input.method==='POST').idempotency_key;
     f.state.hold=null;base.emitResultRecorded('att_'+'1'.repeat(32));
     await expect(reader).toContainText('Original conclusion: accepted');
-    const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
+    expect(await pendingBodyIds(page,path)).toEqual(held);
+    release();await syncBodyIds(page,held);
     await expect(reader.getByRole('button',{name:'View recorded assessment',exact:true})).toBeVisible();
     expect(new URLSearchParams((await page.evaluate(()=>location.hash)).split('?')[1]).get('qa_version')).toBe('2');
     const posts=f.state.requests.filter(input=>input.method==='POST');expect(posts).toHaveLength(1);expect(posts[0].idempotency_key).toBe(key);
