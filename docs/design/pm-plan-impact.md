@@ -59,6 +59,19 @@ must match canonical original records. Ambiguous or inconsistent evidence fails
 closed. Same-work packages on another binding are excluded, not silently rebound.
 An Attempt without a provable selected-package assignment is explicitly unknown.
 
+Proof checks include resource type/ID and original actor, and require every
+checked body field to be present with the exact JSON value (including null and
+boolean types). `operation.accepted` checks action, target and entry against the
+original envelope. `pm.work_package.created` checks workspace, Work, operation,
+package ID, document digest, predecessor, `execution_authorized:false` and
+`execution_spec:not_assigned`. `pm.issue.recorded` checks workspace, Work,
+operation, mapping/revision IDs, native issue identity, publication receipt,
+state, external issue state and execution authorization against the exact saved
+revision. `work.start.succeeded` checks workspace, Work, start/Attempt IDs,
+package/execution IDs and package reuse against the original admission and child
+relation. Its session payload does not prove an impact edge and is neither
+copied nor used to infer execution progress or completion.
+
 A retained admission without its domain creation event yields a subject keyed by
 the original operation, with `creation_boundary_unproven`; it never acquires a
 package/issue ID from a later result. If both admission and creation evidence were

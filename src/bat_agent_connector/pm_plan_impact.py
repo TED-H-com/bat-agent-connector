@@ -163,7 +163,8 @@ def _authorize(ops, principal, wid, oid, events):
 
 def _event(event, resource_type, resource_id, **fields):
     _proof(event["resource_type"] == resource_type and event["resource_id"] == resource_id
-           and all(event["body"].get(key) == value for key, value in fields.items()))
+           and fields.keys() <= event["body"].keys()
+           and diff._json({key: event["body"][key] for key in fields}) == diff._json(fields))
 
 
 def _package(ops, principal, wid, package_id):
@@ -193,7 +194,8 @@ def _subject(ops, principal, wid, bindings, operation, events):
     oid, action = operation["operation_id"], operation["action"]
     admission = events.get("operation.accepted")
     if admission:
-        _event(admission, "operation", oid, action=action, target=operation["target"])
+        _event(admission, "operation", oid, action=action, target=operation["target"], entry=operation["entry"])
+        _proof(admission["actor"] == operation["actor"])
     base = {"operation_id": oid, "event_seqs": sorted(e["seq"] for e in events.values()),
             "semantic_impact": "unassessed"}
     target = operation["target"]
@@ -208,7 +210,9 @@ def _subject(ops, principal, wid, bindings, operation, events):
             return {**base, "boundary": "creation_boundary_unproven", "package_ref": None}
         package = _package(ops, principal, wid, event["resource_id"])
         _event(event, "pm_work_package", package["package_id"], workspace_id=wid, operation_id=oid,
-               work_item_id=package["work_item_id"], package_id=package["package_id"], document_digest=package["document_digest"])
+               work_item_id=package["work_item_id"], package_id=package["package_id"], document_digest=package["document_digest"],
+               previous_package_id=package["previous_package_id"], execution_authorized=False, execution_spec="not_assigned")
+        _proof(event["actor"] == package["actor"] == operation["actor"])
         doc = package["document"]
         _proof(package["operation_id"] == oid and package["work_item_id"] == target["work_item_id"]
                and doc["context"]["work_ref"]["binding_id"] == bid)
@@ -244,7 +248,10 @@ def _subject(ops, principal, wid, bindings, operation, events):
         revision = matches[0]
         doc = revision["document"]
         _event(event, "pm_issue_mapping", intent["mapping_id"], workspace_id=wid, operation_id=oid,
-               work_item_id=intent["work_item_id"], mapping_id=intent["mapping_id"], revision_id=revision["revision_id"])
+               work_item_id=intent["work_item_id"], mapping_id=intent["mapping_id"], revision_id=revision["revision_id"],
+               issue=doc["issue"], publication=doc["receipt"], state=doc["state"],
+               external_issue_state=doc["external_issue_state"], execution_authorized=doc["execution_authorized"])
+        _proof(event["actor"] == revision["actor"] == operation["actor"])
         _proof(revision["operation_id"] == oid and doc["relation"] == intent["relation"]
                and doc["package_ref"] == intent["package_ref"])
         return {**base, "boundary": "proven", "mapping_id": intent["mapping_id"], "revision_id": revision["revision_id"],
@@ -269,7 +276,9 @@ def _subject(ops, principal, wid, bindings, operation, events):
         return base
     body = event["body"]
     _event(event, "pm_work_attempt", row["attempt_id"], workspace_id=wid, operation_id=oid,
-           work_item_id=row["work_item_id"], attempt_id=row["attempt_id"])
+           work_item_id=row["work_item_id"], attempt_id=row["attempt_id"],
+           package_reused=intent["package_plan"]["mode"] == "reuse")
+    _proof(event["actor"] == operation["actor"])
     children = pm_work_start._children(ops, operation)
     execution = children.get("handoff")
     _proof(execution is not None and execution["operation_id"] == body["execution_operation_id"])
