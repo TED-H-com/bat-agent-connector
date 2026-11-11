@@ -1,6 +1,11 @@
 # Better Agent Dashboard／Connector 實作狀態
 
-## 2026-11-10：Work 閱讀端保存清理識別資料（分支增量）
+## 2026-11-10：Work 閱讀端保存清理識別資料（已合併未發布）
+
+[#511](https://github.com/TED-H-com/bat-agent-connector/pull/511) 已合併為
+`12f0f01a1f0909526ce156e002be725fc9b7eb39`。34 項 PR checks 及合併後主線 backend／desktop CI
+通過；本機 Python 3.13 全套為 9,927 passed、84 skipped，10,011 項測試完整性核對通過。
+此增量尚未發布、安裝或實機驗收。Claude Code 的完整接手資料見[交接筆記](claude-code-handoff-2026-11-10.md)。
 
 `feat/work-history-cleanup-index-20261110` 在已發布的 0.2.17／0.1.13 之上，
 讓看板、需求頁、獨立／會話內 Work 的固定摘錄閱讀器明確保存可撤回關聯的 ID。
