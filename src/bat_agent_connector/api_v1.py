@@ -54,7 +54,6 @@ MAX_STREAMS_PER_ACTOR = 8  # several Dashboard tabs per person; reloads briefly 
 REAUTH_S = 5.0  # an open event stream re-checks its token this often (revoked or expired tokens stop it)
 STREAM_MAX_S = 1800.0
 KEEPALIVE_S = 15.0
-_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 # The Dashboard is four static files; nothing else under /dashboard/ is served.
 DASHBOARD_FILES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
                    "i18n.js": "text/javascript; charset=utf-8", "app.css": "text/css; charset=utf-8"}
@@ -96,19 +95,23 @@ class ApiError(Exception):
 
 
 def _host_is_loopback(value: str) -> bool:
-    host = value.strip()
-    if host.startswith("["):
-        host = host[1:].split("]", 1)[0]
-    elif host.count(":") == 1:
-        host = host.split(":", 1)[0]
-    return host.lower() in _LOOPBACK_HOSTS or re.fullmatch(r"127(\.\d{1,3}){3}", host) is not None
+    """Validate a complete loopback authority without normalization or DNS lookup."""
+    match = re.fullmatch(r"(localhost|\[::1\]|127(?:\.(?:0|[1-9][0-9]{0,2})){3})(?::([0-9]{1,5}))?",
+                         value, re.IGNORECASE | re.ASCII)
+    if match is None:
+        return False
+    host, port = match.groups()
+    return ((port is None or 1 <= int(port) <= 65535)
+            and (not host.startswith("127.") or all(int(octet) <= 255 for octet in host.split("."))))
 
 
 def _origin_ok(origin: str, allowed: tuple[str, ...]) -> bool:
     if origin in allowed:
         return True
-    parts = urlsplit(origin)
-    return parts.scheme in {"http", "https"} and _host_is_loopback(parts.netloc)
+    # A serialized origin has no path (even '/'), query or fragment. Avoid URL
+    # parsers that strip controls/whitespace or raise on malformed IPv6 brackets.
+    match = re.fullmatch(r"https?://(.+)", origin, re.IGNORECASE | re.ASCII)
+    return match is not None and _host_is_loopback(match.group(1))
 
 
 def is_dashboard_path(path: str) -> bool:

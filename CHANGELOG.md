@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Resize the Workbench preview's work list with pointer or keyboard controls in
+  English and zh-TW. Keep a separate numeric width preference through temporary
+  narrowing and mobile navigation; cancel unfinished drags when changing Work.
+  Reuse the Classic resizer and preserve existing selection, drafts and operations.
+
+- Copy explicit quotes from individually completed conversation messages in
+  English and zh-TW, preserving nested markers, spacing and original line endings.
+  Keep selection and reader position across refreshes, retire removed copy controls,
+  and preserve literal quoted text in shared PM document readers.
+
+- Show original requirement assessments and criterion evidence in the shared
+  Result, keeping verification, applicability, partial coverage and dependent
+  handoff selections distinct. Live Overview exposes each accepted delivery's
+  exact assessment reference through existing operation and supported discussion
+  links, independently of the PM assessment reader, in English and zh-TW.
+
+- Strictly validate loopback Host authorities for the API and static Dashboard,
+  including canonical IPv4 octets, IPv6 brackets and port bounds. Refuse malformed
+  API Origins with `403 BAD_ORIGIN`, preserving exact configured origin exceptions,
+  existing authentication and CORS behavior; no new static Dashboard Origin gate.
+
 - Explicitly save a readable Work-side relationship ID into the existing cleanup
   index for later withdrawal after source revocation. Recheck current authority
   and relationship identity; preserve original operation recovery, the 500-record
