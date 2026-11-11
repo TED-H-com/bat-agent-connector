@@ -188,7 +188,8 @@ lowercase hexadecimal characters. Unknown fields, duplicate/empty HTTP query
 values, missing selectors and malformed values are refused. Valid but mismatched
 operation/version/digest tuples are not-found, never a request for the latest
 assessment. HTTP uses the existing PM GET parser: request bodies are not parsed
-and cannot supply selectors. The native bridge permits only this exact GET path,
+and cannot supply selectors; its handler also ignores the Idempotency-Key header.
+The native bridge permits only this exact GET path,
 the two typed, required query values, and no body or operation key.
 
 The result is the helper's unchanged envelope: `workspace_id`, `review_id`,
@@ -210,6 +211,34 @@ error object and MCP its ToolError text (including the invoked tool name), witho
 adding HTTP status fields. Source-bound requests retain the existing pre-read
 lineage barrier: RPC can refuse a hidden original source before its method scope
 check, just as `pm_work_quality_get` does. No refusal is remapped by this read.
+
+Refusal precedence follows the existing adapters, not one uniform error pipeline:
+
+| Adapter | Effective order for this read |
+| --- | --- |
+| HTTP | Transport/route and bearer or browser authentication gates; route `observe`; retained-empty query parsing; normalized request source-lineage barrier; exact query/number parsing; `pm_reads.read`; final response source-lineage barrier. |
+| Daemon RPC | Registered `API_RPC` method and bearer authentication; request source-lineage barrier; method `observe`; removal of established transport metadata `entry`; `pm_reads.read`; final response source-lineage barrier. |
+| MCP | Generated argument validation; `pm_daemon` requires the caller's `BATC_API_TOKEN` without a local administrator fallback; daemon RPC with that principal; existing ToolError conversion. |
+| Native bridge | Raw path/method/query/body/operation-key allowlist; existing transport to HTTP, where all HTTP gates still apply. No local membership or acceptance authority. |
+
+`pm_reads.read` checks observe and unknown fields before dispatch. The unchanged
+helper validates operation/version/digest syntax, loads the workspace-qualified
+review and checks context integrity, then checks membership and all original
+contexts/proofs in the bounded predecessor history. Exact tuple selection and
+the byte limit follow those access checks. An inaccessible predecessor or a
+newer assessment's proof therefore hides even an older exact document.
+
+Errors are not uniform or guaranteed constant-time across adapters. HTTP scope
+refusal precedes lineage, while RPC lineage can refuse before scope; malformed
+query fields, central fields and MCP arguments also use their existing distinct
+error formats. Missing versus hidden sources may produce different messages and
+work. This read makes no constant-time or indistinguishable-refusal guarantee.
+
+MCP unknown-argument refusal is intentionally stricter for this exact tool than
+for neighbouring quality reads, whose SDK argument models discard extra fields.
+Only this tool's generated argument model forbids extras; the dependency and
+neighbouring tool behavior remain unchanged. HTTP ignores a GET body and
+idempotency header, while the native bridge refuses both.
 
 This read creates no operation, event, collector marker or other persisted row,
 and calls no model, provider, BAT or collector. The single whole-document byte

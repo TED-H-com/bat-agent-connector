@@ -235,6 +235,8 @@ async def test_exact_assessment_http_selectors_are_exact_typed_bounded_and_never
     assert (await http(w['port'], 'GET', base, tok=auth, body={'version': 2, 'document_digest': digest}))[0] == 422
     assert await http(w['port'], 'GET', path(w['exact']), tok=auth, body={'version': 3}) == await http(
         w['port'], 'GET', path(w['exact']), tok=auth)
+    assert await http(w['port'], 'GET', path(w['exact']), tok=auth, headers={'Idempotency-Key': 'ignored-read-key'}) == await http(
+        w['port'], 'GET', path(w['exact']), tok=auth)
 
 
 async def test_exact_assessment_central_and_mcp_fields_are_strict_and_byte_limit_is_shared(assessed, monkeypatch):
@@ -295,3 +297,143 @@ async def test_generic_verification_facet_keeps_last_execution_match_without_can
     block, _, _, facet, _, _ = read_facet()
     assert block['quality_reviews']['current']['review_id'] == first['review_id']
     assert facet == {'status': 'passed', 'semantic_acceptance': 'accepted'}
+
+
+def exact_selection(w, review):
+    return {'workspace_id': w['workspace_id'], 'review_id': review['review_id'],
+        **{key: review['assessment'][key] for key in ('operation_id', 'version', 'document_digest')}}
+
+
+async def assert_hidden_on_every_transport(w, monkeypatch, principal, selections):
+    auth = token(w['d'], principal.actor, 'observe')
+    server, fleet = mcp(w, monkeypatch, auth)
+    try:
+        for params in selections:
+            with pytest.raises(OperationError) as denied:
+                quality.get_assessment(w['d'].ops, principal, **params)
+            assert denied.value.code == 'NOT_FOUND' and denied.value.status == 404
+            status, body = await http(w['port'], 'GET', path(params), tok=auth)
+            assert status == 404 and set(body) == {'error'}
+            assert set(body['error']) == {'code', 'message'} and body['error']['code'] == 'NOT_FOUND'
+            response = await rpc(w, auth, METHOD, params)
+            assert set(response) == {'error', 'message'} and response['error'] == 'NOT_FOUND'
+            with pytest.raises(ToolError, match='NOT_FOUND') as error:
+                await server.call_tool(METHOD, params)
+            # Refusals contain no original context, conclusions or selected IDs.
+            for selector in ('workspace_id', 'review_id', 'operation_id', 'document_digest'):
+                assert params[selector] not in str(body) + str(response) + str(error.value)
+    finally:
+        await fleet.close()
+
+
+async def other_workspace_review(w):
+    """Create a second real PM workspace on this daemon, reusing synthetic Git sources."""
+    from bat_agent_connector import pm_workspace, work_items
+    from tests import test_pm_work_packages as packages
+    from tests.test_pm_plan_operations import act, adopt, draft
+    other = {**w, 'params': copy.deepcopy(w['params'])}
+    other['workspace_id'] = (await packages.action(w, 'pm.workspace.create', params={
+        'name': 'Other assessment workspace', 'repositories': ['o/r']}))['workspace']['workspace_id']
+    wid = other['workspace_id']
+    await packages.action(other, 'pm.thread.create', {'workspace_id': wid}, {'title': 'Independent scope'}, {'expected_version': 1})
+    scope = await act(other, 'pm.input.record', {'slot': 'scope', 'value': 'Independent member login',
+        'status': 'user_confirmed', 'source_ref': {'kind': 'statement', 'ref': 'Synthetic owner direction'}})
+    acceptance = await act(other, 'pm.input.record', {'slot': 'quality', 'value': 'Check allowed and denied login',
+        'status': 'user_confirmed', 'source_ref': {'kind': 'statement', 'ref': 'Synthetic acceptance'}})
+    await act(other, 'pm.thread.plan', {'selected_input_ids': [scope['input_id'], acceptance['input_id']],
+        'rationale': 'Plan the independent workspace'})
+    other['revision'] = await draft(other, requirements=[{'id': 'member.login',
+        'source_input_id': scope['input_id'], 'acceptance_input_ids': [acceptance['input_id']]}])
+    await act(other, 'pm.run.prepare', {'purpose': 'Prepare independent planning context', 'repository_binding': w['selection']})
+    assert (await adopt(other))['status'] == 'succeeded'
+    pid = (await packages.action(other, 'project.create', params={'name': 'Other quality project', 'repositories': ['o/r']}))['project_id']
+    work = (await packages.action(other, 'work_item.create', {'project_id': pid}, {
+        'title': 'Independent login', 'goal': 'Independent result', 'acceptance': 'Exact regression'}))['work_item_id']
+    await packages.action(other, 'pm.project.bind', {'workspace_id': wid, 'project_id': pid}, {'rationale': 'Independent project'}, {
+        'expected_workspace_version': pm_workspace.get_workspace(w['d'].ops.db, OWNER, wid)['version'],
+        'expected_project_version': work_items._get_project(w['d'].ops.db, pid)['version']})
+    other['target'] = {'workspace_id': wid, 'work_item_id': work}
+    await packages.associate(other)
+    specs = await packages.read_specs(other, paths=[ref['path'] for ref in w['params']['source_refs']])
+    other['params']['source_refs'] = [{'repository': 'o/r', **{key: doc[key]
+        for key in ('commit_sha', 'path', 'source_id', 'sha256')}} for doc in specs['documents']]
+    spec_id = next(ref['source_id'] for ref in other['params']['source_refs'] if ref['path'].endswith('spec.md'))
+    other['params']['design']['source_ids'] = [spec_id]
+    other['params']['tasks'][0]['source_ids'] = [spec_id]
+    other['params']['verification'][0]['source_ids'] = [spec_id]
+    other['params']['verification'][0]['acceptance_input_ids'] = [acceptance['input_id']]
+    other['package'] = packages.read(other, await packages.create(other))
+    await member(other, reviews.REVIEWER.actor, 'contributor')
+    other['child'] = await reviews.run(other, await reviews.request(other))
+    assert other['child']['status'] == 'succeeded'
+    other['proof'] = reviews.observed(other, other['child'], candidate=w['candidate'], tree=w['tree'])
+    row = await reviews.new_review(other, dod=False)
+    await reviews.execute(other, reviews.assessment(other, row), actor=reviews.REVIEWER)
+    other['review'] = reviews.read(other, row)
+    return other
+
+
+async def test_exact_assessment_refuses_real_mixed_workspace_review_and_operation_identities(assessed, monkeypatch):
+    w = assessed
+    second = await reviews.new_review(w, previous=w['review']['review_id'])
+    await reviews.execute(w, reviews.assessment(w, second, verdict='rejected'), actor=reviews.REVIEWER)
+    same_workspace = exact_selection(w, reviews.read(w, second))
+    other = await other_workspace_review(w)
+    foreign = exact_selection(other, other['review'])
+    # This principal can read both reviews in A, but has never belonged to B.
+    await member(w, 'selected-workspace-reader', 'reader')
+    principal = api_auth.Principal('selected-workspace-reader', frozenset({'observe'}))
+    for params in (w['exact'], same_workspace):
+        assert quality.get_assessment(w['d'].ops, principal, **params)['assessment']['operation_id'] == params['operation_id']
+    assert quality.get_assessment(w['d'].ops, OWNER, **foreign)['assessment']['operation_id'] == foreign['operation_id']
+    a = w['exact']
+    mixed = [foreign]
+    for b in (same_workspace, foreign):
+        mixed.extend([
+            {**b, 'workspace_id': a['workspace_id'], 'review_id': a['review_id']},
+            {**a, 'operation_id': b['operation_id']},
+            {**a, 'review_id': b['review_id']},
+            {**a, 'workspace_id': b['workspace_id'], 'review_id': b['review_id']},
+        ])
+    mixed.append({**foreign, 'workspace_id': a['workspace_id']})
+    # A CREATE is a genuine readable operation, but never an assessment record.
+    create_id = w['review']['operation_id']
+    assert w['d'].ops.get(create_id)['action'] == quality.CREATE
+    mixed.append({**a, 'operation_id': create_id})
+    await assert_hidden_on_every_transport(w, monkeypatch, principal, mixed)
+
+
+@pytest.mark.parametrize('withdrawal', ['predecessor_only', 'newer_proof_only'])
+async def test_exact_assessment_withdrawn_history_proof_hides_older_original(assessed, monkeypatch, withdrawal):
+    w = assessed
+    different = {**w, 'proof': reviews.observed(w, w['child'], candidate=w['candidate'], tree=w['tree'])}
+    assert different['proof']['verification_id'] != w['proof']['verification_id']
+    if withdrawal == 'predecessor_only':
+        successor = await reviews.new_review(w, previous=w['review']['review_id'])
+        await reviews.execute(different, reviews.assessment(different, successor), actor=reviews.REVIEWER)
+        selected = exact_selection(w, reviews.read(w, successor))
+        await reviews.execute(different, reviews.assessment(different, successor, verdict='rejected', version=2), actor=reviews.REVIEWER)
+        withdrawn, retained = w, different
+    else:
+        await reviews.execute(different, reviews.assessment(different, w['review']), actor=reviews.REVIEWER)
+        selected = w['exact']
+        withdrawn, retained = different, w
+    original = quality.get_assessment(w['d'].ops, OWNER, **selected)
+    refs = {item['reference']['verification_id'] for item in original['assessment']['document']['criteria']}
+    assert refs == {retained['proof']['verification_id']}
+    reviews.withdraw_verifier(withdrawn)
+    # Only the other task's authority changes; the selected document's own
+    # context and proof remain readable in isolation through real source gates.
+    quality.sources.access(w['d'].ops, OWNER, w['workspace_id'], original['context'])
+    quality.sources.proof_access(w['d'].ops, OWNER, w['workspace_id'], original['assessment']['document'])
+    await assert_hidden_on_every_transport(w, monkeypatch, OWNER, [selected])
+
+
+async def test_exact_assessment_http_reads_maximum_stored_version(assessed):
+    w = assessed
+    for version in range(2, quality.MAX_HISTORY + 1):
+        await reviews.execute(w, reviews.assessment(w, w['review'], version=version), actor=reviews.REVIEWER)
+    selected = exact_selection(w, reviews.read(w, w['review']))
+    assert selected['version'] == 33
+    expected = quality.get_assessment(w['d'].ops, OWNER, **selected)
+    assert await http(w['port'], 'GET', path(selected), tok=token(w['d'], OWNER.actor, 'observe')) == (200, expected)
