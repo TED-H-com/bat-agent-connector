@@ -68,7 +68,18 @@ broadens the result collector or creates a completion authority.
 Read one database snapshot; never probe BAT, providers, sessions or files. Count
 only original central records. Bounds are 10,000 distinct Works and 50,000
 contributing records, including history, selections, execution/input references
-and their original receipts. Stop on overflow. Queries start with workspace or
+and their original receipts. The reused Kanban per-Work history bound is 500
+for both flow events and retained management receipts; fetch at most 501 to detect
+overflow, then return the generic unknown without replaying that history.
+
+Current bindings use the existing `(workspace_id,work_item_id,sequence)` index:
+seek in descending Work ID and sequence order, landing directly on the next
+Work’s latest binding. Each Work needs one seek; obsolete versions are not visited
+or charged. At most 10,001 Work identities are examined to detect Work overflow;
+current binding records also consume the global record budget. Active links are
+enumerated in `(kind,ref)` index order, with no temporary sort. Every enumerated
+active link consumes the record budget, even if its kind does not hold capacity.
+Stop after the remaining record budget plus one row on overflow. Queries start with workspace or
 source identity indexes; work performed must not grow with unrelated workspace
 history. Schema creation and index creation happen only at installation.
 
@@ -80,7 +91,11 @@ makes coverage `unknown`. Unknown has `used: null`, `remaining: null`,
 
 If any contributing source is unreadable, or any bound is exceeded, return exactly
 one generic reason: `coverage_unavailable`. Do not disclose which condition,
-source, identifier, partial count or per-reason count caused it. Reasons derived
+source, identifier, partial count or per-reason count caused it. A source from a
+foreign workspace that is not readable within this read's source authority gives
+that same generic unknown, even if the principal can read it elsewhere; it is not
+silently omitted or treated as zero. Policy visibility is independent of count
+coverage. Reasons derived
 solely from readable sources may be specific (`missing_history`,
 `inconsistent_history`, `clock_uncertain`). A specific reason must never mask a
 later hidden-source or overflow condition. Conservative retained holds do not
@@ -91,7 +106,10 @@ Always return `outside_scope: ["unassociated_external_work",
 is not inferred from paths, host names or sessions. Workload remains its separate
 maintenance safety signal. The Kanban page `wip` remains `returned_page` with
 `limit: null`. Only when a saved policy exists does Kanban's `wip_limit` capability
-point to this independent read; unconfigured responses remain unchanged.
+point to this independent read; unconfigured Kanban responses remain unchanged.
+Bootstrap and availability responses change only through additive `workspace_wip`
+capability and `pm.wip_policy.save` action entries; universal golden byte identity
+is not claimed.
 
 ## Policy and authority
 
@@ -171,7 +189,7 @@ Advertise `workspace_wip` only when its action and schema are installed:
 {"version":1,"read":"pm_workspace_wip_get","action":"pm.wip_policy.save",
  "modes":["advisory","disabled"],"enforcement":false,
  "counting_basis":"work_commitments_v1",
- "bounds":{"works":10000,"contributing_records":50000}}
+ "bounds":{"works":10000,"contributing_records":50000,"per_work_history":500}}
 ```
 
 HTTP, daemon, MCP and native bridge share the same authority, success and refusal

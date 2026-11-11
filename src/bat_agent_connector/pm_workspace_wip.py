@@ -107,11 +107,13 @@ def install(ops):
 
 
 def capabilities(ops):
+    from . import pm_kanban
     if ACTION not in ops.actions or not installed(ops.db):
         return None
     return {"version": 1, "read": READ, "action": ACTION, "modes": ["advisory", "disabled"],
             "enforcement": False, "counting_basis": BASIS,
-            "bounds": {"works": MAX_WORKS, "contributing_records": MAX_RECORDS}}
+            "bounds": {"works": MAX_WORKS, "contributing_records": MAX_RECORDS,
+                       "per_work_history": pm_kanban.MAX_HISTORY}}
 
 
 def _record(db, wid, revision=None):

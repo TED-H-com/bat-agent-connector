@@ -35,7 +35,11 @@ MANAGEMENT_SQL = """SELECT o.operation_id FROM management_applied m JOIN operati
     AND (o.action IN ('work_item.create','work_item.approve','work_item.continue')
         OR o.action='work_item.update' AND json_type(o.params,'$.archived') IS NULL)
     ORDER BY m.rowid LIMIT ?"""
-LINKS_SQL = "SELECT * FROM work_item_links WHERE work_item_id=? AND removed_at IS NULL ORDER BY link_id LIMIT ?"
+LINKS_SQL = "SELECT * FROM work_item_links WHERE work_item_id=? AND removed_at IS NULL ORDER BY kind,ref LIMIT ?"
+FIRST_BINDING_SQL = """SELECT * FROM pm_work_bindings WHERE workspace_id=?
+    ORDER BY work_item_id DESC,sequence DESC LIMIT 1"""
+BINDING_SQL = """SELECT * FROM pm_work_bindings WHERE workspace_id=? AND work_item_id<?
+    ORDER BY work_item_id DESC,sequence DESC LIMIT 1"""
 LINEAGE_SQL = """SELECT resource_id FROM pm_source_lineage
     WHERE original_operation_id=? AND resource_type='operation' LIMIT ?"""
 
@@ -52,12 +56,14 @@ class _Collector:
         self.groups = {reason: set() for reason in REASONS}
         self.reasons = set()
 
-    def rows(self, sql, args=()):
+    def rows(self, sql, args=(), *, bound=None):
         # LIMIT applies before materialization. No OFFSET or unbounded history fetch.
         room = policy.MAX_RECORDS - self.used_records
+        if bound is not None:
+            room = min(room, bound)
         rows = self.db.execute(sql, (*args, room + 1)).fetchall()
         self.used_records += len(rows)
-        if self.used_records > policy.MAX_RECORDS:
+        if len(rows) > room:
             raise _Unavailable
         return rows
 
@@ -87,8 +93,8 @@ class _Collector:
         wi = binding["work_item_id"]
         self.source(binding["operation_id"])
         item, closed = self.work(wi)
-        rows = self.rows(HISTORY_SQL, (wi,))
-        expected = self.rows(MANAGEMENT_SQL, (wi,))
+        rows = self.rows(HISTORY_SQL, (wi,), bound=pm_kanban.MAX_HISTORY)
+        expected = self.rows(MANAGEMENT_SQL, (wi,), bound=pm_kanban.MAX_HISTORY)
         originals = {}
         for row in rows:
             oid = pm_evidence._body(row["body"]).get("operation_id")
@@ -333,11 +339,14 @@ class _Collector:
         for table in ("pm_work_bindings", "work_attempts", "pm_work_batch_children", "pm_work_adopt_and_start_children"):
             if not pm_source_lineage._table(self.db, table):
                 raise _Unavailable
-        bindings = self.rows("""SELECT b.* FROM pm_work_bindings b WHERE workspace_id=?
-            AND NOT EXISTS(SELECT 1 FROM pm_work_bindings n WHERE n.workspace_id=b.workspace_id
-                AND n.work_item_id=b.work_item_id AND n.sequence>b.sequence) LIMIT ?""", (self.wid,))
-        for binding in bindings:
+        binding = self.db.execute(FIRST_BINDING_SQL, (self.wid,)).fetchone()
+        while binding:
+            # A reverse index seek lands on the next Work's newest sequence directly.
+            self.used_records += 1
+            if self.used_records > policy.MAX_RECORDS:
+                raise _Unavailable
             self.management(binding)
+            binding = self.db.execute(BINDING_SQL, (self.wid, binding['work_item_id'])).fetchone()
         for row in self.rows(ROOT_SQL, (self.wid,)):
             self.root(self.source(row["operation_id"]))
         # Do not silently drop older Attempts absent from the current root query.

@@ -1669,7 +1669,8 @@
           "counting_basis": "work_commitments_v1",
           "bounds": {
             "works": 10000,
-            "contributing_records": 50000
+            "contributing_records": 50000,
+            "per_work_history": 500
           }
         },
         "work_profiles": {
