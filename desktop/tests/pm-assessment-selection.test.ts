@@ -1,8 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {assessmentSelection, assessmentQuery, parseAssessmentSelection, matchesAssessment, matchesAttempt,
-  matchesResult, contextualAssessment, selectionFromResult} from '../src/pm-assessment-selection.js';
+  matchesResult as matchesTrustedResult, contextualAssessment as contextualTrustedAssessment, selectionFromResult} from '../src/pm-assessment-selection.js';
 import {sessionOrigin, sessionHref} from '../src/session-navigation.js';
+const matchesResult=(value:any,data:any,...identity:any[])=>matchesTrustedResult(value,data,identity.length?identity[0]:'fixture-server');
+const contextualAssessment=(value:any,data:any)=>contextualTrustedAssessment(value,data,'fixture-server');
 const id = (prefix: string, n = '1', length = 32) => prefix + n.repeat(length);
 const pin = {partition:'fixture-partition',workspace_id:id('ws_'),work_item_id:id('wi_','1',20),attempt_id:id('att_'),
   result_id:id('res_'),result_digest:'sha256:'+id('','a',64),package_id:id('pmwp_'),package_digest:id('','b',64),
@@ -14,7 +16,7 @@ const exact = {workspace_id:pin.workspace_id,review_id:pin.review_id,context_dig
     execution_operation_id:pin.execution_operation_id,native_result:{candidate_commit:pin.candidate_commit}},
   assessment:{kind:'assessment',operation_id:pin.operation_id,version:pin.version,document_digest:pin.document_digest,document:{criteria:[]}}};
 const result = {contract:'pm-work-attempt-result/v1',workspace_id:pin.workspace_id,attempt_id:pin.attempt_id,
-  identity:{workspace_id:pin.workspace_id,work_item_id:pin.work_item_id,attempt_id:pin.attempt_id,package_id:pin.package_id,execution_operation_id:pin.execution_operation_id},
+  identity:{server_id:'fixture-server',workspace_id:pin.workspace_id,work_item_id:pin.work_item_id,attempt_id:pin.attempt_id,package_id:pin.package_id,execution_operation_id:pin.execution_operation_id},
   sources:{result_id:pin.result_id,digest:pin.result_digest},changes:{fixed_result_commit:{commit_sha:pin.candidate_commit}},
   requirements:{package_ref:exact.context.package_ref,items:[{requirement_id:'member.login',assessments:[{reference:pin,applicable:false,qualified:false}]}]}};
 
@@ -72,4 +74,13 @@ test('Overview enrichment keeps the original return control when a recorded asse
   assert.equal(enriched.return_review_id,reference.return_review_id);
   assert.equal(enriched.return_document_digest,reference.return_document_digest);
   assert.equal(enriched.operation_id,pin.operation_id);
+});
+
+test('Result server identity must match the trusted bootstrap, including a missing identity',()=>{
+  const trusted='trusted-fixture-server';
+  const bound={...result,identity:{...result.identity,server_id:trusted}};
+  assert.equal(matchesResult(pin,bound,trusted),true);
+  assert.equal(matchesResult(pin,bound,'foreign-fixture-server'),false);
+  assert.equal(matchesResult(pin,{...bound,identity:{...bound.identity,server_id:undefined}},trusted),false);
+  assert.equal(matchesResult(pin,bound,undefined),false);
 });

@@ -16,7 +16,7 @@ export function workQualityContext(envelope, workspaceId, attempt) {
     execution_operation_id: id.execution_operation_id, candidate_commit: commit};
 }
 
-export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}, onSourceUnavailable = () => {}}) {
+export function createWorkQuality({h, t, api, alive, workspaceId, serverId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}, onSourceUnavailable = () => {}}) {
   let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null, saving = 0;
   const body = h('div'), status = h('div', {role: 'status'});
   const open = button({variant: 'secondary', size: 'sm', label: t('pmq_result_open'), onClick: () => void load()});
@@ -64,7 +64,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
   }
   function render(value, attempt) {
     const next = workQualityContext(value, workspaceId, attempt);
-    if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value))) {dispose(); return null;}
+    if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value, serverId))) {dispose(); return null;}
     if (!form || getCaps()?.features?.pm_workspaces?.quality_reviews?.version !== 1 || !next) {dispose(); return null;}
     if (JSON.stringify(next) !== JSON.stringify(context)) {dispose(); context = next;}
     const signature = JSON.stringify([value.verification, value.next_allowed_actions?.filter(row => row.action?.startsWith('pm.quality.') || row.action === 'pm.execution.verify'),

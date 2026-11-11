@@ -56,7 +56,7 @@ function normalizeForComparison(envelope) {
   return clone;
 }
 
-export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}, form = null, namespace = ''}) {
+export function workResultPanel({h, t, api, alive, workspaceId, serverId, caps, errorBox, onVisibility = () => {}, form = null, namespace = ''}) {
   let activeAttempt = null;
   let readSerial = 0;
   let lastEnvelope = null;
@@ -96,7 +96,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     readSerial++; lastEnvelope = lastNormalized = null; lastStale = true;
     panelElement.querySelector('[data-result-requirements]')?.remove(); quality.dispose();
   });
-  const original = originalAssessmentReader({h, t, api, alive, workspaceId, caps, namespace, form, errorBox,
+  const original = originalAssessmentReader({h, t, api, alive, workspaceId, serverId, caps, namespace, form, errorBox,
     refreshOrigin: readResult, onSelectionChange: selected => {
       if (selected) for (const node of panelElement.querySelectorAll('[data-result-requirements] details[open]')) node.open = false;
       quality.dispose();
@@ -189,6 +189,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         return; // Drop late reply
       }
 
+      if (original.supported() && (!serverId || data?.identity?.server_id !== serverId)) throw Error(t('pmq_invalid'));
       // Validate envelope contract and matching IDs
       const isValid =
         data &&
@@ -211,7 +212,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       sources.replace((data.requirements?.items || []).flatMap(item => (item.assessments || []).map(row => row.reference)));
       const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace) : null;
       if (requested?.origin === 'result' && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id
-        && requested.attempt_id === attemptId && !matchesResult(requested, data)) {
+        && requested.attempt_id === attemptId && !matchesResult(requested, data, serverId)) {
         lastStale = true;
         publish.dispose(); quality.dispose(); panelElement.replaceChildren(h('h3', {tabindex: -1}, t('wres_heading')), original.element); updateVisibility(true);
         if (original.selected()) void original.refresh(); else original.restore('result');

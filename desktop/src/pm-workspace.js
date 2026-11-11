@@ -417,7 +417,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 // Test fixtures rewrite the declaration above to an export. This alias stays a second export.
 export {durableForm as pmDurableForm};
 
-export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
+export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
   if (!pmAvailable(caps())) {main.append(renderPmAvailability(h('div'), {h, t, state: pmAvailability({caps: caps(), kind: 'workspace'})})); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
@@ -692,7 +692,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   heading.querySelector('.ui-page-heading').append(overviewMeta);
   const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
-    ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
+    ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({h, t, api, alive, namespace, serverId, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
       onCompare: () => {openReport('compare'); void brief.prepareReports().then(() => brief.reportActions.compare());},
       onHeader: ({meta, phase, active}) => {overviewMeta.hidden = !active; overviewMeta.replaceChildren(meta);
         if (active) {phasePill.hidden = !phase; phasePill.textContent = phase || ''; }},
@@ -740,7 +740,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       && caps()?.scopes?.some(scope => scope === 'observe' || scope === 'admin')}) : null;
   if (schedule) body.insertBefore(schedule.element, content);
   const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
-    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
+    ? workspaceKanban({h,t,api,alive,namespace,serverId,workspaceId,workspace:()=>workspace,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;

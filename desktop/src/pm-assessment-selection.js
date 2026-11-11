@@ -58,9 +58,10 @@ export function matchesAttempt(value, data) {
     && a.work_item_id === value.work_item_id && a.attempt_id === value.attempt_id
     && a.package_id === value.package_id && a.execution_operation_id === value.execution_operation_id;
 }
-export function matchesResult(value, data) {
+export function matchesResult(value, data, serverId) {
   const id = data?.identity;
-  return data?.contract === 'pm-work-attempt-result/v1' && data.workspace_id === value.workspace_id
+  return typeof serverId === 'string' && serverId.length > 0 && id?.server_id === serverId
+    && data?.contract === 'pm-work-attempt-result/v1' && data.workspace_id === value.workspace_id
     && data.attempt_id === value.attempt_id && id?.workspace_id === value.workspace_id
     && id.work_item_id === value.work_item_id && id.attempt_id === value.attempt_id
     && id.package_id === value.package_id && id.execution_operation_id === value.execution_operation_id
@@ -80,8 +81,8 @@ export function selectionFromResult({partition, envelope, reference, origin = 'r
     ...Object.fromEntries(Object.entries(reference).filter(([key]) => key.startsWith('return_'))), ...(requirement_id ? {requirement_id} : {})}, partition, {complete: true});
 }
 // Only the selected Result's central projection can supply applicability.
-export function contextualAssessment(value, envelope) {
-  if (!matchesResult(value, envelope)) return null;
+export function contextualAssessment(value, envelope, serverId) {
+  if (!matchesResult(value, envelope, serverId)) return null;
   return (envelope.requirements.items || []).filter(item => !value.requirement_id || item.requirement_id === value.requirement_id)
     .flatMap(item => item.assessments || []).find(item => {
       const ref = item.reference;

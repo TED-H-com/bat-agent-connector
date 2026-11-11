@@ -6,7 +6,7 @@ import {assessmentSelection, assessmentQuery, parseAssessmentSelection, matchesA
 
 // One mounted reader owns its epoch. Withdrawal invalidates all pending reads,
 // including replies issued before an event removed the originating source.
-export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, namespace, form, errorBox,
+export function originalAssessmentReader({h, t, api, alive, workspaceId, serverId, caps, namespace, form, errorBox,
   refreshOrigin = async () => {}, onSelectionChange = () => {}, returnFocus = () => null}) {
   let reading = null, fence = null, sourceToken = null;
   let pin = null, epoch = 0, quality = null, currentResult = null, currentAttempt = null, recorded = null;
@@ -73,10 +73,11 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, n
       api('GET', `/pm/workspaces/${workspaceId}/work-attempts/${requested.attempt_id}`),
       api('GET', `/pm/workspaces/${workspaceId}/work-attempts/${requested.attempt_id}/result`),
     ]); guard(ticket);
+    if (!serverId || result?.identity?.server_id !== serverId) throw Error(t('pmq_invalid'));
     if (work?.work_item?.work_item_id !== requested.work_item_id || !matchesAttempt(requested, attempt)) throw Error(t('pmq_invalid'));
     if (!requested.result_id) requested = selectionFromResult({partition: namespace, envelope: result, reference: requested, origin: requested.origin});
     if (!requested || !matchesAssessment(requested, original)) return null;
-    return {selection: requested, attempt: attempt.attempt, envelope: result, matches: matchesResult(requested, result)};
+    return {selection: requested, attempt: attempt.attempt, envelope: result, matches: matchesResult(requested, result, serverId)};
   }
   async function refresh({focus = false} = {}) {
     if (!pin || !supported()) {close(); return;}
@@ -90,7 +91,7 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, n
       const context = await readContext(selected, original, ticket); guard(ticket);
       if (context && !selected.result_id) {pin = context.selection; remember(pin);}
       currentResult = context?.envelope; currentAttempt = context?.attempt;
-      const contextual = context?.matches ? contextualAssessment(pin, currentResult) : null;
+      const contextual = context?.matches ? contextualAssessment(pin, currentResult, serverId) : null;
       const document = original.assessment.document;
       const assessment = {reference: {review_id: pin.review_id, operation_id: pin.operation_id, version: pin.version, document_digest: pin.document_digest},
         original: document, assessed_by: original.assessment.actor,
@@ -105,7 +106,7 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, n
           h('a', {class: 'ui-button secondary', href: `#/pm/${workspaceId}/board?select=${pin.work_item_id}`,
             onclick: () => {close({forget: true});}}, t('pmq_open_current_result')));
       } else {
-        if (!quality) quality = createWorkQuality({h, t, api, alive, workspaceId, caps, namespace, form, errorBox,
+        if (!quality) quality = createWorkQuality({h, t, api, alive, workspaceId, serverId, caps, namespace, form, errorBox,
           assessmentSelection: pin, originalAssessment: original, onSourceUnavailable: error => fence?.withdraw(error),
           refreshResult: async () => {await refreshOrigin(); await refresh();},
           onRecorded: reference => {

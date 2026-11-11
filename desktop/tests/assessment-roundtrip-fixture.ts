@@ -17,7 +17,7 @@ export function assessmentRoundtrip(base:any, workspaceId:string, workId:string)
   const attempt={attempt_id:attemptId,workspace_id:workspaceId,work_item_id:workId,package_id:packageId,execution_operation_id:childId,
     start_operation_id:'op_'+'1'.repeat(32),stage:'started',status:'succeeded',session:{host:'fixture-host',session_id:'session-123'}};
   const envelope=buildResultEnvelope({workspace_id:workspaceId,attempt_id:attemptId,
-    identity:{workspace_id:workspaceId,work_item_id:workId,attempt_id:attemptId,package_id:packageId,execution_operation_id:childId},
+    identity:{server_id:base.ids?.serverId || 'pm-fixture',workspace_id:workspaceId,work_item_id:workId,attempt_id:attemptId,package_id:packageId,execution_operation_id:childId},
     sources:{result_id:'res_'+'1'.repeat(32),digest:'sha256:'+'d'.repeat(64)},fixed_commit:{commit_sha:candidate,source_kind:'turn_end_observation'},
     requirements:{relation:'explicit',package_ref:map(q.package_ref),candidate_commit:candidate,verification:'verified',coverage:{reviews_partial:false,packages_partial:false},
       items:[{requirement_id:'recovery',text:'Recover original ownership',state:'assessments_recorded',assessments:[{reference:ref,original:structuredClone(row.assessment.document),

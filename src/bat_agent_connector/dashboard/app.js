@@ -16138,9 +16138,9 @@ function matchesAttempt(value, data) {
 	const a = data?.attempt;
 	return data?.workspace_id === value.workspace_id && a?.workspace_id === value.workspace_id && a.work_item_id === value.work_item_id && a.attempt_id === value.attempt_id && a.package_id === value.package_id && a.execution_operation_id === value.execution_operation_id;
 }
-function matchesResult(value, data) {
+function matchesResult(value, data, serverId) {
 	const id = data?.identity;
-	return data?.contract === "pm-work-attempt-result/v1" && data.workspace_id === value.workspace_id && data.attempt_id === value.attempt_id && id?.workspace_id === value.workspace_id && id.work_item_id === value.work_item_id && id.attempt_id === value.attempt_id && id.package_id === value.package_id && id.execution_operation_id === value.execution_operation_id && data.sources?.result_id === value.result_id && data.sources.digest === value.result_digest && data.changes?.fixed_result_commit?.commit_sha === value.candidate_commit && data.requirements?.package_ref?.workspace_id === value.workspace_id && data.requirements.package_ref.package_id === value.package_id && data.requirements.package_ref.document_digest === value.package_digest;
+	return typeof serverId === "string" && serverId.length > 0 && id?.server_id === serverId && data?.contract === "pm-work-attempt-result/v1" && data.workspace_id === value.workspace_id && data.attempt_id === value.attempt_id && id?.workspace_id === value.workspace_id && id.work_item_id === value.work_item_id && id.attempt_id === value.attempt_id && id.package_id === value.package_id && id.execution_operation_id === value.execution_operation_id && data.sources?.result_id === value.result_id && data.sources.digest === value.result_digest && data.changes?.fixed_result_commit?.commit_sha === value.candidate_commit && data.requirements?.package_ref?.workspace_id === value.workspace_id && data.requirements.package_ref.package_id === value.package_id && data.requirements.package_ref.document_digest === value.package_digest;
 }
 function selectionFromResult({ partition, envelope, reference, origin = "result", requirement_id }) {
 	return assessmentSelection({
@@ -16163,8 +16163,8 @@ function selectionFromResult({ partition, envelope, reference, origin = "result"
 		...requirement_id ? { requirement_id } : {}
 	}, partition, { complete: true });
 }
-function contextualAssessment(value, envelope) {
-	if (!matchesResult(value, envelope)) return null;
+function contextualAssessment(value, envelope, serverId) {
+	if (!matchesResult(value, envelope, serverId)) return null;
 	return (envelope.requirements.items || []).filter((item) => !value.requirement_id || item.requirement_id === value.requirement_id).flatMap((item) => item.assessments || []).find((item) => {
 		const ref = item.reference;
 		return ref?.review_id === value.review_id && ref.operation_id === value.operation_id && ref.version === value.version && ref.document_digest === value.document_digest;
@@ -22593,7 +22593,7 @@ function workQualityContext(envelope, workspaceId, attempt) {
 		candidate_commit: commit
 	};
 }
-function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}, onSourceUnavailable = () => {} }) {
+function createWorkQuality({ h, t, api, alive, workspaceId, serverId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}, onSourceUnavailable = () => {} }) {
 	let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null, saving = 0;
 	const body = h("div"), status = h("div", { role: "status" });
 	const open = button({
@@ -22689,7 +22689,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 	}
 	function render(value, attempt) {
 		const next = workQualityContext(value, workspaceId, attempt);
-		if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value))) {
+		if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value, serverId))) {
 			dispose();
 			return null;
 		}
@@ -22726,7 +22726,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 }
 //#endregion
 //#region src/pm-original-assessment.js
-function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespace, form, errorBox, refreshOrigin = async () => {}, onSelectionChange = () => {}, returnFocus = () => null }) {
+function originalAssessmentReader({ h, t, api, alive, workspaceId, serverId, caps, namespace, form, errorBox, refreshOrigin = async () => {}, onSelectionChange = () => {}, returnFocus = () => null }) {
 	let reading = null, fence = null, sourceToken = null;
 	let pin = null, epoch = 0, quality = null, currentResult = null, currentAttempt = null, recorded = null;
 	const body = h("div"), editor = h("div"), status = h("div", { role: "status" });
@@ -22831,6 +22831,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespa
 			api("GET", `/pm/workspaces/${workspaceId}/work-attempts/${requested.attempt_id}/result`)
 		]);
 		guard(ticket);
+		if (!serverId || result?.identity?.server_id !== serverId) throw Error(t("pmq_invalid"));
 		if (work?.work_item?.work_item_id !== requested.work_item_id || !matchesAttempt(requested, attempt)) throw Error(t("pmq_invalid"));
 		if (!requested.result_id) requested = selectionFromResult({
 			partition: namespace,
@@ -22843,7 +22844,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespa
 			selection: requested,
 			attempt: attempt.attempt,
 			envelope: result,
-			matches: matchesResult(requested, result)
+			matches: matchesResult(requested, result, serverId)
 		};
 	}
 	async function refresh({ focus = false } = {}) {
@@ -22877,7 +22878,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespa
 			}
 			currentResult = context?.envelope;
 			currentAttempt = context?.attempt;
-			const contextual = context?.matches ? contextualAssessment(pin, currentResult) : null;
+			const contextual = context?.matches ? contextualAssessment(pin, currentResult, serverId) : null;
 			const document = original.assessment.document;
 			const content = originalAssessment({
 				h,
@@ -22924,6 +22925,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespa
 					api,
 					alive,
 					workspaceId,
+					serverId,
 					caps,
 					namespace,
 					form,
@@ -23687,7 +23689,7 @@ function normalizeForComparison(envelope) {
 	if (clone.collection) delete clone.collection.checked_at;
 	return clone;
 }
-function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}, form = null, namespace = "" }) {
+function workResultPanel({ h, t, api, alive, workspaceId, serverId, caps, errorBox, onVisibility = () => {}, form = null, namespace = "" }) {
 	let activeAttempt = null;
 	let readSerial = 0;
 	let lastEnvelope = null;
@@ -23752,6 +23754,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		api,
 		alive,
 		workspaceId,
+		serverId,
 		caps,
 		namespace,
 		form,
@@ -23836,6 +23839,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				return;
 			}
 			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			if (original.supported() && (!serverId || data?.identity?.server_id !== serverId)) throw Error(t("pmq_invalid"));
 			if (!(data && typeof data === "object" && data.contract === "pm-work-attempt-result/v1" && data.workspace_id === workspaceId && data.attempt_id === attemptId && data.execution && KNOWN_STATES.has(data.execution.state))) {
 				lastEnvelope = null;
 				lastNormalized = null;
@@ -23845,7 +23849,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			}
 			sources.replace((data.requirements?.items || []).flatMap((item) => (item.assessments || []).map((row) => row.reference)));
 			const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split("?")[1] || ""), namespace) : null;
-			if (requested?.origin === "result" && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id && requested.attempt_id === attemptId && !matchesResult(requested, data)) {
+			if (requested?.origin === "result" && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id && requested.attempt_id === attemptId && !matchesResult(requested, data, serverId)) {
 				lastStale = true;
 				publish.dispose();
 				quality.dispose();
@@ -47755,7 +47759,7 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 }
 //#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, workspace = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
+function workspaceKanban({ t, api, alive, serverId, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, workspace = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
@@ -47814,6 +47818,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					errorBox,
 					form,
 					namespace,
+					serverId,
 					onVisibility: (visible) => {
 						const attemptSection = detail.element?.body?.querySelector("[data-work-section=\"attempt-result\"]");
 						if (attemptSection) attemptSection.hidden = !visible;
@@ -56436,7 +56441,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		values: () => capture()
 	};
 }
-async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false }) {
+async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false }) {
 	if (!pmAvailable(caps())) {
 		main.append(renderPmAvailability(h("div"), {
 			h,
@@ -56905,6 +56910,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		api,
 		alive,
 		namespace,
+		serverId,
 		workspaceId,
 		permitted,
 		form,
@@ -57082,6 +57088,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		api,
 		alive,
 		namespace,
+		serverId,
 		workspaceId,
 		workspace: () => workspace,
 		errorBox,
@@ -76816,6 +76823,7 @@ async function viewSession(main, host, sid, context = null) {
 		t,
 		api,
 		workspaceId: workContext.workspaceId,
+		serverId: state.scopeIdentity?.server_id,
 		onVisibility: showSupportingTools,
 		caps: () => state.caps,
 		errorBox,
@@ -81932,6 +81940,7 @@ async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
 		h,
 		t,
 		api,
+		serverId: state.scopeIdentity?.server_id,
 		caps: () => state.caps,
 		canSend: () => !state.nativeBusy && state.online && state.viewReady,
 		onOnline,

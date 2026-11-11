@@ -364,3 +364,16 @@ for(const refusal of ['editor','exact','result'] as const)test(`source refusal w
   await expect(page.locator('[data-pm-action="pm.quality.review.record"]')).toHaveCount(0);
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
 });
+
+for(const server of [undefined,'foreign-fixture-server'])test(`exact destination refuses Result server identity: ${server||'missing'}`,async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  f.state.envelope.identity.server_id=server;
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');
+  await expect(reader.locator('[data-api-error]')).toBeVisible();
+  await expect(reader).not.toContainText('Original conclusion: accepted');
+  await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
