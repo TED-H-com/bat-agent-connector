@@ -43,14 +43,28 @@ from .redact import redact
 from .task_daemon import request as task_request
 
 
-class _CleanupCursorMetadata(FuncMetadata):
+class _ExactStringMetadata(FuncMetadata):
+    string_parameters: frozenset[str]
+
     def pre_parse_json(self, data: dict[str, Any]) -> dict[str, Any]:
         parsed = super().pre_parse_json(data)
-        # This opaque string is not JSON-in-a-string. Preserve explicit JSON null,
-        # but let central validation refuse strings such as "null" and "[]".
-        if 'after' in data:
-            parsed['after'] = data['after']
+        # Opaque selectors are not JSON-in-a-string. Keep null distinct from
+        # "null" and leave syntax/authorization decisions to central validation.
+        for name in self.string_parameters & data.keys():
+            parsed[name] = data[name]
         return parsed
+
+
+def _strict_tool_arguments(mcp: MCPServer, name: str, *, string_parameters: frozenset[str]) -> None:
+    """Opt one registered tool into exact selectors without changing SDK defaults."""
+    tool = mcp._tool_manager.get_tool(name)
+    assert tool is not None
+    args = tool.fn_metadata.arg_model
+    args.model_config['extra'] = 'forbid'
+    args.model_rebuild(force=True)
+    tool.parameters = args.model_json_schema()
+    tool.fn_metadata = _ExactStringMetadata(
+        **tool.fn_metadata.model_dump(), string_parameters=string_parameters)
 
 
 READ_TOOLS = [
@@ -1312,22 +1326,11 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 
-    # This fixed receipt selector must not let the SDK discard unknown fields.
-    # Configure only its generated argument model; other tool contracts stay as-is.
-    exact_assessment_tool = mcp._tool_manager.get_tool("pm_quality_assessment_get")
-    assert exact_assessment_tool is not None
-    exact_assessment_args = exact_assessment_tool.fn_metadata.arg_model
-    exact_assessment_args.model_config['extra'] = 'forbid'
-    exact_assessment_args.model_rebuild(force=True)
-    exact_assessment_tool.parameters = exact_assessment_args.model_json_schema()
+    _strict_tool_arguments(mcp, "pm_quality_assessment_get",
+        string_parameters=frozenset({"workspace_id", "review_id", "operation_id", "document_digest"}))
     mcp.add_tool(_wrap(pm_history_cleanup_list), name="pm_history_cleanup_list", annotations=ro)
-    cleanup_tool = mcp._tool_manager.get_tool("pm_history_cleanup_list")
-    assert cleanup_tool is not None
-    cleanup_args = cleanup_tool.fn_metadata.arg_model
-    cleanup_args.model_config['extra'] = 'forbid'
-    cleanup_args.model_rebuild(force=True)
-    cleanup_tool.parameters = cleanup_args.model_json_schema()
-    cleanup_tool.fn_metadata = _CleanupCursorMetadata(**cleanup_tool.fn_metadata.model_dump())
+    _strict_tool_arguments(mcp, "pm_history_cleanup_list",
+        string_parameters=frozenset({"workspace_id", "work_item_id", "after"}))
 
     if not read_only:
         async def work_continue_from_repository(repository: str, host: str, workspace_id: str, source_ref: str,
