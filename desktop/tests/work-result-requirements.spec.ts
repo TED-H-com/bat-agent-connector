@@ -254,13 +254,13 @@ test('selecting B rejects a late exact response for A',async({page})=>{
   f.state.saved.get(next.operation_id).assessment.document.rationale='Selected B rationale';
   await installBodyCompletedCounter(page);await open(page,{...base,dispatch:f.dispatch});
   const source=page.locator('[data-result-requirement="recovery"]');
-  for(const summary of await source.locator('summary').filter({hasText:'Original conclusion'}).all())await summary.click();
+  for(const summary of await source.locator(':scope > details > summary').filter({hasText:'Original conclusion'}).all())await summary.click();
   let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
   const path=`/quality-reviews/${f.ref.review_id}/assessments/${f.ref.operation_id}`;
   try{
     await source.locator(`[data-assessment-open="${f.ref.operation_id}"]`).click();
     await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
-    f.state.hold=null;await source.locator('summary').filter({hasText:'Original conclusion'}).last().click();await source.locator(`[data-assessment-open="${next.operation_id}"]`).click();
+    f.state.hold=null;await source.locator(':scope > details > summary').filter({hasText:'Original conclusion'}).last().click();await source.locator(`[data-assessment-open="${next.operation_id}"]`).click();
     const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Selected B rationale');
     const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
     await expect(reader).not.toContainText('Original A rationale');await expect(reader).toContainText('Selected B rationale');
@@ -429,6 +429,9 @@ for(const mismatch of ['original','result','historical'] as const)test(`requirem
 test('Back retires a pending pinned assessment before its body arrives',async({page})=>{
   const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
   await installBodyCompletedCounter(page);await open(page,{...base,dispatch:f.dispatch});
+  await page.evaluate(()=>{location.hash='#/home';});await expect(page).toHaveURL(/#\/home$/);
+  await page.evaluate(hash=>{location.hash=hash;},'#/pm/'+workspaceId+'/board');
+  await page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();
   await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
   let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
   const path='/assessments/'+f.ref.operation_id;
