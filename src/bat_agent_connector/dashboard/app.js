@@ -16247,6 +16247,18 @@ function sessionOrigin(value) {
 		return "";
 	}
 }
+function persistedSessionOrigin(value) {
+	if (typeof value !== "string") return "";
+	const [route, raw] = value.split("?"), query = new URLSearchParams(raw || "");
+	for (const key of [...query.keys()]) if (key.startsWith("qa_")) query.delete(key);
+	return sessionOrigin(route + (query.size ? "?" + query : ""));
+}
+function persistedDiscussionOrigin(value) {
+	return {
+		...value,
+		from: value.from?.startsWith("#/session/") ? persistedSessionOrigin(value.from) : value.from
+	};
+}
 var contextFields = {
 	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
 	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
@@ -56646,13 +56658,15 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		index.push(id);
 		while (index.length > 40) localStorage.removeItem(originKey + index.shift());
 		for (const key of Object.keys(localStorage)) if (key.startsWith(originKey) && key !== indexKey && !index.includes(key.slice(originKey.length))) localStorage.removeItem(key);
-		localStorage.setItem(originKey + id, JSON.stringify(origin));
+		localStorage.setItem(originKey + id, JSON.stringify(persistedDiscussionOrigin(origin)));
 		localStorage.setItem(indexKey, JSON.stringify(index));
 	};
 	const backLink = () => {
 		let savedOrigin = {};
 		try {
-			savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};
+			const raw = localStorage.getItem(originKey + threadId);
+			savedOrigin = persistedDiscussionOrigin(JSON.parse(raw) || {});
+			if (raw && raw !== JSON.stringify(savedOrigin)) localStorage.setItem(originKey + threadId, JSON.stringify(savedOrigin));
 		} catch {}
 		const source = parseDiscussRefs(new URLSearchParams({
 			from: launch.from || savedOrigin.from || "",
@@ -59135,7 +59149,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 							title: name,
 							content: text
 						},
-						namespace: threadId === "new" ? namespace + ".discussion." + JSON.stringify(launch) : namespace,
+						namespace: threadId === "new" ? namespace + ".discussion." + JSON.stringify(persistedDiscussionOrigin(launch)) : namespace,
 						params: (values) => ({
 							title: values.title.trim(),
 							...launch.refs.length ? { context: launch.refs } : {}

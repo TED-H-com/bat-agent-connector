@@ -39,3 +39,14 @@ export function sessionOrigin(value) {
     return base + (base.includes('?') ? '&' : '?') + assessmentQuery(pin, pin.partition);
   } catch {return '';}
 }
+
+// Persistence retains the ordinary return identity, never an assessment pin.
+export function persistedSessionOrigin(value) {
+  if (typeof value !== 'string') return '';
+  const [route, raw] = value.split('?'), query = new URLSearchParams(raw || '');
+  for (const key of [...query.keys()]) if (key.startsWith('qa_')) query.delete(key);
+  return sessionOrigin(route + (query.size ? '?' + query : ''));
+}
+export function persistedDiscussionOrigin(value) {
+  return {...value, from: value.from?.startsWith('#/session/') ? persistedSessionOrigin(value.from) : value.from};
+}

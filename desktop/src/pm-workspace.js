@@ -10,7 +10,7 @@ import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
 import {locale} from './i18n.js';
 import {findingFromNative, findingName} from './ui/finding-name.js';
-import {sessionOrigin} from './session-navigation.js';
+import {persistedDiscussionOrigin, sessionOrigin} from './session-navigation.js';
 import {viewState} from './ui/view-state.js';
 import {settleRefreshes} from './state/events.ts';
 import {skeleton, searchField, pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu, emptyState, statusPill} from './ui/components.js';
@@ -578,12 +578,16 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     index.push(id);
     while (index.length > 40) localStorage.removeItem(originKey + index.shift());
     for (const key of Object.keys(localStorage)) if (key.startsWith(originKey) && key !== indexKey && !index.includes(key.slice(originKey.length))) localStorage.removeItem(key);
-    localStorage.setItem(originKey + id, JSON.stringify(origin));
+    localStorage.setItem(originKey + id, JSON.stringify(persistedDiscussionOrigin(origin)));
     localStorage.setItem(indexKey, JSON.stringify(index));
   };
   const backLink = () => {
     let savedOrigin = {};
-    try {savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};} catch {}
+    try {
+      const raw = localStorage.getItem(originKey + threadId);
+      savedOrigin = persistedDiscussionOrigin(JSON.parse(raw) || {});
+      if (raw && raw !== JSON.stringify(savedOrigin)) localStorage.setItem(originKey + threadId, JSON.stringify(savedOrigin));
+    } catch {}
     const source = parseDiscussRefs(new URLSearchParams({from: launch.from || savedOrigin.from || '', report: launch.report || savedOrigin.report || ''}));
     const origin = source.from || 'discussions';
     const session = sessionOrigin(origin);
@@ -1729,7 +1733,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
           const text = input('pd_message', {multiline: true, max: 12000, required: threadId === 'new'}); text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
           let titleDraft = null;
           const create = form({action: 'pm.thread.create', pruneEmpty: true, target: {workspace_id: workspaceId}, fields: {title: name, content: text},
-            namespace: threadId === 'new' ? namespace + '.discussion.' + JSON.stringify(launch) : namespace,
+            namespace: threadId === 'new' ? namespace + '.discussion.' + JSON.stringify(persistedDiscussionOrigin(launch)) : namespace,
             params: values => ({title: values.title.trim(), ...(launch.refs.length ? {context: launch.refs} : {})}), preconditions: () => ({expected_version: workspace.version}),
             permitted: () => permitted(false) && !draftSourceUnavailable, recoverPermitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
             onStateChange: () => titleDraft?.updateState(),
