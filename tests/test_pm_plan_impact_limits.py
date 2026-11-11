@@ -54,9 +54,8 @@ async def test_impact_real_limits_authorize_before_derived_errors(selected, limi
         ('PM_IMPACT_SOURCE_UNAVAILABLE', 404) if unavailable else ('PM_IMPACT_TOO_LARGE', 413))
 
 
-@pytest.mark.parametrize('conflict', ['comparison', 'duplicate', 'contradiction'])
-async def test_impact_unreadable_source_dominates_conflicting_evidence(selected, monkeypatch, conflict):
-    w, ops = selected, selected['d'].ops
+async def conflicting_sources(w, monkeypatch, conflict):
+    ops = w['d'].ops
     await attach_source_and_withdraw(w, w['publication']['operation_id'], w['impact_selector'])
     if conflict == 'comparison':
         monkeypatch.setattr(impact.diff, 'MAX_RESPONSE_BYTES', 1)
@@ -68,7 +67,13 @@ async def test_impact_unreadable_source_dominates_conflicting_evidence(selected,
         else:
             body['document_digest'] = '0' * 64
             ops.db.execute('UPDATE api_events SET body=? WHERE seq=?', (json.dumps(body), row['seq']))
-    params = await selector(w)
+    return await selector(w)
+
+
+@pytest.mark.parametrize('conflict', ['comparison', 'duplicate', 'contradiction'])
+async def test_impact_unreadable_source_dominates_conflicting_evidence(selected, monkeypatch, conflict):
+    w = selected
+    params = await conflicting_sources(w, monkeypatch, conflict)
     with pytest.raises(OperationError) as error:
         read(w, params)
     assert (error.value.code, error.value.status) == ('PM_IMPACT_SOURCE_UNAVAILABLE', 404)
@@ -88,3 +93,19 @@ async def test_impact_actual_comparison_bytes_follow_source_authorization(select
         read(w, params)
     assert (error.value.code, error.value.status) == (
         ('PM_IMPACT_SOURCE_UNAVAILABLE', 404) if hidden else ('PM_IMPACT_TOO_LARGE', 413))
+
+
+@pytest.mark.parametrize('hidden', ['first', 'last', 'none'])
+async def test_impact_readable_subject_prefix_cannot_mask_a_later_denial(selected, hidden):
+    w, ops = selected, selected['d'].ops
+    # 101 readable admissions can overflow construction before either original
+    # subject is visited. The last case reproduced the old early-413 defect.
+    ids = clone_admissions(ops, w['package']['operation_id'], 101)
+    if hidden != 'none':
+        oid = ids[0] if hidden == 'first' else max(w['package']['operation_id'], w['publication']['operation_id'])
+        await attach_source_and_withdraw(w, oid, w['impact_selector'])
+    params = await selector(w)
+    with pytest.raises(OperationError) as error:
+        read(w, params)
+    assert (error.value.code, error.value.status) == (
+        ('PM_IMPACT_TOO_LARGE', 413) if hidden == 'none' else ('PM_IMPACT_SOURCE_UNAVAILABLE', 404))

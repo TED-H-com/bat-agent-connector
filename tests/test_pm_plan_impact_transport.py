@@ -154,3 +154,22 @@ async def test_impact_real_bound_errors_have_identical_transport_code_and_messag
         assert code in str(error.value) and message in str(error.value)
     finally:
         await fleet.close()
+
+
+@pytest.mark.parametrize('conflict', ['comparison', 'duplicate', 'contradiction'])
+async def test_impact_source_denial_dominates_derived_errors_in_every_adapter(selected, monkeypatch, conflict):
+    from tests.test_pm_plan_impact_limits import conflicting_sources
+    w, d = selected, selected['d']
+    params = await conflicting_sources(w, monkeypatch, conflict)
+    auth = token(d, OWNER.actor, 'observe')
+    server, fleet = mcp(w, monkeypatch, auth)
+    code = 'PM_IMPACT_SOURCE_UNAVAILABLE'
+    message = "The selected impact sources are unavailable or cannot be established within the read's bounds; select fewer bindings"
+    try:
+        assert await http(w['port'], 'GET', path(params), tok=auth) == (404, {'error': {'code': code, 'message': message}})
+        assert await rpc(w, auth, METHOD, params) == {'error': code, 'message': message}
+        with pytest.raises(ToolError) as error:
+            await server.call_tool(METHOD, params)
+        assert code in str(error.value) and message in str(error.value)
+    finally:
+        await fleet.close()
