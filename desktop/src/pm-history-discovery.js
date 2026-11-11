@@ -121,7 +121,7 @@ export function historyDiscovery({h,t,api,alive,workspaceId,enabled,errorBox,onC
   }
   function reset() {
     epoch++; opened = workBusy = false; selected = ''; workAfter = null; works.clear(); clearPages(); choices();
-    chooser.hidden = true; discover.setAttribute('aria-expanded','false'); status.replaceChildren(); workStatus.replaceChildren(); sync();
+    chooser.hidden = true; discover.setAttribute('aria-expanded','false'); status.replaceChildren(); workStatus.replaceChildren(); sync(); onChange();
   }
   return {element,rows,reviewVersion:()=>review,
     has:id=>available() && opened && rows.has(id),

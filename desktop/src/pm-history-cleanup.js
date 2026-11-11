@@ -5,7 +5,7 @@ import {historyDiscovery} from './pm-history-discovery.js';
 
 // Known IDs are a local recovery index, never proof of current central authority.
 export function historyCleanup({h, t, api, alive, workspaceId, workspace, caps, namespace, form, errorBox}) {
-  const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set();
+  const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set(), rendered = new Map();
   const recovery = historyRecovery(localStorage, namespace, workspaceId);
   let active = false, disposed = false, count = 20, limited = false, redraw = false;
   const completed = new Set(), conflicts = new Set();
@@ -54,7 +54,13 @@ export function historyCleanup({h, t, api, alive, workspaceId, workspace, caps, 
     }
     return found;
   }
-  function clearForms() {for (const value of forms) value.dispose(); forms.clear(); rows.replaceChildren(); refresh.disabled = more.disabled = false;}
+  function clearForms(preserveChecking = false) {
+    for (const [id, value] of rendered) {
+      if (preserveChecking && value.editor.checking()) continue;
+      value.editor.dispose(); forms.delete(value.editor); value.element.remove(); rendered.delete(id);
+    }
+    refresh.disabled = more.disabled = [...forms].some(value=>value.checking());
+  }
   function remove(row) {
     discovery.forget(row.link_id);
     records.remove(row.link_id);
@@ -64,9 +70,13 @@ export function historyCleanup({h, t, api, alive, workspaceId, workspace, caps, 
     if (pending.length) localStorage.setItem(key,JSON.stringify(pending)); else localStorage.removeItem(key);
   }
   function draw() {
-    if (!supported() || !element.open || [...forms].some(value=>value.checking())) return;
-    redraw = false;
-    clearForms(); status.replaceChildren(); more.hidden = true;
+    if (!supported() || !element.open) return;
+    // A scan owns its rows, but an in-flight withdrawal owns its form until its
+    // receipt settles. Keep that exact owner while reconciling the current scan.
+    clearForms(true);
+    redraw = forms.size > 0;
+    for (const value of rendered.values()) if (!value.element.isConnected) rows.append(value.element);
+    status.replaceChildren(); more.hidden = true;
     try {
       const known = records.read();
       legacyPending(); // Preserve validation of the old marker collection too.
@@ -75,7 +85,7 @@ export function historyCleanup({h, t, api, alive, workspaceId, workspace, caps, 
       for (const row of discovery.rows.values()) visible.set(row.link_id,recovery.resolve(row,{reviewVersion:discovery.reviewVersion()}));
       for (const value of visible.values()) {
         const row = value.row;
-        if (completed.has(row.link_id)) continue;
+        if (completed.has(row.link_id) || rendered.has(row.link_id)) continue;
         const version = h('p', {class:'ui-meta'},t('exh_cleanup_version',{version:row.version}));
         const discovered = discovery.has(row.link_id);
         const editor = historyWithdrawalForm({h,t,form,recovery,row,errorBox,reviewVersion:discovered && discovery.reviewVersion(),
@@ -104,15 +114,15 @@ export function historyCleanup({h, t, api, alive, workspaceId, workspace, caps, 
         const rowElement = h('div', {class:'exh-relation','data-history-cleanup-link':row.link_id},
           h('p', {class:'mono'}, row.link_id), h('a', {class:'mono',href:`#/item/${encodeURIComponent(row.work_item_id)}`},row.work_item_id),
           version, editor.box);
-        forms.add(editor); rows.append(rowElement); editor.update();
+        forms.add(editor); rendered.set(row.link_id,{editor,element:rowElement}); rows.append(rowElement); editor.update();
       }
       more.hidden = local.length <= count;
       if (!visible.size) status.append(h('p', {class:'ui-meta'},t('exh_cleanup_empty')));
       if (completed.size) status.append(h('p',{role:'status'},t('exh_cleanup_done')));
       if (limited || known.length >= 500) status.append(h('p', {class:'ui-meta'},t('exh_cleanup_limit')));
-    } catch (error) {clearForms(); status.replaceChildren(errorBox(error,{summary:t('exh_cleanup_invalid'),within:status}));}
+    } catch (error) {clearForms(true); status.replaceChildren(errorBox(error,{summary:t('exh_cleanup_invalid'),within:status}));}
   }
-  element.addEventListener('toggle',()=>{if (element.open) {discovery.update(); draw();} else {discovery.reset(); clearForms(); status.replaceChildren(); count = 20;}});
+  element.addEventListener('toggle',()=>{if (element.open) {discovery.update(); draw();} else {discovery.reset(); clearForms(true); rows.replaceChildren(); status.replaceChildren(); count = 20;}});
   return {element,
     remember(link) {
       if (!allowed(link,false)) return;
@@ -122,10 +132,10 @@ export function historyCleanup({h, t, api, alive, workspaceId, workspace, caps, 
     setActive(value) {
       active = value; element.hidden = !supported();
       discovery.update();
-      if (element.hidden) {clearForms(); status.replaceChildren(); element.open = false;}
+      if (element.hidden) {clearForms(true); rows.replaceChildren(); status.replaceChildren(); element.open = false;}
       else if (element.open) {for (const editor of forms) editor.update();}
     },
-    withdraw() {active = false; discovery.reset(); clearForms(); status.replaceChildren(); element.open = false; element.hidden = true;},
+    withdraw() {active = false; discovery.reset(); clearForms(!disposed); rows.replaceChildren(); status.replaceChildren(); element.open = false; element.hidden = true;},
     dispose() {disposed = true; this.withdraw(); discovery.dispose();},
   };
 }

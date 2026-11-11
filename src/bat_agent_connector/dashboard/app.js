@@ -26567,6 +26567,7 @@ function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, on
 		status.replaceChildren();
 		workStatus.replaceChildren();
 		sync();
+		onChange();
 	}
 	return {
 		element,
@@ -26602,7 +26603,7 @@ function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, on
 //#endregion
 //#region src/pm-history-cleanup.js
 function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namespace, form, errorBox }) {
-	const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set();
+	const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set(), rendered = new Map();
 	const recovery = historyRecovery(localStorage, namespace, workspaceId);
 	let active = false, disposed = false, count = 20, limited = false, redraw = false;
 	const completed = new Set(), conflicts = new Set();
@@ -26682,11 +26683,15 @@ function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namesp
 		}
 		return found;
 	}
-	function clearForms() {
-		for (const value of forms) value.dispose();
-		forms.clear();
-		rows.replaceChildren();
-		refresh.disabled = more.disabled = false;
+	function clearForms(preserveChecking = false) {
+		for (const [id, value] of rendered) {
+			if (preserveChecking && value.editor.checking()) continue;
+			value.editor.dispose();
+			forms.delete(value.editor);
+			value.element.remove();
+			rendered.delete(id);
+		}
+		refresh.disabled = more.disabled = [...forms].some((value) => value.checking());
 	}
 	function remove(row) {
 		discovery.forget(row.link_id);
@@ -26698,9 +26703,10 @@ function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namesp
 		else localStorage.removeItem(key);
 	}
 	function draw() {
-		if (!supported() || !element.open || [...forms].some((value) => value.checking())) return;
-		redraw = false;
-		clearForms();
+		if (!supported() || !element.open) return;
+		clearForms(true);
+		redraw = forms.size > 0;
+		for (const value of rendered.values()) if (!value.element.isConnected) rows.append(value.element);
 		status.replaceChildren();
 		more.hidden = true;
 		try {
@@ -26711,7 +26717,7 @@ function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namesp
 			for (const row of discovery.rows.values()) visible.set(row.link_id, recovery.resolve(row, { reviewVersion: discovery.reviewVersion() }));
 			for (const value of visible.values()) {
 				const row = value.row;
-				if (completed.has(row.link_id)) continue;
+				if (completed.has(row.link_id) || rendered.has(row.link_id)) continue;
 				const version = h("p", { class: "ui-meta" }, t("exh_cleanup_version", { version: row.version }));
 				const discovered = discovery.has(row.link_id);
 				const editor = historyWithdrawalForm({
@@ -26767,6 +26773,10 @@ function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namesp
 					href: `#/item/${encodeURIComponent(row.work_item_id)}`
 				}, row.work_item_id), version, editor.box);
 				forms.add(editor);
+				rendered.set(row.link_id, {
+					editor,
+					element: rowElement
+				});
 				rows.append(rowElement);
 				editor.update();
 			}
@@ -26775,7 +26785,7 @@ function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namesp
 			if (completed.size) status.append(h("p", { role: "status" }, t("exh_cleanup_done")));
 			if (limited || known.length >= 500) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_limit")));
 		} catch (error) {
-			clearForms();
+			clearForms(true);
 			status.replaceChildren(errorBox(error, {
 				summary: t("exh_cleanup_invalid"),
 				within: status
@@ -26788,7 +26798,8 @@ function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namesp
 			draw();
 		} else {
 			discovery.reset();
-			clearForms();
+			clearForms(true);
+			rows.replaceChildren();
 			status.replaceChildren();
 			count = 20;
 		}
@@ -26812,7 +26823,8 @@ function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namesp
 			element.hidden = !supported();
 			discovery.update();
 			if (element.hidden) {
-				clearForms();
+				clearForms(true);
+				rows.replaceChildren();
 				status.replaceChildren();
 				element.open = false;
 			} else if (element.open) for (const editor of forms) editor.update();
@@ -26820,7 +26832,8 @@ function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namesp
 		withdraw() {
 			active = false;
 			discovery.reset();
-			clearForms();
+			clearForms(!disposed);
+			rows.replaceChildren();
 			status.replaceChildren();
 			element.open = false;
 			element.hidden = true;

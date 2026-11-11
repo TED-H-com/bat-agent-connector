@@ -230,3 +230,66 @@ test('failed removal keeps the original receipt recoverable without a remount lo
   await expect(cleanup(page)).toContainText('Relationship withdrawn.');expect(f.state.writes).toEqual([original]);
   expect(await page.evaluate(()=>Object.entries(localStorage).filter(([key])=>key.includes('.history-cleanup.')))).toEqual([]);
 });
+
+for(const native of [false,true]) for(const locale of ['en','zh-TW'] as const)
+for(const change of ['work','again','reset','membership'] as const)
+test(`pending withdrawal keeps its owner while discovery changes: ${change} ${native?'IPC':'HTTP'} ${locale}`,async({page})=>{
+  await page.setViewportSize({width:390,height:900});
+  const f=discoveryFixture(),old='hxl_'+'c'.repeat(32),fresh='hxl_'+'d'.repeat(32);
+  f.state.links.push({...f.link(),link_id:old},{...f.link(),link_id:fresh,work_item_id:workId(2)});
+  const dispatch=f.dispatch;let release!:()=>void,finishRead!:()=>void,entered=false,removed=false,authorityReads=0;
+  const held=new Promise<void>(resolve=>release=resolve);
+  f.dispatch=async input=>{
+    if(input.method==='POST'&&input.body?.action==='pm.history.unlink'){entered=true;await held;}
+    const result=await dispatch(input);
+    if(removed&&input.path===`/pm/workspaces/${workspaceId}`){result.data.workspace.membership=null;authorityReads++;}
+    return result;
+  };
+  await open(page,native,f,locale);await choose(page,locale);await read(page,locale).click();await expect(rows(page)).toHaveCount(2);
+  const originalRow=rows(page).filter({hasText:linkId});
+  await originalRow.getByRole('button',{name:STRINGS[locale].exh_unlink,exact:true}).click();
+  await expect.poll(()=>entered).toBe(true);
+  const saved=await page.evaluate(()=>Object.entries(localStorage).find(([key])=>key.includes('.history-cleanup.'))!);
+  const intent=JSON.parse(saved[1]).intent;
+  // Object identity proves the same form owns the held request across redraws.
+  await originalRow.evaluate(node=>(window as any).pendingCleanupRow=node);
+  try {
+    if(change==='membership'){
+      removed=true;await page.locator('[data-pm-refresh]').click();
+      await expect.poll(()=>authorityReads).toBeGreaterThan(0);
+      await expect(discovery(page)).toBeHidden();await expect(rows(page)).toHaveCount(0);
+    } else {
+      if(change==='work')await discovery(page).getByRole('combobox').selectOption(workId(2));
+      if(change==='reset'){
+        await cleanup(page).locator('summary').click();await cleanup(page).locator('summary').click();
+        await expect(rows(page).filter({hasText:old})).toHaveCount(0);
+        await choose(page,locale,workId(2));
+      }
+      if(change==='again'){
+        f.discovery.hold=new Promise(resolve=>finishRead=resolve);
+        f.discovery.pages=[{links:[{link_id:fresh,work_item_id:workId(1),version:1}],next_after:null}];
+        await discovery(page).getByRole('button',{name:STRINGS[locale].exh_cleanup_read_again,exact:true}).click();
+      }
+      // The unsaved, unsent row must disappear before any new read or POST reply.
+      await expect(rows(page).filter({hasText:old})).toHaveCount(0);
+      if(change==='again')finishRead();else await read(page,locale).click();
+      await expect(rows(page).filter({hasText:fresh})).toHaveCount(1);
+      await expect(rows(page).filter({hasText:linkId})).toHaveCount(1);
+      expect(await originalRow.evaluate(node=>node===(window as any).pendingCleanupRow)).toBe(true);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    }
+    expect(await page.evaluate(key=>localStorage.getItem(key),saved[0])).toBe(saved[1]);
+    const posts=f.discovery.requests.filter(request=>request.method==='POST');
+    // The held dispatch has not reached the fixture recorder yet.
+    expect(posts).toEqual([]);
+  } finally {finishRead?.();release();}
+  await expect.poll(()=>f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].idempotency_key).toBe(intent.key);
+  expect(f.state.writes[0].body).toEqual(intent.request);
+  if(change==='membership'){
+    await expect.poll(async()=>JSON.parse((await page.evaluate(key=>localStorage.getItem(key),saved[0]))!).intent.operation_id).toMatch(/^op_/);
+    const retained=JSON.parse((await page.evaluate(key=>localStorage.getItem(key),saved[0]))!).intent;
+    expect(retained.key).toBe(intent.key);expect(retained.request).toEqual(intent.request);
+  }else await expect(cleanup(page)).toContainText(STRINGS[locale].exh_cleanup_done);
+  expect(f.discovery.requests.filter(request=>request.method!=='GET')).toHaveLength(1);
+});
