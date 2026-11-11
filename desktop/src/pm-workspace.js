@@ -74,7 +74,7 @@ export const pmAvailable = caps => pmAvailability({caps, kind: 'workspace'}).rea
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = 'pm_saved', pendingText = 'pm_pending', releaseAfterAcknowledgement = false, acknowledgedText = '', onAcknowledged = () => {}, acknowledgeStatus = null, beforePersist = () => {}}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = action === 'pm.conversation.adopt' ? [250, 500, 1000, 1500, 2000, 3000, 3000, 3000, 3000, 3000] : [250, 500, 1000, 1500, 2000, 3000];
@@ -95,7 +95,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   // The header announces connection changes. This quiet line explains a paused
   // submit without adding an error summary or replacing the request's outcome.
   const gateNotice = h('p', {class: 'muted', 'data-pm-client-gate': '', hidden: true});
-  const persist = () => {guard(); if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage); else localStorage.setItem(storage, JSON.stringify(saved));};
+  const persist = () => {guard(); beforePersist(saved, storage); if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage); else localStorage.setItem(storage, JSON.stringify(saved));};
   const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
   const changed = () => {
     if (busy || saved.intent || damaged) return;
@@ -289,6 +289,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         if (stored?.intent?.key === intent.key && same(stored.intent.request, intent.request)) {
           if (stored.intent.operation_id && stored.intent.operation_id !== op.operation_id) throw Error(t('pm_receipt_mismatch'));
           stored.intent.operation_id = op.operation_id;
+          beforePersist(stored, storage);
           localStorage.setItem(storage, JSON.stringify(stored));
           for (const notify of receiptSubscribers.get(storage) || []) notify();
         }
