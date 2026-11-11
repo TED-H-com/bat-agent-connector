@@ -262,3 +262,44 @@ async def test_impact_duplicate_creation_proof_fails_closed(selected):
     params = await selector(w)
     with pytest.raises(OperationError, match='PM_IMPACT_EVIDENCE_INVALID'):
         read(w, params)
+
+
+async def test_impact_excluded_binding_never_reads_withdrawn_package(ready, monkeypatch):
+    from tests.test_pm_work_packages import create
+    w, ops = ready, ready['d'].ops
+    old = await create(w)
+    old_params = await selector(w)
+    await associate(w)
+    params = await selector(w)
+    before = read(w, params)
+    assert before['matrix']['subjects'] == []
+    await attach_source_and_withdraw(w, old['operation_id'], params)
+    assert read(w, params) == before
+    with pytest.raises(OperationError, match='PM_IMPACT_SOURCE_UNAVAILABLE'):
+        read(w, old_params)
+    original = ops.get
+    def get(oid, **kwargs):
+        assert oid != old['operation_id'], 'Excluded subjects must not invoke a reader'
+        return original(oid, **kwargs)
+    monkeypatch.setattr(ops, 'get', get)
+    assert read(w, params) == before
+
+
+async def test_impact_mixed_selected_bindings_require_each_source(ready):
+    from tests.test_pm_work_packages import create
+    w, ops = ready, ready['d'].ops
+    first = await create(w)
+    first_target = w['target']
+    first_binding = pm_evidence._binding(ops.db, **first_target)['binding_id']
+    project = work_items._get_item(ops.db, first_target['work_item_id'])['project_id']
+    second = await action(w, 'work_item.create', {'project_id': project}, {'title': 'Second selected work'})
+    w['target'] = first_target | {'work_item_id': second['work_item_id']}
+    await associate(w)
+    await create(w)
+    params = await selector(w)
+    mixed = params | {'binding_ids': params['binding_ids'] + [first_binding]}
+    assert len(read(w, mixed)['matrix']['subjects']) == 2
+    await attach_source_and_withdraw(w, first['operation_id'], mixed)
+    assert len(read(w, params)['matrix']['subjects']) == 1
+    with pytest.raises(OperationError, match='PM_IMPACT_SOURCE_UNAVAILABLE'):
+        read(w, mixed)

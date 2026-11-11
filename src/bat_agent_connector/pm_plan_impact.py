@@ -52,7 +52,44 @@ def _source(reader, *args, **kwargs):
         raise _unavailable() from None
 
 
-def _candidates(ops, workspace_id, work_ids, cursor):
+def _eligible(ops, operation, bindings, cursor):
+    """Private selection from original relations, before any source reader."""
+    try:
+        action = operation["action"]
+        saved = operation["external_refs"].get("admission_binding", {})
+        if action == "pm.work_package.create":
+            bid = operation["preconditions"]["expected_binding_id"]
+        elif action in {"pm.issue.publish", "pm.issue.cancel"}:
+            bid = saved["issue_intent"]["relation"]["binding_id"]
+        elif action == "repository.continue":
+            bid = saved["pm_handoff"]["contract"]["package"]["context"]["work_ref"]["binding_id"]
+        else:
+            # Without a unique retained finish, an Attempt remains unassigned.
+            row = ops.db.execute("SELECT attempt_id FROM work_attempts WHERE start_operation_id=?",
+                                 (operation["operation_id"],)).fetchone()
+            if row is None:
+                return True
+            events = ops.db.execute("""SELECT body FROM api_events WHERE resource_type='pm_work_attempt'
+                AND resource_id=? AND seq<=? AND kind='work.start.succeeded'""", (row[0], cursor)).fetchall()
+            if len(events) != 1:
+                return True
+            body = json.loads(events[0][0])
+            link = ops.db.execute("SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'",
+                                  (operation["operation_id"],)).fetchone()
+            child = ops._row(link[0]) if link else None
+            if child is None or child["operation_id"] != body.get("execution_operation_id"):
+                return True
+            ref = child["external_refs"]["admission_binding"]["pm_handoff"]["contract"]
+            if ref["package_ref"]["package_id"] != body.get("package_id"):
+                return True
+            bid = ref["package"]["context"]["work_ref"]["binding_id"]
+        return bid in bindings
+    except (KeyError, TypeError, ValueError):
+        # Malformed evidence is checked after selected-source authorization.
+        return True
+
+
+def _candidates(ops, workspace_id, work_ids, cursor, bindings):
     # Discovery depends exclusively on retained events, not today's domain heads.
     # Original envelopes interpret admissions (including cancel and direct handoff).
     rows = ops.db.execute("""SELECT e.*,o.operation_id AS original_operation_id FROM api_events e
@@ -69,14 +106,18 @@ def _candidates(ops, workspace_id, work_ids, cursor):
             OR (o.action='repository.continue'
               AND json_extract(o.external_refs,'$.admission_binding.pm_handoff.contract.package_ref.workspace_id')=?
               AND json_extract(o.external_refs,'$.admission_binding.pm_handoff.contract.package.work_item_id') IN (SELECT value FROM json_each(?)))
-          ))) ORDER BY e.seq LIMIT ?""",
+          ))) ORDER BY e.seq""",
         (cursor, workspace_id, json.dumps(work_ids), workspace_id, json.dumps(work_ids),
-         workspace_id, json.dumps(work_ids), MAX_CANDIDATES + 1)).fetchall()
-    _bound(len(rows) <= MAX_CANDIDATES)
+         workspace_id, json.dumps(work_ids)))
     groups = {}
+    inspected = 0
     for row in rows:
         if row["original_operation_id"] is None:
             raise _unavailable()
+        if not _eligible(ops, ops._row(row["original_operation_id"]), bindings, cursor):
+            continue
+        inspected += 1
+        _bound(inspected <= MAX_CANDIDATES)
         group = groups.setdefault(row["original_operation_id"], {})
         _proof(row["kind"] not in group)
         group[row["kind"]] = {**dict(row), "body": json.loads(row["body"])}
@@ -238,7 +279,7 @@ def preview(ops, principal, workspace_id, snapshot_id, from_revision_id, to_revi
             if error.code == "PM_DIFF_TOO_LARGE":
                 _bound(False)  # The comparison alone already exceeds the smaller matrix bound.
             raise
-        groups = _candidates(ops, workspace_id, sorted({w["work_item_id"] for w in selected}), cursor)
+        groups = _candidates(ops, workspace_id, sorted({w["work_item_id"] for w in selected}), cursor, set(binding_ids))
         candidates = {c["binding"]["binding_id"]: c for c in comparison["impact_candidates"]}
         subjects = []
         for oid, events in sorted(groups.items()):
