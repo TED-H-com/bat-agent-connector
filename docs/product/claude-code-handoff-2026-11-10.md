@@ -1,5 +1,10 @@
 # Claude Code 開發交接筆記
 
+本文保留 2026-11-10 的歷史快照。Connector 0.2.18／Desktop 0.1.14 的目前交付與
+獨立的合併、發布、安裝及實機證據，請見[實作狀態](implementation-status.md)。
+This is the November 10 historical snapshot; see implementation status for current
+Connector 0.2.18 / Desktop 0.1.14 delivery and separate acceptance evidence.
+
 交接日期：2026-11-10。接手者：Claude Code。此筆記涵蓋目前產品方向、已交付內容、
 剩餘工作、實作入口、驗證與發布流程。先讀根目錄 [AGENTS.md](../../AGENTS.md) 與
 [CONTRIBUTING.md](../../CONTRIBUTING.md)，再依本筆記找到適用合約；本筆記不取代它們。

@@ -1,5 +1,29 @@
 # PM v1.2 開發狀態
 
+Connector 0.2.18／Desktop 0.1.14：[版本與交付紀錄](implementation-status.md#connector-0218desktop-0114-交付)
+及[發布頁](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18)。
+已於 2026-11-11 12:16 UTC 發布，固定來源 `e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270`；主線 CI 與資產核對見交付紀錄。
+#521 已合併版本準備、#454／#519 與 fixture filter 修正，#518 先行合併；來源、CI、發布、
+安裝與實機驗收分別記錄，不將已合併或 fixture 通過當作安裝／驗收。
+本版包含 Workbench 清單調寬、完成訊息引用複製、原始需求證據、設定草稿憑證
+排除與原請求恢復、cursor／loopback 驗證、清理 ID 保存及 updater ZIP 處理。
+Linux／Windows 未簽章，macOS 採 ad-hoc 簽章且未公證；沒有 signed updater feed。
+沒有新增 owner 安裝、實體裝置或真 BAT／模型驗收；圖庫仍為歷史 0.2.13／0.1.9。
+E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂生命週期待辦保持開放。
+下方日期段落描述各自當時狀態，不取代上述版本交付紀錄。
+
+Connector 0.2.18 / Desktop 0.1.14: see the linked release and delivery record.
+#521 merges version preparation, #454/#519 and the fixture-filter fix; #518 was merged earlier.
+Published on 2026-11-11 at 12:16 UTC from `e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270`; see delivery status for verified main CI and assets.
+Branch, merged, released, installed and live-tested evidence remain separate.
+Changes include Workbench resizing, completed-message quotes, original requirement
+evidence, credential-safe setup drafts and original-request recovery, cursor/loopback
+validation, cleanup IDs and updater ZIP handling. Linux/Windows remain unsigned;
+macOS is ad-hoc signed, not notarized; there is no signed updater feed. No new owner
+installation, physical-device or real BAT/model acceptance is claimed. The gallery
+remains historical 0.2.13 / 0.1.9; open E/R/A and PM lifecycle work remains open.
+Earlier dated entries retain their own historical states.
+
 2026-11-09：[穩定版 0.2.17／0.1.13](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)
 已發布，包含已合併的 #507／#508，來源為 `0399db5a7b647486126c9bf7bb5900c40dc54ea7`。
 固定外部對話紀錄／文字範圍可連到既有 Work 與選填 Attempt，替換或撤回關聯，
