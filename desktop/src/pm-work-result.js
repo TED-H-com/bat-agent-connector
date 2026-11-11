@@ -3,6 +3,7 @@ import {timeStamp} from './ui/stamps.js';
 import {sessionHref} from './session-navigation.js';
 import {createWorkPublish, publicationDeliveryLine, publicationPrLine} from './pm-work-publish.js';
 import {createWorkQuality} from './pm-work-quality.js';
+import {resultRequirements} from './pm-work-result-requirements.js';
 
 const KNOWN_STATES = new Set([
   'accepted',
@@ -379,6 +380,8 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
   function renderEnvelope(envelope, attempt, errorBoxNode = null) {
     const focusToken = saveFocus();
+    const requirementOpen = new Set(Array.from(panelElement.querySelectorAll('[data-result-requirement-details][open]'),
+      node => node.getAttribute('data-result-requirement-details')));
 
     // Preserve disclosure open states from DOM if present
     const existingTurns = panelElement.querySelector('[data-work-result-turns]');
@@ -608,6 +611,8 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     dl.append(h('dt', {}, t('wres_check_delivery_goal')), h('dd', {'data-check': 'delivery-goal'}, goalText));
 
     sections.push(dl);
+    const requirements = resultRequirements({h, t, section: envelope.requirements, open: requirementOpen});
+    if (requirements) sections.push(requirements);
 
     // 4. Changes
     const changesBox = h('div', {class: 'pm-work-result-changes'});
