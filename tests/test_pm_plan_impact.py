@@ -157,9 +157,12 @@ async def test_impact_withdraw_each_original_operation_source_fails_whole_matrix
     assert not any(value in error.value.message for value in (params['snapshot_id'], w['package']['package_id'], ids[source]))
 
 
-@pytest.mark.parametrize('bound', ['MAX_SUBJECTS', 'MAX_CANDIDATES', 'MAX_BYTES'])
+@pytest.mark.parametrize('bound', ['MAX_SUBJECTS', 'MAX_CANDIDATES', 'MAX_BYTES', 'DIFF_BYTES'])
 async def test_impact_bounds_fail_explicitly_never_truncate(selected, monkeypatch, bound):
-    monkeypatch.setattr(impact, bound, 1)
+    if bound == 'DIFF_BYTES':
+        monkeypatch.setattr(impact.diff, 'MAX_RESPONSE_BYTES', 1)
+    else:
+        monkeypatch.setattr(impact, bound, 1)
     with pytest.raises(OperationError) as error:
         read(selected, selected['impact_selector'])
     assert error.value.code == 'PM_IMPACT_TOO_LARGE' and error.value.status == 413

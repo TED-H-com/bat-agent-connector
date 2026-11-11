@@ -231,8 +231,13 @@ def preview(ops, principal, workspace_id, snapshot_id, from_revision_id, to_revi
         if {w["binding"]["binding_id"] for w in selected} != set(binding_ids):
             raise OperationError("PM_IMPACT_BINDING_MISMATCH", "Select bindings from this saved snapshot", 409)
         cursor = snapshot["journal_cursor"]
-        comparison = diff.compare(ops, principal, workspace_id, from_revision_id, to_revision_id,
-                                  binding_ids=binding_ids, journal_cursor=cursor)["comparison"]
+        try:
+            comparison = diff.compare(ops, principal, workspace_id, from_revision_id, to_revision_id,
+                                      binding_ids=binding_ids, journal_cursor=cursor)["comparison"]
+        except OperationError as error:
+            if error.code == "PM_DIFF_TOO_LARGE":
+                _bound(False)  # The comparison alone already exceeds the smaller matrix bound.
+            raise
         groups = _candidates(ops, workspace_id, sorted({w["work_item_id"] for w in selected}), cursor)
         candidates = {c["binding"]["binding_id"]: c for c in comparison["impact_candidates"]}
         subjects = []
