@@ -62,6 +62,11 @@ def _source(reader, *args, **kwargs):
         raise _unavailable() from None
 
 
+def _lineage(ops, principal, document, references):
+    references.update(pm_source_lineage.references(document))
+    _source(pm_source_lineage.require_document, ops.db, principal, document)
+
+
 def _eligible(ops, operation, bindings, cursor):
     """Private selection from original relations, before any source reader."""
     try:
@@ -118,13 +123,14 @@ def _candidates(ops, workspace_id, work_ids, cursor, bindings):
     return groups
 
 
-def _authorize(ops, principal, wid, oid, events):
+def _authorize(ops, principal, wid, oid, events, references):
     """Authorize every source before interpreting proof or materializing rows.
 
     Original records locate sources, even if their proof contradicts them. They
     never replace retained events as creation/association evidence.
     """
     operation = _source(ops.get, oid, steps=False, principal=principal)
+    _lineage(ops, principal, {"operation_id": oid, "target": operation["target"]}, references)
     action = operation["action"]
     saved = operation["external_refs"].get("admission_binding", {})
     package_ids = set()
@@ -134,9 +140,16 @@ def _authorize(ops, principal, wid, oid, events):
         package_ids.update(e["resource_id"] for e in events if e["kind"] == "pm.work_package.created")
     elif action in {"pm.issue.publish", "pm.issue.cancel"}:
         intent = saved.get("issue_intent", {})
+        _lineage(ops, principal, {"work_item_id": intent.get("work_item_id"),
+                                  "relation": intent.get("relation"), "package_ref": intent.get("package_ref")}, references)
         package_ids.add(intent.get("package_ref", {}).get("package_id"))
         if any(e["kind"] == "pm.issue.recorded" for e in events):
-            _source(pm_issue_mappings.get_mapping, ops, principal, wid, intent.get("mapping_id"))
+            mapping = _source(pm_issue_mappings.get_mapping, ops, principal, wid, intent.get("mapping_id"))
+            revision_ids = [e["body"].get("revision_id") for e in events if e["kind"] == "pm.issue.recorded"]
+            for revision in mapping["revisions"]:
+                if revision["revision_id"] in revision_ids:
+                    document = revision["document"]
+                    _lineage(ops, principal, {"relation": document.get("relation"), "issue": document.get("issue")}, references)
     elif action == "repository.continue":
         package_ids.add(saved.get("pm_handoff", {}).get("contract", {}).get("package_ref", {}).get("package_id"))
     elif action == "work.start":
@@ -147,10 +160,15 @@ def _authorize(ops, principal, wid, oid, events):
         # Use the immutable relation only to locate sources; _subject validates it.
         for link in ops.db.execute("SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'", (oid,)):
             child = _source(ops.get, link[0], steps=False, principal=principal)
+            _lineage(ops, principal, {"execution_operation_id": child["operation_id"]}, references)
             package_ids.add(child["external_refs"].get("admission_binding", {}).get("pm_handoff", {})
                             .get("contract", {}).get("package_ref", {}).get("package_id"))
     for pid in sorted(package_ids, key=lambda value: str(value)):
-        _package(ops, principal, wid, pid)
+        package = _package(ops, principal, wid, pid)
+        document = package["document"]
+        _lineage(ops, principal, {"work_item_id": package["work_item_id"],
+            "plan_ref": document["context"]["plan_ref"], "requirements": document["requirements"],
+            "verification": document["verification"]}, references)
     return operation
 
 
@@ -310,10 +328,26 @@ def preview(ops, principal, workspace_id, snapshot_id, from_revision_id, to_revi
         selected = [w for w in snapshot["work"] if (w.get("binding") or {}).get("binding_id") in binding_ids]
         if {w["binding"]["binding_id"] for w in selected} != set(binding_ids):
             raise OperationError("PM_IMPACT_BINDING_MISMATCH", "Select bindings from this saved snapshot", 409)
+        # Preflight exactly the saved projections and fixed comparison inputs.
+        # The snapshot reader does not apply the public Work/document barrier.
+        # Do not inspect current Work heads or unselected snapshot Work lineage.
+        references = set()
+        _lineage(ops, principal, {"work": selected, "coverage": snapshot["coverage"]}, references)
+        for rid in (from_revision_id, to_revision_id):
+            _lineage(ops, principal, pm_plans._revision(ops.db, workspace_id, rid), references)
+        for bid in binding_ids:
+            row = ops.db.execute("SELECT * FROM pm_work_bindings WHERE workspace_id=? AND binding_id=?",
+                                 (workspace_id, bid)).fetchone()
+            if row is not None:
+                _lineage(ops, principal, dict(row), references)
         cursor = snapshot["journal_cursor"]
         groups = _candidates(ops, workspace_id, sorted({w["work_item_id"] for w in selected}), cursor, set(binding_ids))
-        operations = {oid: _authorize(ops, principal, workspace_id, oid, events)
+        operations = {oid: _authorize(ops, principal, workspace_id, oid, events, references)
                       for oid, events in sorted(groups.items())}
+        # Apply the shared whole-document root bound before any derived errors,
+        # without retaining copies of source text just for this final preflight.
+        _source(pm_source_lineage.require_document, ops.db, principal,
+                [{"resource_type": kind, "resource_id": identity} for kind, identity in sorted(references)])
         try:
             comparison = diff.compare(ops, principal, workspace_id, from_revision_id, to_revision_id,
                                       binding_ids=binding_ids, journal_cursor=cursor)["comparison"]
