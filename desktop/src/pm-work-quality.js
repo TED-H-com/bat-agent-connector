@@ -1,3 +1,4 @@
+import {assessmentSourceRefused} from './pm-assessment-source-fence.js';
 import {matchesAssessment, matchesResult} from './pm-assessment-selection.js';
 import {button} from './ui/components.js';
 import {workspaceQualityReviews} from './pm-quality-reviews.js';
@@ -15,7 +16,7 @@ export function workQualityContext(envelope, workspaceId, attempt) {
     execution_operation_id: id.execution_operation_id, candidate_commit: commit};
 }
 
-export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}}) {
+export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}, onSourceUnavailable = () => {}}) {
   let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null, saving = 0;
   const body = h('div'), status = h('div', {role: 'status'});
   const open = button({variant: 'secondary', size: 'sm', label: t('pmq_result_open'), onClick: () => void load()});
@@ -47,7 +48,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
         workspaceId, workspace: () => workspace, caps: getCaps, permitted: () => Boolean(envelope),
         form, input, labelled: (key, field) => h('label', {}, t(key), field), errorBox,
         namespace: `${namespace}.result.${envelope.attempt_id}.${selected.candidate_commit}`,
-        fixedResult: selected, assessmentSelection, originalContextDigest: originalAssessment?.context_digest, onRecorded, allowedAction: offered, onSaved: async () => {
+        fixedResult: selected, assessmentSelection, originalContextDigest: originalAssessment?.context_digest, onRecorded, onSourceUnavailable, allowedAction: offered, onSaved: async () => {
           saving++;
           try {await refreshResult();} finally {saving--;}
           if (!valid()) throw Error('VIEW_CHANGED');
@@ -58,6 +59,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
     } catch (err) {
       if (!valid()) return;
       open.disabled = false; status.replaceChildren(errorBox(err, {within: status}));
+      if (assessmentSourceRefused(err)) onSourceUnavailable(err);
     }
   }
   function render(value, attempt) {

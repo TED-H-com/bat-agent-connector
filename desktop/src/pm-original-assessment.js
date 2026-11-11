@@ -1,4 +1,4 @@
-import {assessmentSourceFence} from './pm-assessment-source-fence.js';
+import {assessmentSourceFence, assessmentSourceRefused} from './pm-assessment-source-fence.js';
 import {originalAssessment} from './pm-work-result-requirements.js';
 import {createWorkQuality} from './pm-work-quality.js';
 import {assessmentSelection, assessmentQuery, parseAssessmentSelection, matchesAssessment,
@@ -106,7 +106,7 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, n
             onclick: () => {close({forget: true});}}, t('pmq_open_current_result')));
       } else {
         if (!quality) quality = createWorkQuality({h, t, api, alive, workspaceId, caps, namespace, form, errorBox,
-          assessmentSelection: pin, originalAssessment: original,
+          assessmentSelection: pin, originalAssessment: original, onSourceUnavailable: error => fence?.withdraw(error),
           refreshResult: async () => {await refreshOrigin(); await refresh();},
           onRecorded: reference => {
             recorded = assessmentSelection({...pin, ...reference}, namespace, {complete: true});
@@ -122,7 +122,7 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, n
       // A successful resolution may have enriched the pin without changing its epoch.
       if (!valid() && ticket !== epoch) return;
       try {guard(ticket);} catch {return;}
-      if ([401,403,404].includes(error.status)) fence?.withdraw(error);
+      if (assessmentSourceRefused(error)) fence?.withdraw(error);
       else fail(error);
     }
   }

@@ -1,3 +1,4 @@
+import {assessmentPresentations, assessmentSourceRefused} from './pm-assessment-source-fence.js';
 import {originalAssessmentReader} from './pm-original-assessment.js';
 import {overviewAssessment} from './pm-overview-assessment.js';
 import {relativeAge} from './relative-age.js';
@@ -30,7 +31,12 @@ export function workspaceOverview(options) {
   const meta = h('span', {'data-overview-meta': ''});
   const content = h('div', {class: 'pm-overview-content', 'data-overview-content': ''}), status = h('div', {role: 'status'}), savedBar = h('div', {class: 'pm-overview-saved', hidden: true});
   const box = h('section', {class: 'pm-overview', 'data-pm-overview': ''}, savedBar, status, content);
-  const original = originalAssessmentReader({...options, refreshOrigin: () => refreshLive(), returnFocus: () => {
+  const sources = assessmentPresentations({partition: namespace, workspace_id: workspaceId}, () => {
+    serial++; projection = saved = null; signature = ''; content.replaceChildren();
+  });
+  const original = originalAssessmentReader({...options, refreshOrigin: () => refreshLive(), onSelectionChange: selected => {
+    if (selected) for (const node of content.querySelectorAll('[data-overview-delivery-assessment]')) node.open = false;
+  }, returnFocus: () => {
     const selected = original.selected();
     return [...box.querySelectorAll('[data-assessment-open]')].find(node => node.dataset.assessmentOpen === (selected?.return_operation_id || selected?.operation_id))
       || box.querySelector('h2, h3');
@@ -443,6 +449,7 @@ export function workspaceOverview(options) {
         adopted = value.plan;
       }
       const anchor = mode === 'live' ? readingAnchor() : null;
+      sources.replace(data.recent_deliveries.map(row => row.assessment_ref));
       projection = data; plan = adopted; loading = false; status.replaceChildren(); render(anchor);
       if (mode === 'live') {
         await assessment?.refresh();
@@ -455,7 +462,7 @@ export function workspaceOverview(options) {
       }
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
-      if ([401,403,404].includes(error.status)) original.sourceWithdrawn(error);
+      if (assessmentSourceRefused(error)) {sources.withdraw(error); original.sourceWithdrawn(error);}
       projection = null; plan = null; loading = false; signature = ''; assessment?.withdraw(); closeReader(); render(); status.replaceChildren(options.errorBox(error, {within:status}));
     }
   }
@@ -481,6 +488,6 @@ export function workspaceOverview(options) {
         if (preference.scroll) requestAnimationFrame(() => {if (active) window.scrollTo(0, preference.scroll);});
       }
       header();},
-    dispose() {active = false; serial++; original.close(); assessment?.dispose(); closeReader();},
+    dispose() {sources.dispose(); active = false; serial++; original.close(); assessment?.dispose(); closeReader();},
   };
 }

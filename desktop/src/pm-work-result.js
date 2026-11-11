@@ -1,3 +1,4 @@
+import {assessmentPresentations, assessmentSourceRefused} from './pm-assessment-source-fence.js';
 import {originalAssessmentReader} from './pm-original-assessment.js';
 import {selectionFromResult, parseAssessmentSelection, matchesResult} from './pm-assessment-selection.js';
 import {button, disclosure, statusPill} from './ui/components.js';
@@ -91,8 +92,13 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   const qualityHost = h('div');
   const quality = createWorkQuality({h,t,api,alive,workspaceId,caps,form,errorBox,namespace,refreshResult:readResult});
 
+  const sources = assessmentPresentations({partition: namespace, workspace_id: workspaceId}, () => {
+    readSerial++; lastEnvelope = lastNormalized = null; lastStale = true;
+    panelElement.querySelector('[data-result-requirements]')?.remove(); quality.dispose();
+  });
   const original = originalAssessmentReader({h, t, api, alive, workspaceId, caps, namespace, form, errorBox,
     refreshOrigin: readResult, onSelectionChange: selected => {
+      if (selected) for (const node of panelElement.querySelectorAll('[data-result-requirements] details[open]')) node.open = false;
       quality.dispose();
       const node = !selected && !lastStale && lastEnvelope && activeAttempt ? quality.render(lastEnvelope, activeAttempt) : null;
       qualityHost.replaceChildren(...(node ? [node] : []));
@@ -112,6 +118,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     changesSerial++;
     diffGeneration++;
     diffKeySerials.clear();
+    sources.dispose();
     lastEnvelope = null;
     lastNormalized = null;
     lastStale = false;
@@ -201,6 +208,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         return;
       }
 
+      sources.replace((data.requirements?.items || []).flatMap(item => (item.assessments || []).map(row => row.reference)));
       const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace) : null;
       if (requested?.origin === 'result' && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id
         && requested.attempt_id === attemptId && !matchesResult(requested, data)) {
@@ -233,7 +241,8 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       }
 
       const status = err?.status;
-      if (status === 401 || status === 403 || status === 404) {
+      if (assessmentSourceRefused(err)) {
+        sources.withdraw(err);
         // Withdraw content and hide section
         original.sourceWithdrawn(err);
         withdraw();

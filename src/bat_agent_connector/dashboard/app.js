@@ -21163,6 +21163,35 @@ function assessmentSourceFence(selection, onWithdraw) {
 		}
 	};
 }
+var assessmentSourceRefused = (error) => [
+	401,
+	403,
+	404
+].includes(error?.status) || /(?:^|_)SOURCES?_UNAVAILABLE$/.test(error?.code || "");
+function assessmentPresentations(scope, onWithdraw) {
+	const mounted = new Map();
+	return {
+		replace(references) {
+			const ids = new Set(references.map((ref) => ref?.review_id).filter(Boolean));
+			for (const [id, fence] of mounted) if (!ids.has(id)) {
+				fence.withdraw({ code: "SOURCE_UNAVAILABLE" });
+				fence.release();
+				mounted.delete(id);
+			}
+			for (const review_id of ids) if (!mounted.has(review_id)) mounted.set(review_id, assessmentSourceFence({
+				...scope,
+				review_id
+			}, onWithdraw));
+		},
+		withdraw(error) {
+			for (const fence of mounted.values()) fence.withdraw(error);
+		},
+		dispose() {
+			for (const fence of mounted.values()) fence.release();
+			mounted.clear();
+		}
+	};
+}
 //#endregion
 //#region src/pm-work-result-requirements.js
 function originalAssessment({ h, t, assessment, requirementId = null, key = "original", open = new Set(), shortcut = null }) {
@@ -21731,7 +21760,7 @@ var github = {
 	kind: "fixed_revision_verification",
 	profile: "github_reported_checks_v1"
 };
-function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSelectionChange = () => {}, fixedResult = null, allowedAction = () => true, onSaved = () => {}, assessmentSelection = null, originalContextDigest = null, onRecorded = () => {} }) {
+function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSelectionChange = () => {}, fixedResult = null, allowedAction = () => true, onSaved = () => {}, assessmentSelection = null, originalContextDigest = null, onRecorded = () => {}, onSourceUnavailable = () => {} }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let workId = null, serial = 0, ready = false, filtered = false, model = null, selected = "", chosen = null, create = null, record = null, revoke = null, formKey = "", matrixKey = "", verifier = null;
 	const navigation = `batc.pm.quality-navigation.${namespace}.${workspaceId}`;
@@ -21843,6 +21872,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			summary: t("pmq_unavailable"),
 			within: status
 		}));
+		if (options.sourceRefresh !== false && assessmentSourceRefused(err)) onSourceUnavailable(err);
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -22563,7 +22593,7 @@ function workQualityContext(envelope, workspaceId, attempt) {
 		candidate_commit: commit
 	};
 }
-function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {} }) {
+function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}, onSourceUnavailable = () => {} }) {
 	let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null, saving = 0;
 	const body = h("div"), status = h("div", { role: "status" });
 	const open = button({
@@ -22631,6 +22661,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 				assessmentSelection,
 				originalContextDigest: originalAssessment?.context_digest,
 				onRecorded,
+				onSourceUnavailable,
 				allowedAction: offered,
 				onSaved: async () => {
 					saving++;
@@ -22653,6 +22684,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 			if (!valid()) return;
 			open.disabled = false;
 			status.replaceChildren(errorBox(err, { within: status }));
+			if (assessmentSourceRefused(err)) onSourceUnavailable(err);
 		}
 	}
 	function render(value, attempt) {
@@ -22898,6 +22930,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespa
 					errorBox,
 					assessmentSelection: pin,
 					originalAssessment: original,
+					onSourceUnavailable: (error) => fence?.withdraw(error),
 					refreshResult: async () => {
 						await refreshOrigin();
 						await refresh();
@@ -22929,11 +22962,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespa
 			} catch {
 				return;
 			}
-			if ([
-				401,
-				403,
-				404
-			].includes(error.status)) fence?.withdraw(error);
+			if (assessmentSourceRefused(error)) fence?.withdraw(error);
 			else fail(error);
 		}
 	}
@@ -23707,6 +23736,16 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		namespace,
 		refreshResult: readResult
 	});
+	const sources = assessmentPresentations({
+		partition: namespace,
+		workspace_id: workspaceId
+	}, () => {
+		readSerial++;
+		lastEnvelope = lastNormalized = null;
+		lastStale = true;
+		panelElement.querySelector("[data-result-requirements]")?.remove();
+		quality.dispose();
+	});
 	const original = originalAssessmentReader({
 		h,
 		t,
@@ -23719,6 +23758,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		errorBox,
 		refreshOrigin: readResult,
 		onSelectionChange: (selected) => {
+			if (selected) for (const node of panelElement.querySelectorAll("[data-result-requirements] details[open]")) node.open = false;
 			quality.dispose();
 			const node = !selected && !lastStale && lastEnvelope && activeAttempt ? quality.render(lastEnvelope, activeAttempt) : null;
 			qualityHost.replaceChildren(...node ? [node] : []);
@@ -23737,6 +23777,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		changesSerial++;
 		diffGeneration++;
 		diffKeySerials.clear();
+		sources.dispose();
 		lastEnvelope = null;
 		lastNormalized = null;
 		lastStale = false;
@@ -23802,6 +23843,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				renderInvalid();
 				return;
 			}
+			sources.replace((data.requirements?.items || []).flatMap((item) => (item.assessments || []).map((row) => row.reference)));
 			const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split("?")[1] || ""), namespace) : null;
 			if (requested?.origin === "result" && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id && requested.attempt_id === attemptId && !matchesResult(requested, data)) {
 				lastStale = true;
@@ -23833,8 +23875,9 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				return;
 			}
 			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
-			const status = err?.status;
-			if (status === 401 || status === 403 || status === 404) {
+			err?.status;
+			if (assessmentSourceRefused(err)) {
+				sources.withdraw(err);
 				original.sourceWithdrawn(err);
 				withdraw();
 				return;
@@ -32189,9 +32232,21 @@ function workspaceOverview(options) {
 		class: "pm-overview",
 		"data-pm-overview": ""
 	}, savedBar, status, content);
+	const sources = assessmentPresentations({
+		partition: namespace,
+		workspace_id: workspaceId
+	}, () => {
+		serial++;
+		projection = saved = null;
+		signature = "";
+		content.replaceChildren();
+	});
 	const original = originalAssessmentReader({
 		...options,
 		refreshOrigin: () => refreshLive(),
+		onSelectionChange: (selected) => {
+			if (selected) for (const node of content.querySelectorAll("[data-overview-delivery-assessment]")) node.open = false;
+		},
 		returnFocus: () => {
 			const selected = original.selected();
 			return [...box.querySelectorAll("[data-assessment-open]")].find((node) => node.dataset.assessmentOpen === (selected?.return_operation_id || selected?.operation_id)) || box.querySelector("h2, h3");
@@ -33052,6 +33107,7 @@ function workspaceOverview(options) {
 				adopted = value.plan;
 			}
 			const anchor = mode === "live" ? readingAnchor() : null;
+			sources.replace(data.recent_deliveries.map((row) => row.assessment_ref));
 			projection = data;
 			plan = adopted;
 			loading = false;
@@ -33075,11 +33131,10 @@ function workspaceOverview(options) {
 			} catch {
 				return;
 			}
-			if ([
-				401,
-				403,
-				404
-			].includes(error.status)) original.sourceWithdrawn(error);
+			if (assessmentSourceRefused(error)) {
+				sources.withdraw(error);
+				original.sourceWithdrawn(error);
+			}
 			projection = null;
 			plan = null;
 			loading = false;
@@ -33169,6 +33224,7 @@ function workspaceOverview(options) {
 			header();
 		},
 		dispose() {
+			sources.dispose();
 			active = false;
 			serial++;
 			original.close();

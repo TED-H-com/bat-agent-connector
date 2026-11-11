@@ -997,3 +997,18 @@ test('a late exact response cannot restore a withdrawn delivery assessment',asyn
     expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
   }finally{release();}
 });
+
+test('an exact refusal removes the whole Overview source disclosure',async({page})=>{
+  const base=fixture(),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  await boot(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-overview-delivery-assessment] summary').click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  await expect(page.locator('[data-overview-delivery-assessment]')).not.toHaveAttribute('open','');
+  f.state.denied=true;base.state.cursor++;
+  await expect.poll(()=>page.locator('main').innerHTML()).not.toContain(f.ref.operation_id);
+  await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+  await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});

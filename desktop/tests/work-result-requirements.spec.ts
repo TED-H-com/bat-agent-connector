@@ -254,7 +254,7 @@ test('selecting B rejects a late exact response for A',async({page})=>{
   try{
     await source.locator(`[data-assessment-open="${f.ref.operation_id}"]`).click();
     await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
-    f.state.hold=null;await source.locator(`[data-assessment-open="${next.operation_id}"]`).click();
+    f.state.hold=null;await source.locator('summary').filter({hasText:'Original conclusion'}).last().click();await source.locator(`[data-assessment-open="${next.operation_id}"]`).click();
     const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Selected B rationale');
     const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
     await expect(reader).not.toContainText('Original A rationale');await expect(reader).toContainText('Selected B rationale');
@@ -339,5 +339,28 @@ test('a successful reread restores Result context after a temporary failure whil
   unavailable=false;base.emitResultRecorded(attemptId);
   await expect(page.locator('[data-result-requirement="recovery"]')).toBeVisible();
   await expect(reader).toContainText('Original conclusion: accepted');
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+for(const refusal of ['editor','exact','result'] as const)test(`source refusal withdraws every Result presentation: ${refusal}`,async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));let denied=false;
+  const dispatch=async(input:any)=>{
+    if(denied&&(refusal==='editor'&&input.path.includes('/quality')||refusal==='result'&&input.path.endsWith('/result')))
+      return {status:403,data:{error:{code:'FORBIDDEN',message:'Original source withdrawn'}}};
+    return f.dispatch(input);
+  };
+  await open(page,{...base,dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  if(refusal==='editor'){
+    await reader.getByRole('button',{name:'Review this result',exact:true}).click();
+    await expect(reader.locator('[data-pm-action="pm.quality.review.record"]')).toBeAttached();
+    denied=true;await reader.getByRole('button',{name:'Refresh quality sources',exact:true}).click();
+  }else{denied=true;f.state.denied=true;base.emitResultRecorded(attemptId);}
+  await expect.poll(()=>page.locator('main').innerHTML()).not.toContain(f.ref.operation_id);
+  await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+  await expect(page.locator('[data-assessment-open]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-action="pm.quality.review.record"]')).toHaveCount(0);
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
 });

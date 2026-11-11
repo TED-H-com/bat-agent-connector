@@ -1,3 +1,4 @@
+import {assessmentSourceRefused} from './pm-assessment-source-fence.js';
 import {iconButton, skeleton} from './ui/components.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
 import {discussHref} from './pm-discuss-link.js';
@@ -11,7 +12,7 @@ const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;
 const same=(a,b)=>JSON.stringify(ordered(a))===JSON.stringify(ordered(b)),clone=value=>structuredClone(value);
 const github={kind:'fixed_revision_verification',profile:'github_reported_checks_v1'};
-export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{},fixedResult=null,allowedAction=()=>true,onSaved=()=>{},assessmentSelection=null,originalContextDigest=null,onRecorded=()=>{}}){
+export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{},fixedResult=null,allowedAction=()=>true,onSaved=()=>{},assessmentSelection=null,originalContextDigest=null,onRecorded=()=>{},onSourceUnavailable=()=>{}}){
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let workId=null,serial=0,ready=false,filtered=false,model=null,selected='',chosen=null,create=null,record=null,revoke=null,formKey='',matrixKey='',verifier=null;
   const navigation=`batc.pm.quality-navigation.${namespace}.${workspaceId}`;
@@ -39,7 +40,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   function clear(){ready=false;model=null;verifier?.withdraw();comparison.invalidate();facts.replaceChildren();history.replaceChildren();draft.hidden=assessment.hidden=withdrawal.hidden=true;emit(null);update();}
   function purge(){for(const editor of [create,record,revoke])editor?.dispose();create=record=revoke=null;formKey=matrixKey='';draft.replaceChildren();assessment.replaceChildren();withdrawal.replaceChildren();}
   function withdraw(){serial++;clear();comparison.withdraw();purge();workChoice.replaceChildren();status.replaceChildren();}
-  function failure(err, options = {}){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren(errorBox(err,{...options, summary:t('pmq_unavailable'), within:status}));}
+  function failure(err, options = {}){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren(errorBox(err,{...options, summary:t('pmq_unavailable'), within:status}));if(options.sourceRefresh!==false&&assessmentSourceRefused(err))onSourceUnavailable(err);}
   const request=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err, {sourceRefresh:args[0] !== 'POST' && !(args[0] === 'GET' && typeof args[4] === 'function')});throw err;}};
   async function pages(path,key,ticket,{cursor='next_cursor',wid=true,descending=false}={}){
     let after=descending?null:0;const rows=[],seen=new Set();
