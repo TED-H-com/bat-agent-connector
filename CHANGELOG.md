@@ -18,6 +18,11 @@
   exact assessment reference through existing operation and supported discussion
   links, independently of the PM assessment reader, in English and zh-TW.
 
+- Strictly validate loopback Host authorities for the API and static Dashboard,
+  including canonical IPv4 octets, IPv6 brackets and port bounds. Refuse malformed
+  API Origins with `403 BAD_ORIGIN`, preserving exact configured origin exceptions,
+  existing authentication and CORS behavior; no new static Dashboard Origin gate.
+
 - Explicitly save a readable Work-side relationship ID into the existing cleanup
   index for later withdrawal after source revocation. Recheck current authority
   and relationship identity; preserve original operation recovery, the 500-record
