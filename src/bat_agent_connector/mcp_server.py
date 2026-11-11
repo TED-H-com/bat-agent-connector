@@ -21,6 +21,7 @@ from typing import Any, Literal
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
 from mcp_types import ToolAnnotations
 from pydantic import StrictInt
 
@@ -40,6 +41,17 @@ from .errors import BatError, WriteRefused
 from .fleet import Fleet
 from .redact import redact
 from .task_daemon import request as task_request
+
+
+class _CleanupCursorMetadata(FuncMetadata):
+    def pre_parse_json(self, data: dict[str, Any]) -> dict[str, Any]:
+        parsed = super().pre_parse_json(data)
+        # This opaque string is not JSON-in-a-string. Preserve explicit JSON null,
+        # but let central validation refuse strings such as "null" and "[]".
+        if 'after' in data:
+            parsed['after'] = data['after']
+        return parsed
+
 
 READ_TOOLS = [
     "work_status", "work_result", "work_events",
@@ -1273,7 +1285,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
                pm_overview_get, pm_dependencies_get, pm_dependencies_revisions_list, pm_dependencies_impact_get,
-               pm_history_excerpt_preview, pm_history_excerpt_get, pm_history_links_list, pm_history_link_get, pm_history_associations_list, pm_history_cleanup_list,
+               pm_history_excerpt_preview, pm_history_excerpt_get, pm_history_links_list, pm_history_link_get, pm_history_associations_list,
                pm_resources_get, pm_history_sources_list, pm_history_get, pm_register_list, pm_register_get, pm_schedule_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
                pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
                pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
@@ -1293,6 +1305,15 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_roadmap_get, pm_roadmap_revisions_list, pm_roadmap_revision_get,
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
+
+    mcp.add_tool(_wrap(pm_history_cleanup_list), name="pm_history_cleanup_list", annotations=ro)
+    cleanup_tool = mcp._tool_manager.get_tool("pm_history_cleanup_list")
+    assert cleanup_tool is not None
+    cleanup_args = cleanup_tool.fn_metadata.arg_model
+    cleanup_args.model_config['extra'] = 'forbid'
+    cleanup_args.model_rebuild(force=True)
+    cleanup_tool.parameters = cleanup_args.model_json_schema()
+    cleanup_tool.fn_metadata = _CleanupCursorMetadata(**cleanup_tool.fn_metadata.model_dump())
 
     if not read_only:
         async def work_continue_from_repository(repository: str, host: str, workspace_id: str, source_ref: str,

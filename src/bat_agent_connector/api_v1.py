@@ -591,6 +591,9 @@ class ApiV1:
             if fn != self.version:
                 if principal is None:
                     raise ApiError(401, "UNAUTHORIZED", "a valid bearer token is required")
+                if fn == self.pm_history_cleanup_list:
+                    from .pm_external_history_links import cleanup_read_scopes
+                    cleanup_read_scopes(principal)
                 if scope and not principal.allows(scope):
                     raise ApiError(403, "FORBIDDEN", f"this route needs the {scope!r} scope")
             if fn in {self.messages, self.session_wait}:
@@ -632,8 +635,7 @@ class ApiV1:
                 query = parse_qs(parts.query, keep_blank_values=True)
             cleanup_guard = contextlib.nullcontext()
             if fn == self.pm_history_cleanup_list:
-                from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard, cleanup_read_scopes
-                cleanup_read_scopes(principal)
+                from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard
                 if 'transfer-encoding' in headers or not re.fullmatch(r'0+', headers.get('content-length', '0').strip()):
                     raise ApiError(422, 'INVALID_REQUEST', 'This read does not accept a request body')
                 params = self._pm_read_params(CLEANUP_READ, query, **kwargs)

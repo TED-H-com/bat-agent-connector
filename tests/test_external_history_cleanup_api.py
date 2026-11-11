@@ -238,14 +238,15 @@ async def test_cleanup_uniform_semantic_refusals_within_each_adapter(adapters, m
         baseline[0][0], baseline[1][1]['error'], baseline[1][1]['message'])
 
 
-async def test_cleanup_scope_and_missing_credentials_precede_source_lookups(adapters, monkeypatch):
+@pytest.mark.parametrize('scope', ['observe', 'manage'])
+async def test_cleanup_scope_and_missing_credentials_precede_source_lookups(adapters, monkeypatch, scope):
     d, target, _, lid, port, _, server = adapters
-    auth = token(d, OWNER.actor, 'observe')
+    auth = token(d, OWNER.actor, scope)
     monkeypatch.setenv('BATC_API_TOKEN', auth)
     def unexpected(*args, **kwargs):
         pytest.fail('Authorization must fail before source-dependent lookup')
     monkeypatch.setattr(pm_source_lineage, 'read_request', unexpected)
-    principal = Principal(OWNER.actor, frozenset({'observe'}))
+    principal = Principal(OWNER.actor, frozenset({scope}))
     with pytest.raises(OperationError) as policy:
         await d.call_api(METHOD, target, principal)
     assert policy.value.status == 403 and policy.value.code == 'FORBIDDEN'
@@ -257,6 +258,9 @@ async def test_cleanup_scope_and_missing_credentials_precede_source_lookups(adap
         text = await tool_error(server, METHOD, selected)
         assert policy.value.code in text and policy.value.message in text
     old_path = f"/api/v1/pm/workspaces/{target['workspace_id']}/external-links/{lid}"
+    if scope == 'manage':
+        assert (await http(port, 'GET', old_path, tok=auth))[1]['error'] == {
+            'code': 'FORBIDDEN', 'message': "this route needs the 'observe' scope"}
     assert await raw_get(port, cleanup_path(target)) == await raw_get(port, old_path)
     assert (await raw_get(port, cleanup_path(target)))[0] == 401
     missing_rpc = await http(port, 'POST', '/rpc', body={'method': METHOD, 'params': target})
@@ -292,6 +296,32 @@ async def test_cleanup_http_body_method_and_mcp_types(adapters):
     assert unpack(await server.call_tool(METHOD, target | {'after': None, 'limit': 1}))['links'][0]['link_id'] == lid
     # The existing GET's historical body handling is unchanged by this route's guard.
     assert (await http(port, 'GET', path.removesuffix('/cleanup'), tok=auth, body={}))[0] == 200
+
+
+async def test_cleanup_mcp_preserves_cursor_strings_and_refuses_unknown_arguments(adapters):
+    d, target, _, lid, port, auth, server = adapters
+    schema = next(tool.input_schema for tool in await server.list_tools() if tool.name == METHOD)
+    assert schema['additionalProperties'] is False
+    assert 'extra_forbidden' in await tool_error(server, METHOD, target | {'actor': 'ignored-actor'})
+    for cursor in ('null', '[]', '{}', 'true', 'false', '"null"'):
+        params = target | {'after': cursor}
+        web = await http(port, 'GET', cleanup_path(params), tok=auth)
+        rpc = await http(port, 'POST', '/rpc', tok=auth, body={'method': METHOD, 'params': params})
+        assert web[0] == 422 and rpc[0] == 400
+        assert rpc[1] == {'error': web[1]['error']['code'], 'message': web[1]['error']['message']}
+        assert rpc[1]['error'] == 'PM_HISTORY_REFERENCE_INVALID'
+        text = await tool_error(server, METHOD, params)
+        assert rpc[1]['error'] in text and rpc[1]['message'] in text
+    first = unpack(await server.call_tool(METHOD, target))
+    assert first['links'][0]['link_id'] == lid
+    assert unpack(await server.call_tool(METHOD, target | {'after': None})) == first
+    later = add_rows(d, target, lid, 1)
+    assert project(unpack(await server.call_tool(METHOD, target | {'after': lid})), target['work_item_id']) == later
+    # Other tools retain their established JSON-in-a-string argument handling.
+    ref = json.loads(d.ops.db.execute('SELECT canonical_ref FROM pm_external_excerpts').fetchone()[0])
+    params = {key: ref[key] for key in ('workspace_id', 'source_id', 'entry_id')}
+    params.update(expected_content_digest=ref['content_digest'], selection=json.dumps(ref['selection']))
+    assert unpack(await server.call_tool('pm_history_excerpt_preview', params))['ref'] == ref
 
 
 @pytest.mark.parametrize('transport', ['http', 'rpc', 'mcp'])
