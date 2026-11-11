@@ -18,6 +18,9 @@
   Nothing is read until requested, conversation content and source details are
   not shown, and a list that reaches the page cap is marked as possibly incomplete.
 
+- Give each browser UI test shard a 30-minute job limit so a slow package mirror
+  no longer cancels an otherwise passing run; per-test time limits are unchanged.
+
 ## 0.2.18 / Desktop 0.1.14 (2026-11-11)
 
 - Update the desktop updater plugin to Tauri updater 2.14.1, with patched archive
