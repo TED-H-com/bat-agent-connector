@@ -88,10 +88,15 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   const panelElement = h('div', {class: 'pm-work-result-panel', 'data-work-result': ''});
   panelElement.hidden = true;
   const publish = createWorkPublish({h, t, form, namespace, caps, errorBox});
+  const qualityHost = h('div');
   const quality = createWorkQuality({h,t,api,alive,workspaceId,caps,form,errorBox,namespace,refreshResult:readResult});
 
   const original = originalAssessmentReader({h, t, api, alive, workspaceId, caps, namespace, form, errorBox,
-    refreshOrigin: readResult, returnFocus: () => {
+    refreshOrigin: readResult, onSelectionChange: selected => {
+      quality.dispose();
+      const node = !selected && !lastStale && lastEnvelope && activeAttempt ? quality.render(lastEnvelope, activeAttempt) : null;
+      qualityHost.replaceChildren(...(node ? [node] : []));
+    }, returnFocus: () => {
       const pin = original.selected();
       return [...panelElement.querySelectorAll('[data-assessment-open]')].find(node => node.dataset.assessmentOpen === (pin?.return_operation_id || pin?.operation_id)
         && node.dataset.assessmentRequirement === (pin?.requirement_id || '')) || panelElement.querySelector('h3, h4');
@@ -196,7 +201,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         return;
       }
 
-      const requested = original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace);
+      const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace) : null;
       if (requested?.origin === 'result' && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id
         && requested.attempt_id === attemptId && !matchesResult(requested, data)) {
         publish.dispose(); quality.dispose(); panelElement.replaceChildren(h('h3', {tabindex: -1}, t('wres_heading')), original.element); updateVisibility(true);
@@ -824,10 +829,9 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
     const publishNode = publish.render(envelope);
     if (publishNode) sections.push(publishNode);
-    if (!lastStale) {
-      const qualityNode = quality.render(envelope, attempt);
-      if (qualityNode) sections.push(qualityNode);
-    }
+    const qualityNode = !lastStale && !original.selected() ? quality.render(envelope, attempt) : null;
+    qualityHost.replaceChildren(...(qualityNode ? [qualityNode] : []));
+    sections.push(qualityHost);
 
     // 6. Recorded turns disclosure
     sections.push(original.element);

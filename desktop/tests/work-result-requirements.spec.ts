@@ -276,9 +276,45 @@ test('a revoked assessment keeps its original verdict without allowing a new fix
   f.row.applicability_reasons=['review_revoked'];f.row.applicable=false;f.row.qualified=false;
   Object.assign(f.state.envelope.requirements.items[0].assessments[0],{applicable:false,qualified:false,revocation:f.row.revocation,applicability_reasons:['review_revoked']});
   f.state.envelope.next_allowed_actions=[];base.emitResultRecorded(attemptId);
-  await expect(reader).toContainText('Original conclusion: accepted');await expect(reader).toContainText('Revoked');
+  await expect(reader).toContainText('Original conclusion: accepted');await expect(reader).toContainText('This review was revoked. Its original conclusion remains in the history.');
   await reader.getByRole('button',{name:'Review this result',exact:true}).click();
   await reader.locator('[data-quality-assess]>summary').click();
   await expect(reader.locator('[data-pm-action="pm.quality.review.record"] button[type=submit]')).toBeDisabled();
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+
+test('a removed exact-read capability ignores an older pin after Result rollover',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  await expect(page.locator('[data-original-assessment]:visible')).toContainText('Original conclusion: accepted');
+  f.state.enabled=false;f.state.envelope.sources.result_id='res_'+'2'.repeat(32);
+  const reads=f.state.requests.filter(input=>input.path.includes('/assessments/')).length;
+  await page.reload();
+  await expect(page.locator('[data-result-requirement="recovery"]')).toBeVisible();
+  await expect(page.locator('[data-assessment-open]')).toHaveCount(0);
+  await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.path.includes('/assessments/'))).toHaveLength(reads);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+test('a late exact Result read cannot restore content after source refusal',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await installBodyCompletedCounter(page);await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path=`/quality-reviews/${f.ref.review_id}/assessments/${f.ref.operation_id}`;
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    f.state.hold=null;f.state.denied=true;base.emitResultRecorded(attemptId);
+    const reader=page.locator('[data-original-assessment]');
+    await expect(reader.locator('[data-api-error]')).toBeVisible();
+    const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
+    await expect(reader).not.toContainText('Original conclusion: accepted');
+    await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
 });

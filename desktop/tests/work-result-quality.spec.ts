@@ -205,6 +205,7 @@ for(const [locale,width] of [['en',1440],['zh-TW',390]] as const)test(`pinned as
   const base=workResultFixture(),f=assessmentRoundtrip(base,resultWorkspace,resultWork(1)),zh=locale==='zh-TW';f.newer();
   try{
     const reader=await pinned(page,f,zh),form=reader.locator(`[data-pm-action="${RECORD}"]`);
+    await expect(page.locator('[data-work-quality]')).toHaveCount(1);
     await reader.locator('[data-quality-assess]>summary').click();
     await expect(form.locator('button[type=submit]')).toBeDisabled();
     expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);

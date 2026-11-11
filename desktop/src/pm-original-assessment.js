@@ -7,7 +7,7 @@ import {assessmentSelection, assessmentQuery, parseAssessmentSelection, matchesA
 // One mounted reader owns its epoch. Withdrawal invalidates all pending reads,
 // including replies issued before an event removed the originating source.
 export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, namespace, form, errorBox,
-  refreshOrigin = async () => {}, returnFocus = () => null}) {
+  refreshOrigin = async () => {}, onSelectionChange = () => {}, returnFocus = () => null}) {
   let reading = null, fence = null, sourceToken = null;
   let pin = null, epoch = 0, quality = null, currentResult = null, currentAttempt = null, recorded = null;
   const body = h('div'), editor = h('div'), status = h('div', {role: 'status'});
@@ -40,7 +40,7 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, n
   function close({focus = false, forget = false} = {}) {
     const focusTarget = focus ? returnFocus() : null;
     epoch++; fence?.release(); fence = null; sourceToken = null; reading = null; pin = null; recorded = null; quality?.dispose(); quality = null;
-    body.replaceChildren(); editor.replaceChildren(); status.replaceChildren(); element.hidden = true;
+    body.replaceChildren(); editor.replaceChildren(); status.replaceChildren(); element.hidden = true; onSelectionChange(null);
     if (forget) remember(null);
     if (focus) {
       const target = focusTarget;
@@ -128,7 +128,7 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, caps, n
     const selected = assessmentSelection({return_operation_id: value.operation_id, return_review_id: value.review_id,
       return_document_digest: value.document_digest, ...value}, namespace);
     if (!supported() || !selected || selected.workspace_id !== workspaceId) return;
-    close(); pin = selected; fence = assessmentSourceFence(pin, fail); sourceToken = fence.token(); element.hidden = false; remember(pin); await refresh({focus: true});
+    close(); pin = selected; onSelectionChange(pin); fence = assessmentSourceFence(pin, fail); sourceToken = fence.token(); element.hidden = false; remember(pin); await refresh({focus: true});
   }
   function restore(origin, accepts = () => true) {
     const value = parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace);

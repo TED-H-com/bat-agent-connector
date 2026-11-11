@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {assessmentSelection, assessmentQuery, parseAssessmentSelection, matchesAssessment, matchesAttempt,
-  matchesResult, contextualAssessment} from '../src/pm-assessment-selection.js';
+  matchesResult, contextualAssessment, selectionFromResult} from '../src/pm-assessment-selection.js';
 import {sessionOrigin, sessionHref} from '../src/session-navigation.js';
 const id = (prefix: string, n = '1', length = 32) => prefix + n.repeat(length);
 const pin = {partition:'fixture-partition',workspace_id:id('ws_'),work_item_id:id('wi_','1',20),attempt_id:id('att_'),
@@ -62,4 +62,14 @@ test('one source withdrawal fences late reads at both mounted entrances',()=>{
   assert.equal(other.current(otherToken),true);
   const retry=b.token();assert.equal(b.current(retry),true);
   a.release();b.release();other.release();assert.equal(b.current(retry),false);
+});
+
+
+test('Overview enrichment keeps the original return control when a recorded assessment is selected',()=>{
+  const reference={...pin,return_review_id:pin.review_id,return_operation_id:id('op_','5'),return_document_digest:id('','e',64)};
+  const enriched=selectionFromResult({partition:pin.partition,envelope:result,reference,origin:'overview'});
+  assert.equal(enriched.return_operation_id,reference.return_operation_id);
+  assert.equal(enriched.return_review_id,reference.return_review_id);
+  assert.equal(enriched.return_document_digest,reference.return_document_digest);
+  assert.equal(enriched.operation_id,pin.operation_id);
 });

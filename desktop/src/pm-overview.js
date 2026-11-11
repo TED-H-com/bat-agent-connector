@@ -446,6 +446,7 @@ export function workspaceOverview(options) {
       projection = data; plan = adopted; loading = false; status.replaceChildren(); render(anchor);
       if (mode === 'live') {
         await assessment?.refresh();
+        alive(); if (ticket !== serial || mode !== 'live') return;
         const hasOrigin = pin => data.recent_deliveries.some(row => row.state === 'accepted' && row.work_item_id === pin.work_item_id
           && row.assessment_ref?.review_id === (pin.return_review_id || pin.review_id) && row.assessment_ref.operation_id === (pin.return_operation_id || pin.operation_id)
           && row.assessment_ref.document_digest === (pin.return_document_digest || pin.document_digest));

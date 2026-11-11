@@ -22694,7 +22694,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 }
 //#endregion
 //#region src/pm-original-assessment.js
-function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespace, form, errorBox, refreshOrigin = async () => {}, returnFocus = () => null }) {
+function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespace, form, errorBox, refreshOrigin = async () => {}, onSelectionChange = () => {}, returnFocus = () => null }) {
 	let reading = null, fence = null, sourceToken = null;
 	let pin = null, epoch = 0, quality = null, currentResult = null, currentAttempt = null, recorded = null;
 	const body = h("div"), editor = h("div"), status = h("div", { role: "status" });
@@ -22748,6 +22748,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespa
 		editor.replaceChildren();
 		status.replaceChildren();
 		element.hidden = true;
+		onSelectionChange(null);
 		if (forget) remember(null);
 		if (focus) {
 			const target = focusTarget;
@@ -22945,6 +22946,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, caps, namespa
 		if (!supported() || !selected || selected.workspace_id !== workspaceId) return;
 		close();
 		pin = selected;
+		onSelectionChange(pin);
 		fence = assessmentSourceFence(pin, fail);
 		sourceToken = fence.token();
 		element.hidden = false;
@@ -23691,6 +23693,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		caps,
 		errorBox
 	});
+	const qualityHost = h("div");
 	const quality = createWorkQuality({
 		h,
 		t,
@@ -23714,6 +23717,11 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		form,
 		errorBox,
 		refreshOrigin: readResult,
+		onSelectionChange: (selected) => {
+			quality.dispose();
+			const node = !selected && !lastStale && lastEnvelope && activeAttempt ? quality.render(lastEnvelope, activeAttempt) : null;
+			qualityHost.replaceChildren(...node ? [node] : []);
+		},
 		returnFocus: () => {
 			const pin = original.selected();
 			return [...panelElement.querySelectorAll("[data-assessment-open]")].find((node) => node.dataset.assessmentOpen === (pin?.return_operation_id || pin?.operation_id) && node.dataset.assessmentRequirement === (pin?.requirement_id || "")) || panelElement.querySelector("h3, h4");
@@ -23793,7 +23801,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				renderInvalid();
 				return;
 			}
-			const requested = original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split("?")[1] || ""), namespace);
+			const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split("?")[1] || ""), namespace) : null;
 			if (requested?.origin === "result" && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id && requested.attempt_id === attemptId && !matchesResult(requested, data)) {
 				publish.dispose();
 				quality.dispose();
@@ -24303,10 +24311,9 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		}
 		const publishNode = publish.render(envelope);
 		if (publishNode) sections.push(publishNode);
-		if (!lastStale) {
-			const qualityNode = quality.render(envelope, attempt);
-			if (qualityNode) sections.push(qualityNode);
-		}
+		const qualityNode = !lastStale && !original.selected() ? quality.render(envelope, attempt) : null;
+		qualityHost.replaceChildren(...qualityNode ? [qualityNode] : []);
+		sections.push(qualityHost);
 		sections.push(original.element);
 		if (!original.selected()) original.restore("result", (pin) => pin.work_item_id === attempt.work_item_id && pin.attempt_id === attempt.attempt_id);
 		const results = envelope.results || [];
@@ -33049,6 +33056,8 @@ function workspaceOverview(options) {
 			render(anchor);
 			if (mode === "live") {
 				await assessment?.refresh();
+				alive();
+				if (ticket !== serial || mode !== "live") return;
 				const hasOrigin = (pin) => data.recent_deliveries.some((row) => row.state === "accepted" && row.work_item_id === pin.work_item_id && row.assessment_ref?.review_id === (pin.return_review_id || pin.review_id) && row.assessment_ref.operation_id === (pin.return_operation_id || pin.operation_id) && row.assessment_ref.document_digest === (pin.return_document_digest || pin.document_digest));
 				if (original.selected() && hasOrigin(original.selected())) await original.refresh();
 				else {
