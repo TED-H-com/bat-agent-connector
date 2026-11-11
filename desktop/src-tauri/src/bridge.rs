@@ -1914,7 +1914,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|hosts/deploy-status|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/history(?:/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}(?:/associations)?)?|/history-excerpts/hxe_[0-9a-f]{64}|/external-links/hxl_[0-9a-f]{32}|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/overview-assessments(?:/pmoa_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs|external-links))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/history(?:/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}(?:/associations)?)?|/history-excerpts/hxe_[0-9a-f]{64}|/external-links/hxl_[0-9a-f]{32}|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32}(?:/assessments/op_[0-9a-f]{32})?)?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/overview-assessments(?:/pmoa_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs|external-links))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -2065,6 +2065,10 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
         && path.split('/').nth(4) == Some("work")
         && path.split('/').count() == 7
         && path.ends_with("/external-links");
+    let quality_assessment = pm
+        && path.split('/').nth(4) == Some("quality-reviews")
+        && path.split('/').nth(6) == Some("assessments")
+        && path.split('/').count() == 8;
     let mut query_keys = std::collections::HashSet::new();
     for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
         if key.chars().chain(value.chars()).any(char::is_control) {
@@ -2294,6 +2298,18 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && value.len() <= 3
                         && value.bytes().all(|b| b.is_ascii_digit())
                         && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
+                }
+                "version" if quality_assessment => {
+                    !value.is_empty()
+                        && value.len() <= 9
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u32>().is_ok_and(|n| (2..=33).contains(&n))
+                }
+                "document_digest" if quality_assessment => {
+                    value.len() == 64
+                        && value
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
                 "quality_refs" if package_readiness => {
                     value.len() <= 16_384
@@ -2867,6 +2883,11 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
         if (query_keys.contains("snapshot_id") && !retained) || (retained && after) {
             return Err("Saved history cannot be used as a live turn observation".into());
         }
+    }
+    if quality_assessment
+        && !(query_keys.contains("version") && query_keys.contains("document_digest"))
+    {
+        return Err("Quality assessment reads require an exact version and document digest".into());
     }
     if history_associations && !query_keys.contains("entry_id") {
         return Err("History associations require an exact retained entry".into());
@@ -5750,6 +5771,61 @@ mod tests {
             let path = format!("{root}{suffix}");
             assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
         }
+    }
+
+    #[test]
+    fn quality_assessment_reads_require_one_exact_receipt_and_no_body() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111";
+        let review = format!("pmqr_{}", "3".repeat(32));
+        let operation = format!("op_{}", "4".repeat(32));
+        let digest = "a".repeat(64);
+        let route = format!("{root}/quality-reviews/{review}/assessments/{operation}");
+        for version in ["2", "33", "000000002"] {
+            let path = format!("{route}?version={version}&document_digest={digest}");
+            assert!(validate_request(&request("GET", &path)).is_ok(), "{path}");
+            assert!(validate_request(&request("POST", &path)).is_err(), "{path}");
+            let mut body = request("GET", &path);
+            body.body = Some(serde_json::json!({}));
+            assert!(validate_request(&body).is_err());
+            let mut keyed = request("GET", &path);
+            keyed.idempotency_key = Some("not-an-operation".into());
+            assert!(validate_request(&keyed).is_err());
+        }
+        for query in [
+            String::new(),
+            "version=2".into(),
+            format!("document_digest={digest}"),
+            format!("version=2&document_digest={digest}&latest=true"),
+            format!("version=2&version=2&document_digest={digest}"),
+            format!("version=2&%76ersion=2&document_digest={digest}"),
+            format!("version=2&document_digest={digest}&document_digest={digest}"),
+            format!("version=&document_digest={digest}"),
+            "version=2&document_digest=".into(),
+            format!("version=2&document_digest={}", "a".repeat(63)),
+            format!("version=2&document_digest={}", "a".repeat(65)),
+            format!("version=2&document_digest={}", "A".repeat(64)),
+            format!("version=2&document_digest={}", "z".repeat(64)),
+        ] {
+            let path = format!("{route}?{query}");
+            assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
+        }
+        for version in ["0", "1", "34", "-1", "true", "2.0", "%202", "%2B2", "9999999999"] {
+            let path = format!("{route}?version={version}&document_digest={digest}");
+            assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
+        }
+        for suffix in [
+            format!("/quality-reviews/{review}/assessments"),
+            format!("/quality-reviews/{review}/assessments/latest"),
+            format!("/quality-reviews/{review}/assessments/{operation}/extra"),
+            format!("/quality-reviews/{review}/assessments/op_{}", "A".repeat(32)),
+            format!("/quality-reviews/pmqr_{}/assessments/{operation}", "A".repeat(32)),
+        ] {
+            let path = format!("{root}{suffix}?version=2&document_digest={digest}");
+            assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
+        }
+        // Selectors belong only to the exact assessment route, never the review head.
+        let path = format!("{root}/quality-reviews/{review}?version=2&document_digest={digest}");
+        assert!(validate_request(&request("GET", &path)).is_err());
     }
 
     #[test]

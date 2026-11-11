@@ -30,6 +30,7 @@ FIELDS = {
     "pm_maintenance_repair_get": ("workspace_id", "repair_id"),
     "pm_quality_reviews_list": ("workspace_id", "after", "limit"),
     "pm_quality_review_get": ("workspace_id", "review_id"),
+    "pm_quality_assessment_get": ("workspace_id", "review_id", "operation_id", "version", "document_digest"),
     "pm_work_quality_get": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_deliveries_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_batches_list": ("workspace_id", "after", "limit"),
@@ -202,10 +203,13 @@ def read(ops, principal, method, params):
         if method == "pm_maintenance_repair_current_get":
             return repairs.current_repair(ops, principal, workspace_id)
         return repairs.list_repairs(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
-    if method in {"pm_quality_reviews_list", "pm_quality_review_get", "pm_work_quality_get"}:
+    if method in {"pm_quality_reviews_list", "pm_quality_review_get", "pm_quality_assessment_get", "pm_work_quality_get"}:
         from . import pm_quality_reviews as quality
         if method == "pm_quality_review_get":
             return quality.get_review(ops, principal, workspace_id, params.get("review_id"))
+        if method == "pm_quality_assessment_get":
+            return quality.get_assessment(ops, principal, workspace_id, params.get("review_id"),
+                operation_id=params.get("operation_id"), version=params.get("version"), document_digest=params.get("document_digest"))
         if method == "pm_work_quality_get":
             return quality.for_work(ops, principal, workspace_id, params.get("work_item_id"),
                 after=params.get("after", 0), limit=params.get("limit", 50))
