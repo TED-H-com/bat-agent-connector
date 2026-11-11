@@ -9,7 +9,17 @@
 - Let API and MCP clients discover withdrawable external-conversation relationship
   IDs for a selected Work with observe/manage scope and current cleanup authority,
   including after source access is revoked. Return only link/Work IDs and versions,
-  without source identities or conversation content; no discovery UI is added yet.
+  without source identities or conversation content.
+
+- Let Dashboard users find those relationships under Resources → External
+  conversations: for one chosen Work, an explicit read lists every relationship
+  they may withdraw now, including ones whose source they can still read, and
+  withdraws one through the existing action and its original operation key.
+  Nothing is read until requested, conversation content and source details are
+  not shown, and a list that reaches the page cap is marked as possibly incomplete.
+
+- Give each browser UI test shard a 30-minute job limit so a slow package mirror
+  no longer cancels an otherwise passing run; per-test time limits are unchanged.
 
 ## 0.2.18 / Desktop 0.1.14 (2026-11-11)
 

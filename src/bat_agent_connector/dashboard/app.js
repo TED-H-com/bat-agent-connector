@@ -1135,7 +1135,19 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_cleanup_version: "Last read version {version}",
 			exh_cleanup_done: "Relationship withdrawn.",
 			exh_cleanup_invalid: "Saved relationship metadata could not be read. Original requests have been kept.",
-			exh_cleanup_limit: "This device keeps up to 500 known IDs. Some relationships may be absent if storage is full or unavailable; existing recovery records are kept."
+			exh_cleanup_limit: "This device keeps up to 500 known IDs. Some relationships may be absent if storage is full or unavailable; existing recovery records are kept.",
+			exh_cleanup_discover: "Find relationships to withdraw",
+			exh_cleanup_discover_help: "Choose a Work to list every relationship you may withdraw now, including ones whose source you can still read. Conversation content and source details are not shown. Results are a point-in-time view, not a reservation.",
+			exh_cleanup_read_ids: "Read cleanup IDs",
+			exh_cleanup_read_again: "Read again",
+			exh_cleanup_discovered: "Available to withdraw in this Work",
+			exh_cleanup_none: "No relationships are currently available for you to withdraw in this Work.",
+			exh_cleanup_empty_page: "No relationships on this page. More may remain.",
+			exh_cleanup_read_limit: "The page limit was reached. More relationships may remain.",
+			exh_cleanup_read_error: "Cleanup IDs could not be read safely. Saved original requests have been kept.",
+			exh_cleanup_conflict: "The relationship changed. Read this Work again before reviewing a new request. Your original request is unchanged.",
+			exh_cleanup_recovery_full: "500 withdrawal requests are saved. Recover existing requests before starting another. No saved request was removed.",
+			exh_cleanup_recovery_invalid: "Saved withdrawal data could not be read safely. Nothing was sent or replaced."
 		},
 		"zh-TW": {
 			exh_remember: "保存關聯 ID 供日後撤回",
@@ -1243,7 +1255,19 @@ var init_pm_external_history_strings = __esmMin((() => {
 			exh_cleanup_version: "上次讀取為第 {version} 版",
 			exh_cleanup_done: "已撤回關聯。",
 			exh_cleanup_invalid: "無法讀取已保存的關聯資料，原請求仍保留。",
-			exh_cleanup_limit: "此裝置最多保存 500 個關聯識別資料。空間已滿或無法儲存時，部分關聯可能未列出；既有復原紀錄仍保留。"
+			exh_cleanup_limit: "此裝置最多保存 500 個關聯識別資料。空間已滿或無法儲存時，部分關聯可能未列出；既有復原紀錄仍保留。",
+			exh_cleanup_discover: "尋找可撤回的關聯",
+			exh_cleanup_discover_help: "選擇工作，列出你目前可撤回的所有關聯，包括來源仍可讀取的關聯。不顯示對話內容或來源詳細資料。結果只反映讀取當下的狀態，不會保留撤回資格。",
+			exh_cleanup_read_ids: "讀取可撤回的關聯 ID",
+			exh_cleanup_read_again: "重新讀取",
+			exh_cleanup_discovered: "此工作中可撤回的關聯",
+			exh_cleanup_none: "目前此工作中沒有你可撤回的關聯。",
+			exh_cleanup_empty_page: "此頁沒有關聯，後面可能仍有其他關聯。",
+			exh_cleanup_read_limit: "已達讀取頁數上限，可能仍有其他關聯。",
+			exh_cleanup_read_error: "無法安全讀取可撤回的關聯 ID，已保存的原請求仍保留。",
+			exh_cleanup_conflict: "關聯已變更。請重新讀取此工作，再檢閱新請求；原請求維持不變。",
+			exh_cleanup_recovery_full: "已保存 500 筆撤回請求。請先恢復既有請求，再建立新請求；未移除任何已保存的請求。",
+			exh_cleanup_recovery_invalid: "無法安全讀取已保存的撤回資料；未送出或取代任何請求。"
 		}
 	};
 }));
@@ -18228,7 +18252,7 @@ var frontendDigest = (value) => typeof value === "string" && value.length === 64
 var frontendBuild = Object.freeze({ frontend_digest: frontendDigest("__BATC_FRONTEND_DIGEST_PLACEHOLDER______________________________") });
 //#endregion
 //#region src/version-projection.js
-var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+var version$3 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
 var commit = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) && [40, 64].includes(value.length) ? value : null;
 var digest$13 = frontendDigest;
 var frontendLoadedAt = new Date().toISOString();
@@ -18259,7 +18283,7 @@ var updateResults = [
 ];
 var fact$1 = (id, value, source, at, period, extra = {}) => {
 	const selected = {
-		version: version$2(value?.version),
+		version: version$3(value?.version),
 		commit: commit(value?.commit),
 		digest: digest$13(value?.digest)
 	};
@@ -18275,7 +18299,7 @@ var fact$1 = (id, value, source, at, period, extra = {}) => {
 	};
 };
 var released = (id, candidate, source, at) => {
-	const known = version$2(candidate?.version) && commit(candidate?.commit) && time(at);
+	const known = version$3(candidate?.version) && commit(candidate?.commit) && time(at);
 	return fact$1(id, known ? candidate : null, source, known ? at : null, "release_check", { published_at: known ? time(candidate.published_at) : null });
 };
 function versionProjection(input = {}) {
@@ -18360,7 +18384,7 @@ function nativeFailureCode(error) {
 	return typeof value === "string" ? code(value.match(/^([A-Z][A-Z0-9_]{0,79})(?=$|: | \()/)?.[1]) : null;
 }
 var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
-var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
+var action$1 = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
 var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
@@ -18497,7 +18521,7 @@ function scrubDiagnostics(text) {
 		} catch {}
 		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
 		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
-		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$6(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+		return code(value) || reason(value) || version$3(value) || commit(value) || operationId$6(value) || action$1(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
 	}));
 }
 function sessionFacts(session) {
@@ -18637,7 +18661,7 @@ function buildDiagnostics(input) {
 						"unavailable",
 						"unknown"
 					]),
-					version: version$2(host.bat?.version ?? host.server_version),
+					version: version$3(host.bat?.version ?? host.server_version),
 					protocol: select(host.bat?.protocol, protocols),
 					capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, [
 						"claude",
@@ -18672,7 +18696,7 @@ function buildDiagnostics(input) {
 		},
 		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
 			id: operationId$6(op.operation_id),
-			action: action(op.action),
+			action: action$1(op.action),
 			status: op.status,
 			error_code: code(op.error_code ?? op.error?.code),
 			created_at: time(op.created_at),
@@ -22063,7 +22087,7 @@ var digest$10 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
 var ordered$1 = (value) => Array.isArray(value) ? value.map(ordered$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered$1(value[key])])) : value;
-var same$10 = (a, b) => JSON.stringify(ordered$1(a)) === JSON.stringify(ordered$1(b));
+var same$11 = (a, b) => JSON.stringify(ordered$1(a)) === JSON.stringify(ordered$1(b));
 var clone$1 = (value) => structuredClone(value);
 var github = {
 	kind: "fixed_revision_verification",
@@ -22223,7 +22247,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		return model?.packages.find((row) => row.package_id === id);
 	}
 	function children(pkg) {
-		return (model?.operations || []).filter((op) => op.action === "repository.continue" && op.status === "succeeded" && op.params?.work_item_id === workId && same$10(op.external_refs?.admission_binding?.pm_handoff?.contract?.package_ref, {
+		return (model?.operations || []).filter((op) => op.action === "repository.continue" && op.status === "succeeded" && op.params?.work_item_id === workId && same$11(op.external_refs?.admission_binding?.pm_handoff?.contract?.package_ref, {
 			workspace_id: workspaceId,
 			package_id: pkg?.package_id,
 			document_digest: pkg?.document_digest
@@ -22300,9 +22324,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					return [];
 				}
 			};
-			const permittedCreate = () => canCreate() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$4.test(candidate.value) && (!fixedResult || pkg.value === fixedResult.package_id && child.value === fixedResult.execution_operation_id && candidate.value === fixedResult.candidate_commit) && reviewer.value && chosenCriteria().length > 0 && same$10(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
+			const permittedCreate = () => canCreate() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$4.test(candidate.value) && (!fixedResult || pkg.value === fixedResult.package_id && child.value === fixedResult.execution_operation_id && candidate.value === fixedResult.candidate_commit) && reviewer.value && chosenCriteria().length > 0 && same$11(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
 				try {
-					return same$10(row.condition, policy(row.choice));
+					return same$11(row.condition, policy(row.choice));
 				} catch {
 					return false;
 				}
@@ -22326,18 +22350,18 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					matrix.replaceChildren();
 					const saved = rows();
 					for (const criterion of chosenCriteria()) {
-						const field = choice("pmq_policy_profile"), old = saved.find((row) => same$10(row.criterion, criterion.criterion));
+						const field = choice("pmq_policy_profile"), old = saved.find((row) => same$11(row.criterion, criterion.criterion));
 						options(field, policyChoices());
 						field.value = old?.choice || "";
 						field.addEventListener("change", () => {
 							if (create.locked()) return;
-							const values = rows().filter((row) => !same$10(row.criterion, criterion.criterion));
+							const values = rows().filter((row) => !same$11(row.criterion, criterion.criterion));
 							if (field.value) values.push({
 								criterion: criterion.criterion,
 								condition: policy(field.value),
 								choice: field.value
 							});
-							const ordered = chosenCriteria().map((item) => values.find((row) => same$10(row.criterion, item.criterion)) || {
+							const ordered = chosenCriteria().map((item) => values.find((row) => same$11(row.criterion, item.criterion)) || {
 								criterion: item.criterion,
 								condition: null,
 								choice: ""
@@ -22482,13 +22506,13 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			row.original_outcome.qualified && !row.qualified ? text("pmq_original_qualified") : null,
 			h("details", {}, h("summary", {}, t("pmq_original_sources")), line("pmq_package", row.context.package_ref.package_id), line("pmq_digest", row.context.package_ref.document_digest), line("pmq_scope", row.context.plan_ref.scope_revision), line("pmq_binding", row.context.work_ref.binding_id), line("pmq_dod", row.context.dod_ref?.revision_id), h("a", { href: `#/op/${row.context.execution_operation_id}` }, t("pmq_execution")), h("p", { class: "pm-note-text" }, row.context.policy_rationale)),
 			...(row.context.criteria || []).map((item) => {
-				const saved = document?.criteria.find((value) => same$10(value.criterion, item.criterion));
+				const saved = document?.criteria.find((value) => same$11(value.criterion, item.criterion));
 				return h("details", {}, h("summary", {}, `${item.text} · ${t("pmq_" + (saved?.status || "unassessed"))}`), saved ? h("p", { class: "pm-note-text" }, saved.rationale) : null, saved?.verification ? line("pmq_verification", t("pmq_" + saved.verification.status)) : text("pmq_no_proof"));
 			}),
 			row.revocation ? h("div", {}, h("h4", {}, t("pmq_revoked")), h("p", { class: "pm-note-text" }, row.revocation.document.reason), line("pmq_by", row.revocation.actor)) : null,
 			h("details", {}, h("summary", {}, t("pmq_history_receipts")), ...row.history.map((item) => h("p", { class: "pm-source" }, `${item.version} · ${item.actor} · ${t("pmq_" + item.kind)} · `, h("a", { href: `#/op/${item.operation_id}` }, item.operation_id), h("span", {}, " · " + item.document_digest)))),
 			fixedResult ? null : use,
-			fixedResult ? text("pmq_result_help") : chosen && same$10(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help"),
+			fixedResult ? text("pmq_result_help") : chosen && same$11(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help"),
 			fixedResult && row.assessment && caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes("quality_assessment") ? h("p", {}, h("a", { href: discussHref({
 				workspaceId,
 				title: t("pmq_discuss_title"),
@@ -22524,7 +22548,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		return Boolean(row?.assessment && row.applicable === true && !row.revocation);
 	}
 	function proofChoices(row, item) {
-		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$10(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
+		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$11(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
 	}
 	function buildAssessment(row) {
 		const key = row.review_id;
@@ -22800,7 +22824,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			await verifier.setSources(model.operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
 			status.replaceChildren(...filtered ? [text("pmq_filtered")] : []);
-			if (previous && selectable(current()) && same$10(previous, reference(current()))) emit(previous);
+			if (previous && selectable(current()) && same$11(previous, reference(current()))) emit(previous);
 			update();
 		} catch (err) {
 			if (valid(ticket)) failure(err);
@@ -25476,14 +25500,302 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, matchesWor
 	};
 }
 //#endregion
+//#region src/pm-history-recovery.js
+var action = "pm.history.unlink";
+var separator = `.${action}.`;
+var limit = 500;
+var object$8 = (value) => value !== null && typeof value === "object" && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+var exact$2 = (value, keys) => object$8(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+var same$10 = (a, b) => a === b || object$8(a) && object$8(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$10(a[key], b[key]));
+var invalid$1 = () => Object.assign(Error("HISTORY_RECOVERY_INVALID"), { code: "HISTORY_RECOVERY_INVALID" });
+var changed = () => Object.assign(Error("HISTORY_RECOVERY_CHANGED"), { code: "HISTORY_RECOVERY_CHANGED" });
+var full = () => Object.assign(Error("HISTORY_RECOVERY_FULL"), { code: "HISTORY_RECOVERY_FULL" });
+var id$1 = (value, pattern) => typeof value === "string" && pattern.test(value);
+var version$2 = (value) => Number.isSafeInteger(value) && value > 0;
+var sameIntent = (a, b) => a && b && a.key === b.key && same$10(a.request, b.request) && (!a.operation_id || !b.operation_id || a.operation_id === b.operation_id);
+function targetOf(row, workspaceId) {
+	const target = {
+		workspace_id: workspaceId,
+		work_item_id: row?.work_item_id,
+		link_id: row?.link_id
+	};
+	if (row?.workspace_id !== void 0 && row.workspace_id !== workspaceId || !id$1(workspaceId, /^ws_[0-9a-f]{32}$/) || !id$1(target.work_item_id, /^wi_[0-9a-f]{20}$/) || !id$1(target.link_id, /^hxl_[0-9a-f]{32}$/)) throw invalid$1();
+	return target;
+}
+function envelope(saved, target) {
+	if (!exact$2(saved, saved?.intent === void 0 ? ["version", "values"] : [
+		"version",
+		"values",
+		"intent"
+	]) || saved.version !== 1 || !exact$2(saved.values, [])) throw invalid$1();
+	if (saved.intent === void 0) return;
+	const intent = saved.intent, request = intent?.request;
+	if (!object$8(intent) || Object.keys(intent).some((key) => ![
+		"key",
+		"request",
+		"operation_id",
+		"initialAdmissionRefused"
+	].includes(key)) || typeof intent.key !== "string" || !intent.key.trim() || intent.key.trim().length > 200 || Object.hasOwn(intent, "operation_id") && !id$1(intent.operation_id, /^op_[0-9a-f]{32}$/) || Object.hasOwn(intent, "initialAdmissionRefused") && typeof intent.initialAdmissionRefused !== "boolean" || !exact$2(request, [
+		"action",
+		"target",
+		"params",
+		"preconditions"
+	]) || request.action !== action || !exact$2(request.target, [
+		"workspace_id",
+		"work_item_id",
+		"link_id"
+	]) || !same$10(request.target, target) || !exact$2(request.params, []) || !exact$2(request.preconditions, ["expected_link_version"]) || !version$2(request.preconditions.expected_link_version)) throw invalid$1();
+}
+function historyRecovery(storage, namespace, workspaceId) {
+	if (typeof namespace !== "string" || !namespace) throw invalid$1();
+	targetOf({
+		work_item_id: "wi_" + "0".repeat(20),
+		link_id: "hxl_" + "0".repeat(32)
+	}, workspaceId);
+	const records = historyRecords(storage, namespace, workspaceId);
+	const cleanupNamespace = `${namespace}.history-cleanup.${workspaceId}`;
+	const cleanupPrefix = `batc.pm.${cleanupNamespace}.`, legacyPrefix = `batc.pm.${namespace}.history.`;
+	function descriptor(row, draftNamespace, target = targetOf(row, workspaceId), intent = null) {
+		return {
+			row,
+			namespace: draftNamespace,
+			target,
+			intent,
+			known: false,
+			sourceIndependent: draftNamespace === cleanupNamespace,
+			storageKey: `batc.pm.${draftNamespace}${separator}${JSON.stringify(target)}`
+		};
+	}
+	function read() {
+		const byId = new Map(records.read().map((row) => [row.link_id, {
+			...descriptor(row, historyDraftNamespace(namespace, row)),
+			known: true
+		}]));
+		const seen = new Set(), keys = new Set();
+		const count = storage.length;
+		if (!Number.isSafeInteger(count) || count < 0) throw invalid$1();
+		for (let i = 0; i < count; i++) {
+			const key = storage.key(i);
+			if (typeof key !== "string") throw invalid$1();
+			keys.add(key);
+		}
+		let pendingCount = 0;
+		for (const key of keys) {
+			const independent = key.startsWith(cleanupPrefix);
+			if (!independent && !key.startsWith(legacyPrefix)) continue;
+			const legacyName = !independent && key.slice(legacyPrefix.length).match(/^(\["[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}","shi_[0-9a-f]{32}"\])(.*)$/);
+			if (legacyName && !legacyName[2].startsWith(separator)) continue;
+			const split = key.lastIndexOf(separator);
+			if (split < 0) {
+				if (independent) throw invalid$1();
+				else continue;
+			}
+			const target = JSON.parse(key.slice(split + separator.length));
+			if (!id$1(target?.workspace_id, /^ws_[0-9a-f]{32}$/)) throw invalid$1();
+			if (target.workspace_id !== workspaceId) {
+				if (independent) throw invalid$1();
+				else continue;
+			}
+			if (!exact$2(target, [
+				"workspace_id",
+				"work_item_id",
+				"link_id"
+			]) || !same$10(target, targetOf(target, workspaceId)) || JSON.stringify(target) !== key.slice(split + separator.length)) throw invalid$1();
+			const draftNamespace = key.slice(8, split);
+			let source = {};
+			if (independent) {
+				if (draftNamespace !== cleanupNamespace) throw invalid$1();
+			} else {
+				const encoded = key.slice(legacyPrefix.length, split), identity = JSON.parse(encoded);
+				if (!Array.isArray(identity) || identity.length !== 2 || JSON.stringify(identity) !== encoded || !id$1(identity[0], /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/) || !id$1(identity[1], /^shi_[0-9a-f]{32}$/)) throw invalid$1();
+				source = {
+					source_id: identity[0],
+					entry_id: identity[1]
+				};
+			}
+			const raw = storage.getItem(key);
+			if (raw === null) continue;
+			const saved = JSON.parse(raw);
+			envelope(saved, target);
+			if (!saved.intent) continue;
+			if (seen.has(target.link_id) || independent && ++pendingCount > limit) throw invalid$1();
+			seen.add(target.link_id);
+			const known = byId.get(target.link_id);
+			if (known && known.row.work_item_id !== target.work_item_id) throw invalid$1();
+			const row = {
+				...known?.row,
+				...source,
+				...target,
+				version: saved.intent.request.preconditions.expected_link_version
+			};
+			byId.set(target.link_id, {
+				...descriptor(row, draftNamespace, target, saved.intent),
+				known: Boolean(known?.known)
+			});
+		}
+		return [...byId.values()];
+	}
+	function resolve(value, { reviewVersion = false } = {}) {
+		const target = targetOf(value, workspaceId);
+		if (!version$2(value?.version)) throw invalid$1();
+		const legacy = value.source_id !== void 0 || value.entry_id !== void 0 || value.fixed_ref !== void 0;
+		if (legacy && (!id$1(value.source_id ?? value.fixed_ref?.source_id, /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/) || !id$1(value.entry_id ?? value.fixed_ref?.entry_id, /^shi_[0-9a-f]{32}$/))) throw invalid$1();
+		if (!legacy && !exact$2(value, Object.hasOwn(value, "workspace_id") ? [
+			"workspace_id",
+			"work_item_id",
+			"link_id",
+			"version"
+		] : [
+			"work_item_id",
+			"link_id",
+			"version"
+		])) throw invalid$1();
+		const current = read().find((item) => item.row.link_id === target.link_id);
+		if (current) {
+			if (current.row.work_item_id !== target.work_item_id) throw invalid$1();
+			return reviewVersion && !current.intent ? {
+				...current,
+				row: {
+					...current.row,
+					version: value.version
+				}
+			} : current;
+		}
+		if (legacy) {
+			const row = historyRecord({
+				...value,
+				workspace_id: workspaceId
+			});
+			return descriptor(row, historyDraftNamespace(namespace, row));
+		}
+		return descriptor({
+			...target,
+			version: value.version
+		}, cleanupNamespace);
+	}
+	function inspect(selected, owned, capacity = true) {
+		const rows = read(), current = rows.find((item) => item.row.link_id === selected.row.link_id);
+		if (current && current.row.work_item_id !== selected.row.work_item_id) throw invalid$1();
+		if (current?.intent && !sameIntent(current.intent, owned)) throw owned ? invalid$1() : changed();
+		if (current && current.storageKey !== selected.storageKey && (!owned || current.intent)) throw changed();
+		if (capacity && selected.sourceIndependent && !current?.intent && rows.filter((item) => item.sourceIndependent && item.intent).length >= limit) throw full();
+		return current;
+	}
+	return {
+		read,
+		resolve,
+		admit: inspect,
+		beforePersist(selected, saved, storageKey, owned = saved.intent) {
+			if (storageKey !== selected.storageKey) throw invalid$1();
+			envelope(saved, selected.target);
+			inspect(selected, owned, Boolean(saved.intent));
+			if (saved.intent && saved.intent.request.preconditions.expected_link_version !== selected.row.version) throw invalid$1();
+		}
+	};
+}
+function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPermitted = permitted, beforeNew = () => {}, onResolve = () => {}, onError = () => false, onSaved = () => {}, errorBox, reviewVersion = false, ...options }) {
+	const box = h("div"), notice = h("div", { role: "status" });
+	let editor, selected, owned, disposed = false, queued = false, completed = false, needsRead = false, lastError = null;
+	function report(error) {
+		if (lastError === error.code) return;
+		lastError = error.code;
+		const key = error.code === "HISTORY_RECOVERY_FULL" ? "full" : "invalid";
+		notice.replaceChildren(errorBox(Error(t(selected?.sourceIndependent ? `exh_cleanup_recovery_${key}` : key === "full" ? "exh_cleanup_limit" : "exh_cleanup_invalid")), {
+			within: notice,
+			sourceRefresh: false
+		}));
+	}
+	function remount() {
+		if (queued || disposed) return;
+		queued = true;
+		queueMicrotask(() => {
+			queued = false;
+			if (!disposed) try {
+				mount();
+			} catch (error) {
+				report(error);
+			}
+		});
+	}
+	function ready(recovering) {
+		if (disposed || completed || !(recovering ? recoverPermitted() : permitted())) return false;
+		try {
+			const stored = recovery.admit(selected, owned);
+			if (owned && !stored?.intent && editor && !editor.intentRequest()) owned = null;
+			return Boolean(owned) || !needsRead;
+		} catch (error) {
+			if (error.code === "HISTORY_RECOVERY_CHANGED" && !owned) remount();
+			else report(error);
+			return false;
+		}
+	}
+	function mount() {
+		const next = recovery.resolve(row, { reviewVersion });
+		editor?.dispose();
+		selected = next;
+		owned = next.intent;
+		needsRead = Boolean(owned?.initialAdmissionRefused);
+		notice.replaceChildren();
+		lastError = null;
+		onResolve(next);
+		editor = form({
+			...options,
+			namespace: next.namespace,
+			action,
+			target: next.target,
+			fields: {},
+			params: () => ({}),
+			pruneEmpty: next.sourceIndependent,
+			preconditions: () => {
+				recovery.admit(selected, owned);
+				beforeNew();
+				return { expected_link_version: selected.row.version };
+			},
+			permitted: () => ready(false),
+			recoverPermitted: () => ready(true),
+			beforePersist: (saved, key) => {
+				recovery.beforePersist(selected, saved, key, owned);
+				if (saved.intent) owned = structuredClone(saved.intent);
+			},
+			onError: (error) => {
+				if (["PM_HISTORY_LINK_CHANGED", "VERSION_CONFLICT"].includes(error.code)) needsRead = true;
+				if (typeof error.code === "string" && error.code.startsWith("HISTORY_RECOVERY_")) {
+					report(error);
+					return true;
+				}
+				return onError(error);
+			},
+			onSaved: async (result) => {
+				completed = true;
+				return onSaved(result);
+			}
+		});
+		box.replaceChildren(editor.box, notice);
+	}
+	mount();
+	return {
+		box,
+		update: () => editor.update(),
+		checking: () => editor.checking(),
+		intentRequest: () => editor.intentRequest(),
+		locked: () => editor.locked(),
+		operation: () => editor.operation(),
+		dispose: () => {
+			disposed = true;
+			editor.dispose();
+		}
+	};
+}
+//#endregion
 //#region src/pm-external-history-links.js
-var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
+var workId$2 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
 var digest$9 = (value) => /^[0-9a-f]{64}$/.test(value || "");
 function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, cleanup, sourceId, entry, onUnavailable }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const draftNamespace = `${namespace}.history.${JSON.stringify([sourceId, entry.entry_id])}`;
 	const selectionKey = `batc.pm.${draftNamespace}.work-selection`;
 	const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
+	const recovery = historyRecovery(localStorage, namespace, workspaceId);
 	let disposed = false, generation = 0, loaded = false, busy = false, after = null;
 	let preview = null, selected = "", editor = null, choosing = false, workAfter = null, workBusy = false;
 	let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null, replacement = null;
@@ -25524,7 +25836,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	}
 	function pendingWithdrawals() {
 		const saved = JSON.parse(localStorage.getItem(withdrawalKey) || "[]");
-		if (!Array.isArray(saved) || saved.some((link) => !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || !workId$1(link.work_item_id) || !Number.isSafeInteger(link.version) || link.version < 1 || typeof link.created_by !== "string")) throw mismatch();
+		if (!Array.isArray(saved) || saved.some((link) => !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || !workId$2(link.work_item_id) || !Number.isSafeInteger(link.version) || link.version < 1 || typeof link.created_by !== "string")) throw mismatch();
 		return saved;
 	}
 	function rememberWithdrawal(link, remove = false) {
@@ -25538,30 +25850,35 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		if (saved.length) localStorage.setItem(withdrawalKey, JSON.stringify(saved));
 		else localStorage.removeItem(withdrawalKey);
 	}
+	function pendingRecoveries() {
+		const pending = new Map(pendingWithdrawals().map((row) => [row.link_id, row]));
+		for (const value of recovery.read()) if (value.intent && value.row.source_id === sourceId && value.row.entry_id === entry.entry_id) pending.set(value.row.link_id, value.row);
+		return [...pending.values()];
+	}
 	function withdrawal(link, active = true) {
-		const target = {
+		const row = {
+			...link,
 			workspace_id: workspaceId,
-			work_item_id: link.work_item_id,
-			link_id: link.link_id
+			source_id: sourceId,
+			entry_id: entry.entry_id
 		};
+		const selected = recovery.resolve(row);
 		if (!active) {
-			if (!JSON.parse(localStorage.getItem(`batc.pm.${draftNamespace}.pm.history.unlink.${JSON.stringify(target)}`) || "null")?.intent) {
+			if (!selected.intent) {
 				rememberWithdrawal(link, true);
 				return null;
 			}
 		}
-		const remove = form({
-			namespace: draftNamespace,
-			action: "pm.history.unlink",
-			target,
-			fields: {},
-			params: () => ({}),
-			preconditions: () => {
-				rememberWithdrawal(link);
-				return { expected_link_version: link.version };
-			},
+		const remove = historyWithdrawalForm({
+			h,
+			t,
+			form,
+			recovery,
+			row,
+			errorBox,
+			beforeNew: () => rememberWithdrawal(link),
 			permitted: () => active && canUnlink(link),
-			recoverPermitted: () => canUnlink(link),
+			recoverPermitted: () => current(generation) && supported("pm.history.unlink") && Boolean(workspace()?.membership),
 			label: "exh_unlink",
 			onBeforeSaved: (result) => {
 				if (result?.link_id !== link.link_id || result.state !== "withdrawn" || result.version !== remove.intentRequest()?.preconditions.expected_link_version + 1) throw mismatch();
@@ -25709,7 +26026,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			if (!Array.isArray(data.links) || data.links.length > 20) throw mismatch();
 			const next = checkPage(data, cursor, "next_after");
 			const visible = await Promise.all(data.links.map(async (link) => {
-				if (link.workspace_id !== workspaceId || !workId$1(link.work_item_id) || !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || link.state !== "active" || !Number.isSafeInteger(link.version) || link.version < 1 || !matches(link.fixed_ref)) throw mismatch();
+				if (link.workspace_id !== workspaceId || !workId$2(link.work_item_id) || !/^hxl_[0-9a-f]{32}$/.test(link.link_id) || link.state !== "active" || !Number.isSafeInteger(link.version) || link.version < 1 || !matches(link.fixed_ref)) throw mismatch();
 				const detail = await api("GET", `/work-items/${encodeURIComponent(link.work_item_id)}`);
 				if (detail.work_item?.work_item_id !== link.work_item_id || typeof detail.work_item.title !== "string") throw mismatch();
 				return {
@@ -25746,7 +26063,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			}
 			recoveryForms.clear();
 			rows.querySelectorAll("[data-history-withdrawal]").forEach((node) => node.remove());
-			for (const link of pendingWithdrawals()) if (!links.has(link.link_id) && canUnlink(link)) {
+			for (const link of pendingRecoveries()) if (!links.has(link.link_id)) {
 				const recovery = withdrawal(link, false);
 				if (recovery) rows.append(h("div", {
 					class: "exh-relation",
@@ -25786,7 +26103,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	});
 	workRefresh.disabled = true;
 	function checkCard(card, id = card?.work_item_id) {
-		if (!workId$1(id) || card?.work_item_id !== id || card.work?.work_item_id !== id || typeof card.work.title !== "string" || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== id || card.work.project_id !== card.binding.project_id || !/^pmwb_[0-9a-f]{32}$/.test(card.binding.binding_id) || !Number.isSafeInteger(card.work.version) || card.work.version < 1) throw mismatch();
+		if (!workId$2(id) || card?.work_item_id !== id || card.work?.work_item_id !== id || typeof card.work.title !== "string" || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== id || card.work.project_id !== card.binding.project_id || !/^pmwb_[0-9a-f]{32}$/.test(card.binding.binding_id) || !Number.isSafeInteger(card.work.version) || card.work.version < 1) throw mismatch();
 		return card;
 	}
 	function choices() {
@@ -25841,7 +26158,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		workSelecting = true;
 		updateSelectionControls();
 		try {
-			if (id && !workId$1(id)) throw mismatch();
+			if (id && !workId$2(id)) throw mismatch();
 			if (id) localStorage.setItem(selectionKey, id);
 			else localStorage.removeItem(selectionKey);
 			if (!id) return;
@@ -26021,10 +26338,275 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	};
 }
 //#endregion
+//#region src/pm-history-discovery.js
+var linkId = (value) => typeof value === "string" && /^hxl_[0-9a-f]{32}$/.test(value);
+var workId$1 = (value) => typeof value === "string" && /^wi_[0-9a-f]{20}$/.test(value);
+var exact$1 = (value, keys) => value && !Array.isArray(value) && typeof value === "object" && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+var invalid = () => Error("HISTORY_CLEANUP_PAGE_INVALID");
+function cleanupPage(data, work, ids = new Set(), cursors = new Set()) {
+	if (!exact$1(data, ["links", "next_after"]) || !workId$1(work) || !Array.isArray(data.links) || data.links.length > 20 || data.next_after !== null && (!linkId(data.next_after) || cursors.has(data.next_after))) throw invalid();
+	const seen = new Set(ids), links = [];
+	for (const row of data.links) {
+		if (!exact$1(row, [
+			"link_id",
+			"work_item_id",
+			"version"
+		]) || !linkId(row.link_id) || row.work_item_id !== work || !Number.isSafeInteger(row.version) || row.version < 1 || seen.has(row.link_id)) throw invalid();
+		seen.add(row.link_id);
+		links.push({
+			link_id: row.link_id,
+			work_item_id: row.work_item_id,
+			version: row.version
+		});
+	}
+	return {
+		links,
+		next_after: data.next_after
+	};
+}
+function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, onChange }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let disposed = false, opened = false, epoch = 0, serial = 0, selected = "", busy = false, workBusy = false;
+	let after = null, workAfter = null, pages = 0, loaded = false, review = false;
+	const rows = new Map(), works = new Map(), ids = new Set(), cursors = new Set();
+	const status = h("div", { role: "status" }), workStatus = h("div", { role: "status" });
+	const select = h("select", {
+		"aria-label": t("exh_work"),
+		onchange: () => {
+			selected = works.has(select.value) ? select.value : "";
+			clearPages();
+			status.replaceChildren();
+			sync();
+			onChange();
+		}
+	});
+	const read = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_cleanup_read_ids"),
+		onclick: () => void readPage(true, loaded)
+	});
+	const more = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_more_links"),
+		onclick: () => void readPage(false, review)
+	});
+	const workMore = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_more_work"),
+		onclick: () => void readWorks(false)
+	});
+	const retryWorks = button({
+		variant: "ghost",
+		size: "sm",
+		label: t("exh_choose_work"),
+		onclick: () => void readWorks(true)
+	});
+	retryWorks.hidden = true;
+	const chooser = h("div", {
+		"data-history-cleanup-chooser": "",
+		hidden: true
+	}, h("p", { class: "ui-meta" }, t("exh_cleanup_discover_help")), h("label", {}, t("exh_work"), select), workStatus, h("div", { class: "exh-actions" }, workMore, retryWorks, read, more), status);
+	const discover = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("exh_cleanup_discover"),
+		onclick: () => {
+			if (!available() || opened) return;
+			opened = true;
+			chooser.hidden = false;
+			discover.setAttribute("aria-expanded", "true");
+			readWorks(true);
+			select.focus();
+		}
+	});
+	discover.setAttribute("aria-expanded", "false");
+	const element = h("div", {
+		"data-history-discovery": "",
+		hidden: true
+	}, h("div", { class: "exh-actions" }, discover), chooser);
+	function available() {
+		try {
+			alive();
+		} catch {
+			return false;
+		}
+		return !disposed && enabled();
+	}
+	const current = (ticket) => available() && opened && ticket === epoch;
+	function clearPages() {
+		serial++;
+		busy = false;
+		after = null;
+		pages = 0;
+		loaded = review = false;
+		rows.clear();
+		ids.clear();
+		cursors.clear();
+	}
+	function sync() {
+		const focused = document.activeElement;
+		read.textContent = t(loaded ? "exh_cleanup_read_again" : "exh_cleanup_read_ids");
+		read.disabled = !available() || !selected;
+		read.setAttribute("aria-disabled", String(busy));
+		more.hidden = !loaded || after === null || pages >= 25;
+		more.setAttribute("aria-disabled", String(busy));
+		workMore.hidden = workAfter === null;
+		for (const control of [workMore, retryWorks]) control.setAttribute("aria-disabled", String(workBusy));
+		status.setAttribute("aria-busy", String(busy));
+		if (opened && available()) {
+			if (focused === more && more.hidden) read.focus({ preventScroll: true });
+			if (focused === workMore && workMore.hidden) select.focus({ preventScroll: true });
+		}
+	}
+	function choices() {
+		select.replaceChildren(h("option", { value: "" }, t("exh_select_work")), ...[...works.values()].map((card) => h("option", { value: card.work_item_id }, card.work.title)));
+		select.value = selected;
+	}
+	async function readWorks(reset) {
+		if (!available() || !opened || workBusy) return;
+		const ticket = epoch, cursor = reset ? 0 : workAfter;
+		if (!reset && cursor === null) return;
+		workBusy = true;
+		if (document.activeElement === retryWorks) select.focus({ preventScroll: true });
+		retryWorks.hidden = true;
+		sync();
+		workStatus.replaceChildren();
+		try {
+			const data = await api("GET", `${endpoint}/kanban?after=${cursor}&limit=20`);
+			if (!current(ticket)) return;
+			if (data.workspace_id !== workspaceId || !Array.isArray(data.cards) || data.cards.length > 20 || data.next_cursor !== null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= cursor)) throw invalid();
+			for (const card of data.cards) if (!workId$1(card?.work_item_id) || card.work?.work_item_id !== card.work_item_id || typeof card.work.title !== "string" || card.binding?.workspace_id !== workspaceId || card.binding.work_item_id !== card.work_item_id || card.work.project_id !== card.binding.project_id || !/^pmwb_[0-9a-f]{32}$/.test(card.binding.binding_id)) throw invalid();
+			if (reset) works.clear();
+			for (const card of data.cards) works.set(card.work_item_id, card);
+			workAfter = data.next_cursor;
+			if (selected && !works.has(selected)) {
+				selected = "";
+				clearPages();
+				onChange();
+			}
+			choices();
+			if (!works.size) workStatus.append(h("p", { class: "ui-meta" }, t("exh_no_work")));
+		} catch (error) {
+			if (current(ticket)) {
+				works.clear();
+				selected = "";
+				workAfter = null;
+				clearPages();
+				choices();
+				onChange();
+				retryWorks.hidden = false;
+				workStatus.replaceChildren(errorBox(error, {
+					summary: t("exh_cleanup_read_error"),
+					within: workStatus,
+					sourceRefresh: false
+				}));
+			}
+		} finally {
+			if (current(ticket)) {
+				workBusy = false;
+				sync();
+			}
+		}
+	}
+	async function readPage(reset, reviewVersion) {
+		if (!available() || !opened || !selected || busy || !reset && (after === null || pages >= 25)) return;
+		if (reset) {
+			clearPages();
+			review = reviewVersion;
+			onChange();
+		}
+		const ticket = epoch, request = ++serial, work = selected, cursor = reset ? null : after;
+		busy = true;
+		status.replaceChildren();
+		sync();
+		try {
+			const data = await api("GET", `${endpoint}/work/${encodeURIComponent(work)}/external-links/cleanup?limit=20${cursor ? `&after=${encodeURIComponent(cursor)}` : ""}`);
+			if (!current(ticket) || request !== serial || selected !== work) return;
+			const page = cleanupPage(data, work, ids, cursors);
+			for (const row of page.links) {
+				rows.set(row.link_id, row);
+				ids.add(row.link_id);
+			}
+			after = page.next_after;
+			if (after !== null) cursors.add(after);
+			pages++;
+			loaded = true;
+			status.replaceChildren(h("p", { class: "ui-meta" }, t(rows.size ? "exh_cleanup_discovered" : after === null ? "exh_cleanup_none" : "exh_cleanup_empty_page")));
+			if (pages >= 25 && after !== null) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_read_limit")));
+			onChange("page");
+		} catch (error) {
+			if (current(ticket) && request === serial) {
+				clearPages();
+				onChange();
+				status.replaceChildren(errorBox(error, {
+					summary: t("exh_cleanup_read_error"),
+					within: status,
+					sourceRefresh: false
+				}));
+			}
+		} finally {
+			if (current(ticket) && (request === serial || !busy)) {
+				busy = false;
+				sync();
+			}
+		}
+	}
+	function reset() {
+		epoch++;
+		opened = workBusy = false;
+		selected = "";
+		workAfter = null;
+		works.clear();
+		clearPages();
+		choices();
+		chooser.hidden = true;
+		discover.setAttribute("aria-expanded", "false");
+		status.replaceChildren();
+		workStatus.replaceChildren();
+		sync();
+		onChange();
+	}
+	return {
+		element,
+		rows,
+		reviewVersion: () => review,
+		has: (id) => available() && opened && rows.has(id),
+		invalidate() {
+			clearPages();
+			sync();
+			onChange();
+		},
+		forget(id) {
+			rows.delete(id);
+			serial++;
+			busy = false;
+			sync();
+		},
+		focus: () => {
+			(loaded ? read : discover).focus({ preventScroll: true });
+		},
+		update() {
+			element.hidden = !available();
+			if (element.hidden) reset();
+			else sync();
+		},
+		reset,
+		dispose() {
+			disposed = true;
+			reset();
+		}
+	};
+}
+//#endregion
 //#region src/pm-history-cleanup.js
-function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, form, errorBox }) {
-	const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set();
-	let active = false, disposed = false, count = 20, limited = false;
+function historyCleanup({ h, t, api, alive, workspaceId, workspace, caps, namespace, form, errorBox }) {
+	const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set(), rendered = new Map();
+	const recovery = historyRecovery(localStorage, namespace, workspaceId);
+	let active = false, disposed = false, count = 20, limited = false, redraw = false;
+	const completed = new Set(), conflicts = new Set();
 	const status = h("div", { role: "status" }), rows = h("div");
 	const refresh = button({
 		variant: "ghost",
@@ -26041,10 +26623,27 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 			draw();
 		}
 	});
+	const discovery = historyDiscovery({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox,
+		enabled: () => supported() && caps()?.features?.external_history?.relationships?.cleanup_discovery?.version === 1,
+		onChange: (reason) => {
+			if (reason === "page" && discovery.reviewVersion()) try {
+				const pending = new Set(recovery.read().filter((value) => value.intent).map((value) => value.row.link_id));
+				for (const id of discovery.rows.keys()) if (!pending.has(id)) conflicts.delete(id);
+			} catch {}
+			redraw = true;
+			draw();
+		}
+	});
 	const element = h("details", {
 		"data-history-cleanup": "",
 		hidden: true
-	}, h("summary", {}, t("exh_cleanup")), h("p", { class: "ui-meta" }, t("exh_cleanup_help")), status, rows, h("div", { class: "exh-actions" }, refresh, more));
+	}, h("summary", {}, t("exh_cleanup")), h("p", { class: "ui-meta" }, t("exh_cleanup_help")), discovery.element, status, rows, h("div", { class: "exh-actions" }, refresh, more));
 	function supported(visible = true) {
 		try {
 			alive();
@@ -26084,52 +26683,86 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 		}
 		return found;
 	}
-	function clearForms() {
-		for (const value of forms) value.dispose();
-		forms.clear();
-		rows.replaceChildren();
-		refresh.disabled = more.disabled = false;
+	function clearForms(preserveChecking = false) {
+		for (const [id, value] of rendered) {
+			if (preserveChecking && value.editor.checking()) continue;
+			value.editor.dispose();
+			forms.delete(value.editor);
+			value.element.remove();
+			rendered.delete(id);
+		}
+		refresh.disabled = more.disabled = [...forms].some((value) => value.checking());
 	}
 	function remove(row) {
+		discovery.forget(row.link_id);
 		records.remove(row.link_id);
+		if (!row.source_id || !row.entry_id) return;
 		const key = `batc.pm.${historyDraftNamespace(namespace, row)}.withdrawals`;
 		const pending = JSON.parse(localStorage.getItem(key) || "[]").filter((value) => value.link_id !== row.link_id);
 		if (pending.length) localStorage.setItem(key, JSON.stringify(pending));
 		else localStorage.removeItem(key);
 	}
 	function draw() {
-		if (!supported() || !element.open || [...forms].some((value) => value.checking())) return;
-		clearForms();
+		if (!supported() || !element.open) return;
+		clearForms(true);
+		redraw = forms.size > 0;
+		for (const value of rendered.values()) if (!value.element.isConnected) rows.append(value.element);
 		status.replaceChildren();
 		more.hidden = true;
 		try {
-			const known = records.read(), byId = new Map(known.map((row) => [row.link_id, row]));
-			for (const row of legacyPending()) if (!byId.has(row.link_id)) byId.set(row.link_id, row);
-			const visible = [...byId.values()].filter((row) => allowed(row));
-			for (const row of visible.slice(0, count)) {
-				const isKnown = known.some((value) => value.link_id === row.link_id);
-				const editor = form({
-					namespace: historyDraftNamespace(namespace, row),
-					action: "pm.history.unlink",
-					target: target(row),
-					fields: {},
-					params: () => ({}),
-					preconditions: () => ({ expected_link_version: row.version }),
-					permitted: () => isKnown && allowed(row),
-					recoverPermitted: () => allowed(row),
+			const known = records.read();
+			legacyPending();
+			const local = recovery.read().filter((value) => value.intent ? supported() : allowed(value.row));
+			const visible = new Map(local.slice(0, count).map((value) => [value.row.link_id, value]));
+			for (const row of discovery.rows.values()) visible.set(row.link_id, recovery.resolve(row, { reviewVersion: discovery.reviewVersion() }));
+			for (const value of visible.values()) {
+				const row = value.row;
+				if (completed.has(row.link_id) || rendered.has(row.link_id)) continue;
+				const version = h("p", { class: "ui-meta" }, t("exh_cleanup_version", { version: row.version }));
+				const discovered = discovery.has(row.link_id);
+				const editor = historyWithdrawalForm({
+					h,
+					t,
+					form,
+					recovery,
+					row,
+					errorBox,
+					reviewVersion: discovered && discovery.reviewVersion(),
+					permitted: () => !conflicts.has(row.link_id) && (value.known && allowed(row) || discovery.has(row.link_id)),
+					recoverPermitted: () => supported(),
 					label: "exh_unlink",
+					onResolve: (selected) => {
+						version.textContent = t("exh_cleanup_version", { version: selected.row.version });
+					},
 					onBeforeSaved: (result) => {
 						const version = editor.intentRequest()?.preconditions.expected_link_version;
 						if (result?.link_id !== row.link_id || result.state !== "withdrawn" || result.version !== version + 1) throw Error(t("pm_scope_mismatch"));
 						remove(row);
 					},
+					onError: (error) => {
+						if (["PM_HISTORY_SOURCE_UNAVAILABLE", "FORBIDDEN"].includes(error.code)) discovery.invalidate();
+						if (["PM_HISTORY_LINK_CHANGED", "VERSION_CONFLICT"].includes(error.code)) {
+							conflicts.add(row.link_id);
+							discovery.forget(row.link_id);
+							status.replaceChildren(h("p", { role: "status" }, t("exh_cleanup_conflict")));
+						}
+						return false;
+					},
 					onSaved: () => {
 						alive();
+						completed.add(row.link_id);
+						if (editor.box.contains(document.activeElement)) {
+							if (discovered) discovery.focus();
+							else refresh.focus();
+						}
 						editor.box.hidden = true;
 						rowElement.prepend(h("p", { role: "status" }, t("exh_cleanup_done")));
 					},
 					onStateChange: () => {
 						refresh.disabled = more.disabled = [...forms].some((value) => value.checking());
+						if (redraw && !refresh.disabled) queueMicrotask(() => {
+							if (redraw) draw();
+						});
 					}
 				});
 				const rowElement = h("div", {
@@ -26138,16 +26771,21 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 				}, h("p", { class: "mono" }, row.link_id), h("a", {
 					class: "mono",
 					href: `#/item/${encodeURIComponent(row.work_item_id)}`
-				}, row.work_item_id), h("p", { class: "ui-meta" }, t("exh_cleanup_version", { version: row.version })), editor.box);
+				}, row.work_item_id), version, editor.box);
 				forms.add(editor);
+				rendered.set(row.link_id, {
+					editor,
+					element: rowElement
+				});
 				rows.append(rowElement);
 				editor.update();
 			}
-			more.hidden = visible.length <= count;
-			if (!visible.length) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_empty")));
+			more.hidden = local.length <= count;
+			if (!visible.size) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_empty")));
+			if (completed.size) status.append(h("p", { role: "status" }, t("exh_cleanup_done")));
 			if (limited || known.length >= 500) status.append(h("p", { class: "ui-meta" }, t("exh_cleanup_limit")));
 		} catch (error) {
-			clearForms();
+			clearForms(true);
 			status.replaceChildren(errorBox(error, {
 				summary: t("exh_cleanup_invalid"),
 				within: status
@@ -26155,9 +26793,13 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 		}
 	}
 	element.addEventListener("toggle", () => {
-		if (element.open) draw();
-		else {
-			clearForms();
+		if (element.open) {
+			discovery.update();
+			draw();
+		} else {
+			discovery.reset();
+			clearForms(true);
+			rows.replaceChildren();
 			status.replaceChildren();
 			count = 20;
 		}
@@ -26173,21 +26815,25 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 			}
 		},
 		remove(linkId) {
-			const row = records.read().find((value) => value.link_id === linkId);
+			const row = recovery.read().find((value) => value.row.link_id === linkId)?.row || discovery.rows.get(linkId);
 			if (row) remove(row);
 		},
 		setActive(value) {
 			active = value;
 			element.hidden = !supported();
+			discovery.update();
 			if (element.hidden) {
-				clearForms();
+				clearForms(true);
+				rows.replaceChildren();
 				status.replaceChildren();
 				element.open = false;
 			} else if (element.open) for (const editor of forms) editor.update();
 		},
 		withdraw() {
 			active = false;
-			clearForms();
+			discovery.reset();
+			clearForms(!disposed);
+			rows.replaceChildren();
 			status.replaceChildren();
 			element.open = false;
 			element.hidden = true;
@@ -26195,6 +26841,7 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 		dispose() {
 			disposed = true;
 			this.withdraw();
+			discovery.dispose();
 		}
 	};
 }
@@ -26215,6 +26862,7 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox, wor
 	const cleanup = historyCleanup({
 		h,
 		t,
+		api,
 		alive,
 		workspaceId,
 		workspace,
@@ -55282,7 +55930,7 @@ var pmAvailable = (caps) => pmAvailability({
 	caps,
 	kind: "workspace"
 }).ready;
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null, beforePersist = () => {} }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -55329,6 +55977,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	});
 	const persist = () => {
 		guard();
+		beforePersist(saved, storage);
 		if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage);
 		else localStorage.setItem(storage, JSON.stringify(saved));
 	};
@@ -55568,6 +56217,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				if (stored?.intent?.key === intent.key && same$3(stored.intent.request, intent.request)) {
 					if (stored.intent.operation_id && stored.intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
 					stored.intent.operation_id = op.operation_id;
+					beforePersist(stored, storage);
 					localStorage.setItem(storage, JSON.stringify(stored));
 					for (const notify of receiptSubscribers.get(storage) || []) notify();
 				}
