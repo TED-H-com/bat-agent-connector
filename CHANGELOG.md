@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Let API and MCP clients preview, for selected Work in one saved plan snapshot,
+  which retained packages, Attempts, handoffs and issue mappings connect to the
+  requirement and acceptance changes between two fixed plan revisions. The read
+  is bounded, deterministic and read-only, requires every joined source to be
+  readable, and reports missing history as unknown instead of guessing; no review
+  fields or UI are added yet.
+
 - Let API and MCP clients reopen the exact original PM assessment named by a
   Result reference under existing authorization. This read explicitly leaves
   applicability to the current candidate unevaluated.
