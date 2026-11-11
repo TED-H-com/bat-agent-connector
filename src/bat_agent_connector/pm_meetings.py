@@ -82,6 +82,7 @@ def schema(journal):
                 actor TEXT NOT NULL, created_at REAL NOT NULL, operation_id TEXT NOT NULL UNIQUE)''',
         ):
             journal.db.execute(ddl)
+        journal.db.execute('CREATE INDEX IF NOT EXISTS pm_meeting_drafts_by_meeting ON pm_meeting_drafts(meeting_id,sequence)')
         for table in ('pm_meetings', 'pm_meeting_contexts', 'pm_meeting_notes', 'pm_meeting_drafts',
                       'pm_meeting_completions', 'pm_meeting_follow_up_events'):
             for verb in ('UPDATE', 'DELETE'):
@@ -138,6 +139,10 @@ def _snapshot(ops, principal, wid, reference):
 def _access(ops, principal, meeting):
     context = _document(ops.db, 'pm_meeting_contexts', 'context_revision_id', meeting['context_revision_id'])
     snapshot = _snapshot(ops, principal, meeting['workspace_id'], context['document']['snapshot_ref'])
+    if meeting.get('draft_revision_id'):
+        from .pm_sprint_review import access_draft
+        if _document(ops.db, 'pm_meeting_drafts', 'revision_id', meeting['draft_revision_id'])['document'].get('guided_review'):
+            access_draft(ops, principal, meeting['workspace_id'], meeting['draft_revision_id'])
     return context, snapshot
 
 
@@ -224,7 +229,7 @@ def _output(meeting, context, output):
 
 
 def _draft(ops, principal, meeting, context, snapshot, params):
-    _only(params, ('output', 'source_refs', 'decisions', 'follow_ups', 'unresolved_questions', 'rationale'))
+    _only(params, ('output', 'source_refs', 'decisions', 'follow_ups', 'unresolved_questions', 'rationale', 'review_basis'))
     def references(refs):
         return _refs(ops, meeting, context, snapshot, refs)
     decisions, seen = [], set()
@@ -249,6 +254,14 @@ def _draft(ops, principal, meeting, context, snapshot, params):
               'unresolved_questions': _texts(params.get('unresolved_questions', []), 'unresolved questions'),
               'rationale': _text(params.get('rationale'), 'rationale'), 'source_status': 'discussion_proposal',
               'quality': 'unassessed', 'meeting_completed': False, 'execution_authorized': False}
+    if 'review_basis' in params:
+        from .pm_sprint_review import freeze
+        if meeting['kind'] != 'review':
+            raise _bad('INVALID_PARAMS', 'Guided basis belongs only to Sprint Review')
+        if params['output'].get('feedback'):
+            raise _bad('INVALID_PARAMS', 'Guided feedback is derived from exact source references')
+        result['guided_review'] = freeze(ops, principal, meeting, context, params['review_basis'])
+        result['output']['feedback'] = [row['content'] for row in result['guided_review']['feedback']]
     if meeting['kind'] == 'retro' and follow_ups and result['output']['no_improvement_rationale']:
         raise _bad('INVALID_PARAMS', 'Choose improvements or explicitly record why none is adopted')
     if len(_json(result).encode('utf-8')) > MAX_DOCUMENT_BYTES:
@@ -430,6 +443,8 @@ def operation_visible(db, principal, operation):
             source = db.execute('SELECT * FROM pm_document_snapshots WHERE workspace_id=? AND snapshot_id=?', (wid, snapshot_id)).fetchone()
             if source is None or pm_snapshots._out(reader, principal, source)['snapshot']['visibility']['filtered']:
                 return False
+        from .pm_sprint_review import operation_access
+        operation_access(db, principal, op)
         return True
     except OperationError:
         return False
@@ -438,8 +453,15 @@ def operation_visible(db, principal, operation):
 def _admitter(action):
     def admit(ops, principal, target, params, pre):
         meeting, _ = _check(ops, principal, action, target, params, pre)
-        return {'principal': pm_workspace.principal_binding(principal),
-                'meeting_context_revision_id': meeting['context_revision_id'] if meeting else None}
+        binding = {'principal': pm_workspace.principal_binding(principal),
+                   'meeting_context_revision_id': meeting['context_revision_id'] if meeting else None}
+        if 'review_basis' in params:
+            binding['sprint_review'] = {'basis': params['review_basis'], 'context_revision_id': meeting['context_revision_id']}
+        if meeting and meeting['draft_revision_id']:
+            draft = _document(ops.db, 'pm_meeting_drafts', 'revision_id', meeting['draft_revision_id'])
+            if 'guided_review' in draft['document']:
+                binding['sprint_review_draft_id'] = draft['revision_id']
+        return binding
     return admit
 
 
@@ -538,6 +560,9 @@ def _history_record(ops, principal, meeting, kind, sequence, checked_contexts):
         checked_contexts.add(context_id)
     if 'document' in row.keys():
         result = _document(ops.db, table, key, row[key])
+        if kind == 'drafts' and 'guided_review' in result['document']:
+            from .pm_sprint_review import access_draft
+            access_draft(ops, principal, meeting['workspace_id'], result['revision_id'])
         if kind == 'follow_ups':
             _snapshot(ops, principal, meeting['workspace_id'], result['document']['snapshot_ref'])
         return result

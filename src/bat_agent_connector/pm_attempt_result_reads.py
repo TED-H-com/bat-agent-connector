@@ -261,6 +261,45 @@ def _attempt_context(ops, principal: Principal, workspace_id: str, attempt_id: s
     }
 
 
+def read_fixed_receipt(ops, principal, workspace_id, attempt_id, result_id, digest):
+    """Read an exact historical receipt under the original Attempt/source policy.
+
+    No collector, provider, latest-turn substitution or read-side mutation.
+    The turn digest is not a digest of the entire enriched Result document.
+    """
+    from . import pm_access, pm_result_requirements
+    from .pm_release_baselines import _snapshot
+    with _snapshot(ops.db):
+        if not principal.allows('observe'):
+            raise _bad('FORBIDDEN', 'Fixed Result reads require observe', 403)
+        ctx = _attempt_context(ops, principal, workspace_id, attempt_id)
+        if not isinstance(result_id, str) or not isinstance(digest, str):
+            raise _bad('INVALID_PARAMS', 'Select an exact Result ID and digest')
+        if not pm_attempt_results.installed(ops.db):
+            raise _bad('NOT_FOUND', 'Original Result unavailable', 404)
+        row = ops.db.execute('SELECT * FROM session_results WHERE workspace_id=? AND attempt_id=? AND result_id=?',
+                             (workspace_id, attempt_id, result_id)).fetchone()
+        if row is None:
+            raise _bad('NOT_FOUND', 'Original Result unavailable', 404)
+        receipt = pm_attempt_results._decode_row(row)
+        original = ops.get(receipt['operation_id'], steps=False)
+        pm_access.require_visible(ops.db, principal, original)
+        # The collector may attach a later owned input operation to the receipt.
+        # Its original Attempt association is authoritative, not a matching path.
+        if receipt['operation_id'] != ctx['execution_op_id']:
+            linked = ops.db.execute('SELECT 1 FROM work_inputs WHERE attempt_id=? AND operation_id=?',
+                                   (attempt_id, receipt['operation_id'])).fetchone() if _has_table(ops.db, 'work_inputs') else None
+            if not linked:
+                raise _bad('PM_SPRINT_REVIEW_REFERENCE_MISMATCH', 'Result provenance differs from its original Attempt', 409)
+        if receipt['digest'] != digest or receipt['document'].get('result_id') != result_id:
+            raise _bad('PM_SPRINT_REVIEW_REFERENCE_MISMATCH', 'Select the original Result digest', 409)
+        child = ops.get(ctx['execution_op_id'], steps=False) if ctx['execution_op_id'] else None
+        relation = pm_result_requirements._original(ops, principal, workspace_id, child) if child else None
+        return {'receipt': receipt, 'work_item_id': ctx['work_item_id'],
+                'execution_operation_id': ctx['execution_op_id'],
+                'package': relation[0] if relation else None}
+
+
 def _check_managed_session_registry(ops, ctx: dict[str, Any]) -> tuple[bool, str, dict[str, Any] | None]:
     handoff = ctx["handoff"]
     sess_host = ctx["sess_host"]

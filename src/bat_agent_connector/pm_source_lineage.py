@@ -232,6 +232,10 @@ def _visible_roots(db, principal, original_ids):
             from .pm_review_candidate_sources import operation_visible as candidate_visible
             if not candidate_visible(db, principal, operation):
                 return False
+        elif operation['action'].startswith('pm.meeting.') and any((operation.get('external_refs') or {}).get('admission_binding', {}).get(key) for key in ('sprint_review', 'sprint_review_draft_id')):
+            from .pm_meetings import operation_visible as meeting_visible
+            if not meeting_visible(db, principal, operation):
+                return False
         elif operation['action'] == 'pm.workspace.adapter.select':
             from .pm_workspace_adapter import operation_visible as adapter_visible
             if not adapter_visible(db, principal, operation):
@@ -355,6 +359,7 @@ def bind_operation(db, operation_id, target, params, binding):
         resources.append(("session", binding["pm_bat_binding"]["target"]["host"] + "/" + str(uuid.uuid5(NAMESPACE, operation_id))))
     if (binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None
             or binding.get('pm_review_candidate') is not None or binding.get('pm_work_input_idea') is not None
+            or binding.get('sprint_review') is not None or binding.get('sprint_review_draft_id') is not None
             or binding.get('overview_assessment') is not None or binding.get('pm_adapter_selection') is not None):
         original_ids = [operation_id, *original_ids]
     if binding.get("pm_handoff") is not None:
