@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let API and MCP clients reopen the exact original PM assessment named by a
+  Result reference under existing authorization. This read explicitly leaves
+  applicability to the current candidate unevaluated; no UI is added yet.
+
 - Resize the Workbench preview's work list with pointer or keyboard controls in
   English and zh-TW. Keep a separate numeric width preference through temporary
   narrowing and mobile navigation; cancel unfinished drags when changing Work.

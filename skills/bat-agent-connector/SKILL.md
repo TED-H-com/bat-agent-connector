@@ -725,6 +725,14 @@ not semantic acceptance. Revoked, superseded or context-mismatched conclusions
 do not qualify new delivery, while original history remains immutable and
 subject to every original source's current read permissions.
 
+Before reopening an exact assessment reference, check
+`quality_reviews.exact_assessment_read` in `capabilities_get()`. Call
+`pm_quality_assessment_get(workspace_id, review_id, operation_id, version, document_digest)`
+with all five original selectors. This returns the immutable original assessment
+document under the existing review/source permissions, with
+`current_applicability: not_evaluated`. It is never a "latest" lookup: a mismatched
+version or digest is not-found, and the read does not assess the current candidate.
+
 ### Prepare and discuss a fixed maintenance report
 
 Read `pm_maintenance_review_current_get`, `pm_maintenance_reviews_list`,

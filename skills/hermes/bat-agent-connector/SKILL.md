@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "ebd7b08ddfbacd718b612c7025919dfe742d2a2ce5cb3a73ad0daa26122446e0"
+  canonical_sha256: "1d08bc9516da89b12e037802110711a65df71229c44d2d5ad4fa0bd8c36dfa96"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -747,6 +747,14 @@ management approval, passing tests alone or an unrelated newer candidate is
 not semantic acceptance. Revoked, superseded or context-mismatched conclusions
 do not qualify new delivery, while original history remains immutable and
 subject to every original source's current read permissions.
+
+Before reopening an exact assessment reference, check
+`quality_reviews.exact_assessment_read` in `capabilities_get()`. Call
+`pm_quality_assessment_get(workspace_id, review_id, operation_id, version, document_digest)`
+with all five original selectors. This returns the immutable original assessment
+document under the existing review/source permissions, with
+`current_applicability: not_evaluated`. It is never a "latest" lookup: a mismatched
+version or digest is not-found, and the read does not assess the current candidate.
 
 ### Prepare and discuss a fixed maintenance report
 

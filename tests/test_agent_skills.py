@@ -145,6 +145,7 @@ async def test_skill_tool_references_and_recovery_parameters_match_discovered_sc
         # a renamed/removed parameter must invalidate the skill's instructions.
         expected = {
             "capabilities_get": set(),
+            "pm_quality_assessment_get": {"workspace_id", "review_id", "operation_id", "version", "document_digest"},
             "pm_follow_up_assessments_list": {"workspace_id", "intake_id", "after", "limit"},
             "pm_follow_up_assessment_get": {"workspace_id", "assessment_id"},
             "pm_brief_export_get": {"workspace_id", "snapshot_id", "format", "locale"},
