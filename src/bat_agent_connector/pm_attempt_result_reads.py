@@ -1394,6 +1394,21 @@ async def _wait_for_related_event(
         await asyncio.sleep(min(WAIT_POLL_INTERVAL_S, rem))
 
 
+SELECTED_MARKER_SQL = """SELECT * FROM session_results
+    WHERE workspace_id=? AND attempt_id=? AND json_extract(source_position, '$.turn_marker')=?
+    ORDER BY sequence DESC LIMIT 1"""
+
+
+def _selected_receipt(ops, workspace_id, attempt_id, turn_marker, page):
+    if turn_marker is None:
+        return None
+    for receipt in page:
+        if receipt.get("turn_marker") == turn_marker:
+            return receipt
+    row = ops.db.execute(SELECTED_MARKER_SQL, (workspace_id, attempt_id, turn_marker)).fetchone()
+    return pm_attempt_results._decode_row(row) if row is not None else None
+
+
 async def _read_result(
     ops,
     principal: Principal,
@@ -1429,12 +1444,7 @@ async def _read_result(
     latest_row = all_rows[0] if all_rows else None
     latest_doc = latest_row["document"] if (latest_row and isinstance(latest_row.get("document"), dict)) else {}
 
-    current_receipt = None
-    if turn_marker is not None:
-        for r in all_rows:
-            if r.get("turn_marker") == turn_marker:
-                current_receipt = r
-                break
+    current_receipt = _selected_receipt(ops, workspace_id, attempt_id, turn_marker, all_rows)
     cur_doc = (
         current_receipt["document"]
         if (current_receipt and isinstance(current_receipt.get("document"), dict))
