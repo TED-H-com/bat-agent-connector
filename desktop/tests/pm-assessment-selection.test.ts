@@ -12,9 +12,9 @@ const pin = {partition:'fixture-partition',workspace_id:id('ws_'),work_item_id:i
   version:2,document_digest:id('','c',64),origin:'result',requirement_id:'member.login'};
 const exact = {workspace_id:pin.workspace_id,review_id:pin.review_id,context_digest:id('','d',64),
   semantics:'immutable_original_assessment',current_applicability:'not_evaluated',
-  context:{work_ref:{work_item_id:pin.work_item_id},package_ref:{workspace_id:pin.workspace_id,package_id:pin.package_id,document_digest:pin.package_digest},
+  context:{requirement_ids:['member.login'],work_ref:{work_item_id:pin.work_item_id},package_ref:{workspace_id:pin.workspace_id,package_id:pin.package_id,document_digest:pin.package_digest},
     execution_operation_id:pin.execution_operation_id,native_result:{candidate_commit:pin.candidate_commit}},
-  assessment:{kind:'assessment',operation_id:pin.operation_id,version:pin.version,document_digest:pin.document_digest,document:{criteria:[]}}};
+  assessment:{kind:'assessment',operation_id:pin.operation_id,version:pin.version,document_digest:pin.document_digest,document:{criteria:[],requirements:[{requirement_id:'member.login',status:'unassessed'}]}}};
 const result = {contract:'pm-work-attempt-result/v1',workspace_id:pin.workspace_id,attempt_id:pin.attempt_id,
   identity:{server_id:'fixture-server',workspace_id:pin.workspace_id,work_item_id:pin.work_item_id,attempt_id:pin.attempt_id,package_id:pin.package_id,execution_operation_id:pin.execution_operation_id},
   sources:{result_id:pin.result_id,digest:pin.result_digest},changes:{fixed_result_commit:{commit_sha:pin.candidate_commit}},
@@ -83,4 +83,8 @@ test('Result server identity must match the trusted bootstrap, including a missi
   assert.equal(matchesResult(pin,bound,'foreign-fixture-server'),false);
   assert.equal(matchesResult(pin,{...bound,identity:{...bound.identity,server_id:undefined}},trusted),false);
   assert.equal(matchesResult(pin,bound,undefined),false);
+});
+
+test('an unrelated requirement is not an unassessed original assessment',()=>{
+  assert.equal(matchesAssessment({...pin,requirement_id:'not-in-original-context'},exact),false);
 });

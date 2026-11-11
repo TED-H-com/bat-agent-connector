@@ -3988,6 +3988,7 @@ var pmQualityReviewsStrings;
 var init_pm_quality_reviews_strings = __esmMin((() => {
 	pmQualityReviewsStrings = {
 		en: {
+			pmq_requirement_mismatch: "This requirement does not belong to the selected original assessment and Result.",
 			pmq_open_original: "Open original assessment",
 			pmq_original_assessment: "Original assessment",
 			pmq_applicability_not_evaluated: "Current applicability: not evaluated",
@@ -4113,6 +4114,7 @@ var init_pm_quality_reviews_strings = __esmMin((() => {
 			pmq_reason_candidate_commit_changed: "The selected candidate differs from this original review."
 		},
 		"zh-TW": {
+			pmq_requirement_mismatch: "此需求不屬於所選原始評估與成果。",
 			pmq_open_original: "開啟原始評估",
 			pmq_original_assessment: "原始評估",
 			pmq_applicability_not_evaluated: "目前適用性：未評估",
@@ -16130,9 +16132,19 @@ function assessmentQuery(value, partition) {
 	if (!selected) throw Error("ASSESSMENT_SELECTION_MISMATCH");
 	return new URLSearchParams(Object.entries(selected).map(([key, item]) => ["qa_" + key, String(item)]));
 }
+function assessmentRequirementKnown(value, data) {
+	return !value.requirement_id || Array.isArray(data?.context?.requirement_ids) && data.context.requirement_ids.includes(value.requirement_id) && data.assessment?.document?.requirements?.some((row) => row.requirement_id === value.requirement_id && [
+		"accepted",
+		"rejected",
+		"unassessed"
+	].includes(row.status));
+}
+function resultRequirementKnown(value, data) {
+	return !value.requirement_id || data?.requirements?.relation === "explicit" && data.requirements.items?.some((row) => row.requirement_id === value.requirement_id);
+}
 function matchesAssessment(value, data) {
 	const context = data?.context, record = data?.assessment;
-	return data?.workspace_id === value.workspace_id && data.review_id === value.review_id && data.semantics === "immutable_original_assessment" && data.current_applicability === "not_evaluated" && digest$13.test(data.context_digest || "") && record?.kind === "assessment" && record.operation_id === value.operation_id && record.version === value.version && record.document_digest === value.document_digest && Array.isArray(record.document?.criteria) && context?.work_ref?.work_item_id === value.work_item_id && context.package_ref?.workspace_id === value.workspace_id && (!value.package_id || context.package_ref.package_id === value.package_id && context.package_ref.document_digest === value.package_digest) && (!value.execution_operation_id || context.execution_operation_id === value.execution_operation_id) && (!value.candidate_commit || context.native_result?.candidate_commit === value.candidate_commit);
+	return data?.workspace_id === value.workspace_id && data.review_id === value.review_id && data.semantics === "immutable_original_assessment" && data.current_applicability === "not_evaluated" && digest$13.test(data.context_digest || "") && record?.kind === "assessment" && record.operation_id === value.operation_id && record.version === value.version && record.document_digest === value.document_digest && assessmentRequirementKnown(value, data) && Array.isArray(record.document?.criteria) && context?.work_ref?.work_item_id === value.work_item_id && context.package_ref?.workspace_id === value.workspace_id && (!value.package_id || context.package_ref.package_id === value.package_id && context.package_ref.document_digest === value.package_digest) && (!value.execution_operation_id || context.execution_operation_id === value.execution_operation_id) && (!value.candidate_commit || context.native_result?.candidate_commit === value.candidate_commit);
 }
 function matchesAttempt(value, data) {
 	const a = data?.attempt;
@@ -22701,7 +22713,7 @@ function createWorkQuality({ h, t, api, alive, workspaceId, serverId, caps, form
 	}
 	function render(value, attempt) {
 		const next = workQualityContext(value, workspaceId, attempt);
-		if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value, serverId))) {
+		if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value, serverId) || !resultRequirementKnown(assessmentSelection, value))) {
 			dispose();
 			return null;
 		}
@@ -22881,6 +22893,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, serverId, cap
 		try {
 			const original = await api("GET", `/pm/workspaces/${selected.workspace_id}/quality-reviews/${selected.review_id}/assessments/${selected.operation_id}?version=${selected.version}&document_digest=${selected.document_digest}`);
 			guard(ticket);
+			if (!assessmentRequirementKnown(selected, original)) throw Error(t("pmq_requirement_mismatch"));
 			if (!matchesAssessment(selected, original)) throw Error(t("pmq_invalid"));
 			const context = await readContext(selected, original, ticket);
 			guard(ticket);
@@ -22890,6 +22903,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, serverId, cap
 			}
 			currentResult = context?.envelope;
 			currentAttempt = context?.attempt;
+			if (context?.matches && !resultRequirementKnown(pin, currentResult)) throw Error(t("pmq_requirement_mismatch"));
 			const contextual = context?.matches ? contextualAssessment(pin, currentResult, serverId) : null;
 			const document = original.assessment.document;
 			const content = originalAssessment({
@@ -22904,7 +22918,7 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, serverId, cap
 					},
 					original: document,
 					assessed_by: original.assessment.actor,
-					conclusion: pin.requirement_id ? document.requirements?.find((row) => row.requirement_id === pin.requirement_id)?.status || "unassessed" : document.acceptance,
+					conclusion: pin.requirement_id ? document.requirements?.find((row) => row.requirement_id === pin.requirement_id)?.status : document.acceptance,
 					...contextual ? {
 						applicable: contextual.applicable,
 						qualified: contextual.qualified,

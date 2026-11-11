@@ -9,6 +9,8 @@ export function assessmentRoundtrip(base:any, workspaceId:string, workId:string)
     if(typeof value==='string')return reverse?value.replaceAll(workspaceId,qualityWorkspace).replaceAll(workId,qualityWork):value.replaceAll(qualityWorkspace,workspaceId).replaceAll(qualityWork,workId);
     return value;
   };
+  row.context.requirement_ids=q.state.packages[0].document.requirements.map((item:any)=>item.id);
+  row.context.gaps=[];
   const reference=()=>map({review_id:row.review_id,...Object.fromEntries(['operation_id','version','document_digest'].map(key=>[key,row.assessment[key]])),candidate_commit:candidate});
   const saved=new Map<string,any>();
   const snapshot=()=>{row.assessment.document.requirements=[{requirement_id:'recovery',status:row.assessment.document.acceptance}];const ref=reference();saved.set(ref.operation_id,map({workspace_id:qualityWorkspace,review_id:row.review_id,context_digest:row.context_digest,

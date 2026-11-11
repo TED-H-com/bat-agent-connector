@@ -40,13 +40,23 @@ export function assessmentQuery(value, partition) {
   if (!selected) throw Error('ASSESSMENT_SELECTION_MISMATCH');
   return new URLSearchParams(Object.entries(selected).map(([key, item]) => ['qa_' + key, String(item)]));
 }
+export function assessmentRequirementKnown(value, data) {
+  return !value.requirement_id || Array.isArray(data?.context?.requirement_ids)
+    && data.context.requirement_ids.includes(value.requirement_id)
+    && data.assessment?.document?.requirements?.some(row => row.requirement_id === value.requirement_id
+      && ['accepted','rejected','unassessed'].includes(row.status));
+}
+export function resultRequirementKnown(value, data) {
+  return !value.requirement_id || data?.requirements?.relation === 'explicit'
+    && data.requirements.items?.some(row => row.requirement_id === value.requirement_id);
+}
 export function matchesAssessment(value, data) {
   const context = data?.context, record = data?.assessment;
   return data?.workspace_id === value.workspace_id && data.review_id === value.review_id
     && data.semantics === 'immutable_original_assessment' && data.current_applicability === 'not_evaluated'
     && digest.test(data.context_digest || '') && record?.kind === 'assessment'
     && record.operation_id === value.operation_id && record.version === value.version && record.document_digest === value.document_digest
-    && Array.isArray(record.document?.criteria) && context?.work_ref?.work_item_id === value.work_item_id
+    && assessmentRequirementKnown(value, data) && Array.isArray(record.document?.criteria) && context?.work_ref?.work_item_id === value.work_item_id
     && context.package_ref?.workspace_id === value.workspace_id
     && (!value.package_id || context.package_ref.package_id === value.package_id && context.package_ref.document_digest === value.package_digest)
     && (!value.execution_operation_id || context.execution_operation_id === value.execution_operation_id)

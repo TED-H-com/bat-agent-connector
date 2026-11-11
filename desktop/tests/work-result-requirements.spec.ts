@@ -403,3 +403,24 @@ test('Open current Result navigates from a pinned session and reads the Board Re
   expect(await page.evaluate(()=>location.hash)).toBe('#/pm/'+workspaceId+'/board?select='+workId(1));
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
 });
+
+for(const mismatch of ['original','result','historical'] as const)test(`requirement selection validates original and Result membership: ${mismatch}`,async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  if(mismatch==='original')await page.evaluate(()=>{const [path,raw]=location.hash.split('?'),query=new URLSearchParams(raw);query.set('qa_requirement_id','not-in-original-context');history.replaceState(history.state,'',path+'?'+query);});
+  else f.state.envelope.requirements.items=[];
+  if(mismatch==='historical')f.state.envelope.sources.result_id='res_'+'2'.repeat(32);
+  await page.reload();
+  if(mismatch==='historical'){
+    await expect(reader).toContainText('Original conclusion: accepted');
+    await expect(reader).toContainText('Current applicability: not evaluated');
+  }else{
+    await expect(reader.locator('[data-api-error]')).toContainText('This requirement does not belong to the selected original assessment and Result.');
+    await expect(reader).not.toContainText('Original conclusion: unassessed');
+  }
+  await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});

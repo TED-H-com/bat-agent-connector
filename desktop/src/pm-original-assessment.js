@@ -2,7 +2,7 @@ import {assessmentSourceFence, assessmentSourceRefused} from './pm-assessment-so
 import {originalAssessment} from './pm-work-result-requirements.js';
 import {createWorkQuality} from './pm-work-quality.js';
 import {assessmentSelection, assessmentQuery, parseAssessmentSelection, matchesAssessment,
-  matchesAttempt, matchesResult, selectionFromResult, contextualAssessment, assessmentQueryKeys} from './pm-assessment-selection.js';
+  assessmentRequirementKnown, resultRequirementKnown, matchesAttempt, matchesResult, selectionFromResult, contextualAssessment, assessmentQueryKeys} from './pm-assessment-selection.js';
 
 // One mounted reader owns its epoch. Withdrawal invalidates all pending reads,
 // including replies issued before an event removed the originating source.
@@ -87,15 +87,17 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, serverI
     const valid = () => {try {guard(ticket); return pin === selected;} catch {return false;}};
     try {
       const original = await api('GET', `/pm/workspaces/${selected.workspace_id}/quality-reviews/${selected.review_id}/assessments/${selected.operation_id}?version=${selected.version}&document_digest=${selected.document_digest}`); guard(ticket);
+      if (!assessmentRequirementKnown(selected, original)) throw Error(t('pmq_requirement_mismatch'));
       if (!matchesAssessment(selected, original)) throw Error(t('pmq_invalid'));
       const context = await readContext(selected, original, ticket); guard(ticket);
       if (context && !selected.result_id) {pin = context.selection; remember(pin);}
       currentResult = context?.envelope; currentAttempt = context?.attempt;
+      if (context?.matches && !resultRequirementKnown(pin, currentResult)) throw Error(t('pmq_requirement_mismatch'));
       const contextual = context?.matches ? contextualAssessment(pin, currentResult, serverId) : null;
       const document = original.assessment.document;
       const assessment = {reference: {review_id: pin.review_id, operation_id: pin.operation_id, version: pin.version, document_digest: pin.document_digest},
         original: document, assessed_by: original.assessment.actor,
-        conclusion: pin.requirement_id ? document.requirements?.find(row => row.requirement_id === pin.requirement_id)?.status || 'unassessed' : document.acceptance,
+        conclusion: pin.requirement_id ? document.requirements?.find(row => row.requirement_id === pin.requirement_id)?.status : document.acceptance,
         ...(contextual ? {applicable: contextual.applicable, qualified: contextual.qualified,
           applicability_reasons: contextual.applicability_reasons, revocation: contextual.revocation} : {})};
       const content = originalAssessment({h, t, assessment, requirementId: pin.requirement_id, open: reading?.open}); content.open = true;

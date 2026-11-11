@@ -1,5 +1,6 @@
 export const pmQualityReviewsStrings={
   en:{
+    pmq_requirement_mismatch:'This requirement does not belong to the selected original assessment and Result.',
     pmq_open_original:"Open original assessment",
     pmq_original_assessment:"Original assessment",
     pmq_applicability_not_evaluated:"Current applicability: not evaluated",
@@ -44,6 +45,7 @@ pmq_verify_result_heading:'Verify this result',pmq_verify_result_help:'Run the p
     pmq_reason_dod_revision_id_changed:'The selected DoD differs from this original review.',pmq_reason_candidate_commit_changed:'The selected candidate differs from this original review.'
   },
   'zh-TW':{
+    pmq_requirement_mismatch:'此需求不屬於所選原始評估與成果。',
     pmq_open_original:"開啟原始評估",
     pmq_original_assessment:"原始評估",
     pmq_applicability_not_evaluated:"目前適用性：未評估",

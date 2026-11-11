@@ -1,5 +1,5 @@
 import {assessmentSourceRefused} from './pm-assessment-source-fence.js';
-import {matchesAssessment, matchesResult} from './pm-assessment-selection.js';
+import {matchesAssessment, matchesResult, resultRequirementKnown} from './pm-assessment-selection.js';
 import {button} from './ui/components.js';
 import {workspaceQualityReviews} from './pm-quality-reviews.js';
 
@@ -64,7 +64,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, serverId, caps
   }
   function render(value, attempt) {
     const next = workQualityContext(value, workspaceId, attempt);
-    if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value, serverId))) {dispose(); return null;}
+    if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value, serverId) || !resultRequirementKnown(assessmentSelection, value))) {dispose(); return null;}
     if (!form || getCaps()?.features?.pm_workspaces?.quality_reviews?.version !== 1 || !next) {dispose(); return null;}
     if (JSON.stringify(next) !== JSON.stringify(context)) {dispose(); context = next;}
     const signature = JSON.stringify([value.verification, value.next_allowed_actions?.filter(row => row.action?.startsWith('pm.quality.') || row.action === 'pm.execution.verify'),
