@@ -150,3 +150,22 @@ async def test_http_origin_authority_boundaries(served):
             continue
         status, body = await api_tests.http(port, "GET", "/api/v1/version", headers={"Origin": origin})
         assert status == 403 and body["error"]["code"] == "BAD_ORIGIN", repr(origin)
+
+
+async def test_http_authority_controls_are_not_normalized_away(served):
+    _, port = served
+    for control in ("\r", "\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x1f"):
+        for authority in (control + "localhost", "localhost" + control):
+            for path in ("/api/v1/version", "/dashboard/"):
+                status, _, body = await api_tests.raw_get(port, path, host=authority)
+                assert status == 400, (path, repr(authority))
+                if path.startswith("/api/"):
+                    assert json.loads(body)["error"]["code"] == "BAD_HOST"
+        for origin in (control + "http://localhost", "http://localhost" + control):
+            status, body = await api_tests.http(port, "GET", "/api/v1/version", headers={"Origin": origin})
+            assert status == 403 and body["error"]["code"] == "BAD_ORIGIN", repr(origin)
+    # Ordinary HTTP field framing is not part of the authority value.
+    for path in ("/api/v1/version", "/dashboard/"):
+        assert (await api_tests.raw_get(port, path, host=" \tlocalhost\t "))[0] == 200
+    assert (await api_tests.http(port, "GET", "/api/v1/version",
+                                 headers={"Origin": " \thttp://localhost\t "}))[0] == 200
