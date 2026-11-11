@@ -1553,6 +1553,8 @@ var init_workbench_strings = __esmMin((() => {
 			wc_details: "Evidence and details",
 			wc_list: "Work list",
 			wc_list_help: "Choose work from the project list.",
+			wc_list_resizer: "Resize work list",
+			wc_list_resizer_help: "Drag or use arrow keys to resize the work list. Double-click to reset.",
 			wc_board: "Board",
 			wc_session: "Session",
 			wc_project: "Project",
@@ -1614,6 +1616,8 @@ var init_workbench_strings = __esmMin((() => {
 			wc_details: "證據與詳情",
 			wc_list: "工作清單",
 			wc_list_help: "從專案清單選擇工作。",
+			wc_list_resizer: "調整工作清單寬度",
+			wc_list_resizer_help: "拖曳或使用方向鍵調整工作清單寬度，連按兩下恢復預設。",
 			wc_board: "看板",
 			wc_session: "工作階段",
 			wc_project: "專案",
@@ -2141,6 +2145,8 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_blockers: "Blockers",
 			ov_decisions: "Open decisions",
 			ov_recent_decisions: "Recently decided",
+			ov_original_assessment: "Original assessment",
+			ov_assessment_source: "This delivery cites this exact assessment.",
 			ov_accepted: "{accepted} of {total} accepted",
 			ov_requirements: "{n} requirements",
 			ov_adopted: "adopted {date}",
@@ -2206,6 +2212,8 @@ var init_pm_overview_strings = __esmMin((() => {
 			ov_blockers: "阻礙",
 			ov_decisions: "待決事項",
 			ov_recent_decisions: "近期決策",
+			ov_original_assessment: "原始評估",
+			ov_assessment_source: "此交付引用這筆原始評估。",
 			ov_accepted: "{total} 項中 {accepted} 項已驗收",
 			ov_requirements: "{n} 項需求",
 			ov_adopted: "{date}採用",
@@ -10288,6 +10296,38 @@ var workResultStrings;
 var init_pm_work_result_strings = __esmMin((() => {
 	workResultStrings = {
 		"zh-TW": {
+			wres_req_heading: "成果對應的需求",
+			wres_req_none: "沒有可見的明確需求關聯；這不表示成果不需要驗收。",
+			wres_req_selection: "以下列出原始評估；驗收或解除依賴需有明確選定的評估。",
+			wres_req_sources: "原始來源與證據",
+			wres_req_no_conclusion: "尚無驗收結論",
+			wres_req_verified_no_conclusion: "已驗證，尚無驗收結論",
+			wres_req_assessments_recorded: "已有評估紀錄，尚未選定",
+			wres_req_unavailable: "目前無法完整確認",
+			wres_req_accepted: "原結論：接受",
+			wres_req_rejected: "原結論：拒絕",
+			wres_req_unassessed: "原結論：未評估",
+			wres_req_not_defined: "未定義",
+			wres_req_applicable: "仍適用",
+			wres_req_no_longer_applies: "不再適用",
+			wres_req_applicability_changed: "來源或評估版本已變更，請查看原始證據。",
+			wres_req_assessed_by: "評估者",
+			wres_req_dod: "完成定義",
+			wres_req_criterion: "驗收條件",
+			wres_req_qualified: "符合原品質要求",
+			wres_req_not_qualified: "目前未符合原品質要求",
+			wres_req_revoked: "此審閱已撤回；原結論保留供追溯。",
+			wres_req_reviews_partial: "評估紀錄未完整涵蓋，不能據此判定沒有其他結論。",
+			wres_req_packages_partial: "相依工作未完整涵蓋，不能據此判定沒有其他依賴。",
+			wres_req_dependencies: "相依工作的就緒狀態",
+			wres_req_without_selection: "尚未選定評估",
+			wres_req_original_selection: "交接時明確選定的評估",
+			wres_req_selections_partial: "交接時選定的評估紀錄未完整涵蓋。",
+			wres_req_ready: "已就緒",
+			wres_req_blocked: "尚未就緒",
+			wres_req_passed: "通過",
+			wres_req_failed: "未通過",
+			wres_req_unknown: "未知",
 			wres_heading: "成果",
 			wres_invalid_envelope: "無法讀取這份成果。",
 			wres_state_accepted: "已受理",
@@ -10316,6 +10356,7 @@ var init_pm_work_result_strings = __esmMin((() => {
 			wres_pill_claimed_done: "代理表示已完成",
 			wres_check_verification: "驗證",
 			wres_verification_unverified: "未驗證",
+			wres_verification_unknown: "未知",
 			wres_verification_running: "驗證中",
 			wres_verification_verified: "已驗證",
 			wres_verification_failed: "驗證失敗",
@@ -10430,6 +10471,38 @@ var init_pm_work_result_strings = __esmMin((() => {
 			error_code_PM_DIFF_UNAVAILABLE: "無法自 BAT 讀取工作樹差異。"
 		},
 		en: {
+			wres_req_heading: "Requirements for this result",
+			wres_req_none: "No visible explicit requirement relation. This does not mean acceptance is unnecessary.",
+			wres_req_selection: "Original assessments are kept separately. No assessment has been selected here for acceptance or dependencies.",
+			wres_req_sources: "Original sources and evidence",
+			wres_req_no_conclusion: "No acceptance conclusion",
+			wres_req_verified_no_conclusion: "Verified, without an acceptance conclusion",
+			wres_req_assessments_recorded: "Assessments recorded, none selected",
+			wres_req_unavailable: "Could not fully establish the current state",
+			wres_req_accepted: "Original conclusion: accepted",
+			wres_req_rejected: "Original conclusion: rejected",
+			wres_req_unassessed: "Original conclusion: unassessed",
+			wres_req_not_defined: "Not defined",
+			wres_req_applicable: "Still applies",
+			wres_req_no_longer_applies: "No longer applies",
+			wres_req_applicability_changed: "The source or assessment version changed. Inspect the original evidence.",
+			wres_req_assessed_by: "Assessed by",
+			wres_req_dod: "Definition of Done",
+			wres_req_criterion: "Acceptance criterion",
+			wres_req_qualified: "Meets the original quality requirements",
+			wres_req_not_qualified: "Does not currently meet the original quality requirements",
+			wres_req_revoked: "This review was revoked. Its original conclusion remains in the history.",
+			wres_req_reviews_partial: "Assessment coverage is incomplete; other conclusions may exist.",
+			wres_req_packages_partial: "Dependent work coverage is incomplete; other dependencies may exist.",
+			wres_req_dependencies: "Dependent work readiness",
+			wres_req_without_selection: "Without a selected assessment",
+			wres_req_original_selection: "Assessment explicitly selected at handoff",
+			wres_req_selections_partial: "Coverage of original handoff selections is incomplete.",
+			wres_req_ready: "Ready",
+			wres_req_blocked: "Blocked",
+			wres_req_passed: "Passed",
+			wres_req_failed: "Failed",
+			wres_req_unknown: "Unknown",
 			wres_heading: "Result",
 			wres_invalid_envelope: "This result could not be read.",
 			wres_state_accepted: "Accepted",
@@ -10458,6 +10531,7 @@ var init_pm_work_result_strings = __esmMin((() => {
 			wres_pill_claimed_done: "The agent says it is done",
 			wres_check_verification: "Verification",
 			wres_verification_unverified: "Not verified",
+			wres_verification_unknown: "Unknown",
 			wres_verification_running: "Verifying",
 			wres_verification_verified: "Verified",
 			wres_verification_failed: "Verification failed",
@@ -11163,6 +11237,16 @@ var init_i18n = __esmMin((() => {
 			setup_required: "請填寫此欄位。",
 			setup_invalid_fingerprint: "請輸入 64 個十六進位字元的 SHA-256 憑證指紋，可含冒號。",
 			setup_retained_request: "原設定請求仍保留。請先查回這筆請求，再進行其他變更。",
+			setup_scrubbed_request: "已為安全起見移除儲存的請求內容。原請求無法再次送出。",
+			setup_original_key: "原請求代號：{key}",
+			setup_original_id: "原操作 ID：{id}",
+			setup_recover_original: "查回原請求",
+			setup_scrubbed_check: "以保留的代號唯讀查詢 Connector 的原請求紀錄。未釐清結果前，設定仍會鎖定。",
+			setup_scrubbed_no_key: "未保留可用的原請求代號，無法在此核對。請在操作紀錄中查看結果，並將此畫面的原操作 ID（若有）提供給 Connector 管理員協助處理；此草稿無法送出或在此捨棄。",
+			setup_original_not_visible: "此帳號在此伺服器上看不到具有這個代號的請求。已查至操作清單末端。",
+			setup_discard_draft: "捨棄儲存的草稿",
+			setup_discard_explanation: "原請求無法再次送出。捨棄只移除此本機紀錄，不會取消或變更伺服器上的任何操作。之後的設定會使用新的請求代號。",
+			setup_lookup_pending: "尚未找到原設定操作。原請求代號仍保留；再次查回只會讀取 Connector 紀錄，不會重新送出設定或暫存憑證。",
 			setup_view_sessions: "查看工作階段",
 			error_generic: "無法完成此要求，請查看詳細資料。",
 			error_generic_short: "無法完成此要求。",
@@ -11451,6 +11535,7 @@ var init_i18n = __esmMin((() => {
 			message_table: "訊息表格",
 			message_copy_code: "複製程式碼",
 			message_copy: "複製原文",
+			message_copy_quote: "複製引用",
 			message_copied: "已複製。",
 			message_copy_source: "要複製的原文",
 			message_copy_manual: "無法自動複製，請選取並複製以下原文。",
@@ -12969,6 +13054,16 @@ var init_i18n = __esmMin((() => {
 			setup_required: "Fill in this field.",
 			setup_invalid_fingerprint: "Enter a SHA-256 fingerprint with 64 hexadecimal characters; colons are allowed.",
 			setup_retained_request: "The original request is kept. Check it before making another change.",
+			setup_scrubbed_request: "The saved request text was removed for safety. The original request cannot be sent again.",
+			setup_original_key: "Original request key: {key}",
+			setup_original_id: "Original operation ID: {id}",
+			setup_recover_original: "Check original request",
+			setup_scrubbed_check: "Read the original Connector record using the retained key. Setup stays locked until the result is resolved.",
+			setup_scrubbed_no_key: "No usable original request key was retained, so this draft cannot be reconciled here. Inspect operation history and ask the Connector administrator for help, providing the original operation ID shown here if available. This draft cannot be sent or discarded here.",
+			setup_original_not_visible: "No request with this key is visible to this account on this server. The operation list was read to its end.",
+			setup_discard_draft: "Discard saved draft",
+			setup_discard_explanation: "The original request cannot be sent again. Discarding removes only this local record; it does not cancel or change any server operation. Later setup uses a new request key.",
+			setup_lookup_pending: "The original setup operation has not been found. Its key is retained. Check again to read Connector records; this never resubmits setup or stages a credential.",
 			setup_view_sessions: "View sessions",
 			error_generic: "This request could not be completed. Check Details.",
 			error_generic_short: "This request could not be completed.",
@@ -13258,6 +13353,7 @@ var init_i18n = __esmMin((() => {
 			message_table: "Message table",
 			message_copy_code: "Copy code",
 			message_copy: "Copy original",
+			message_copy_quote: "Copy quote",
 			message_copied: "Copied.",
 			message_copy_source: "Original text to copy",
 			message_copy_manual: "Automatic copy is unavailable. Select and copy the original text below.",
@@ -14963,9 +15059,9 @@ var clientActionMessageKey = (reason) => `error_code_${clientActionCode(reason)}
 var clientActionReason = (code) => clientReasons.find((reason) => clientActionCode(reason) === code) || null;
 //#endregion
 //#region src/state/sessions.js
-var text$6 = (value) => typeof value === "string" ? value : "";
+var text$7 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
-	const host = text$6(session.host), id = text$6(session.workspace_id), name = text$6(session.workspace);
+	const host = text$7(session.host), id = text$7(session.workspace_id), name = text$7(session.workspace);
 	return {
 		key: JSON.stringify([
 			host,
@@ -15000,7 +15096,7 @@ function matchesSession(session, query) {
 		session.model,
 		session.worktree_branch,
 		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$6).join("\n").toLocaleLowerCase();
+	].map(text$7).join("\n").toLocaleLowerCase();
 	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
 }
 function runtimeStale(session) {
@@ -18134,7 +18230,7 @@ var frontendBuild = Object.freeze({ frontend_digest: frontendDigest("__BATC_FRON
 //#region src/version-projection.js
 var version$3 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
 var commit = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) && [40, 64].includes(value.length) ? value : null;
-var digest$12 = frontendDigest;
+var digest$13 = frontendDigest;
 var frontendLoadedAt = new Date().toISOString();
 var time = (value) => {
 	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
@@ -18165,7 +18261,7 @@ var fact$1 = (id, value, source, at, period, extra = {}) => {
 	const selected = {
 		version: version$3(value?.version),
 		commit: commit(value?.commit),
-		digest: digest$12(value?.digest)
+		digest: digest$13(value?.digest)
 	};
 	const observed_at = time(at), observed = Object.values(selected).some(Boolean) || observed_at !== null;
 	return {
@@ -18197,7 +18293,7 @@ function versionProjection(input = {}) {
 		code: updateCode(update.last.code),
 		at: time(update.last.at)
 	} : null;
-	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$12(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
+	const loadedAt = input.frontendLoadedAt === void 0 && frontend === frontendBuild && digest$13(frontend?.frontend_digest) ? frontendLoadedAt : input.frontendLoadedAt;
 	const rows = [
 		released("desktop_released", input.desktop && candidate ? {
 			version: candidate.version,
@@ -18943,6 +19039,339 @@ function projectNavigation({ t, namespace, workspaceId, views, current, discussi
 	}
 	return nav;
 }
+var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
+var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
+function isMobileLayout() {
+	if (typeof window === "undefined") return false;
+	return (window.innerWidth || document.documentElement?.clientWidth || 0) < 1e3;
+}
+function calcSidebarBounds(windowWidth = window.innerWidth) {
+	return {
+		minAllowed: 200,
+		maxAllowed: Math.min(500, Math.max(200, (windowWidth || 1024) - 360))
+	};
+}
+function setupSidebarResizer({ aside, workspace, t, layout = {} }) {
+	if (!aside || !workspace) return { dispose() {} };
+	const storageKey = layout.storageKey || "batc.sidebar.width";
+	const property = layout.property || "--workspace-sidebar-width";
+	const bounds = layout.bounds || calcSidebarBounds;
+	const defaultWidth = layout.defaultWidth || (() => window.innerWidth < 1200 ? 232 : 248);
+	const resetWidth = layout.resetWidth || (() => 248);
+	const enabled = () => !isMobileLayout() && (!layout.enabled || layout.enabled());
+	let savedWidth = defaultWidth(), customWidth = false;
+	try {
+		const raw = localStorage.getItem(storageKey);
+		if (raw !== null) {
+			const parsed = Number(raw);
+			if (Number.isFinite(parsed) && parsed >= 200) {
+				savedWidth = parsed;
+				customWidth = true;
+			}
+		}
+	} catch {}
+	const resizer = document.createElement("div");
+	resizer.className = "workspace-resizer";
+	resizer.setAttribute("role", "separator");
+	resizer.setAttribute("aria-orientation", "vertical");
+	resizer.setAttribute("tabindex", "0");
+	resizer.setAttribute("aria-label", t(layout.label || "workspace_resizer"));
+	resizer.title = t(layout.help || "workspace_resizer_help");
+	const applyWidth = (requestedWidth, persist = true) => {
+		if (!enabled()) {
+			resizer.removeAttribute("aria-valuenow");
+			return requestedWidth;
+		}
+		const { minAllowed, maxAllowed } = bounds();
+		const clamped = Math.max(minAllowed, Math.min(maxAllowed, requestedWidth));
+		workspace.style.setProperty(property, `${clamped}px`);
+		resizer.setAttribute("aria-valuenow", String(clamped));
+		resizer.setAttribute("aria-valuemin", String(minAllowed));
+		resizer.setAttribute("aria-valuemax", String(maxAllowed));
+		if (persist) {
+			customWidth = true;
+			savedWidth = clamped;
+			try {
+				localStorage.setItem(storageKey, String(clamped));
+			} catch {}
+		}
+		return clamped;
+	};
+	let currentWidth = applyWidth(savedWidth, false);
+	let isDragging = false;
+	let startX = 0;
+	let startWidth = currentWidth;
+	let activePointerId = null;
+	const onGlobalKeyDown = (event) => {
+		if (event.key === "Escape" && isDragging) {
+			cancelDrag();
+			event.preventDefault();
+		}
+	};
+	const cancelDrag = () => {
+		if (!isDragging) return;
+		window.removeEventListener("keydown", onGlobalKeyDown);
+		isDragging = false;
+		currentWidth = applyWidth(startWidth, false);
+		resizer.classList.remove("is-resizing");
+		document.body.classList.remove("workspace-resizing");
+		document.body.style.removeProperty("user-select");
+		if (activePointerId !== null) {
+			try {
+				resizer.releasePointerCapture(activePointerId);
+			} catch {}
+			activePointerId = null;
+		}
+	};
+	const onPointerDown = (event) => {
+		if (event.button !== 0 || !enabled()) return;
+		isDragging = true;
+		activePointerId = event.pointerId;
+		startX = event.clientX;
+		startWidth = currentWidth;
+		resizer.classList.add("is-resizing");
+		document.body.classList.add("workspace-resizing");
+		document.body.style.userSelect = "none";
+		window.addEventListener("keydown", onGlobalKeyDown);
+		try {
+			resizer.setPointerCapture(event.pointerId);
+		} catch {}
+		event.preventDefault();
+	};
+	const onPointerMove = (event) => {
+		if (!isDragging || event.pointerId !== activePointerId) return;
+		const delta = event.clientX - startX;
+		currentWidth = applyWidth(startWidth + delta, false);
+	};
+	const onPointerUp = (event) => {
+		if (!isDragging || event.pointerId !== activePointerId) return;
+		window.removeEventListener("keydown", onGlobalKeyDown);
+		const delta = event.clientX - startX;
+		currentWidth = applyWidth(startWidth + delta, true);
+		isDragging = false;
+		resizer.classList.remove("is-resizing");
+		document.body.classList.remove("workspace-resizing");
+		document.body.style.removeProperty("user-select");
+		if (activePointerId !== null) {
+			try {
+				resizer.releasePointerCapture(activePointerId);
+			} catch {}
+			activePointerId = null;
+		}
+	};
+	const onPointerCancel = () => {
+		cancelDrag();
+	};
+	const onKeyDown = (event) => {
+		if (event.key === "Escape") {
+			if (isDragging) {
+				cancelDrag();
+				event.preventDefault();
+			}
+			return;
+		}
+		if (!enabled()) return;
+		const { minAllowed, maxAllowed } = bounds();
+		let handled = false;
+		if (event.key === "ArrowLeft") {
+			currentWidth = applyWidth(currentWidth - (event.shiftKey ? 48 : 16), true);
+			handled = true;
+		} else if (event.key === "ArrowRight") {
+			currentWidth = applyWidth(currentWidth + (event.shiftKey ? 48 : 16), true);
+			handled = true;
+		} else if (event.key === "PageDown") {
+			currentWidth = applyWidth(currentWidth - 48, true);
+			handled = true;
+		} else if (event.key === "PageUp") {
+			currentWidth = applyWidth(currentWidth + 48, true);
+			handled = true;
+		} else if (event.key === "Home") {
+			currentWidth = applyWidth(minAllowed, true);
+			handled = true;
+		} else if (event.key === "End") {
+			currentWidth = applyWidth(maxAllowed, true);
+			handled = true;
+		}
+		if (handled) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	};
+	const onDblClick = () => {
+		if (enabled()) currentWidth = applyWidth(resetWidth(), true);
+	};
+	const refresh = () => {
+		if (!enabled()) cancelDrag();
+		if (!isDragging) currentWidth = applyWidth(customWidth ? savedWidth : defaultWidth(), false);
+	};
+	const onWindowResize = () => {
+		cancelDrag();
+		refresh();
+	};
+	resizer.addEventListener("pointerdown", onPointerDown);
+	resizer.addEventListener("pointermove", onPointerMove);
+	resizer.addEventListener("pointerup", onPointerUp);
+	resizer.addEventListener("pointercancel", onPointerCancel);
+	resizer.addEventListener("lostpointercapture", onPointerCancel);
+	resizer.addEventListener("keydown", onKeyDown);
+	resizer.addEventListener("dblclick", onDblClick);
+	window.addEventListener("resize", onWindowResize);
+	aside.appendChild(resizer);
+	return {
+		resizer,
+		refresh,
+		cancelDrag,
+		getWidth: () => currentWidth,
+		setWidth: (w) => {
+			currentWidth = applyWidth(w, true);
+			return currentWidth;
+		},
+		dispose() {
+			cancelDrag();
+			resizer.removeEventListener("pointerdown", onPointerDown);
+			resizer.removeEventListener("pointermove", onPointerMove);
+			resizer.removeEventListener("pointerup", onPointerUp);
+			resizer.removeEventListener("pointercancel", onPointerCancel);
+			resizer.removeEventListener("lostpointercapture", onPointerCancel);
+			resizer.removeEventListener("keydown", onKeyDown);
+			resizer.removeEventListener("dblclick", onDblClick);
+			window.removeEventListener("resize", onWindowResize);
+			resizer.remove();
+		}
+	};
+}
+function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
+	if (!head || !composer) return {
+		updateInfo() {},
+		updateDraft() {},
+		dispose() {}
+	};
+	let isDisposed = false;
+	const alive = () => {
+		if (isDisposed) return false;
+		try {
+			guard?.();
+			return true;
+		} catch {
+			return false;
+		}
+	};
+	let isInfoCollapsed = false;
+	try {
+		isInfoCollapsed = localStorage.getItem(KEY_MOBILE_INFO_COLLAPSED) === "true";
+	} catch {}
+	const infoToggle = document.createElement("button");
+	infoToggle.type = "button";
+	infoToggle.className = "mini workspace-info-toggle";
+	const renderInfoToggle = () => {
+		if (!alive()) return;
+		head.classList.toggle("workspace-info-collapsed", isInfoCollapsed);
+		infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
+		const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
+		infoToggle.setAttribute("aria-label", label);
+		infoToggle.replaceChildren(icon("info"));
+	};
+	infoToggle.addEventListener("click", () => {
+		if (!alive()) return;
+		isInfoCollapsed = !isInfoCollapsed;
+		try {
+			localStorage.setItem(KEY_MOBILE_INFO_COLLAPSED, String(isInfoCollapsed));
+		} catch {}
+		renderInfoToggle();
+	});
+	const updateInfo = () => {
+		if (!alive()) return;
+		if (infoRow) {
+			if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
+		} else if (!head.contains(infoToggle)) head.append(infoToggle);
+		renderInfoToggle();
+	};
+	let isComposerCollapsed = false;
+	try {
+		isComposerCollapsed = localStorage.getItem(KEY_MOBILE_COMPOSER_COLLAPSED) === "true";
+	} catch {}
+	const composerToggle = document.createElement("button");
+	composerToggle.type = "button";
+	composerToggle.className = "mini workspace-composer-toggle";
+	composerToggle.setAttribute("aria-controls", "workspace-message-input");
+	let boundArea = textarea || null;
+	let boundComposer = composer;
+	let boundRow = composerRow || null;
+	const renderComposerToggle = () => {
+		if (!alive()) return;
+		const hasDraft = (boundArea?.value || "").trim().length > 0;
+		boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
+		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
+		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
+		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
+		composerToggle.replaceChildren(icon("pencil"));
+		composerToggle.setAttribute("aria-label", baseText + draftSuffix);
+		composerToggle.classList.toggle("has-draft", hasDraft);
+	};
+	composerToggle.addEventListener("click", () => {
+		if (!alive()) return;
+		isComposerCollapsed = !isComposerCollapsed;
+		try {
+			localStorage.setItem(KEY_MOBILE_COMPOSER_COLLAPSED, String(isComposerCollapsed));
+		} catch {}
+		renderComposerToggle();
+		if (!isComposerCollapsed) boundArea?.focus({ preventScroll: true });
+		else composerToggle.focus({ preventScroll: true });
+	});
+	const onTextareaInput = () => {
+		renderComposerToggle();
+	};
+	const unbindArea = (node) => {
+		node?.removeEventListener("input", onTextareaInput);
+		node?.removeEventListener("change", onTextareaInput);
+	};
+	const bindArea = (node) => {
+		node?.addEventListener("input", onTextareaInput);
+		node?.addEventListener("change", onTextareaInput);
+	};
+	if (boundRow) {
+		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
+	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+	bindArea(boundArea);
+	updateInfo();
+	renderComposerToggle();
+	return {
+		infoToggle,
+		composerToggle,
+		updateInfo,
+		updateDraft: renderComposerToggle,
+		retarget({ textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = "" } = {}) {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			boundArea = nextArea;
+			if (nextComposer) boundComposer = nextComposer;
+			boundRow = nextRow;
+			if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
+			bindArea(boundArea);
+			composerToggle.remove();
+			if (boundRow) boundRow.append(composerToggle);
+			else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
+			renderComposerToggle();
+		},
+		detachComposer() {
+			if (!alive()) return;
+			unbindArea(boundArea);
+			boundArea = null;
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			composerToggle.remove();
+		},
+		dispose() {
+			isDisposed = true;
+			unbindArea(boundArea);
+			infoToggle.remove();
+			composerToggle.remove();
+			head.classList.remove("workspace-info-collapsed");
+			boundComposer?.classList.remove("workspace-composer-collapsed");
+			composer.classList.remove("workspace-composer-collapsed");
+		}
+	};
+}
 //#endregion
 //#region src/shell.js
 init_i18n();
@@ -18990,7 +19419,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		page: 0,
 		rail: 0
 	};
-	let listPlacement = null;
+	let listPlacement = null, listResizer = null;
 	contextList.addEventListener("scroll", () => {
 		if (listPlacement && contextList.getClientRects().length) listScroll[listPlacement] = contextList.scrollTop;
 	});
@@ -19028,6 +19457,10 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		for (const node of contextNodes) if (node.parentElement !== contextList) contextList.append(node);
 		if (placement !== listPlacement && placement) contextList.scrollTop = listScroll[placement];
 		listPlacement = placement;
+		if (listResizer) {
+			listResizer.resizer.hidden = placement !== "rail";
+			listResizer.refresh();
+		}
 		const workEntry = daily.querySelector("[data-daily=work]");
 		if (workEntry) workEntry.href = !media.matches ? "#/work-list" : workEntry.dataset.desktopHref;
 	}
@@ -19036,6 +19469,30 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	let menus = [], creator = null, phase = null;
 	let drawerOpener = toggle;
 	const media = matchMedia("(min-width: 1000px)");
+	if (candidate) {
+		const workspaceElement = document.getElementById("workspace");
+		const defaultWidth = () => window.innerWidth < 1280 ? 220 : 256;
+		listResizer = setupSidebarResizer({
+			aside: contextList,
+			workspace: workspaceElement,
+			t,
+			layout: {
+				storageKey: "batc.workbench.list.width",
+				property: "--wc-list-width",
+				defaultWidth,
+				resetWidth: defaultWidth,
+				label: "wc_list_resizer",
+				help: "wc_list_resizer_help",
+				enabled: () => listPlacement === "rail",
+				bounds: () => calcSidebarBounds(workspaceElement.clientWidth - aside.getBoundingClientRect().width - 8)
+			}
+		});
+		listResizer.resizer.classList.add("wc-list-resizer");
+		listResizer.resizer.setAttribute("aria-controls", "workbench-context-list");
+		contextList.id = "workbench-context-list";
+		listResizer.resizer.hidden = true;
+		contextList.after(listResizer.resizer);
+	}
 	const scrim = h$1("div", {
 		class: "shell-scrim",
 		hidden: true,
@@ -19431,6 +19888,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		refresh,
 		setRoute(name) {
 			currentRoute = name;
+			listResizer?.cancelDrag();
 			if (name === "pm") {
 				const routeView = location.hash.split("?")[0].split("/")[3];
 				currentView = routeView === "discussions" ? "discussions" : availableProjectViews(caps()).includes(routeView) ? routeView : lastProjectView(namespace, location.hash.split("/")[2]);
@@ -19439,6 +19897,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			closeDrawer(false);
 			navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === "projects");
 			render();
+			listResizer?.refresh();
 			if (candidate && name === "work-list") listTitle.focus({ preventScroll: true });
 		},
 		pending({ count, partial } = {}) {
@@ -19468,6 +19927,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			menus.forEach((control) => control.dispose());
 			tools.dispose();
 			closeDrawer(false);
+			listResizer?.dispose();
 			document.removeEventListener("keydown", keydown, true);
 			media.removeEventListener("change", resize);
 			scrim.remove();
@@ -20059,7 +20519,7 @@ function historyRecords(storage, namespace, workspaceId) {
 }
 //#endregion
 //#region src/pm-work-history.js
-var digest$11 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+var digest$12 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 var keys$3 = (value, names) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join(",") === [...names].sort().join(",");
 var refFields = [
 	"schema",
@@ -20125,7 +20585,7 @@ function workHistoryPanel({ h, t, api, alive, workspaceId, workspace, caps, name
 			"source_digest",
 			"content_digest",
 			"excerpt_digest"
-		].every((key) => digest$11(ref[key]))) throw mismatch();
+		].every((key) => digest$12(ref[key]))) throw mismatch();
 		const selection = ref.selection;
 		if (selection?.kind === "entry") {
 			if (!keys$3(selection, ["kind"])) throw mismatch();
@@ -20625,13 +21085,13 @@ var QUIET_CODES = new Set([
 	"CONNECTION_CHANGED"
 ]);
 var radioSerial = 0;
-var text$5 = (value) => typeof value === "string" && value.length > 0;
+var text$6 = (value) => typeof value === "string" && value.length > 0;
 var sha$6 = (value) => typeof value === "string" && SHA40.test(value);
 var bytes = (value) => new TextEncoder().encode(value).length;
 function exactTarget$1(target) {
 	if (!target || typeof target !== "object" || Array.isArray(target)) return null;
 	if (Object.keys(target).length !== TARGET_KEYS.length) return null;
-	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$5(target[key]))) return null;
+	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$6(target[key]))) return null;
 	if (!/^ws_[0-9a-f]{32}$/.test(target.workspace_id) || !OP_ID.test(target.source_operation_id)) return null;
 	return {
 		workspace_id: target.workspace_id,
@@ -20693,7 +21153,7 @@ function classifyPublicationEntry(envelope) {
 	const target = exactTarget$1(row.target);
 	const prefilled = row.prefilled_params && typeof row.prefilled_params === "object" && !Array.isArray(row.prefilled_params) ? row.prefilled_params : {};
 	const candidate = sha$6(prefilled.candidate_sha) ? prefilled.candidate_sha : "";
-	const baseRef = text$5(prefilled.base_ref) ? prefilled.base_ref : "";
+	const baseRef = text$6(prefilled.base_ref) ? prefilled.base_ref : "";
 	const preconditions = exactPreconditions(row.preconditions);
 	const scopes = Array.isArray(row.required_scopes) ? row.required_scopes.filter((item) => typeof item === "string") : [];
 	if (!target || envelope?.workspace_id && target.workspace_id !== envelope.workspace_id || envelope?.identity?.execution_operation_id && target.source_operation_id !== envelope.identity.execution_operation_id) return {
@@ -20773,7 +21233,7 @@ function publicationPrLine(h, t, pr) {
 	if (!pr || typeof pr !== "object") return null;
 	const opId = operationId$5(pr.publication_operation_id);
 	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
-	const repo = text$5(pr.repository) ? pr.repository : "";
+	const repo = text$6(pr.repository) ? pr.repository : "";
 	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
 	const item = h("li", {});
 	if (opId) {
@@ -20789,9 +21249,9 @@ function publicationPrLine(h, t, pr) {
 }
 function publicationDeliveryLine(h, t, pr, envelope, attempt) {
 	if (!operationId$5(pr?.publication_operation_id)) return null;
-	const host = text$5(attempt?.session?.host) ? attempt.session.host : text$5(attempt?.native_session?.host) ? attempt.native_session.host : "";
-	const source = text$5(pr.child_operation_id) ? pr.child_operation_id : text$5(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
-	const repo = text$5(pr.repository) ? pr.repository : "";
+	const host = text$6(attempt?.session?.host) ? attempt.session.host : text$6(attempt?.native_session?.host) ? attempt.native_session.host : "";
+	const source = text$6(pr.child_operation_id) ? pr.child_operation_id : text$6(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
+	const repo = text$6(pr.repository) ? pr.repository : "";
 	if (!host || !source || !repo) return null;
 	return h("p", { "data-work-publish-delivery": "" }, h("a", { href: `#/delivery/${encodeURIComponent(host)}/execution/${encodeURIComponent(source)}/${encodeURIComponent(repo)}` }, t("nav_delivery")), " ", t("wpub_delivery_link"));
 }
@@ -21192,7 +21652,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 //#region src/pm-execution-verification.js
 var ACTION$5 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
-var digest$10 = /^[0-9a-f]{64}$/;
+var digest$11 = /^[0-9a-f]{64}$/;
 var operation$2 = /^op_[0-9a-f]{32}$/;
 function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {}, fixedResult = null, allowedAction = () => true }) {
 	let sources = [], selected = "", generation = 0, ready = false, configuration = null, editor = null;
@@ -21285,7 +21745,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		try {
 			const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/executions/${selected}/verification-config`);
 			if (!valid(ticket)) return;
-			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$10.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$10.test(value.command_digest) || value.candidate_commit !== null && !sha$5.test(value.candidate_commit) || value.tree_hash !== null && !sha$5.test(value.tree_hash)) throw Error(t("pmq_invalid"));
+			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$11.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$11.test(value.command_digest) || value.candidate_commit !== null && !sha$5.test(value.candidate_commit) || value.tree_hash !== null && !sha$5.test(value.tree_hash)) throw Error(t("pmq_invalid"));
 			configuration = value;
 			ready = true;
 			status.replaceChildren();
@@ -21599,7 +22059,7 @@ var CREATE = "pm.quality.review.create";
 var RECORD$2 = "pm.quality.review.record";
 var REVOKE = "pm.quality.review.revoke";
 var sha$4 = /^[0-9a-f]{40}$/;
-var digest$9 = /^[0-9a-f]{64}$/;
+var digest$10 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
 var ordered$1 = (value) => Array.isArray(value) ? value.map(ordered$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered$1(value[key])])) : value;
@@ -21756,7 +22216,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		throw Error(t("pmq_history_bound"));
 	}
 	function checkReview(row) {
-		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$9.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$9.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
+		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$10.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$10.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
 		return row;
 	}
 	function packageFor(id) {
@@ -22263,7 +22723,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const receipt = saved.verification;
 				if (saved.workspace_id !== workspaceId) throw error();
 				if (!receipt) continue;
-				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$9.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$4.test(receipt.reference.candidate_commit) || !sha$4.test(receipt.reference.tree_hash) || !digest$9.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
+				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$10.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$4.test(receipt.reference.candidate_commit) || !sha$4.test(receipt.reference.tree_hash) || !digest$10.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
 				proofs.push({
 					key: op.operation_id,
 					label: `${t("pmq_runner")} · ${receipt.reference.candidate_commit.slice(0, 12)} · ${op.operation_id}`,
@@ -22280,7 +22740,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const data = await request("GET", `${base}/evidence/${entry.evidence_id}`);
 				if (!valid(ticket)) return;
 				const e = data.evidence, f = e?.document?.facts;
-				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$4.test(f.candidate_commit) || !sha$4.test(f.tree_hash) || !digest$9.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
+				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$4.test(f.candidate_commit) || !sha$4.test(f.tree_hash) || !digest$10.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
 				proofs.push({
 					key: entry.evidence_id,
 					label: `${t("pmq_runner")} · #${f.verification_id} · ${f.candidate_commit.slice(0, 12)}`,
@@ -22299,7 +22759,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			for (const delivery of deliveries) for (const source of delivery.integration?.sources || []) {
 				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$4.test(source.delivered_sha) || !operation$1.test(source.source_id)) continue;
 				for (const observation of observations) {
-					if (!digest$9.test(observation.document_digest)) throw error();
+					if (!digest$10.test(observation.document_digest)) throw error();
 					proofs.push({
 						key: `${delivery.operation_id}:${source.seq}:${observation.observation_id}`,
 						source_operation_id: source.source_id,
@@ -22380,7 +22840,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		onUnavailable: failure,
 		onConfiguration: (value) => {
 			if (model) {
-				model.configuration = value?.available && digest$9.test(value.command_digest) ? value : null;
+				model.configuration = value?.available && digest$10.test(value.command_digest) ? value : null;
 				matrixKey = "";
 				create?.sync();
 			}
@@ -22535,6 +22995,131 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 			if (editor && !saving) editor.refreshDiscussionSources();
 		}
 	};
+}
+//#endregion
+//#region src/pm-work-result-requirements.js
+function resultRequirements({ h, t, section, open = new Set() }) {
+	if (!section) return null;
+	const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t("wres_unknown");
+	const verdict = (value) => label(value, [
+		"accepted",
+		"rejected",
+		"unassessed",
+		"not_defined"
+	]);
+	const text = (value) => typeof value === "string" ? value : "";
+	const note = (value) => h("p", { class: "pm-note-text" }, text(value));
+	const source = (value) => h("code", { class: "pm-source" }, text(value));
+	const line = (key, value) => h("p", {}, t(key), ": ", value);
+	const details = (key, title, ...body) => h("details", {
+		"data-result-requirement-details": key,
+		...open.has(key) ? { open: true } : {}
+	}, h("summary", { "data-work-result-focus": `requirement:${key}` }, title), ...body);
+	const record = (key, value) => details(key, t("wres_req_sources"), h("pre", { class: "pm-note-text" }, JSON.stringify(value, null, 2)));
+	const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || "") ? h("a", {
+		href: `#/op/${id}`,
+		"data-work-result-focus": `requirement:operation:${key}`
+	}, t("wres_view_operation")) : null;
+	const element = h("section", {
+		"data-result-requirements": "",
+		class: "pm-work-result-requirements"
+	}, h("h4", {}, t("wres_req_heading")));
+	if (section.relation !== "explicit") {
+		element.append(note(t(section.relation === "none" ? "wres_req_none" : "wres_req_unavailable")));
+		return element;
+	}
+	element.append(note(t("wres_req_selection")), line("wres_check_verification", [
+		"unverified",
+		"running",
+		"verified",
+		"failed",
+		"stale",
+		"unknown"
+	].includes(section.verification) ? t(`wres_verification_${section.verification}`) : t("wres_unknown")));
+	if (section.coverage?.reviews_partial) element.append(note(t("wres_req_reviews_partial")));
+	if (section.coverage?.packages_partial) element.append(note(t("wres_req_packages_partial")));
+	element.append(record("binding", {
+		package_ref: section.package_ref,
+		plan_ref: section.plan_ref,
+		dod_ref: section.dod_ref,
+		candidate_commit: section.candidate_commit,
+		verification_evidence: section.verification_evidence
+	}));
+	for (const item of section.items || []) {
+		const key = JSON.stringify(["requirement", item.requirement_id]);
+		const row = h("article", { "data-result-requirement": item.requirement_id }, h("h5", {}, text(item.text)), source(item.requirement_id), note(label(item.state, [
+			"no_conclusion",
+			"verified_no_conclusion",
+			"assessments_recorded",
+			"unavailable"
+		])), record(`${key}:inputs`, {
+			source_input_id: item.source_input_id,
+			acceptance_input_ids: item.acceptance_input_ids,
+			link: item.link
+		}));
+		for (const assessment of item.assessments || []) {
+			const ref = assessment.reference || {}, original = assessment.original || {};
+			const assessmentKey = JSON.stringify([
+				key,
+				ref.review_id,
+				ref.operation_id,
+				ref.version,
+				ref.document_digest
+			]);
+			const summary = `${verdict(assessment.conclusion)} · ${t(assessment.applicable === true ? "wres_req_applicable" : "wres_req_no_longer_applies")}`;
+			const reasons = (assessment.applicability_reasons || []).map((reason) => {
+				const translated = t(`pmq_reason_${reason}`);
+				return note(translated === `pmq_reason_${reason}` ? t("wres_req_applicability_changed") : translated);
+			});
+			const criteria = (original.criteria || []).filter((entry) => entry.criterion?.kind === "dod" || entry.criterion?.requirement_id === item.requirement_id).map((entry, index) => {
+				const criterion = entry.criterion || {};
+				return details(`${assessmentKey}:criterion:${index}`, `${t(criterion.kind === "dod" ? "wres_req_dod" : "wres_req_criterion")}: ${text(criterion.input_id || criterion.criterion_id)} · ${verdict(entry.status)}`, note(entry.rationale), line("wres_check_verification", label(entry.verification?.status, [
+					"passed",
+					"failed",
+					"unavailable",
+					"unknown"
+				])), record(`${assessmentKey}:proof:${index}`, {
+					criterion,
+					reference: entry.reference,
+					verification: entry.verification
+				}));
+			});
+			row.append(details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), note(t(assessment.qualified === true ? "wres_req_qualified" : "wres_req_not_qualified")), ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment)));
+		}
+		element.append(row);
+	}
+	if (section.dependent_work?.length) {
+		const dependencies = details("dependencies", t("wres_req_dependencies"));
+		for (const work of section.dependent_work) {
+			const key = JSON.stringify([
+				"dependent",
+				work.work_item_id,
+				work.package_id,
+				work.document_digest
+			]);
+			const readiness = (value) => label(value?.status, [
+				"ready",
+				"blocked",
+				"unavailable",
+				"unknown"
+			]);
+			const body = h("article", { "data-result-dependent": work.package_id }, h("h5", {}, text(work.title)), line("wres_req_without_selection", readiness(work.readiness)));
+			if (!work.selections_complete) body.append(note(t("wres_req_selections_partial")));
+			for (const selected of work.selections || []) body.append(details(`${key}:${selected.execution_operation_id}`, `${t("wres_req_original_selection")}: ${readiness(selected.readiness)}`, operation(selected.execution_operation_id, `${key}:${selected.execution_operation_id}`), record(`${key}:${selected.execution_operation_id}:source`, selected)));
+			body.append(record(`${key}:source`, {
+				work_item_id: work.work_item_id,
+				package_id: work.package_id,
+				document_digest: work.document_digest,
+				prerequisite_ids: work.prerequisite_ids,
+				readiness: work.readiness,
+				link: work.link
+			}));
+			dependencies.append(body);
+		}
+		element.append(dependencies);
+	}
+	if (section.related?.length) element.append(record("related", section.related));
+	return element;
 }
 //#endregion
 //#region src/pm-work-result.js
@@ -22857,6 +23442,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	}
 	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
 		const focusToken = saveFocus();
+		const requirementOpen = new Set(Array.from(panelElement.querySelectorAll("[data-result-requirement-details][open]"), (node) => node.getAttribute("data-result-requirement-details")));
 		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
 		if (existingTurns) turnsOpen = existingTurns.open;
 		const existingDetails = panelElement.querySelector("[data-work-result-details]");
@@ -23050,6 +23636,13 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
 		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
 		sections.push(dl);
+		const requirements = resultRequirements({
+			h,
+			t,
+			section: envelope.requirements,
+			open: requirementOpen
+		});
+		if (requirements) sections.push(requirements);
 		const changesBox = h("div", { class: "pm-work-result-changes" });
 		const ch = envelope.changes || {};
 		const summary = ch.summary || {};
@@ -24887,9 +25480,9 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, matchesWor
 var action = "pm.history.unlink";
 var separator = `.${action}.`;
 var limit = 500;
-var object$7 = (value) => value !== null && typeof value === "object" && [Object.prototype, null].includes(Object.getPrototypeOf(value));
-var exact$1 = (value, keys) => object$7(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
-var same$10 = (a, b) => a === b || object$7(a) && object$7(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$10(a[key], b[key]));
+var object$8 = (value) => value !== null && typeof value === "object" && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+var exact$1 = (value, keys) => object$8(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+var same$10 = (a, b) => a === b || object$8(a) && object$8(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$10(a[key], b[key]));
 var invalid = () => Object.assign(Error("HISTORY_RECOVERY_INVALID"), { code: "HISTORY_RECOVERY_INVALID" });
 var changed = () => Object.assign(Error("HISTORY_RECOVERY_CHANGED"), { code: "HISTORY_RECOVERY_CHANGED" });
 var full = () => Object.assign(Error("HISTORY_RECOVERY_FULL"), { code: "HISTORY_RECOVERY_FULL" });
@@ -24913,7 +25506,7 @@ function envelope(saved, target) {
 	]) || saved.version !== 1 || !exact$1(saved.values, [])) throw invalid();
 	if (saved.intent === void 0) return;
 	const intent = saved.intent, request = intent?.request;
-	if (!object$7(intent) || Object.keys(intent).some((key) => ![
+	if (!object$8(intent) || Object.keys(intent).some((key) => ![
 		"key",
 		"request",
 		"operation_id",
@@ -25164,7 +25757,7 @@ function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPe
 //#endregion
 //#region src/pm-external-history-links.js
 var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
-var digest$8 = (value) => /^[0-9a-f]{64}$/.test(value || "");
+var digest$9 = (value) => /^[0-9a-f]{64}$/.test(value || "");
 function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, namespace, permitted, form, errorBox, cleanup, sourceId, entry, onUnavailable }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const draftNamespace = `${namespace}.history.${JSON.stringify([sourceId, entry.entry_id])}`;
@@ -25189,7 +25782,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	const canLink = () => current(generation) && supported("pm.history.link") && permitted(false) && ["owner", "contributor"].includes(workspace()?.membership?.role);
 	const canUnlink = (link) => current(generation) && supported("pm.history.unlink") && Boolean(workspace()?.membership) && (workspace()?.membership?.role === "owner" || link.created_by === caps()?.actor);
 	const mismatch = () => Error(t("pm_scope_mismatch"));
-	const matches = (ref) => ref?.schema === "external_history_ref/v1" && ref.server_id === workspace()?.server_id && ref.workspace_id === workspaceId && ref.source_id === sourceId && ref.entry_id === entry.entry_id && ref.content_digest === entry.content_digest && digest$8(ref.source_digest) && digest$8(ref.excerpt_digest);
+	const matches = (ref) => ref?.schema === "external_history_ref/v1" && ref.server_id === workspace()?.server_id && ref.workspace_id === workspaceId && ref.source_id === sourceId && ref.entry_id === entry.entry_id && ref.content_digest === entry.content_digest && digest$9(ref.source_digest) && digest$9(ref.excerpt_digest);
 	function fail(error, ticket) {
 		if (!current(ticket)) return;
 		onUnavailable(error);
@@ -30327,6 +30920,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 //#endregion
 //#region src/message-format.js
 var lineText = (line) => line.replace(/\r?\n$/, "");
+var quotePrefix = /^ {0,3}>[ \t]?/;
 function tableCells(line) {
 	let text = line.trim(), cell = "", ticks = 0, separators = 0;
 	const cells = [];
@@ -30357,7 +30951,7 @@ function tableCells(line) {
 	if (cell || !text.endsWith("|")) cells.push(cell.trim());
 	return separators ? cells : null;
 }
-function messageBlocks(source) {
+function messageBlocks(source, { quotes = false } = {}) {
 	if (source.length > 2e5) return [{
 		kind: "text",
 		text: source
@@ -30390,12 +30984,23 @@ function messageBlocks(source) {
 			});
 			continue;
 		}
+		if (quotes && quotePrefix.test(lines[i])) {
+			flush();
+			const body = [];
+			while (i < lines.length && quotePrefix.test(lines[i])) body.push(lines[i++].replace(quotePrefix, ""));
+			blocks.push({
+				kind: "quote",
+				text: body.join("")
+			});
+			continue;
+		}
 		const header = tableCells(lineText(lines[i])), divider = i + 1 < lines.length ? tableCells(lineText(lines[i + 1])) : null;
 		if (header?.length && header.length <= 40 && divider?.length === header.length && divider.every((cell) => /^:?-{3,}:?$/.test(cell))) {
 			flush();
 			const rows = [];
 			i += 2;
 			while (i < lines.length && rows.length < 100) {
+				if (quotes && quotePrefix.test(lines[i])) break;
 				const cells = tableCells(lineText(lines[i]));
 				if (!cells || cells.length !== header.length) break;
 				rows.push(cells);
@@ -30424,8 +31029,16 @@ function inline(h, text) {
 	nodes.push(text.slice(from));
 	return nodes;
 }
-function renderMessage(h, t, source, copy) {
-	return messageBlocks(source).map((block) => {
+function renderMessage(h, t, source, copy, { canCopyQuote = () => false } = {}) {
+	return messageBlocks(source, { quotes: true }).map((block) => {
+		if (block.kind === "quote") return h("blockquote", { class: "message-quote" }, h("div", { class: "message-quote-bar" }, h("button", {
+			class: "mini message-quote-copy",
+			type: "button",
+			hidden: !canCopyQuote(),
+			onclick: (event) => {
+				if (event.currentTarget.isConnected && canCopyQuote()) copy(block.text);
+			}
+		}, t("message_copy_quote"))), h("div", { class: "message-text" }, ...inline(h, block.text)));
 		if (block.kind === "code") return h("div", { class: "message-code" }, h("div", { class: "message-code-bar" }, h("span", { class: "muted" }, block.language || t("message_code")), h("button", {
 			class: "mini",
 			type: "button",
@@ -31652,13 +32265,13 @@ function workspaceOverview(options) {
 			body: h("div", {}, ...data.recent_deliveries.map((row) => h("div", {
 				class: "pm-overview-delivery",
 				"data-overview-delivery": row.work_item_id
-			}, itemLink({
+			}, h("div", { class: "pm-overview-delivery-body" }, itemLink({
 				...row,
 				ref: {
 					kind: "work_item",
 					id: row.work_item_id
 				}
-			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
+			}, "deliveries"), deliveryAssessment(row)), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
 				"work",
 				"quality",
 				"deliveries",
@@ -31666,6 +32279,43 @@ function workspaceOverview(options) {
 			]) : null)
 		});
 		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
+	}
+	function deliveryAssessment(row) {
+		const reference = row.assessment_ref;
+		if (row.state !== "accepted" || !reference || typeof reference !== "object" || Array.isArray(reference)) return null;
+		const ref = {
+			kind: "quality_assessment",
+			id: reference.operation_id,
+			review_id: reference.review_id,
+			document_digest: reference.document_digest
+		};
+		const key = JSON.stringify([
+			"delivery-assessment",
+			row.work_item_id,
+			reference.review_id,
+			reference.operation_id,
+			reference.version,
+			reference.document_digest,
+			reference.candidate_commit
+		]);
+		const controls = isContextRef(ref) ? h("div", { class: "pm-overview-progress-actions" }, h("a", {
+			class: "ui-button secondary ui-sm",
+			href: `#/op/${reference.operation_id}`,
+			"data-overview-link": `${key}:operation`
+		}, t("pm_operation")), options.caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes("quality_assessment") ? discussLink({
+			workspaceId,
+			refs: [ref],
+			title: row.title,
+			from: "overview"
+		}, { "data-overview-link": `${key}:discuss` }) : null) : null;
+		const node = disclosure({
+			label: t("ov_original_assessment"),
+			key: `${namespace}:${workspaceId}:${key}`,
+			body: h("div", {}, h("p", { class: "ui-meta" }, t("ov_assessment_source")), controls, h("pre", { class: "pm-brief-proof" }, JSON.stringify(reference, null, 2)))
+		});
+		node.dataset.overviewDeliveryAssessment = reference.operation_id || "";
+		node.querySelector("summary").dataset.overviewLink = `${key}:source`;
+		return node;
 	}
 	function closeReader() {
 		reader?.close();
@@ -36014,7 +36664,7 @@ var defaults = {
 };
 var record$5 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
-var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
+var text$5 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
 function cyclic(requirements) {
 	const graph = new Map(requirements.map((row) => [row.id, row.depends_on])), active = new Set(), done = new Set();
@@ -36283,10 +36933,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
 			const d = p.document;
-			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
+			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$5(d.title, 160) || !text$5(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$5(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$5(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$5(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -36309,9 +36959,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, namespac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$5(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$5(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$5(row))) return "pcp_missing";
+		if (!active || !record$5(value) || !text$5(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$5(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$5(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
-		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
+		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$5(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
@@ -37223,7 +37873,7 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 //#endregion
 //#region src/pm-spec-materialization.js
 var id = /^pmsp_[0-9a-f]{32}$/;
-var digest$7 = /^[0-9a-f]{64}$/;
+var digest$8 = /^[0-9a-f]{64}$/;
 var sha$3 = /^[0-9a-f]{40}$/;
 var artifactRef = (row) => Object.fromEntries([
 	"artifact_id",
@@ -37234,9 +37884,9 @@ function checkSpecMaterialization(value, workspaceId, selected, { full = false, 
 	const fail = () => {
 		throw Error("PM_SPEC_RESPONSE_MISMATCH");
 	}, row = value;
-	if (!row || row.workspace_id !== workspaceId || row.package_id !== selected.package_id || !id.test(row.materialization_id) || !digest$7.test(row.document_digest) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !/^art_[0-9a-f]{32}$/.test(row.artifact_ref?.artifact_id) || !Number.isSafeInteger(row.artifact_ref.revision) || row.artifact_ref.revision < 1 || row.artifact_ref.digest !== row.document_digest) fail();
+	if (!row || row.workspace_id !== workspaceId || row.package_id !== selected.package_id || !id.test(row.materialization_id) || !digest$8.test(row.document_digest) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !/^art_[0-9a-f]{32}$/.test(row.artifact_ref?.artifact_id) || !Number.isSafeInteger(row.artifact_ref.revision) || row.artifact_ref.revision < 1 || row.artifact_ref.digest !== row.document_digest) fail();
 	const receipt = row.git_receipt;
-	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$3.test(receipt.commit_sha) || !sha$3.test(receipt.tree_sha) || !digest$7.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$7.test(value))) fail();
+	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$3.test(receipt.commit_sha) || !sha$3.test(receipt.tree_sha) || !digest$8.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$8.test(value))) fail();
 	if (original && (JSON.stringify(fixedSpecSelection(row, workspaceId)) !== JSON.stringify(fixedSpecSelection(original, workspaceId)) || row.operation_id !== original.operation_id || receipt.commit_sha !== original.git_receipt.commit_sha || receipt.document_digest !== original.git_receipt.document_digest)) fail();
 	if (full) {
 		const doc = row.document, ref = doc?.package_ref;
@@ -37446,7 +38096,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 		withdraw();
 		if (!row) return;
 		try {
-			if (row.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(row.package_id) || !digest$7.test(row.document_digest) || row.document?.workspace_id !== workspaceId || row.document.package_id !== row.package_id || !/^pmscope_[0-9a-f]{32}$/.test(row.document.context?.plan_ref?.scope_revision)) throw Error(t("psm_invalid"));
+			if (row.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(row.package_id) || !digest$8.test(row.document_digest) || row.document?.workspace_id !== workspaceId || row.document.package_id !== row.package_id || !/^pmscope_[0-9a-f]{32}$/.test(row.document.context?.plan_ref?.scope_revision)) throw Error(t("psm_invalid"));
 			selected = row;
 			bind(row);
 			await refresh();
@@ -37577,7 +38227,7 @@ var profile = {
 var same$6 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var clone = (value) => structuredClone(value);
 var sha$2 = /^[0-9a-f]{40}$/;
-var digest$6 = /^[0-9a-f]{64}$/;
+var digest$7 = /^[0-9a-f]{64}$/;
 var op$1 = /^op_[0-9a-f]{32}$/;
 function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, reviewedHandoff = () => null }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, navigation = `batc.pm.batch-selection.${namespace}.${workspaceId}`;
@@ -38165,7 +38815,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		if (!valid(ticket) || !data) return;
 		observations = data.rows;
 		evidenceFiltered ||= data.filtered;
-		for (const row of observations) if (!/^pmgh_[0-9a-f]{32}$/.test(row.observation_id) || !digest$6.test(row.document_digest) || row.workspace_id !== workspaceId) throw error();
+		for (const row of observations) if (!/^pmgh_[0-9a-f]{32}$/.test(row.observation_id) || !digest$7.test(row.document_digest) || row.workspace_id !== workspaceId) throw error();
 		const deliveries = [];
 		for (const entry of githubEntries) {
 			const data = await pages(`${base}/work/${encodeURIComponent(entry.work_item_id)}/deliveries`, "deliveries", "next_after", "source_visibility_filtered", (data) => {
@@ -51853,7 +52503,7 @@ var RECORD = "pm.maintenance.repair.evidence.record";
 var same$4 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var op = /^op_[0-9a-f]{32}$/;
 var sha$1 = /^[0-9a-f]{40}$/;
-var digest$5 = /^[0-9a-f]{64}$/;
+var digest$6 = /^[0-9a-f]{64}$/;
 function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, labelled, errorBox, namespace }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, key = `batc.pm.repair-selection.${namespace}.${workspaceId}`;
 	let epoch = 0, ready = false, policy = null, baseline = null, lifecycle = null, findings = null, repair = null, start = null, proof = null, firstStart = false, proofReady = false;
@@ -52258,7 +52908,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 				const receipt = data.verification;
 				if (!receipt) continue;
 				const ref = receipt.reference;
-				if (receipt.workspace_id !== workspaceId || receipt.operation_id !== source.operation_id || receipt.execution_operation_id !== row.child.operation_id || receipt.profile !== "observed_runner_v1" || !digest$5.test(receipt.receipt_digest) || ref?.verification_operation_id !== source.operation_id || !sha$1.test(ref.candidate_commit) || !sha$1.test(ref.tree_hash) || ref.candidate_commit !== source.params.candidate_commit || ref.tree_hash !== source.params.tree_hash) throw invalid();
+				if (receipt.workspace_id !== workspaceId || receipt.operation_id !== source.operation_id || receipt.execution_operation_id !== row.child.operation_id || receipt.profile !== "observed_runner_v1" || !digest$6.test(receipt.receipt_digest) || ref?.verification_operation_id !== source.operation_id || !sha$1.test(ref.candidate_commit) || !sha$1.test(ref.tree_hash) || ref.candidate_commit !== source.params.candidate_commit || ref.tree_hash !== source.params.tree_hash) throw invalid();
 				choices.set("verification:" + source.operation_id, {
 					selection: {
 						kind: "verification",
@@ -52279,7 +52929,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 				version: assessment.version,
 				document_digest: assessment.document_digest
 			};
-			if (!/^pmqr_[0-9a-f]{32}$/.test(ref.review_id) || !op.test(ref.operation_id) || !digest$5.test(ref.document_digest) || !Number.isSafeInteger(ref.version)) throw invalid();
+			if (!/^pmqr_[0-9a-f]{32}$/.test(ref.review_id) || !op.test(ref.operation_id) || !digest$6.test(ref.document_digest) || !Number.isSafeInteger(ref.version)) throw invalid();
 			choices.set("quality:" + ref.operation_id, {
 				selection: {
 					kind: "quality",
@@ -52300,7 +52950,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 					document_digest: item.document_digest,
 					native_pr_id: receipt.native_pr_id
 				};
-				if (!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id) || !digest$5.test(ref.document_digest)) throw invalid();
+				if (!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id) || !digest$6.test(ref.document_digest)) throw invalid();
 				choices.set("required_ci:" + ref.observation_id, {
 					selection: {
 						kind: "required_ci",
@@ -60008,6 +60658,159 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 	};
 }
 //#endregion
+//#region src/setup-draft-storage.js
+var explicitPort$1 = (value) => value.replace(/^wss?:\/\//i, "").split(/[/?#]/, 1)[0].match(/:(\d+)$/)?.[1];
+function validSetupEndpoint(value) {
+	try {
+		const url = new URL(value);
+		return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) && url.protocol === "wss:" && !!url.hostname && Number(explicitPort$1(value)) > 0 && !url.username && !url.password && !value.includes("?") && !value.includes("#") && /^wss:\/\/[^/]+\/?$/i.test(value);
+	} catch {
+		return false;
+	}
+}
+var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
+var validSetupRemoteUrl = (value) => typeof value === "string" && !/\s/.test(value) && /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https:\/\/github\.com\/)[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}(?:\.git)?$/i.test(value);
+var setupDraftFields = [
+	"host",
+	"url",
+	"fingerprint",
+	"profile_id",
+	"import_profile_id",
+	"managed_roots",
+	"ssh_alias",
+	"repository",
+	"repository_host",
+	"workspace_id",
+	"remote_url",
+	"verification_project",
+	"verification_executable",
+	"verification_arguments",
+	"verification_timeout",
+	"writes",
+	"orchestrate",
+	"shared_clone_worktrees",
+	"allow_integrate",
+	"allow_merge",
+	"allow_pr_update"
+];
+var setupFlags = new Set([
+	"writes",
+	"orchestrate",
+	"shared_clone_worktrees",
+	"allow_integrate",
+	"allow_merge",
+	"allow_pr_update"
+]);
+var object$7 = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+var text$4 = (value) => typeof value === "string";
+var digest$5 = (value) => text$4(value) && /^[0-9a-f]{64}$/.test(value);
+var strings = (value) => Array.isArray(value) && value.every(text$4);
+var commands = (value) => object$7(value) && Object.values(value).every(strings);
+var verificationFields = {
+	commands,
+	timeout_s: Number.isInteger
+};
+var requestFields = {
+	"setup.host": {
+		url: validSetupEndpoint,
+		fingerprint: text$4,
+		profile_id: text$4,
+		import_profile_id: text$4,
+		writes: (value) => typeof value === "boolean",
+		orchestrate: (value) => typeof value === "boolean",
+		shared_clone_worktrees: (value) => typeof value === "boolean",
+		managed_roots: strings,
+		ssh_alias: text$4,
+		git: (value) => ["ssh", "local"].includes(value),
+		local_confirmation: (value) => typeof value === "boolean",
+		source_digest: digest$5
+	},
+	"setup.repository": {
+		host: text$4,
+		workspace_id: text$4,
+		remote_url: validSetupRemoteUrl,
+		allow_integrate: (value) => typeof value === "boolean",
+		allow_merge: (value) => typeof value === "boolean",
+		allow_pr_update: (value) => typeof value === "boolean"
+	},
+	"setup.verification": verificationFields
+};
+var matchesFields = (value, schema) => object$7(value) && Object.entries(value).every(([key, entry]) => Object.hasOwn(schema, key) && schema[key](entry));
+function setupRequestForStorage(request) {
+	const schema = Object.hasOwn(requestFields, request?.action) ? requestFields[request.action] : null;
+	const target = request?.action === "setup.host" ? { host: text$4 } : request?.action === "setup.repository" ? { repository: text$4 } : {};
+	if (!schema || !matchesFields(request, {
+		action: text$4,
+		target: (value) => matchesFields(value, target),
+		params: (value) => matchesFields(value, {
+			...schema,
+			secret_ref: (value) => text$4(value) && /^setup_[0-9a-f]{32}$/.test(value)
+		}),
+		preconditions: (value) => matchesFields(value, {
+			config_revision: digest$5,
+			review_digest: digest$5
+		})
+	})) return null;
+	if (!object$7(request.params)) return null;
+	return {
+		action: request.action,
+		target: structuredClone(request.target),
+		params: Object.fromEntries(Object.keys(schema).filter((name) => Object.hasOwn(request.params, name)).map((name) => [name, structuredClone(request.params[name])])),
+		preconditions: structuredClone(request.preconditions)
+	};
+}
+function setupDraftForStorage(draft) {
+	const saved = Object.fromEntries(setupDraftFields.filter((name) => Object.hasOwn(draft, name) && (setupFlags.has(name) ? typeof draft[name] === "boolean" : text$4(draft[name]))).map((name) => [name, draft[name]]));
+	if (saved.url && !validSetupEndpoint(saved.url)) saved.url = "";
+	if (typeof saved.remote_url === "string" && !validSetupRemoteUrl(saved.remote_url)) saved.remote_url = "";
+	if (matchesFields(draft.verification_base, {
+		...verificationFields,
+		revision: digest$5
+	})) saved.verification_base = structuredClone(draft.verification_base);
+	if (draft.intent) {
+		const intent = draft.intent;
+		const original = intent.lookup_only === true && intent.lookup_request ? intent.lookup_request : intent.request;
+		const request = setupRequestForStorage(original);
+		saved.intent = Object.fromEntries([
+			"key",
+			"operation_id",
+			"problemCode"
+		].filter((name) => text$4(intent[name])).map((name) => [name, intent[name]]));
+		if (request) {
+			if (intent.lookup_only === true || original.params.secret_ref) {
+				saved.intent.lookup_only = true;
+				saved.intent.lookup_request = request;
+				saved.intent.request = { action: request.action };
+			} else saved.intent.request = request;
+		} else {
+			saved.intent.problemCode = "INVALID_CONFIGURATION";
+			saved.intent.request = { action: Object.hasOwn(requestFields, intent.request?.action) ? intent.request.action : "" };
+		}
+	}
+	return saved;
+}
+//#endregion
+//#region src/operation-page.js
+var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+function operationPage(result, previous = null) {
+	if (!Array.isArray(result?.operations) || result.operations.some((op) => !operationId$4(op?.operation_id))) return null;
+	const time = result.next_before ?? null, id = result.next_before_id ?? null;
+	if (time === null) return id === null ? {
+		operations: result.operations,
+		next: null
+	} : null;
+	const paired = Object.hasOwn(result, "next_before_id");
+	if (typeof time !== "number" || !Number.isFinite(time) || time <= 0 || paired && !operationId$4(id)) return null;
+	if (previous && !(time < previous.time || time === previous.time && previous.id !== null && id !== null && id < previous.id)) return null;
+	return {
+		operations: result.operations,
+		next: {
+			time,
+			id
+		}
+	};
+}
+//#endregion
 //#region src/managed-setup.js
 init_health_fact();
 function normalizeSetupFingerprint(value) {
@@ -60037,15 +60840,6 @@ function parseBatConnectionUrl(value) {
 		return null;
 	}
 }
-function validSetupEndpoint(value) {
-	try {
-		const url = new URL(value);
-		return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) && url.protocol === "wss:" && !!url.hostname && Number(explicitPort(value)) > 0 && !url.username && !url.password && !value.includes("?") && !value.includes("#") && /^wss:\/\/[^/]+\/?$/i.test(value);
-	} catch {
-		return false;
-	}
-}
-var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
 var connectionFacets = [
 	"transport",
 	"service",
@@ -60147,7 +60941,20 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		saved.intent.problemCode = saved.intent.refused;
 		delete saved.intent.refused;
 	}
-	if (typeof saved.url === "string" && /[?@#]/.test(saved.url)) delete saved.url;
+	const storedDraft = JSON.stringify(saved);
+	const projectedDraft = JSON.stringify(setupDraftForStorage(saved));
+	saved = setupDraftForStorage(saved);
+	let draftStorageError;
+	if (projectedDraft !== storedDraft) try {
+		guard();
+		localStorage.setItem(key, projectedDraft);
+	} catch (error) {
+		draftStorageError = error;
+	}
+	if (saved.intent?.lookup_only && saved.intent.lookup_request) {
+		saved.intent.request = saved.intent.lookup_request;
+		delete saved.intent.lookup_request;
+	}
 	const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 	function canonical(value) {
 		if (Array.isArray(value)) return value.map(canonical);
@@ -60163,7 +60970,9 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		"setup.verification"
 	].includes(intent.request?.action) && /^[0-9a-f]{64}$/.test(intent.request?.preconditions?.config_revision) && object(intent.request?.params) && object(intent.request?.target) && (intent.request.action === "setup.verification" ? Object.keys(intent.request.target).length === 0 && validVerification(intent.request.params) : Object.keys(intent.request.target).length === 1 && typeof intent.request.target[intent.request.action === "setup.host" ? "host" : "repository"] === "string") && (!intent.operation_id || /^op_[0-9a-f]{32}$/.test(intent.operation_id));
 	const allowed = (kind) => caps()?.scopes?.includes("manage") && caps()?.actions?.some((action) => action.action === `setup.${kind}` && action.allowed === true);
-	const damaged = !!saved.intent && !validIntent(saved.intent);
+	const damaged = () => !!saved.intent && !validIntent(saved.intent);
+	const usableKey = () => typeof saved.intent?.key === "string" && saved.intent.key.length > 0 && saved.intent.key.length <= 200 && !/[\x00-\x1f\x7f]/.test(saved.intent.key);
+	let noOriginalVisible = false, recoverySerial = 0;
 	const alive = () => {
 		try {
 			guard();
@@ -60174,7 +60983,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	};
 	const persist = () => {
 		guard();
-		localStorage.setItem(key, JSON.stringify(saved));
+		localStorage.setItem(key, JSON.stringify(setupDraftForStorage(saved)));
 	};
 	const terminal = () => [
 		"succeeded",
@@ -60505,7 +61314,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		class: "secondary",
 		hidden: true,
 		onclick: () => {
-			if (!alive() || damaged || !terminal()) return;
+			if (!alive() || busy || !terminal()) return;
 			const previous = saved;
 			saved = {
 				...saved,
@@ -60514,6 +61323,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			if (operation?.status === "succeeded" && previous.intent.request.action === "setup.verification") saved.verification_base = null;
 			try {
 				persist();
+				recoverySerial++;
+				noOriginalVisible = false;
 				operation = null;
 				hostDisclosure.open = true;
 				update();
@@ -60524,6 +61335,35 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 		}
 	}, t("setup_next_change"));
+	const discard = h("button", {
+		class: "secondary",
+		hidden: true,
+		"data-setup-discard": "",
+		onclick: () => {
+			if (!alive() || !damaged() || !usableKey() || !noOriginalVisible) return;
+			const previous = saved;
+			saved = {
+				...saved,
+				intent: null
+			};
+			try {
+				persist();
+				recoverySerial++;
+				busy = false;
+				noOriginalVisible = false;
+				operation = null;
+				lookupKey = null;
+				lookupCursor = null;
+				message.replaceChildren();
+				hostDisclosure.open = true;
+				update();
+				refresh().catch(showError);
+			} catch (error) {
+				saved = previous;
+				showError(error, { sourceRefresh: false });
+			}
+		}
+	}, t("setup_discard_draft"));
 	const sessions = h("a", {
 		href: "#/sessions",
 		class: "ui-button primary",
@@ -60534,7 +61374,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		class: "actions",
 		hidden: true,
 		"data-setup-actions": ""
-	}, sessions, retry, next);
+	}, sessions, retry, next, discard);
 	const hostDisclosure = h("details", {
 		open: true,
 		"data-setup-connect": ""
@@ -60989,20 +61829,30 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		verificationNotice.hidden = !stale;
 		verificationNotice.textContent = t("setup_verification_changed");
 		refreshButton.disabled = busy;
-		retry.hidden = !saved.intent || terminal() || damaged;
+		retry.hidden = !saved.intent || terminal() || damaged() && !usableKey();
 		retry.disabled = busy;
+		retry.textContent = t(damaged() ? "setup_recover_original" : "setup_recover");
 		next.hidden = !saved.intent || !terminal();
-		next.disabled = busy || damaged;
-		if (damaged) retry.disabled = true;
+		next.disabled = busy;
+		discard.hidden = !damaged() || !usableKey() || !noOriginalVisible;
 		receipt.replaceChildren();
 		operationReceipt.replaceChildren();
 		if (operation && snapshot) operationReceipt.append(h("a", {
 			href: `#/op/${operation.operation_id}`,
 			"data-setup-operation": ""
 		}, t("setup_operation_receipt", { status: operation.status === "succeeded" ? t("setup_operation_done") : operationStatusLabel(operation.status) })));
-		else if (saved.intent) receipt.append(h("p", { class: "note" }, t(saved.intent.problemCode ? "setup_retained_request" : "setup_uncertain")));
+		if (damaged()) {
+			receipt.append(h("p", { class: "note" }, t("setup_scrubbed_request")), h("p", {
+				class: "setup-original-identity",
+				"data-setup-original-key": ""
+			}, t("setup_original_key", { key: saved.intent.key || "—" })));
+			if (saved.intent.operation_id) receipt.append(h("p", { class: "setup-original-identity" }, t("setup_original_id", { id: saved.intent.operation_id })));
+			if (!usableKey()) receipt.append(h("p", { class: "note" }, t("setup_scrubbed_no_key")));
+			else if (noOriginalVisible) receipt.append(h("p", { class: "note" }, t("setup_original_not_visible")), h("p", { class: "note" }, t("setup_discard_explanation")));
+			else if (!operation) receipt.append(h("p", { class: "note" }, t("setup_scrubbed_check")));
+		} else if (!operation && saved.intent) receipt.append(h("p", { class: "note" }, t(saved.intent.problemCode ? "setup_retained_request" : "setup_uncertain")));
 		sessions.hidden = !snapshot?.hosts?.length;
-		actions.hidden = sessions.hidden && retry.hidden && next.hidden;
+		actions.hidden = sessions.hidden && retry.hidden && next.hidden && discard.hidden;
 		hostForm.querySelector("button[type=submit]").className = sessions.hidden ? "primary" : "secondary";
 		reviewBox.hidden = !review;
 		applyReview.disabled = !!locked || !review || !supported;
@@ -61094,7 +61944,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 			review = null;
 			paintAutomaticStatus();
-			await sendOriginal();
+			await sendOriginal(true);
 			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
@@ -61106,7 +61956,22 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function accept(candidate) {
 		const intent = saved.intent;
-		if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor || candidate.action !== intent.request.action || !equal(candidate.target, intent.request.target) || !equal(candidate.params, intent.request.params) || !equal(candidate.preconditions, intent.request.preconditions) || candidate.idempotency_key !== intent.key || intent.operation_id && candidate.operation_id !== intent.operation_id) throw Error(t("setup_receipt_mismatch"));
+		if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor || ![
+			"setup.host",
+			"setup.repository",
+			"setup.verification"
+		].includes(candidate.action) || intent.request.action && candidate.action !== intent.request.action || typeof candidate.status !== "string" || !candidate.status || !object(candidate.target) || !object(candidate.params) || !object(candidate.preconditions) || !damaged() && !(intent.lookup_only ? equal(setupRequestForStorage({
+			action: candidate.action,
+			target: candidate.target,
+			params: candidate.params,
+			preconditions: candidate.preconditions
+		}), intent.request) : equal({
+			action: candidate.action,
+			target: candidate.target,
+			params: candidate.params,
+			preconditions: candidate.preconditions
+		}, intent.request)) || candidate.idempotency_key !== intent.key || intent.operation_id && candidate.operation_id !== intent.operation_id) throw Error(t("setup_receipt_mismatch"));
+		noOriginalVisible = false;
 		operation = candidate;
 		intent.operation_id = candidate.operation_id;
 		persist();
@@ -61117,26 +61982,75 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 		update();
 	}
-	async function sendOriginal() {
+	let lookupKey = null, lookupCursor = null;
+	async function findOriginal(intent, current = alive) {
+		if (lookupKey !== intent.key) {
+			lookupKey = intent.key;
+			lookupCursor = null;
+		}
+		for (let page = 0; page < 20; page++) {
+			const cursor = lookupCursor ? `&before=${lookupCursor.time}&before_id=${encodeURIComponent(lookupCursor.id)}` : "";
+			const result = await api("GET", `/operations?${intent.request.action ? `action=${encodeURIComponent(intent.request.action)}&` : ""}actor=${encodeURIComponent(caps().actor)}&limit=200${cursor}`);
+			guard();
+			if (!current()) return;
+			if (damaged() && (!Object.hasOwn(result || {}, "next_before") || !Object.hasOwn(result || {}, "next_before_id"))) throw Error(t("setup_receipt_mismatch"));
+			const parsed = operationPage(result, lookupCursor);
+			if (!parsed || parsed.next && parsed.next.id === null) throw Error(t("setup_receipt_mismatch"));
+			if (damaged() && !parsed.next && (result.next_before !== null || result.next_before_id !== null)) throw Error(t("setup_receipt_mismatch"));
+			if (damaged() && parsed.operations.some((row) => row.actor !== caps().actor || typeof row.idempotency_key !== "string" || !row.idempotency_key || intent.request.action && row.action !== intent.request.action)) throw Error(t("setup_receipt_mismatch"));
+			const matches = parsed.operations.filter((row) => row.actor === caps().actor && row.idempotency_key === intent.key);
+			if (matches.length > 1) throw Error(t("setup_receipt_mismatch"));
+			if (matches.length) {
+				lookupCursor = null;
+				return matches[0];
+			}
+			lookupCursor = parsed.next;
+			if (!lookupCursor) return null;
+		}
+		throw Error(t("setup_lookup_pending"));
+	}
+	async function sendOriginal(submit = false, current = alive) {
 		const intent = saved.intent;
-		const result = intent.operation_id ? await api("GET", `/operations/${encodeURIComponent(intent.operation_id)}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
+		const lookup = damaged() || intent.lookup_only || !submit && intent.request.params.secret_ref;
+		if (intent.operation_id && !/^op_[0-9a-f]{32}$/.test(intent.operation_id)) throw Error(t("setup_receipt_mismatch"));
+		const result = intent.operation_id ? await api("GET", `/operations/${encodeURIComponent(intent.operation_id)}`) : lookup ? { operation: await findOriginal(intent, current) } : await api("POST", "/operations?wait=3", intent.request, intent.key);
 		guard();
+		if (!current()) return;
+		if (lookup && !intent.operation_id && result.operation === null) {
+			if (damaged()) {
+				noOriginalVisible = true;
+				update();
+				return;
+			}
+			throw Error(t("setup_lookup_pending"));
+		}
 		accept(result.operation);
 	}
 	async function recover() {
-		if (!alive() || busy || !saved.intent || damaged) return;
+		if (!alive() || busy || !saved.intent || damaged() && !usableKey()) return;
+		const intent = saved.intent, serial = ++recoverySerial;
+		const active = () => alive() && recoverySerial === serial;
+		const current = () => active() && saved.intent === intent;
+		if (damaged()) message.replaceChildren();
 		busy = true;
 		update();
 		let sourceRefresh = false;
 		try {
-			await sendOriginal();
+			await sendOriginal(false, current);
+			if (!current()) return;
 			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
-			handleSubmissionError(error, saved.intent?.request.action.split(".")[1], { sourceRefresh });
+			if (current()) {
+				noOriginalVisible = false;
+				if (damaged()) showError(error, { sourceRefresh });
+				else handleSubmissionError(error, intent.request.action.split(".")[1], { sourceRefresh });
+			}
 		} finally {
-			busy = false;
-			if (alive()) update();
+			if (active()) {
+				busy = false;
+				update();
+			}
 		}
 	}
 	async function run(kind, defaults = false) {
@@ -61147,6 +62061,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			return;
 		}
 		if (kind === "host" && !validateHost(void 0, defaults) || !setupFormValidity(form, t)) return;
+		if (kind === "repository" && !validSetupRemoteUrl(fields.get("remote_url").value.trim())) {
+			fieldError("remote_url", "error_code_INVALID_PARAMS");
+			focusField("remote_url");
+			return;
+		}
 		const serial = ++reviewSerial;
 		if (kind === "host") {
 			reviewing = true;
@@ -61229,7 +62148,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			};
 			persist();
 			automaticStatus.textContent = t("setup_saving");
-			await sendOriginal();
+			await sendOriginal(true);
 			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
@@ -61492,6 +62411,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		async load() {
 			try {
 				await refresh();
+				if (draftStorageError) throw draftStorageError;
 				if (saved.intent?.operation_id) await recover();
 			} catch (error) {
 				showError(error);
@@ -61509,328 +62429,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				"bat_secret",
 				"github_secret"
 			]) fields.get(name).value = "";
-		}
-	};
-}
-var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
-var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
-var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
-function isMobileLayout() {
-	if (typeof window === "undefined") return false;
-	return (window.innerWidth || document.documentElement?.clientWidth || 0) < 1e3;
-}
-function calcSidebarBounds(windowWidth = window.innerWidth) {
-	return {
-		minAllowed: 200,
-		maxAllowed: Math.min(500, Math.max(200, (windowWidth || 1024) - 360))
-	};
-}
-function setupSidebarResizer({ aside, workspace, t }) {
-	if (!aside || !workspace) return { dispose() {} };
-	let savedWidth = window.innerWidth < 1200 ? 232 : 248, customWidth = false;
-	try {
-		const raw = localStorage.getItem(KEY_SIDEBAR_WIDTH);
-		if (raw !== null) {
-			const parsed = parseInt(raw, 10);
-			if (!Number.isNaN(parsed) && parsed >= 200) {
-				savedWidth = parsed;
-				customWidth = true;
-			}
-		}
-	} catch {}
-	const resizer = document.createElement("div");
-	resizer.className = "workspace-resizer";
-	resizer.setAttribute("role", "separator");
-	resizer.setAttribute("aria-orientation", "vertical");
-	resizer.setAttribute("tabindex", "0");
-	resizer.setAttribute("aria-label", t("workspace_resizer"));
-	resizer.title = t("workspace_resizer_help");
-	const applyWidth = (requestedWidth, persist = true) => {
-		if (isMobileLayout()) {
-			resizer.removeAttribute("aria-valuenow");
-			return requestedWidth;
-		}
-		const { minAllowed, maxAllowed } = calcSidebarBounds();
-		const clamped = Math.max(minAllowed, Math.min(maxAllowed, requestedWidth));
-		workspace.style.setProperty("--workspace-sidebar-width", `${clamped}px`);
-		resizer.setAttribute("aria-valuenow", String(clamped));
-		resizer.setAttribute("aria-valuemin", String(minAllowed));
-		resizer.setAttribute("aria-valuemax", String(maxAllowed));
-		if (persist) {
-			customWidth = true;
-			try {
-				localStorage.setItem(KEY_SIDEBAR_WIDTH, String(clamped));
-			} catch {}
-		}
-		return clamped;
-	};
-	let currentWidth = applyWidth(savedWidth, false);
-	let isDragging = false;
-	let startX = 0;
-	let startWidth = currentWidth;
-	let activePointerId = null;
-	const onGlobalKeyDown = (event) => {
-		if (event.key === "Escape" && isDragging) {
-			cancelDrag();
-			event.preventDefault();
-		}
-	};
-	const cancelDrag = () => {
-		if (!isDragging) return;
-		window.removeEventListener("keydown", onGlobalKeyDown);
-		isDragging = false;
-		currentWidth = applyWidth(startWidth, false);
-		resizer.classList.remove("is-resizing");
-		document.body.classList.remove("workspace-resizing");
-		document.body.style.removeProperty("user-select");
-		if (activePointerId !== null) {
-			try {
-				resizer.releasePointerCapture(activePointerId);
-			} catch {}
-			activePointerId = null;
-		}
-	};
-	const onPointerDown = (event) => {
-		if (event.button !== 0 || isMobileLayout()) return;
-		isDragging = true;
-		activePointerId = event.pointerId;
-		startX = event.clientX;
-		startWidth = currentWidth;
-		resizer.classList.add("is-resizing");
-		document.body.classList.add("workspace-resizing");
-		document.body.style.userSelect = "none";
-		window.addEventListener("keydown", onGlobalKeyDown);
-		try {
-			resizer.setPointerCapture(event.pointerId);
-		} catch {}
-		event.preventDefault();
-	};
-	const onPointerMove = (event) => {
-		if (!isDragging || event.pointerId !== activePointerId) return;
-		const delta = event.clientX - startX;
-		currentWidth = applyWidth(startWidth + delta, false);
-	};
-	const onPointerUp = (event) => {
-		if (!isDragging || event.pointerId !== activePointerId) return;
-		window.removeEventListener("keydown", onGlobalKeyDown);
-		const delta = event.clientX - startX;
-		currentWidth = applyWidth(startWidth + delta, true);
-		isDragging = false;
-		resizer.classList.remove("is-resizing");
-		document.body.classList.remove("workspace-resizing");
-		document.body.style.removeProperty("user-select");
-		if (activePointerId !== null) {
-			try {
-				resizer.releasePointerCapture(activePointerId);
-			} catch {}
-			activePointerId = null;
-		}
-	};
-	const onPointerCancel = () => {
-		cancelDrag();
-	};
-	const onKeyDown = (event) => {
-		if (event.key === "Escape") {
-			if (isDragging) {
-				cancelDrag();
-				event.preventDefault();
-			}
-			return;
-		}
-		if (isMobileLayout()) return;
-		const { minAllowed, maxAllowed } = calcSidebarBounds();
-		let handled = false;
-		if (event.key === "ArrowLeft") {
-			currentWidth = applyWidth(currentWidth - (event.shiftKey ? 48 : 16), true);
-			handled = true;
-		} else if (event.key === "ArrowRight") {
-			currentWidth = applyWidth(currentWidth + (event.shiftKey ? 48 : 16), true);
-			handled = true;
-		} else if (event.key === "PageDown") {
-			currentWidth = applyWidth(currentWidth - 48, true);
-			handled = true;
-		} else if (event.key === "PageUp") {
-			currentWidth = applyWidth(currentWidth + 48, true);
-			handled = true;
-		} else if (event.key === "Home") {
-			currentWidth = applyWidth(minAllowed, true);
-			handled = true;
-		} else if (event.key === "End") {
-			currentWidth = applyWidth(maxAllowed, true);
-			handled = true;
-		}
-		if (handled) {
-			event.preventDefault();
-			event.stopPropagation();
-		}
-	};
-	const onDblClick = () => {
-		if (!isMobileLayout()) currentWidth = applyWidth(248, true);
-	};
-	const onWindowResize = () => {
-		if (!customWidth) currentWidth = window.innerWidth < 1200 ? 232 : 248;
-		if (isMobileLayout()) cancelDrag();
-		if (!isMobileLayout()) currentWidth = applyWidth(currentWidth, false);
-	};
-	resizer.addEventListener("pointerdown", onPointerDown);
-	resizer.addEventListener("pointermove", onPointerMove);
-	resizer.addEventListener("pointerup", onPointerUp);
-	resizer.addEventListener("pointercancel", onPointerCancel);
-	resizer.addEventListener("lostpointercapture", onPointerCancel);
-	resizer.addEventListener("keydown", onKeyDown);
-	resizer.addEventListener("dblclick", onDblClick);
-	window.addEventListener("resize", onWindowResize);
-	aside.appendChild(resizer);
-	return {
-		resizer,
-		getWidth: () => currentWidth,
-		setWidth: (w) => {
-			currentWidth = applyWidth(w, true);
-			return currentWidth;
-		},
-		dispose() {
-			cancelDrag();
-			resizer.removeEventListener("pointerdown", onPointerDown);
-			resizer.removeEventListener("pointermove", onPointerMove);
-			resizer.removeEventListener("pointerup", onPointerUp);
-			resizer.removeEventListener("pointercancel", onPointerCancel);
-			resizer.removeEventListener("lostpointercapture", onPointerCancel);
-			resizer.removeEventListener("keydown", onKeyDown);
-			resizer.removeEventListener("dblclick", onDblClick);
-			window.removeEventListener("resize", onWindowResize);
-			resizer.remove();
-		}
-	};
-}
-function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
-	if (!head || !composer) return {
-		updateInfo() {},
-		updateDraft() {},
-		dispose() {}
-	};
-	let isDisposed = false;
-	const alive = () => {
-		if (isDisposed) return false;
-		try {
-			guard?.();
-			return true;
-		} catch {
-			return false;
-		}
-	};
-	let isInfoCollapsed = false;
-	try {
-		isInfoCollapsed = localStorage.getItem(KEY_MOBILE_INFO_COLLAPSED) === "true";
-	} catch {}
-	const infoToggle = document.createElement("button");
-	infoToggle.type = "button";
-	infoToggle.className = "mini workspace-info-toggle";
-	const renderInfoToggle = () => {
-		if (!alive()) return;
-		head.classList.toggle("workspace-info-collapsed", isInfoCollapsed);
-		infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
-		const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
-		infoToggle.setAttribute("aria-label", label);
-		infoToggle.replaceChildren(icon("info"));
-	};
-	infoToggle.addEventListener("click", () => {
-		if (!alive()) return;
-		isInfoCollapsed = !isInfoCollapsed;
-		try {
-			localStorage.setItem(KEY_MOBILE_INFO_COLLAPSED, String(isInfoCollapsed));
-		} catch {}
-		renderInfoToggle();
-	});
-	const updateInfo = () => {
-		if (!alive()) return;
-		if (infoRow) {
-			if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
-		} else if (!head.contains(infoToggle)) head.append(infoToggle);
-		renderInfoToggle();
-	};
-	let isComposerCollapsed = false;
-	try {
-		isComposerCollapsed = localStorage.getItem(KEY_MOBILE_COMPOSER_COLLAPSED) === "true";
-	} catch {}
-	const composerToggle = document.createElement("button");
-	composerToggle.type = "button";
-	composerToggle.className = "mini workspace-composer-toggle";
-	composerToggle.setAttribute("aria-controls", "workspace-message-input");
-	let boundArea = textarea || null;
-	let boundComposer = composer;
-	let boundRow = composerRow || null;
-	const renderComposerToggle = () => {
-		if (!alive()) return;
-		const hasDraft = (boundArea?.value || "").trim().length > 0;
-		boundComposer?.classList.toggle("workspace-composer-collapsed", isComposerCollapsed && Boolean(boundArea));
-		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
-		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
-		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
-		composerToggle.replaceChildren(icon("pencil"));
-		composerToggle.setAttribute("aria-label", baseText + draftSuffix);
-		composerToggle.classList.toggle("has-draft", hasDraft);
-	};
-	composerToggle.addEventListener("click", () => {
-		if (!alive()) return;
-		isComposerCollapsed = !isComposerCollapsed;
-		try {
-			localStorage.setItem(KEY_MOBILE_COMPOSER_COLLAPSED, String(isComposerCollapsed));
-		} catch {}
-		renderComposerToggle();
-		if (!isComposerCollapsed) boundArea?.focus({ preventScroll: true });
-		else composerToggle.focus({ preventScroll: true });
-	});
-	const onTextareaInput = () => {
-		renderComposerToggle();
-	};
-	const unbindArea = (node) => {
-		node?.removeEventListener("input", onTextareaInput);
-		node?.removeEventListener("change", onTextareaInput);
-	};
-	const bindArea = (node) => {
-		node?.addEventListener("input", onTextareaInput);
-		node?.addEventListener("change", onTextareaInput);
-	};
-	if (boundRow) {
-		if (!boundRow.contains(composerToggle)) boundRow.append(composerToggle);
-	} else if (!boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
-	bindArea(boundArea);
-	updateInfo();
-	renderComposerToggle();
-	return {
-		infoToggle,
-		composerToggle,
-		updateInfo,
-		updateDraft: renderComposerToggle,
-		retarget({ textarea: nextArea = null, composer: nextComposer = null, composerRow: nextRow = null, controlsId = "" } = {}) {
-			if (!alive()) return;
-			unbindArea(boundArea);
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			boundArea = nextArea;
-			if (nextComposer) boundComposer = nextComposer;
-			boundRow = nextRow;
-			if (controlsId) composerToggle.setAttribute("aria-controls", controlsId);
-			bindArea(boundArea);
-			composerToggle.remove();
-			if (boundRow) boundRow.append(composerToggle);
-			else if (boundArea && boundComposer && !boundComposer.contains(composerToggle)) boundComposer.prepend(composerToggle);
-			renderComposerToggle();
-		},
-		detachComposer() {
-			if (!alive()) return;
-			unbindArea(boundArea);
-			boundArea = null;
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			composerToggle.remove();
-		},
-		dispose() {
-			isDisposed = true;
-			unbindArea(boundArea);
-			infoToggle.remove();
-			composerToggle.remove();
-			head.classList.remove("workspace-info-collapsed");
-			boundComposer?.classList.remove("workspace-composer-collapsed");
-			composer.classList.remove("workspace-composer-collapsed");
 		}
 	};
 }
@@ -63021,16 +63619,20 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.body.append(row.toolDetails);
 			} else if (tool && !completed && row.pill !== pillKey) row.toolDetails.open = true;
 			row.pill = pillKey;
+			const quoteCopyAllowed = message.status === "completed" && !message.denied && !message.deferred;
+			const updateQuoteCopy = row.text !== text || row.quoteCopyAllowed !== quoteCopyAllowed;
+			row.quoteCopyAllowed = quoteCopyAllowed;
 			if (row.text !== text) {
 				if (row.text !== null) added += 1;
-				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy));
 				row.text = text;
+				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy, { canCopyQuote: () => row.quoteCopyAllowed && row.text === text && row.node.isConnected }));
 				if (folded && row.toolDetails) {
 					const label = text.split("\n").find((item) => item.trim())?.trim() || t(tool ? "message_tool_details" : "message_system");
 					row.toolLabel.textContent = label;
 					row.toolDetails.querySelector("summary").title = Array.from(label).slice(0, 200).join("");
 				}
 			}
+			if (updateQuoteCopy) for (const button of row.body.querySelectorAll(".message-quote-copy")) button.hidden = !row.quoteCopyAllowed;
 			next.set(key, row);
 		}
 		const retained = new Set([...next.values()].map((row) => row.node));
@@ -67276,7 +67878,7 @@ async function mountUpdates(main, { h, t, versionInput = () => ({ desktop: true 
 //#region src/capture.js
 var record$3 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var digest$2 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
-var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 var previewId = (value) => typeof value === "string" && /^acpv_[0-9a-f]{32}$/.test(value);
 var previewToken = (value) => typeof value === "string" && value.length > 0 && value.length <= 24576;
 var validPreview$3 = (doc) => record$3(doc) && record$3(doc.source) && record$3(doc.evidence) && [
@@ -67303,10 +67905,10 @@ function restore$2(value, source) {
 	if (validPreview$3(value.preview)) saved.preview = value.preview;
 	const intent = value.intent, request = intent?.request;
 	const usable = request?.action === "artifact.capture" && previewId(request.target?.preview_id) && previewToken(request.params?.preview_token) && digest$2(request.preconditions?.expected_fingerprint) && typeof intent.key === "string" && intent.key.length > 0 && intent.key.length <= 200;
-	if (usable || operationId$4(intent?.operation_id)) saved.intent = {
+	if (usable || operationId$3(intent?.operation_id)) saved.intent = {
 		key: usable ? intent.key : null,
 		request: usable ? request : null,
-		operation_id: operationId$4(intent.operation_id) ? intent.operation_id : null,
+		operation_id: operationId$3(intent.operation_id) ? intent.operation_id : null,
 		reviewed_digest: digest$2(intent.reviewed_digest) ? intent.reviewed_digest : saved.preview?.evidence.digest
 	};
 	return saved;
@@ -67419,7 +68021,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	const accept = async (operation) => {
 		guard();
 		const intent = saved.intent;
-		if (!intent || !operationId$4(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
+		if (!intent || !operationId$3(operation?.operation_id) || operation.action !== "artifact.capture" || intent.operation_id && intent.operation_id !== operation.operation_id || intent.request && operation.target?.preview_id !== intent.request.target.preview_id) throw new Error(t("capture_invalid_result"));
 		saved.operation = operation;
 		saved.intent.operation_id = operation.operation_id;
 		persist();
@@ -68008,27 +68610,6 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		box,
 		update,
 		refresh
-	};
-}
-//#endregion
-//#region src/operation-page.js
-var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
-function operationPage(result, previous = null) {
-	if (!Array.isArray(result?.operations) || result.operations.some((op) => !operationId$3(op?.operation_id))) return null;
-	const time = result.next_before ?? null, id = result.next_before_id ?? null;
-	if (time === null) return id === null ? {
-		operations: result.operations,
-		next: null
-	} : null;
-	const paired = Object.hasOwn(result, "next_before_id");
-	if (typeof time !== "number" || !Number.isFinite(time) || time <= 0 || paired && !operationId$3(id)) return null;
-	if (previous && !(time < previous.time || time === previous.time && previous.id !== null && id !== null && id < previous.id)) return null;
-	return {
-		operations: result.operations,
-		next: {
-			time,
-			id
-		}
 	};
 }
 //#endregion
@@ -72059,15 +72640,25 @@ function matchingLegacySources(identity, keys) {
 }
 function migrateManagedStorage(identity, local, session) {
 	const target = managedStorageScope(identity), marker = `batc.storage-migration.${target}`;
+	const areas = [local, session], allKeys = areas.map(keys);
+	const matching = matchingLegacySources(identity, allKeys[0]);
+	function scrubSetup(source) {
+		for (const scope of [source, target]) for (const storage of areas) {
+			const key = `batc.managed.setup.${scope}`, value = storage.getItem(key);
+			if (value === null) continue;
+			const draft = JSON.parse(value);
+			if (!draft || typeof draft !== "object" || Array.isArray(draft)) throw Error("Invalid managed setup draft; migration is blocked");
+			const projected = JSON.stringify(setupDraftForStorage(draft));
+			if (projected !== value) storage.setItem(key, projected);
+		}
+	}
 	const receipt = local.getItem(marker);
 	if (receipt !== null) {
 		const saved = JSON.parse(receipt);
 		if (saved?.version !== 1 || saved.target !== target || saved.status !== "complete") throw Error("Local storage migration is incomplete; original data is retained");
+		if (matching.some((candidate) => candidate.scope === saved.source && !candidate.ambiguous)) scrubSetup(saved.source);
 		return;
 	}
-	const areas = [local, session], allKeys = areas.map(keys);
-	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
-	const matching = matchingLegacySources(identity, allKeys[0]);
 	if (matching.length !== 1 || matching[0].ambiguous) return;
 	const source = matching[0].scope;
 	for (const key of allKeys.flat()) {
@@ -72081,8 +72672,11 @@ function migrateManagedStorage(identity, local, session) {
 		}
 		if (possible !== source && legacyIdentity(possible) && rebase(key, possible, possible) !== null) return;
 	}
+	scrubSetup(source);
+	if (allKeys.some((list) => list.some((key) => rebase(key, target, target) !== null))) return;
 	const copies = areas.flatMap((storage, area) => allKeys[area].flatMap((key) => {
-		const destination = rebase(key, source, target), value = storage.getItem(key);
+		const destination = rebase(key, source, target);
+		const value = storage.getItem(key);
 		return destination !== null && value !== null ? [{
 			storage,
 			destination,

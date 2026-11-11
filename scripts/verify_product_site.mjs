@@ -29,7 +29,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }).end(body);
   }
 });
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+await new Promise(resolve => server.listen(Number(process.env.BATC_UI_TEST_PORT || 0), '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const base = origin + '/bat-agent-connector/';
 const views = ['overview', 'discussions', 'requirements', 'issues', 'schedule', 'dependencies', 'board', 'session'];
@@ -87,6 +87,9 @@ async function checkLayout(page, lang, width) {
       installColumns: width <= 640 || Math.max(...steps) - Math.min(...steps) < 2,
       fullSourceCopy: visibleText('.install-steps').includes('437ee6a7143a82e32eae1d6a008203b2df072aaf'),
       commandCopy: JSON.stringify(commandBlocks.map(code => code.textContent)) === JSON.stringify(expectedCommands),
+      upgradeBaselines: visibleText('.install-current').includes(lang === 'en'
+        ? 'Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.17 sources'
+        : '目前候選版的升級 fixture 使用由 0.2.12 與 0.2.17 固定發布來源建出的核心'),
       commandWrapping: commandBlocks.length === 2 && tokensUnbroken && inlineFlagsUnbroken,
       faqHangingIndent: faqAligned,
       updateScope: platformNote.includes(lang === 'en' ? 'Connector automatic updates' : 'Connector 自動更新')

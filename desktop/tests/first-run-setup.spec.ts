@@ -98,7 +98,7 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
     expect((await draft(page)).intent).toBeUndefined();expect(await storage(page)).not.toMatch(/synthetic-bat-secret|token=/);
     await expect(field(page,'bat_secret')).toHaveValue('');expect(state.posts).toHaveLength(1);
   });
-  test('422 without admission proof retains the intent and recovers with the original key',async({page})=>{
+  test('422 without admission proof retains the original key and never submits its redacted request',async({page})=>{
     const state = await managedSetupFixture(page,native,locale);state.refused=true;state.admissionRefused=false;state.refusalStatus=422;
     await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);await reviewSetupConnection(page,locale); await applySetupReview(page);
     await expect(formFor(page).locator('button[type=submit]')).toBeDisabled();
@@ -107,16 +107,23 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
     const original = structuredClone(state.posts[0]);await page.reload(); await openSetupAdvanced(page);
     await expect(formFor(page).locator('button[type=submit]')).toBeDisabled();
     state.refused=false;await page.getByRole('button',{name:locale==='en'?'Check request':'查回請求',exact:true}).click();
-    await expect(page.locator('[data-setup-sessions]')).toBeVisible();expect(state.posts[1]).toEqual(original);expect(state.staged).toHaveLength(1);
+    await expect(page.locator('[data-managed-setup]')).toContainText(locale==='en'?'The original setup operation has not been found.':'尚未找到原設定操作。');
+    await expect(formFor(page).locator('button[type=submit]')).toBeDisabled();
+    expect((await draft(page)).intent.key).toBe(original.idempotency_key);
+    expect(state.posts).toHaveLength(1);expect(state.staged).toHaveLength(1);
   });
 });
 
-test('a dropped network reply retains the exact request and key after reload',async({page})=>{
+test('a dropped request with no operation record retains its key without resubmission after reload',async({page})=>{
   const state=await managedSetupFixture(page,false);state.drop=true;await page.goto('/dashboard/'); await openSetupAdvanced(page);await field(page,'connection_url').fill(url);
   await reviewSetupConnection(page,'en'); await applySetupReview(page);await expect(page.locator('[data-error-summary]')).toHaveText('Connection failed. Check your network and the original request.');
   const original=structuredClone(state.posts[0]);await page.reload(); await openSetupAdvanced(page);await expect(formFor(page).locator('button[type=submit]')).toBeDisabled();
-  await page.getByRole('button',{name:'Check request',exact:true}).click();await expect(page.locator('[data-setup-sessions]')).toBeVisible();
-  expect(state.posts[1]).toEqual(original);expect(state.staged).toHaveLength(1);
+  await page.getByRole('button',{name:'Check request',exact:true}).click();
+  await expect(page.locator('[data-managed-setup]')).toContainText('The original setup operation has not been found.');
+  expect((await draft(page)).intent.key).toBe(original.idempotency_key);
+  expect((await draft(page)).intent.lookup_request.params.secret_ref).toBeUndefined();
+  expect((await draft(page)).intent.request.params).toBeUndefined();
+  expect(state.posts).toHaveLength(1);expect(state.staged).toHaveLength(1);
 });
 for(const locale of ['en','zh-TW']) test(`older Connector validates required fields, endpoint and fingerprint in ${locale}`,async({page})=>{
   // Override navigator before modules load, since this test uses the shared page fixture.

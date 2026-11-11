@@ -21,7 +21,7 @@ Use the platform asset on the release page. Separate GitHub Actions candidates m
 
 For Windows, download `better-agent-dashboard_0.1.13_windows_x64.exe`, quit Dashboard through its tray menu, then run the installer. Preserve the existing application data; do not delete the Connector journal or credentials. Existing unsigned test packages cannot use the in-app signed update path. Other platforms use their matching package above.
 
-The release checks build older Connector cores from pinned published 0.2.12 and 0.2.16 sources, then exercise the upgrade to 0.2.17 while checking retained identity, data and original operations. These core fixtures do not exercise an old desktop installer upgrading to a new installer or establish recovery on your machine. Final source and passed CI evidence are recorded in [delivery status](product/implementation-status.md).
+Current candidate checks build older Connector cores from pinned published 0.2.12 and 0.2.17 sources, then exercise the upgrade to the candidate while checking retained identity, data and original operations. The candidate must have a higher Connector version; same-version comparisons are refused. The published 0.2.17 release used the 0.2.12 and 0.2.16 baselines. These core fixtures do not exercise an old desktop installer upgrading to a new installer or establish recovery on your machine. Final source and passed CI evidence are recorded in [delivery status](product/implementation-status.md).
 
 ## First launch: your local Connector
 

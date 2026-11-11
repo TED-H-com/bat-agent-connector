@@ -39,11 +39,38 @@ Scopes：`observe`（讀目錄、操作、事件、政策）、`operate`（驅�
 
 Controller 由持久 `server_id` 與已認證 actor 產生；同 actor 的多 client、換 token 與重啟維持身分。Session reservation 保存 `controller_authority` 與 `controller_incarnation`；BAT `workspace_id` 和可選 `pm_workspace_id` 分開。新操作受理及最後 BAT frame 都核對原建立者，背景 task／reviewer／failover／清理沿用持久 authority。缺少建立證據的舊資源維持唯讀；已送出但不明的舊效果仍可回查，不重新認領或重送。`features.controller_isolation` 宣告此契約，inventory 的 `api_access` 依目前 caller 計算，`provenance` 保留客觀來源。
 
-瀏覽器防護：Host 必須是 loopback（擋 DNS rebinding）；有 Origin 時須是 loopback 或 `[api] allowed_origins`。API token 透過 bearer 驗證；managed browser session 僅接受 cookie 路徑，並核對來源、fetch metadata 與 CSRF，不接受作為 HTTP 或 `/rpc` bearer。既有 cookie session、拒絕後的連線恢復與同 host 不同埠限制見 [Managed installation](managed-installation.md#credentials-and-browser-connections)。只有列在 `allowed_origins` 的 Origin 會收到 CORS 標頭（含 `OPTIONS` preflight）；Dashboard 與 API 同源，不需要它。
+瀏覽器防護：API 與 static Dashboard 的 Host 共用嚴格 authority grammar：`host[:port]`。
+host 僅接受 ASCII 大小寫不敏感的 `localhost`、127.0.0.0/8 內四段標準十進位 IPv4
+（每段 0–255、ASCII 數字、除單一 `0` 外無前導零），或 `[::1]`；port 若存在須為
+1–5 個 ASCII 數字且值為 1–65535。不接受 userinfo、空白、控制字元、尾點、額外冒號、
+括號後綴、percent-encoding、非標準 IPv4、未加括號或展開的 IPv6 loopback、IPv4-mapped IPv6。
+API 既有 Origin gate 接受與 `[api] allowed_origins` 完全相同的字串；否則僅接受
+`http://authority` 或 `https://authority`（scheme 大小寫不敏感），authority 沿用上述規則，
+不得帶 userinfo、path（含 `/`）、query 或 fragment。格式錯誤回 `403 BAD_ORIGIN`；
+Host 拒絕仍為 400（API code 為 `BAD_HOST`）。Static Dashboard 沒有 Origin gate。
+HTTP 欄位外圍的空格與 tab 視為 framing OWS；其餘控制字元保留並由既有 gate 拒絕。
+API token 透過 bearer 驗證；managed browser session 僅接受 cookie 路徑，並核對來源、fetch metadata 與 CSRF，不接受作為 HTTP 或 `/rpc` bearer。既有 cookie session、拒絕後的連線恢復與同 host 不同埠限制見 [Managed installation](managed-installation.md#credentials-and-browser-connections)。只有列在 `allowed_origins` 的 Origin 會收到 CORS 標頭（含 `OPTIONS` preflight）；Dashboard 與 API 同源，不需要它。
 
 MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confirm=true`，而且只以 `BATC_API_TOKEN` 的主體執行，不退回本機 admin token：這個 client 能做什麼由它自己的 token scopes 決定，不是由 MCP server 啟動時的主機 tier 決定。PM 及共用 operation／event 讀取也要求 `BATC_API_TOKEN`；legacy Fleet 觀察保留原本唯讀方式。
 
 ## Operation
+
+`GET /operations` 的歷史游標沿用時間加 ID 排序：`before` 必須為有限正數，
+十進位字串最多 64 bytes；選填的 `before_id` 必須為 `op_` 加 32 位小寫十六進位，
+且同時有 `before`。重複或空的 cursor 欄位回既有 `422 INVALID_FILTER`；
+只提供時間的舊 client 仍可使用。驗證由 OperationService 共用，HTTP 保留原始
+cursor 值供中央檢查；未知 query keys 與其他參數維持既有相容行為。
+目前 daemon `op_list` 與 MCP `operations_list` 不接收 cursor，不擴充其參數。
+Python 與 Rust 測試使用同一份 `tests/fixtures/operation-history-cursors.json`，
+Node route inventory 只驗證路由，不代表 Rust query 驗證已執行。
+
+Operation history accepts a finite positive `before` (at most 64 bytes) and an
+optional `before_id` of `op_` plus 32 lowercase hex digits, paired with `before`.
+Repeated or empty cursor fields use the existing `422 INVALID_FILTER` response.
+Timestamp-only callers, unknown HTTP query keys and other parameters remain
+compatible. HTTP passes raw cursor values to the shared OperationService validator.
+Daemon/MCP list methods currently expose no cursor. Python and native tests consume
+the same cursor vectors; Node route inventory is not native query validation.
 
 HTTP `POST /operations?wait=…`、RPC `op_submit(wait_s=…)` 與 MCP
 `operation_submit` 等待後，必須以目前 caller 再讀原 operation；等待期間的

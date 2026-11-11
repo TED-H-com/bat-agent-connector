@@ -16,6 +16,112 @@ This contract covers the ordinary local installation and its advanced external-c
 
 Existing external-central configuration stays selected. **Advanced: join an existing central** requires explicit native confirmation and separate credential enrollment. It preserves the existing owned background service and never forwards its credential to the new address. Failure to reach an external service cannot provision a second database.
 
+## Setup draft privacy and original-operation recovery
+
+The shared browser/desktop setup form projects every localStorage write and every
+restored draft through an explicit field and type allow-list, including nested
+request targets, parameters, preconditions and verification command arrays.
+Password inputs, pasted BAT links, unknown fields and staged `secret_ref` values
+are never stored. Repository remotes must use credential-free `github.com` HTTPS,
+SCP-style `git@github.com:owner/repo` or `ssh://git@github.com/owner/repo` syntax.
+Userinfo credentials, query strings and fragments are rejected before staging or
+admission and removed from old drafts. An unsafe legacy request keeps its original
+key/operation ID but is blocked from replay; removing a field never creates a new
+request under its old key.
+
+Managed-origin migration uses this same projection before copying a proven setup
+scope and before completed-receipt/occupied-target returns, scrubbing existing
+source and destination entries in both storage areas after identity/proof checks.
+A failed scrub
+blocks the copy. Other scopes are not scanned or rewritten; other draft families
+retain their existing byte-for-byte migration contract.
+
+A staging handle is a random 128-bit identifier for private credential and metadata
+files under the managed installation. Staging and setup admission require the
+installation's original personal actor/principal and `manage`; resolution checks
+the installation principal, credential kind, integrity hash and one-hour expiry.
+The principal ID hashes actor, the complete scope set and the admin bit; a different
+token with that same tuple matches, while merely retaining `manage` does not.
+It is **not single-use or bound to a target, operation key or exact request**.
+An authorized caller can reuse it before expiry. Already admitted work resolves
+it after expiry; configuration and pending operations protect referenced files
+from opportunistic cleanup during later staging. Expiry is not deletion or
+revocation. There is no public credential redemption endpoint returning bytes.
+
+Possession of the handle alone bypasses no authentication. However, a storage
+reader who can also act as the installation principal could use it to select an
+existing credential for a different setup request without knowing that credential.
+Principal binding and expiry do not justify treating this selector as harmless
+at rest. Setup therefore stores a permanent `lookup_only` marker in place of the
+handle, with the non-secret projection in `lookup_request`. The stored `request`
+contains only its action so older clients' intent validation also blocks replay;
+they cannot mistake the projection for a complete request. The full request exists only in page memory and the central operation
+journal. The initial authorized submit uses that exact in-memory request/key.
+
+After a lost reply, **Check request / 查回請求** reads the existing operations list
+filtered by action and current actor, matching the original key; a known operation
+ID uses its detail GET. Central's unique actor/key record is the authority for the
+original request, whose non-secret projection, actor, key and known ID must match
+before accepting it. These reads do not run admission or credential resolution;
+expired or already-used handles do not prevent recovery. A projected request is
+never POSTed, even when nothing is found. Empty, partial, failed or unauthorized
+reads retain the key and lock the original intent; they cannot prove non-admission
+or permit replacement. Each check reads at most 20 pages of 200 records, follows
+both timestamp and ID cursors (including empty visibility-filtered pages), and can
+continue from the in-memory cursor on another explicit check. Reload starts the
+read again. Existing account/connection namespaces and response guards remain in
+force. Requests without a staged handle retain exact-request idempotent recovery.
+The native bridge permits the existing paired `before`/`before_id` cursor only
+for operations GET, checking the timestamp, operation ID and duplicate selectors.
+
+A damaged legacy intent whose request text was removed has a separate reconciliation
+state. It displays the retained original key and any operation ID and offers
+**Check original request / 查回原請求**. This only GETs the known operation or scans
+the action/current-actor list for the original key (without an action filter if
+the damaged record retained no action). Because the original body is gone, recovery
+checks the retained identity, action when available, key and known ID rather than
+reconstructing or comparing a replacement request. It never stages or POSTs.
+Only `succeeded`, `failed` and `cancelled` enable the existing next-change path;
+only `succeeded` is success. Every other state stays locked and can be checked again.
+
+For this damaged state only, reaching an explicit null continuation at the true
+end without a matching record reports that no request with this key is visible
+to this account on this server. This is not proof of non-admission. It enables a
+deliberate **Discard saved draft / 捨棄儲存的草稿** click, explaining that the original
+request cannot be sent again and that discarding removes only this local record,
+without cancelling server work. A later setup uses a new key. Partial/capped pages,
+errors, offline reads, malformed or mismatched responses and duplicate matches do
+not permit discard. Scan progress lasts for the mounted view; reload requires
+fresh authority reads, including a fresh complete scan before discard. A check
+returning after discard or an identity/view switch cannot update the old intent.
+No usable key means no check/discard: the UI directs the person to operation
+history and their Connector administrator, retaining any original operation ID.
+
+共用設定表單在寫入及還原草稿時，依欄位與型別白名單檢查巢狀資料；不保存密碼、
+含憑證的網址或 `secret_ref`。暫存引用雖綁定安裝身分、種類及一小時期限，卻不是
+一次性，也未綁定特定目標或請求；已受理操作及設定仍可保留並使用它，因此不能
+把到期當成撤銷。首次送出沿用記憶體中的完整請求與原 key；草稿只保存非秘密投影
+及 `lookup_only`。回覆遺失後以原 actor/key 查中央紀錄，已有 ID 則直接讀取該操作，
+不把刪減過的請求重新送出。未找到、讀取失敗或權限不足時保留原 key 並繼續鎖定，
+不得自動另建請求；再次「查回請求」只讀取，不重新暫存或套用設定。舊格式不安全的
+網址或未知巢狀欄位會清除並阻止重播，原 key/operation ID 保留供檢查。
+已驗證身分且有精確 checkpoint 證明的舊位址遷移，即使已有完成 receipt 或目的資料，
+也會清理兩種 storage 中既有的設定來源與目的副本；不重建已消耗的草稿，清理失敗
+便停止且下次重試。完成 receipt 只證明複製完成，不代表已清理。
+其他身分與草稿種類維持原遷移界線。原生讀取沿用中央的時間與 ID 成對分頁游標。
+
+已清除原內容的損壞 intent 另有核對狀態，顯示原 key／操作 ID 並提供「查回原請求」。
+有 ID 就唯讀查該操作，否則依原 action 與目前 actor 分頁比對 key（缺 action 時只篩 actor）；
+不重建或重送請求。succeeded／failed／cancelled 才可進入既有的「修改設定」，只有
+succeeded 顯示成功。其他狀態保持鎖定並可再次查詢。確實讀到清單末端仍無相符操作時，
+只表示此帳號在此伺服器看不到該 key，並非未受理的證明；此時才可明確點擊「捨棄儲存的草稿」，
+僅移除本機紀錄，不取消中央操作，之後以新 key 設定。離線、錯誤、截斷分頁、格式或身分不符、
+重複結果均不可捨棄。重載後重新核對，捨棄或切換身分後的遲到回覆無效。缺少可用 key 時仍鎖定，
+引導查看操作紀錄並請 Connector 管理員協助，不提供捨棄。
+
+This changes setup privacy/recovery within the existing E/UX work, not E00–E11,
+R0–R5 or A01–A40 acceptance. Unrevised PM v1.2 requirements remain open.
+
 ## Setup connection readout
 
 `GET /managed/setup` adds `connection_observation` to each configured host. GET
@@ -310,11 +416,12 @@ or sessionStorage. Exactly one legacy loopback-port scope must have an exact
 `batc.sync.<scope>` key whose encoded server, principal and actor all match the
 verified bootstrap. The checkpoint key delimits the old identity; an action suffix
 on a draft alone is insufficient. Only that complete scope is copied, byte for
-byte, including nested form namespaces. Nothing is submitted or automatically
+byte, including nested form namespaces, except the setup privacy projection
+described above. Nothing is submitted or automatically
 retried as part of migration. A matching retained draft can therefore reappear
 after an upgrade even if it looked lost on the previous port.
 
-The originals remain unchanged for rollback. A local
+The originals remain unchanged for rollback, except for the setup privacy projection. A local
 `batc.storage-migration.<new-scope>` receipt records source, destination, version
 and copy status. A completed receipt prevents deleted/consumed drafts and keys from
 being imported again. A failed copy rolls back only its exact newly written values;
@@ -322,12 +429,22 @@ an interrupted copy or failed rollback retains its marker and refuses activation
 instead of reading a draft separated from its original operation key. This case
 needs explicit recovery; automatic repair is not supported.
 
+Setup privacy cleanup runs independently of copying, including upgrades with a
+version-1 completed receipt and occupied destinations. A receipt's source must
+match the verified server/principal/actor and have its exact, unambiguous legacy
+checkpoint proof. Only that source and the existing target setup entries in
+localStorage and sessionStorage are projected. Missing or consumed targets stay
+absent; original operation keys and IDs stay unchanged. Without a receipt, the
+existing unique-source and orphan-port checks still apply before cleanup. A scrub
+write failure stops activation before copying or updating a receipt; the next
+startup retries. A completed receipt proves copying, not successful cleanup.
+
 Multiple matching old ports are **not** merged or ranked, even when their values
 look identical or one port only has orphan drafts/tab preferences without a
 checkpoint. Existing destination data, missing old checkpoint keys, legacy
 keys without server/principal proof, unrecognized legacy key envelopes, ambiguous namespace boundaries, non-loopback
 endpoints and different identities are left in place. Reverting to the old frontend can still read original old-port keys
-when connected at that original endpoint, but later edits in the new scope are not
+when connected at that original endpoint (with setup credentials scrubbed), but later edits in the new scope are not
 copied back automatically.
 
 `batc.sync.<scope>` stores only `{cursor, token}`, not a last-used time or a

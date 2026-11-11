@@ -85,6 +85,15 @@ test.describe('Workspace Layout Controls', () => {
     // Desktop main min size (360px): 1200 - 360 = 840, clamped to max 500
     expect(maxVal).toBe(500);
 
+    // Temporary mobile presentation must not replace the desktop preference.
+    await page.setViewportSize({width: 390, height: 844});
+    await expect(resizer).toBeHidden();
+    await page.reload();
+    expect(await page.evaluate(() => localStorage.getItem('batc.sidebar.width'))).toBe('500');
+    expect(await page.evaluate(() => localStorage.getItem('batc.workbench.list.width'))).toBeNull();
+    await page.setViewportSize({width: 1200, height: 900});
+    await expect(resizer).toHaveAttribute('aria-valuenow', '500');
+
     // Double-click resets to default 248px
     await resizer.dblclick();
     expect(Number(await resizer.getAttribute('aria-valuenow'))).toBe(248);

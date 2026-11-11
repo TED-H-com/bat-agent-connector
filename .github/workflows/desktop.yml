@@ -46,6 +46,7 @@ on:
       - "tests/fixtures/managed-setup-preview.json"
       - "tests/fixtures/managed-stop-hold.json"
       - "tests/fixtures/native-plan-manifest.json"
+      - "tests/fixtures/operation-history-cursors.json"
       - "tests/fixtures/pm-availability.json"
       - "tests/fixtures/pm-effective-route.json"
       - "tests/fixtures/pm-version-facts.json"
@@ -169,6 +170,7 @@ on:
       - "tests/fixtures/managed-setup-preview.json"
       - "tests/fixtures/managed-stop-hold.json"
       - "tests/fixtures/native-plan-manifest.json"
+      - "tests/fixtures/operation-history-cursors.json"
       - "tests/fixtures/pm-availability.json"
       - "tests/fixtures/pm-effective-route.json"
       - "tests/fixtures/pm-version-facts.json"
@@ -642,17 +644,17 @@ jobs:
         working-directory: .
         timeout-minutes: 8
         run: uv run --locked --extra dev --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --previous-source .upgrade-baseline --receipt desktop/test-results/packaged-core-upgrade.json
-      - name: Check out the latest stable core upgrade baseline (0.2.16)
+      - name: Check out the latest stable core upgrade baseline (0.2.17)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 2f9386df38c71974144e58a77496f9f52b687f40
+          ref: 0399db5a7b647486126c9bf7bb5900c40dc54ea7
           path: .upgrade-current-stable
           persist-credentials: false
       - name: Build the latest stable core from its own locked environment
         working-directory: .upgrade-current-stable
         timeout-minutes: 8
         env:
-          BATC_BUILD_COMMIT: 2f9386df38c71974144e58a77496f9f52b687f40
+          BATC_BUILD_COMMIT: 0399db5a7b647486126c9bf7bb5900c40dc54ea7
         run: uv run --python 3.13 --locked --extra desktop-build python desktop/scripts/build-managed-runtime.py
       - name: Latest stable packaged core upgrade retains identity, workspace and original intents
         working-directory: .

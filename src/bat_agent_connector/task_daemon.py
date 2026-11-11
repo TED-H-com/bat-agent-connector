@@ -953,7 +953,9 @@ class TaskDaemon:
                         continue
                     if key in headers and key in {"host", "authorization", "content-length", "origin"}:
                         raise ValueError("duplicate request header")
-                    headers[key] = value.strip()
+                    # Only HTTP framing OWS may be removed from authorities;
+                    # preserve other controls for the existing Host/Origin gates.
+                    headers[key] = value.strip(" \t") if key in {"host", "origin"} else value.strip()
                 if dashboard:
                     await self.api.dashboard(request_line[0], request_line[1], headers, writer)
                 else:
