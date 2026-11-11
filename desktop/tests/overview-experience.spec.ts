@@ -955,3 +955,41 @@ for (const width of [390, 1440]) test(`sidebar milestone opens the matching Sche
   const id = await selected.getAttribute('data-schedule-select'); await page.keyboard.press('Escape');
   const row = page.locator(`[data-schedule-select="${id}"]`); await expect(row).toBeFocused(); await expect(row).toBeInViewport(); expect(f.state.writes).toEqual([]);
 });
+
+import {assessmentRoundtrip} from './assessment-roundtrip-fixture.ts';
+for(const locale of ['en','zh-TW'])for(const native of [false,true])test(`accepted delivery opens the exact original assessment ${locale} ${native?'IPC':'HTTP'}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:native?390:1440,height:900}}),page=await context.newPage();
+  const base=fixture(locale),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id),zh=locale==='zh-TW';row.assessment_ref=f.ref;
+  try{
+    await boot(page,{...base,dispatch:f.dispatch},native);
+    await page.locator('[data-overview-delivery-assessment] summary').click();
+    const source=page.locator('[data-overview-delivery-assessment] [data-assessment-open]');await source.click();
+    const reader=page.locator('[data-original-assessment]:visible');
+    await expect(reader.locator('h4').first()).toBeFocused();
+    await expect(reader).toContainText(zh?'原結論：接受':'Original conclusion: accepted');
+    const reads=f.state.requests.filter(input=>input.path.includes('/assessments/'));
+    expect(reads).toHaveLength(1);expect(reads[0].path).toContain(f.ref.operation_id+'?version=2&document_digest='+f.ref.document_digest);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();await expect(source).toBeFocused();
+  }finally{await context.close();}
+});
+
+test('a late exact response cannot restore a withdrawn delivery assessment',async({page})=>{
+  const base=fixture(),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const f=assessmentRoundtrip(base,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  await boot(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-overview-delivery-assessment] summary').click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes('/assessments/')).length).toBe(1);
+    f.state.hold=null;f.state.denied=true;base.state.data.recent_deliveries=[];base.state.cursor++;
+    await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
+    await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+    release();
+    await expect(page.locator('[data-original-assessment]')).not.toContainText('Original conclusion: accepted');
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});

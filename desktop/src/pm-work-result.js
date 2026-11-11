@@ -1,3 +1,5 @@
+import {originalAssessmentReader} from './pm-original-assessment.js';
+import {selectionFromResult, parseAssessmentSelection, matchesResult} from './pm-assessment-selection.js';
 import {button, disclosure, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {sessionHref} from './session-navigation.js';
@@ -88,6 +90,13 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   const publish = createWorkPublish({h, t, form, namespace, caps, errorBox});
   const quality = createWorkQuality({h,t,api,alive,workspaceId,caps,form,errorBox,namespace,refreshResult:readResult});
 
+  const original = originalAssessmentReader({h, t, api, alive, workspaceId, caps, namespace, form, errorBox,
+    refreshOrigin: readResult, returnFocus: () => {
+      const pin = original.selected();
+      return [...panelElement.querySelectorAll('[data-assessment-open]')].find(node => node.dataset.assessmentOpen === (pin?.return_operation_id || pin?.operation_id)
+        && node.dataset.assessmentRequirement === (pin?.requirement_id || '')) || panelElement.querySelector('h3, h4');
+    }});
+
   function updateVisibility(visible) {
     panelElement.hidden = !visible;
     onVisibility(visible);
@@ -115,6 +124,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     filesOpen = false;
     publish.dispose();
     quality.dispose();
+    original.close();
     panelElement.replaceChildren();
     updateVisibility(false);
   }
@@ -154,6 +164,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   }
 
   async function readResult() {
+    original.suspend();
     if (!activeAttempt) return;
     const ticket = ++readSerial;
     const attemptId = activeAttempt.attempt_id;
@@ -185,6 +196,13 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         return;
       }
 
+      const requested = original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace);
+      if (requested?.origin === 'result' && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id
+        && requested.attempt_id === attemptId && !matchesResult(requested, data)) {
+        publish.dispose(); quality.dispose(); panelElement.replaceChildren(h('h3', {tabindex: -1}, t('wres_heading')), original.element); updateVisibility(true);
+        if (original.selected()) void original.refresh(); else original.restore('result');
+        return;
+      }
       const normalized = normalizeForComparison(data);
       const isUnchanged = lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized);
 
@@ -201,6 +219,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         publish.recheck();
         quality.recheck();
       }
+      if (original.selected()) void original.refresh();
     } catch (err) {
       try { alive?.(); } catch { return; }
       if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) {
@@ -210,10 +229,15 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       const status = err?.status;
       if (status === 401 || status === 403 || status === 404) {
         // Withdraw content and hide section
+        original.sourceWithdrawn(err);
         withdraw();
         return;
       }
 
+      if (original.selected()) {
+        publish.dispose(); quality.dispose(); original.fail(err);
+        panelElement.replaceChildren(h('h3', {tabindex: -1}, t('wres_heading')), original.element); updateVisibility(true); return;
+      }
       // Other errors: keep last good content under stale pill, show errorBox with Try again
       lastStale = true;
       lastError = err;
@@ -224,6 +248,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   function renderInvalid() {
     publish.dispose();
     quality.dispose();
+    original.close();
     panelElement.replaceChildren(
       h('h3', {}, t('wres_heading')),
       h('p', {class: 'pm-work-result-invalid'}, t('wres_invalid_envelope')),
@@ -233,6 +258,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
   function renderError(err, attempt) {
     quality.dispose();
+    original.close();
     const heading = h('h3', {}, t('wres_heading'));
     const retryBtn = button({
       label: t('wres_try_again'),
@@ -611,7 +637,14 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     dl.append(h('dt', {}, t('wres_check_delivery_goal')), h('dd', {'data-check': 'delivery-goal'}, goalText));
 
     sections.push(dl);
-    const requirements = resultRequirements({h, t, section: envelope.requirements, open: requirementOpen});
+    const requirements = resultRequirements({h, t, section: envelope.requirements, open: requirementOpen,
+      assessmentShortcut: original.supported() ? (reference, requirement_id) => {
+        const selection = selectionFromResult({partition: namespace, envelope, reference, requirement_id});
+        return selection ? h('button', {type: 'button', class: 'ui-button secondary',
+          'data-assessment-open': reference.operation_id, 'data-assessment-requirement': requirement_id,
+          'data-work-result-focus': `assessment:${requirement_id}:${reference.operation_id}`,
+          onclick: () => void original.open(selection)}, t('pmq_open_original')) : null;
+      } : null});
     if (requirements) sections.push(requirements);
 
     // 4. Changes
@@ -797,6 +830,8 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     }
 
     // 6. Recorded turns disclosure
+    sections.push(original.element);
+    if (!original.selected()) original.restore('result', pin => pin.work_item_id === attempt.work_item_id && pin.attempt_id === attempt.attempt_id);
     const results = envelope.results || [];
     if (results.length > 0) {
       const turnsBody = h('div', {class: 'pm-work-result-turns-body'});

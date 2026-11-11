@@ -1,9 +1,45 @@
-// Read only the relations resolved by the Result's original central handoff.
-// Rendering never chooses an assessment or recomputes readiness/acceptance.
-export function resultRequirements({h, t, section, open = new Set()}) {
-  if (!section) return null; // Older servers do not provide this projection.
+export function originalAssessment({h, t, assessment, requirementId = null, key = 'original', open = new Set(), shortcut = null}) {
   const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t('wres_unknown');
   const verdict = value => label(value, ['accepted', 'rejected', 'unassessed', 'not_defined']);
+  const text = value => typeof value === 'string' ? value : '';
+  const note = value => h('p', {class: 'pm-note-text'}, text(value));
+  const line = (key, value) => h('p', {}, t(key), ': ', value);
+  const details = (key, title, ...body) => h('details', {
+    'data-result-requirement-details': key, ...(open.has(key) ? {open: true} : {}),
+  }, h('summary', {'data-work-result-focus': `requirement:${key}`}, title), ...body);
+  const record = (key, value) => details(key, t('wres_req_sources'), h('pre', {class: 'pm-note-text'}, JSON.stringify(value, null, 2)));
+  const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || '')
+    ? h('a', {href: `#/op/${id}`, 'data-work-result-focus': `requirement:operation:${key}`}, t('wres_view_operation')) : null;
+  const ref = assessment.reference || {}, original = assessment.original || {};
+  const assessmentKey = JSON.stringify([key, ref.review_id, ref.operation_id, ref.version, ref.document_digest]);
+  const summary = `${verdict(assessment.conclusion)} · ${t(assessment.applicable === true ? 'wres_req_applicable' : assessment.applicable === false ? 'wres_req_no_longer_applies' : 'pmq_applicability_not_evaluated')}`;
+  const reasons = (assessment.applicability_reasons || []).map(reason => {
+    const translated = t(`pmq_reason_${reason}`);
+    return note(translated === `pmq_reason_${reason}` ? t('wres_req_applicability_changed') : translated);
+  });
+  const criteria = (original.criteria || []).filter(entry => !requirementId || entry.criterion?.kind === 'dod'
+    || entry.criterion?.requirement_id === requirementId).map((entry, index) => {
+    const criterion = entry.criterion || {};
+    return details(`${assessmentKey}:criterion:${index}`,
+      `${t(criterion.kind === 'dod' ? 'wres_req_dod' : 'wres_req_criterion')}: ${text(criterion.input_id || criterion.criterion_id)} · ${verdict(entry.status)}`,
+      note(entry.rationale), line('wres_check_verification',
+        label(entry.verification?.status, ['passed','failed','unavailable','unknown'])),
+      record(`${assessmentKey}:proof:${index}`, {criterion, reference: entry.reference, verification: entry.verification}));
+  });
+  return details(assessmentKey, summary,
+    line('wres_req_assessed_by', text(assessment.assessed_by)),
+    line('wres_req_dod', verdict(original.dod)),
+    typeof assessment.qualified === 'boolean' ? note(t(assessment.qualified ? 'wres_req_qualified' : 'wres_req_not_qualified')) : null,
+    ...reasons, note(original.rationale), ...criteria,
+    assessment.revocation ? note(t('wres_req_revoked')) : null,
+    operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment), shortcut);
+}
+
+// Read only the relations resolved by the Result's original central handoff.
+// Rendering never chooses an assessment or recomputes readiness/acceptance.
+export function resultRequirements({h, t, section, open = new Set(), assessmentShortcut = null}) {
+  if (!section) return null; // Older servers do not provide this projection.
+  const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t('wres_unknown');
   const text = value => typeof value === 'string' ? value : '';
   const note = value => h('p', {class: 'pm-note-text'}, text(value));
   const source = value => h('code', {class: 'pm-source'}, text(value));
@@ -36,29 +72,8 @@ export function resultRequirements({h, t, section, open = new Set()}) {
       note(label(item.state, ['no_conclusion','verified_no_conclusion','assessments_recorded','unavailable'])),
       record(`${key}:inputs`, {source_input_id: item.source_input_id, acceptance_input_ids: item.acceptance_input_ids, link: item.link}));
     for (const assessment of item.assessments || []) {
-      const ref = assessment.reference || {}, original = assessment.original || {};
-      const assessmentKey = JSON.stringify([key, ref.review_id, ref.operation_id, ref.version, ref.document_digest]);
-      const summary = `${verdict(assessment.conclusion)} · ${t(assessment.applicable === true ? 'wres_req_applicable' : 'wres_req_no_longer_applies')}`;
-      const reasons = (assessment.applicability_reasons || []).map(reason => {
-        const translated = t(`pmq_reason_${reason}`);
-        return note(translated === `pmq_reason_${reason}` ? t('wres_req_applicability_changed') : translated);
-      });
-      const criteria = (original.criteria || []).filter(entry => entry.criterion?.kind === 'dod'
-        || entry.criterion?.requirement_id === item.requirement_id).map((entry, index) => {
-        const criterion = entry.criterion || {};
-        return details(`${assessmentKey}:criterion:${index}`,
-          `${t(criterion.kind === 'dod' ? 'wres_req_dod' : 'wres_req_criterion')}: ${text(criterion.input_id || criterion.criterion_id)} · ${verdict(entry.status)}`,
-          note(entry.rationale), line('wres_check_verification',
-            label(entry.verification?.status, ['passed','failed','unavailable','unknown'])),
-          record(`${assessmentKey}:proof:${index}`, {criterion, reference: entry.reference, verification: entry.verification}));
-      });
-      row.append(details(assessmentKey, summary,
-        line('wres_req_assessed_by', text(assessment.assessed_by)),
-        line('wres_req_dod', verdict(original.dod)),
-        note(t(assessment.qualified === true ? 'wres_req_qualified' : 'wres_req_not_qualified')),
-        ...reasons, note(original.rationale), ...criteria,
-        assessment.revocation ? note(t('wres_req_revoked')) : null,
-        operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment)));
+      row.append(originalAssessment({h, t, assessment, requirementId: item.requirement_id, key, open,
+        shortcut: assessmentShortcut?.(assessment.reference, item.requirement_id)}));
     }
     element.append(row);
   }

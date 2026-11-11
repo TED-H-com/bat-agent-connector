@@ -1,3 +1,4 @@
+import {parseAssessmentSelection, matchesAttempt} from './pm-assessment-selection.js';
 import {boardGitHubPanel, boardGitHubLink} from './board-github.js';
 import {h} from './ui/dom.js';
 import {button, searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState, inlineError} from './ui/components.js';
@@ -74,8 +75,17 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         startPanel = workStartPanel({
           h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: () => plan,
           onStartableChange: updateHeaderButton,
-          onLatestAttempt: attempt => {
-            resultPanel?.setAttempt(attempt);
+          onLatestAttempt: async attempt => {
+            const pin = parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace);
+            if (caps()?.features?.pm_workspaces?.quality_reviews?.exact_assessment_read === true && pin?.origin === 'result' && pin.workspace_id === workspaceId && pin.work_item_id === selected) {
+              const ticket = detailSerial;
+              try {
+                const data = await api('GET', `${endpoint}/work-attempts/${pin.attempt_id}`); alive();
+                if (ticket !== detailSerial || selected !== pin.work_item_id) return;
+                if (!matchesAttempt(pin, data)) throw Error(t('pmq_invalid'));
+                await resultPanel?.setAttempt(data.attempt);
+              } catch {if(ticket === detailSerial) resultPanel?.withdraw();}
+            } else resultPanel?.setAttempt(attempt);
           },
         });
       }

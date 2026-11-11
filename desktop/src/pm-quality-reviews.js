@@ -11,7 +11,7 @@ const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;
 const same=(a,b)=>JSON.stringify(ordered(a))===JSON.stringify(ordered(b)),clone=value=>structuredClone(value);
 const github={kind:'fixed_revision_verification',profile:'github_reported_checks_v1'};
-export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{},fixedResult=null,allowedAction=()=>true,onSaved=()=>{}}){
+export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{},fixedResult=null,allowedAction=()=>true,onSaved=()=>{},assessmentSelection=null,originalContextDigest=null,onRecorded=()=>{}}){
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let workId=null,serial=0,ready=false,filtered=false,model=null,selected='',chosen=null,create=null,record=null,revoke=null,formKey='',matrixKey='',verifier=null;
   const navigation=`batc.pm.quality-navigation.${namespace}.${workspaceId}`;
@@ -127,6 +127,14 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   }
   function renderReview(){
     comparison.invalidate();
+    if(assessmentSelection){
+      const row=current();facts.replaceChildren();
+      if(!row)throw error();
+      facts.append(h('h3',{tabindex:-1},t('pmq_original_assessment')),
+        h('p',{},t(row.version===assessmentSelection.version?'pmq_pinned_version':'pmq_newer_version',{version:row.version})),
+        ...row.applicability_reasons.filter(reason=>['review_revoked','review_superseded'].includes(reason)).map(reason=>text('pmq_reason_'+reason)));
+      buildAssessment(row);return;
+    }
     const row=current();facts.replaceChildren();if(!row){facts.append(text('pmq_empty'));assessment.hidden=withdrawal.hidden=true;return;}
     const document=row.assessment?.document;
     const use=h('button',{type:'button',class:'secondary',disabled:!selectable(row),onclick:()=>{if(!ready||!selectable(current()))return;emit(reference(current()));renderReview();}},t('pmq_use'));
@@ -158,7 +166,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     &&(!proof.source_operation_id||proof.source_operation_id===row.context.execution_operation_id));}
   function buildAssessment(row){
     const key=row.review_id;if(formKey!==key){record?.dispose();revoke?.dispose();formKey=key;
-      const version=hidden(row.version),rationale=input('pmq_assessment_reason',{multiline:true,max:4000}),fields={_version:version,rationale},matrix=h('div',{class:'pm-fields'});
+      const version=hidden(assessmentSelection?.version??row.version),rationale=input('pmq_assessment_reason',{multiline:true,max:4000}),fields={_version:version,rationale},matrix=h('div',{class:'pm-fields'});
       row.context.criteria.forEach((item,index)=>{const verdict=choice('pmq_verdict'),proof=choice('pmq_proof'),reason=input('pmq_criterion_reason',{multiline:true,max:2000});
         options(verdict,['unassessed','accepted','rejected'].map(value=>[value,t('pmq_'+value)]));verdict.value='unassessed';verdict.dataset.pmDefault='unassessed';
         options(proof,proofChoices(row,item).map(value=>[value.key,value.label]));fields['verdict_'+index]=verdict;fields['proof_'+index]=proof;fields['reason_'+index]=reason;
@@ -182,14 +190,18 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     row.context.criteria.forEach((item,index)=>options(record.fields['proof_'+index],proofChoices(row,item).map(value=>[value.key,value.label])));
     assessment.hidden=false;withdrawal.hidden=!!fixedResult;update();
   }
-  function remember(){try{localStorage.setItem(navigation,JSON.stringify({workId,review_id:selected}));}catch{}}
-  async function refreshAfterSave(){
+  function remember(){if(assessmentSelection)return;try{localStorage.setItem(navigation,JSON.stringify({workId,review_id:selected}));}catch{}}
+  async function refreshAfterSave(result){
     const doc=element.ownerDocument,owner=doc.activeElement,work=workId,review=selected;
     let restore=element.contains(owner);
     const moved=event=>{if(event.target!==owner)restore=false;};
     doc.addEventListener('focusin',moved);
     try{
-      await onSaved();await refresh();
+      await onSaved(result);await refresh();
+      if(assessmentSelection&&result?.kind==='assessment'&&result.review_id===assessmentSelection.review_id){
+        const receipt=current()?.history.find(row=>row.kind==='assessment'&&row.version===result.version&&row.document_digest===result.document_digest);
+        if(receipt)onRecorded({review_id:result.review_id,operation_id:receipt.operation_id,version:receipt.version,document_digest:receipt.document_digest});
+      }
       // Refresh briefly hides the long form. Keep the completed action's result
       // readable, unless the user moved to another control while it was saving.
       if(restore&&ready&&workId===work&&selected===review&&element.isConnected)facts.querySelector('h3')?.focus();
@@ -234,19 +246,28 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
         model.reviews=model.reviews.filter(row=>row.context.package_ref.package_id===fixedResult.package_id
           &&row.context.execution_operation_id===fixedResult.execution_operation_id&&row.context.native_result.candidate_commit===fixedResult.candidate_commit);
       }
+      if(assessmentSelection){
+        const row=model.reviews.find(row=>row.review_id===assessmentSelection.review_id);
+        if(!row||row.context_digest!==originalContextDigest||packageFor(assessmentSelection.package_id)?.document_digest!==assessmentSelection.package_digest
+          ||row.context.package_ref.document_digest!==assessmentSelection.package_digest
+          ||!row.history.some(ref=>ref.kind==='assessment'&&ref.operation_id===assessmentSelection.operation_id
+            &&ref.version===assessmentSelection.version&&ref.document_digest===assessmentSelection.document_digest))throw error();
+        selected=assessmentSelection.review_id;
+      }
       ready=true;options(history,model.reviews.map(row=>[row.review_id,`${row.context.native_result.candidate_commit.slice(0,12)} · ${row.context.reviewer_actor} · ${row.review_id}`]));
       if(selected&&!model.reviews.some(row=>row.review_id===selected))selected='';
       if(fixedResult&&!selected&&model.reviews.length===1)selected=model.reviews[0].review_id;
-      history.value=selected;buildCreate();renderReview();await verifier.setSources(model.operations.filter(op=>packages.some(pkg=>children(pkg).some(child=>child.operation_id===op.operation_id))));if(!valid(ticket))return;status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
+      history.value=selected;if(!assessmentSelection)buildCreate();renderReview();await verifier.setSources(model.operations.filter(op=>packages.some(pkg=>children(pkg).some(child=>child.operation_id===op.operation_id))));if(!valid(ticket))return;status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
       if(previous&&selectable(current())&&same(previous,reference(current())))emit(previous);update();
     }catch(err){if(valid(ticket))failure(err);}
   }
   function setWork(id){if(fixedResult&&id!==fixedResult.work_item_id)return;if(id===workId)return;withdraw();
-    workId=/^wi_[0-9a-f]{20}$/.test(id||'')?id:null;selected='';try{const saved=JSON.parse(localStorage.getItem(navigation));if(saved.workId===workId)selected=saved.review_id||'';}catch{}
+    workId=/^wi_[0-9a-f]{20}$/.test(id||'')?id:null;selected=assessmentSelection?.review_id||'';try{const saved=assessmentSelection?{}:JSON.parse(localStorage.getItem(navigation));if(saved.workId===workId)selected=saved.review_id||'';}catch{}
     void refresh();}
   workChoice.addEventListener('change',()=>setWork(workChoice.value));
   verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,namespace,fixedResult,allowedAction,onSaved:async()=>{await onSaved();await refresh();},onUnavailable:failure,onConfiguration:value=>{if(model){model.configuration=value?.available&&digest.test(value.command_digest)?value:null;matrixKey='';create?.sync();}}});
   element.insertBefore(verifier.element,draft.parentElement);
+  if(assessmentSelection){history.closest('label').hidden=true;draft.parentElement.hidden=true;}
   if(fixedResult){workChoice.closest('label').hidden=true;
     element.classList.remove('panel');element.querySelector('h2').textContent=t('pmq_result_open');}
   return {element,setWork,refresh,withdraw,refreshDiscussionSources:comparison.refresh,selection:()=>ready&&chosen?clone(chosen):null};

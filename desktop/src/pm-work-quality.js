@@ -1,3 +1,4 @@
+import {matchesAssessment, matchesResult} from './pm-assessment-selection.js';
 import {button} from './ui/components.js';
 import {workspaceQualityReviews} from './pm-quality-reviews.js';
 
@@ -14,7 +15,7 @@ export function workQualityContext(envelope, workspaceId, attempt) {
     execution_operation_id: id.execution_operation_id, candidate_commit: commit};
 }
 
-export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult}) {
+export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}}) {
   let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null, saving = 0;
   const body = h('div'), status = h('div', {role: 'status'});
   const open = button({variant: 'secondary', size: 'sm', label: t('pmq_result_open'), onClick: () => void load()});
@@ -46,7 +47,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
         workspaceId, workspace: () => workspace, caps: getCaps, permitted: () => Boolean(envelope),
         form, input, labelled: (key, field) => h('label', {}, t(key), field), errorBox,
         namespace: `${namespace}.result.${envelope.attempt_id}.${selected.candidate_commit}`,
-        fixedResult: selected, allowedAction: offered, onSaved: async () => {
+        fixedResult: selected, assessmentSelection, originalContextDigest: originalAssessment?.context_digest, onRecorded, allowedAction: offered, onSaved: async () => {
           saving++;
           try {await refreshResult();} finally {saving--;}
           if (!valid()) throw Error('VIEW_CHANGED');
@@ -61,6 +62,7 @@ export function createWorkQuality({h, t, api, alive, workspaceId, caps, form, er
   }
   function render(value, attempt) {
     const next = workQualityContext(value, workspaceId, attempt);
+    if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value))) {dispose(); return null;}
     if (!form || getCaps()?.features?.pm_workspaces?.quality_reviews?.version !== 1 || !next) {dispose(); return null;}
     if (JSON.stringify(next) !== JSON.stringify(context)) {dispose(); context = next;}
     const signature = JSON.stringify([value.verification, value.next_allowed_actions?.filter(row => row.action?.startsWith('pm.quality.') || row.action === 'pm.execution.verify'),
