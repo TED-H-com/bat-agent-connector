@@ -214,6 +214,8 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   });
   render();
   return {update, refresh, setRoute(name) {currentRoute = name;
+      // A different Work can retain the rail; abandon its in-flight width preview too.
+      listResizer?.cancelDrag();
       if (name === 'pm') {const routeView = location.hash.split('?')[0].split('/')[3]; currentView = routeView === 'discussions' ? 'discussions' : availableProjectViews(caps()).includes(routeView) ? routeView : lastProjectView(namespace, location.hash.split('/')[2]);}
       serial++; closeDrawer(false); navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === 'projects'); render();
       // The first route mounts before has-workspace enables the final grid.

@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {workspaceFixture, mountWorkspace, workspaceRoute} from './workspace-fixture.ts';
+import {workspaceFixture, mountWorkspace, workspaceRoute, workspaceProject} from './workspace-fixture.ts';
 
 for (const lang of ['en', 'zh-TW']) for (const native of [false, true]) {
   test(`work list width preserves reading and drafts ${lang} ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
@@ -50,6 +50,12 @@ for (const lang of ['en', 'zh-TW']) for (const native of [false, true]) {
     await page.reload();
     await expect(handle).toHaveAttribute('aria-valuenow', '500');
     await expect(draft).toHaveValue('Keep this draft. 保留草稿。');
+    await page.setViewportSize({width: 1000, height: 900});
+    await page.reload();
+    await expect(handle).toHaveAttribute('aria-valuenow', '456');
+    expect(await page.evaluate(() => localStorage.getItem('batc.workbench.list.width'))).toBe('500');
+    await page.setViewportSize({width: 1440, height: 900});
+    await expect(handle).toHaveAttribute('aria-valuenow', '500');
     expect(f.data.posts).toEqual([]);
   });
 }
@@ -73,17 +79,19 @@ test('pointer resize commits once; Escape, lost capture and route changes abando
   expect(await page.evaluate(() => localStorage.getItem('batc.workbench.list.width'))).toBeNull();
   await page.mouse.up();
   expect(await page.evaluate(() => localStorage.getItem('batc.workbench.list.width'))).toBe('336');
-  for (const cancel of ['Escape', 'pointercancel', 'lostpointercapture', 'route', 'mobile']) {
+  for (const cancel of ['Escape', 'pointercancel', 'lostpointercapture', 'route', 'other-work', 'mobile']) {
     await drag(60);
     await expect(handle).toHaveAttribute('aria-valuenow', '396');
     if (cancel === 'Escape') await page.keyboard.press('Escape');
     else if (cancel === 'route') await page.evaluate(() => {location.hash = '#/work-list';});
+    else if (cancel === 'other-work') await page.evaluate(route => {location.hash = route;},
+      `#/work/${workspaceProject}/execution/${f.data.detail.work[1].operation_id}`);
     else if (cancel === 'mobile') await page.setViewportSize({width: 390, height: 844});
     else await handle.dispatchEvent(cancel);
     await expect(page.locator('body')).not.toHaveClass(/workspace-resizing/);
     await page.mouse.up();
     expect(await page.evaluate(() => localStorage.getItem('batc.workbench.list.width'))).toBe('336');
-    if (cancel === 'route') await page.evaluate(route => {location.hash = route;}, workspaceRoute);
+    if (cancel === 'route' || cancel === 'other-work') await page.evaluate(route => {location.hash = route;}, workspaceRoute);
     if (cancel === 'mobile') await page.setViewportSize({width: 1440, height: 900});
     await expect(handle).toHaveAttribute('aria-valuenow', '336');
   }
@@ -91,6 +99,10 @@ test('pointer resize commits once; Escape, lost capture and route changes abando
   await page.keyboard.press('Home');
   await expect(handle).toHaveAttribute('aria-valuenow', '200');
   await page.keyboard.press('Shift+ArrowRight');
+  await expect(handle).toHaveAttribute('aria-valuenow', '248');
+  await page.keyboard.press('PageUp');
+  await expect(handle).toHaveAttribute('aria-valuenow', '296');
+  await page.keyboard.press('PageDown');
   await expect(handle).toHaveAttribute('aria-valuenow', '248');
   await handle.dblclick();
   await expect(handle).toHaveAttribute('aria-valuenow', '256');

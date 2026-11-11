@@ -19128,6 +19128,7 @@ function setupSidebarResizer({ aside, workspace, t, layout = {} }) {
 	return {
 		resizer,
 		refresh,
+		cancelDrag,
 		getWidth: () => currentWidth,
 		setWidth: (w) => {
 			currentWidth = applyWidth(w, true);
@@ -19795,6 +19796,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		refresh,
 		setRoute(name) {
 			currentRoute = name;
+			listResizer?.cancelDrag();
 			if (name === "pm") {
 				const routeView = location.hash.split("?")[0].split("/")[3];
 				currentView = routeView === "discussions" ? "discussions" : availableProjectViews(caps()).includes(routeView) ? routeView : lastProjectView(namespace, location.hash.split("/")[2]);

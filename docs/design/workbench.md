@@ -78,6 +78,9 @@ target, and is disposed with the shell. Reflow moves no composer or conversation
 nodes and retains the existing search, selection, drafts and list scroll. The
 Work heading's actions wrap with available content width so widening the list
 does not squeeze the title into a few characters per line.
+Changing routes cancels an unfinished drag even when both destinations retain
+the desktop list. Reloading while narrowed still preserves the wider preference;
+Classic uses its original independent width key and mobile drawer behavior.
 
 The preview project list joins an execution to its existing Work only when the
 project response supplies a caller-visible `work_identity`. This projection checks

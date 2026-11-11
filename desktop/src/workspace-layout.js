@@ -218,6 +218,7 @@ export function setupSidebarResizer({ aside, workspace, t, layout = {} }) {
   return {
     resizer,
     refresh,
+    cancelDrag,
     getWidth: () => currentWidth,
     setWidth: w => {
       currentWidth = applyWidth(w, true);
