@@ -317,7 +317,8 @@ jobs:
   browser-ui:
     name: browser-ui (${{ matrix.shard }}/5)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Budget evidence: tests/test_browser_ui_budget.py.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
