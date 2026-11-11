@@ -1,5 +1,5 @@
 import {expect} from '@playwright/test';
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createInterface} from 'node:readline';
 import {once} from 'node:events';
 

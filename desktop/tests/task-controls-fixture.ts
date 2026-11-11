@@ -6,7 +6,7 @@ export async function taskFixture(page: Page, native = false, options: any = {})
     allowed: true, paused: false, version: 7, taskState: 'running', status: 'succeeded', failRead: false, failTask: false,
     operation: null as any, posts: [] as any[], reads: [] as string[], errors: [] as string[], events: [] as any[],
     after: 0, lost: false, holdPost: null as any, delayPost: false, taskEvents: [] as any[], list: [] as any[], listLimit: 2,
-    holdList: null as any, delayList: false, failList: false, ...options};
+    holdList: null as any, delayList: false, failList: false, hiddenIds: [] as string[], legacyCursors: false, ...options};
   const dispatch = async (input: any) => {
     const url = new URL(input.path, 'http://fixture'), path = url.pathname;
     const caps = {actor: state.actor, scopes: state.scopes, api_version: 1, contract_version: '2026-10-08',
@@ -41,14 +41,26 @@ export async function taskFixture(page: Page, native = false, options: any = {})
       if (state.failRead) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Operation read failed'}}};
       return {status: 200, data: {operation: {...state.operation, status: state.status}}};
     }
+    if (path.startsWith('/operations/')) {
+      const id = path.slice('/operations/'.length), operation = state.list.find((op: any) => op.operation_id === id);
+      if (operation) return state.hiddenIds.includes(id)
+        ? {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Operation unavailable'}}}
+        : {status: 200, data: {operation}};
+    }
     if (path === '/operations') {
       if (state.delayList) {state.delayList = false; await new Promise(resolve => {state.holdList = resolve;});}
       if (state.failList) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'List read failed'}}};
       const before = Number(url.searchParams.get('before') || Infinity);
+      const beforeId = url.searchParams.get('before_id');
       const statuses = url.searchParams.get('status')?.split(',');
-      const rows = state.list.filter((op: any) => op.created_at < before && (!statuses || statuses.includes(op.status)));
-      const operations = rows.slice(0, state.listLimit);
-      return {status: 200, data: {operations, next_before: rows.length > operations.length ? operations.at(-1).created_at : null}};
+      const rows = state.list.filter((op: any) => (op.created_at < before ||
+        beforeId && op.created_at === before && op.operation_id < beforeId) && (!statuses || statuses.includes(op.status)))
+        .sort((a: any, b: any) => b.created_at - a.created_at || (a.operation_id < b.operation_id ? 1 : a.operation_id > b.operation_id ? -1 : 0));
+      const scanned = rows.slice(0, state.listLimit), more = rows.length > scanned.length;
+      const data = {operations: scanned.filter((op: any) => !state.hiddenIds.includes(op.operation_id)),
+        next_before: more ? scanned.at(-1).created_at : null,
+        ...(!state.legacyCursors ? {next_before_id: more ? scanned.at(-1).operation_id : null} : {})};
+      return {status: 200, data: state.listResponse ? state.listResponse(data, url) : data};
     }
     if (path === '/events') state.after = Number(url.searchParams.get('after'));
     const events = state.events.filter((e: any) => e.seq > state.after), cursor = events.at(-1)?.seq || state.after;

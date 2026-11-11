@@ -8,6 +8,9 @@ test('shared frontend central routes are on the desktop bridge allow-list', () =
   const discovered = found.calls.map(call => `${call.method} ${call.path} ${call.file}`);
   for (const needle of [
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/attempts?limit=100 pm-work-start.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/attempts?after=1&limit=20 pm-history-attempt-picker.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-attempts/att_cccccccccccccccccccccccccccccccc pm-history-attempt-picker.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/external-links/hxl_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pm-history-replacement.js',
     'POST /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/start-preview pm-work-start.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-attempts/att_cccccccccccccccccccccccccccccccc/result pm-work-result.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/inputs?limit=50&attempt_id=att_cccccccccccccccccccccccccccccccc pm-work-follow-up.js',
@@ -16,6 +19,12 @@ test('shared frontend central routes are on the desktop bridge allow-list', () =
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-profiles?limit=50 pm-work-profile-picker.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-profiles/wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pm-work-profile-picker.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-profiles/wpf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/readiness pm-work-profile-picker.js',
+    'GET /pm/workspaces pm-work-item-history.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pm-work-item-history.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/kanban/wi_bbbbbbbbbbbbbbbbbbbb pm-work-item-history.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/external-links?after=1&limit=20 pm-work-history.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/external-links/hxl_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pm-work-history.js',
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/history-excerpts/hxe_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pm-work-history.js',
   ]) {
     assert.ok(discovered.includes(needle), `discovery missed ${needle}`);
   }

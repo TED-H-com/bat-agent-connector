@@ -54,6 +54,8 @@ jobs:
           python-version: "3.13"
       - name: Sync (locked)
         run: uv sync --locked --extra dev
+      - name: Hidden process policy
+        run: uv run python scripts/check-hidden-spawns.py
       - name: Lint
         run: uv run ruff check .
       - name: Generated agent skills

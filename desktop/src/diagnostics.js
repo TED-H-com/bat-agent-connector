@@ -2,6 +2,11 @@ import {runtimeStale} from './state/sessions.js';
 import {versionProjection, projectionBuild, version, commit, time} from './version-projection.js';
 // An explicit projection. Never spread server/client objects into an export.
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
+// Native errors can append recovery advice. Export only the leading code, never that text.
+export function nativeFailureCode(error) {
+  const value = typeof error === 'string' ? error : error?.code || error?.message;
+  return typeof value === 'string' ? code(value.match(/^([A-Z][A-Z0-9_]{0,79})(?=$|: | \()/)?.[1]) : null;
+}
 const reason = value => typeof value === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
 const action = value => typeof value === 'string' && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
 const protocols = ['bat-remote/v2','bat-remote/legacy-v1'];
@@ -55,16 +60,20 @@ export function buildLine(projection, t) {
 }
 const APP = 'io.betteragent.dashboard';
 export function logLocations(os, managed) {
-  const root = managed ? {linux:`~/.local/share/${APP}/central`,macos:`~/Library/Application Support/${APP}/central`,windows:`%LOCALAPPDATA%\\${APP}\\central`}[os]
+  // Managed::prepare stores the installation under app_local_data_dir()/managed-central.
+  const root = managed ? {linux:`~/.local/share/${APP}/managed-central`,macos:`~/Library/Application Support/${APP}/managed-central`,windows:`%LOCALAPPDATA%\\${APP}\\managed-central`}[os]
     : {linux:'~/.local/state/bat-agent-connector',macos:'~/.local/state/bat-agent-connector',windows:'~\\.local\\state\\bat-agent-connector'}[os];
   return {state_database: root ? root + (os === 'windows' ? '\\' : '/') + (managed ? (os === 'windows' ? 'state\\' : 'state/') : '') + 'tasks.sqlite3' : null,
+    service_log: managed && root ? root + (os === 'windows' ? '\\' : '/') + 'service.log' : null,
     runtime_stderr: managed ? 'not_persisted_by_desktop' : 'external_service_configuration', location: 'default_template_only'};
 }
 const databaseTemplates = managed => Object.fromEntries(['linux','macos','windows'].map(os => [os,logLocations(os,managed).state_database]));
 export function scrubDiagnostics(text) {
   // Parse the serialized JSON so values can be replaced in full, never partially.
   // Only module-owned formats/templates survive this independent final gate.
-  const safeLogs = new Set(['linux','macos','windows'].flatMap(os => [false,true].map(managed => logLocations(os,managed).state_database)));
+  const safeLogs = new Set(['linux','macos','windows'].flatMap(os => [false,true].flatMap(managed => {
+    const locations = logLocations(os,managed); return [locations.state_database,locations.service_log];
+  })));
   return JSON.stringify(JSON.parse(text, (_key, input) => {
     if(typeof input !== 'string')return input;
     let value = input;
@@ -117,8 +126,21 @@ export function buildDiagnostics(input) {
   const sources = Object.fromEntries(Object.entries(sourceReads).map(([key, read]) => [key,
     read.status === 'available' ? 'available' : 'not_available']));
   const versions=versionProjection(input);
+  const native = input.nativeConnectionRead?.data;
+  const localRead = read => diagnosticsSource({completed:!!read?.data, at:read?.at, error:read?.error});
   const bundle = {schema:'batc.diagnostics.v1', exported_at: time(input.exportedAt),
     client: clientIdentity(input,versions), versions, sources, source_reads:sourceReads,
+    desktop_connection: input.desktop ? {
+      status_read:localRead(input.nativeConnectionRead),
+      configuration_source:select(native?.configuration_source,['managed','external']),
+      connected:bool(native?.connected), credential_available:bool(native?.credential_available),
+      error_code:nativeFailureCode(native?.error),
+      managed_runtime:{status_read:localRead(input.managedConnectionRead),
+        mode:select(input.managedRuntime?.mode,['managed','external','role_pending']),
+        ready:bool(input.managedRuntime?.ready), background:bool(input.managedRuntime?.background),
+        lifecycle:select(input.managedRuntime?.lifecycle?.state,['running','stop_pending','stopped']),
+        error_code:nativeFailureCode(input.managedRuntime?.error)},
+    } : null,
     hosts: hosts.map((host,i) => {
       const policy = input.caps?.hosts?.find(h => h.host === host.host) || {};
       const policyFlags = flags(host.policy || policy, ['enabled','writes','orchestrate','shared_clone_worktrees','managed_roots_configured','ssh_configured','checkpoint_available']);
@@ -141,6 +163,7 @@ export function buildDiagnostics(input) {
     coverage: {complete:bool(input.observation?.coverage?.complete), reasons:Array.isArray(input.observation?.coverage?.reasons) ? input.observation.coverage.reasons.map(reason).filter(Boolean) : null},
     operations_basis:'loaded_page', recent_errors:(input.recentErrors || []).slice(-50).map(e => failedCall({at:e.at,method:e.method,path:e.path_template,status:e.status,code:e.code,admissionRefused:e.admission_refused,operation:{operation_id:e.operation_id}})),
     log_locations:{basis:'default_templates_only', state_database:{managed_desktop:databaseTemplates(true),standalone:databaseTemplates(false)},
+      managed_service_log:Object.fromEntries(['linux','macos','windows'].map(os=>[os,logLocations(os,true).service_log])),
       runtime_stderr:{managed_desktop:'not_persisted_by_desktop',standalone:'external_service_configuration'}}};
   return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
 }

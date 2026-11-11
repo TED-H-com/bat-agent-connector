@@ -388,6 +388,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   });
   form.append(connection);
   return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !(initialChecking && receiptTimer !== null) && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+    intentRequest: () => saved.intent ? structuredClone(saved.intent.request) : null,
     initialChecking: () => initialChecking && (busy || receiptTimer !== null),
     stopAutoCheck: () => {if (initialChecking) {initialChecking = false; stopTimer(); update();}},
     stage: () => {
@@ -739,7 +740,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       && caps()?.scopes?.some(scope => scope === 'observe' || scope === 'admin')}) : null;
   if (schedule) body.insertBefore(schedule.element, content);
   const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
-    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
+    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
@@ -836,13 +837,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       onSelectionChange:(id,ref)=>{if(ref)qualitySelections.set(id,ref);else qualitySelections.delete(id);}}) : null;
   if(qualityReviews)body.insertBefore(qualityReviews.element,sprints?.box||content);
   const traceability = charter && brief && kanban
-    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled}) : null;
+    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox, workspace: () => workspace, workspaceSettled}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
   const resources = workspaceId && !threadId && caps()?.features?.pm_resources
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === 'day'}) : null;
   if (resources) body.insertBefore(resources.element, content);
   const externalHistory = workspaceId && !threadId && caps()?.features?.external_history?.version === 1
-    ? workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox}) : null;
+    ? workspaceExternalHistory({h, t, api, alive, workspaceId, errorBox, workspace:()=>workspace, caps, namespace, permitted, form}) : null;
   if (externalHistory) body.insertBefore(externalHistory.element, content);
   const agentsContent = resources && externalHistory ? h('div', {}, resources.element, externalHistory.element) : resources?.element || externalHistory?.element;
   const drawersHome = h('div', {hidden: true});
@@ -1309,7 +1310,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, errorBox, guard: alive,
           capability: () => pmCapabilities, capabilityError: () => pmCapabilitiesError, thread: () => threadData, permitted, target, refresh: load});
       }
-      continuation = continuationBrief({h,t,form,input,labelled,caps,capability:()=>pmCapabilities,thread:()=>threadData,permitted,target,refresh:load,
+      continuation = continuationBrief({h,t,api,guard:alive,form,input,labelled,caps,capability:()=>pmCapabilities,thread:()=>threadData,permitted,target,refresh:load,
         onOpen:()=>discussionTools.open('context')});
       column.querySelector('.pd-transcript').prepend(continuation.reader);
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
@@ -1990,7 +1991,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     disposed = true; main.removeEventListener('toggle', openedSource, true); for (const placeholder of maskedSources.values()) placeholder.remove(); maskedSources.clear();
     discussionTools?.dispose(); sequence++; off(); offOnline(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
     brief?.dispose?.();traceability?.dispose();kanban?.dispose();resources?.dispose();externalHistory?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
-    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();assessmentSources?.dispose();
+    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();assessmentSources?.dispose();continuation?.dispose();
     for (const control of viewToolMenus.values()) control.dispose();
     for (const value of forms) value.dispose();
     refreshing = false;

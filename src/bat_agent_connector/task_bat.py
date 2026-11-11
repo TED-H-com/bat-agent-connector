@@ -9,12 +9,13 @@ import os
 import re
 import shlex
 import stat
-import subprocess
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from bat_agent_connector import hidden_process
 
 from . import (
     confinement,
@@ -92,7 +93,7 @@ class BatTaskAdapter:
         if not alias:
             raise ValueError("base_branch requires a configured SSH verification host")
         cmd = ("ssh", "-o", "BatchMode=yes", alias, "sh -lc " + shlex.quote(script))
-        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE,
+        proc = await hidden_process.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE,
                                                     stderr=asyncio.subprocess.PIPE)
         out, err = await proc.communicate()
         if proc.returncode != 0:
@@ -852,7 +853,7 @@ class BatTaskAdapter:
             raise ValueError("complete request archive is not locally valid or host verifier is unset")
         command = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", alias,
                    "sha256sum -- " + shlex.quote(str(path))]
-        result = await asyncio.to_thread(subprocess.run, command, capture_output=True,
+        result = await asyncio.to_thread(hidden_process.run, command, capture_output=True,
                                          text=True, timeout=8, check=False)
         if result.returncode != 0 or result.stdout.split(maxsplit=1)[0:1] != [archive["sha256"]]:
             raise ValueError("BAT successor host cannot verify the complete request archive")

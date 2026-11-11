@@ -1,7 +1,8 @@
 # Explicit external conversation history
 
-This is an E08 / EC-1.1 T3–T5 read-only increment. It retains the Connector as
-collection and authorization authority. It does not complete native execution,
+This E08 / EC-1.1 T3–T5 increment reads external histories and explicitly relates
+fixed entries to Work. Original CLI sessions stay read-only, with the Connector
+as collection and authorization authority. It does not complete native execution,
 source discovery, cross-adapter aliasing, Work derivation or real-device acceptance.
 
 ## Grant and identity
@@ -151,8 +152,312 @@ Global operation/event reads also enforce source access. Relationships add
 reviewable material; they change no Work/Attempt state, approval, ownership,
 fingerprint or Overview progress. The source remains `external_read_only`.
 `features.external_history.relationships` is additive and has `derive_ready=false`;
-it grants no admission authority. There is no relationship UI, derive, search,
-automatic suggestion or native route yet.
+it grants no admission authority. The shared relationship UI below is a branch
+candidate; derive, search, automatic suggestion and native execution remain open.
+
+### Desktop transport parity
+
+The Tauri `connector_request` bridge admits the five existing relationship reads
+above, including the pure-read POST preview. It passes them to the same central
+service with the current principal; Rust does not resolve source files, maintain
+grants or store relationships. Link/unlink continue through the existing
+`/operations` path with their original idempotency key.
+
+Preview accepts only `source_id`, `entry_id`, `expected_content_digest` and one
+typed `selection`. It refuses queries, operation keys, paths, caller identity
+overrides and extra fields. A text selection uses integer Unicode codepoint
+offsets, a part index below 128 and `0 <= start < end <= 16000`; central still
+checks the actual retained part, content digest and current access. Whole-entry
+selection accepts only `kind: "entry"`.
+
+The two list routes accept only `after` (0 through 2^63−1) and `limit` (1–50).
+Source associations additionally require one exact `shi_` entry ID. Duplicate
+or unrelated parameters and malformed IDs are refused. Excerpt and link detail
+routes accept no query fields. This transport increment does not add
+native CLI execution or installed-device acceptance. The subsequent shared UI
+candidate uses these same routes.
+
+### Shared relationship UI candidate
+
+The English/zh-TW history reader exposes an on-demand **Related Work** disclosure
+per retained entry when the server advertises relationship version 1. Opening it
+reads current associations in pages of 20, follows advancing cursors even across
+hidden rows and resolves current Work titles. Each relationship distinguishes a
+whole entry from selected text and identifies an optional Attempt association.
+Opening the Work uses its existing route. Merely reading creates no operation.
+
+An owner or contributor with the advertised link action and manage/observe can
+choose an existing Work. The client requests the whole-entry preview, verifies
+its server/workspace/source/entry/digest identity and renders returned plaintext,
+clipping and omissions. It sends the returned canonical reference unchanged.
+The existing workspace board supplies paginated Work choices; selecting a Work
+reads its current card and checks the binding, project and version. No Work,
+Attempt, source grant or ownership is inferred or created by this picker.
+
+The existing durable form submits `pm.history.link` with the displayed binding
+and Work version. Its namespace also includes source and entry IDs so two entries
+linked to the same Work cannot share an intent. Only the chosen Work ID and the
+form's fixed reference/request persist locally; preview text and Work titles do
+not. A lost response restores the original target, preconditions and key after
+reload. Selection and refresh controls stay locked while that intent is unresolved.
+After an explicit failed-request reset, **Refresh selected Work** obtains a new
+version before a new submission. No retry silently retargets the original request.
+
+Creators and workspace owners can submit `pm.history.unlink` through the same
+form. Before submission a small index saves only the known link/Work IDs, version
+and creator. If the withdrawal succeeds but its response is lost, the link may
+disappear from the active-only list; its original stored intent remains reachable
+through a recovery control. The index alone cannot create a new withdrawal. A
+verified success removes the index entry. Current scopes, membership, action
+authorization and the central existing-operation checks continue to apply.
+
+Source withdrawal, failed source reads, reader close and workspace departure
+dispose relationship forms, hide preview/plaintext and fence late responses.
+Administrators do not bypass source grants or workspace roles. Older servers
+retain the original read-only reader. The initial increment supplies whole-entry
+links and withdrawal; the text-range, optional Attempt, relationship maintenance
+and Work-side reader candidates below extend it. Derive and real-device acceptance
+remain open. Linking
+adds reference material without approving, completing or taking over any work.
+
+### Text-range selection candidate
+
+After requesting the whole-entry preview, **Choose a text range** exposes each
+nonempty retained text part in a labelled, read-only field. Tool markers have no
+range control. The user explicitly selects a range and chooses **Preview selected
+text**; **Use entire entry** returns to the full retained entry. The preview shows
+which selection is active, preserving clipping, omissions and the partial-history
+notice. Nothing is submitted merely by selecting or previewing text.
+
+Textarea UTF-16 positions are mapped to the original Unicode codepoint offsets,
+including CRLF/CR normalization by the browser. Empty selections, split surrogate
+pairs, invalid parts and out-of-bounds ranges are refused. No Unicode normalization,
+trimming or client digest calculation occurs. Read-only fields support keyboard
+selection with Shift plus Left/Right/Home/End, including backward selections;
+grapheme navigation uses `Intl.Segmenter` when available and complete codepoints
+otherwise. Mouse and native touch selection use the same preview path. These
+browser fixtures do not establish physical mobile or native WebView acceptance.
+
+The preview response must match the requested selection, exact reference schema,
+source identity and retained content. Text excerpts contain only that exact slice;
+role, clipping and omitted-part counts must still match the entry. The returned
+canonical reference is sent through the existing `pm.history.link` action without
+alteration. Pending previews clear the previous excerpt and disable sending or
+changing targets. Source refusal, close and disposal clear plaintext and fence
+late replies; focus returns to the initiating control when it is still available.
+
+Only fixed-reference metadata is retained in the existing Work-specific durable
+form draft, never the text field or preview body. Reloading or changing Work
+re-previews that saved range and compares its original reference before showing
+it. A saved operation's immutable request takes precedence over draft fields,
+including older whole-entry intents without range metadata. Its recovery key,
+target, parameters and preconditions remain unchanged. The shared durable form
+exposes a cloned request for this display purpose; callers cannot mutate the
+stored original through that accessor. An unresolved request locks range controls,
+and a failed request requires the existing explicit **New request** action.
+
+This adds no API, schema, source takeover, automatic PM input or model call.
+The optional Attempt and relationship maintenance candidates below extend this
+path within E08/E10 and EC-1.1 T5.
+
+### Optional Attempt selection candidate
+
+The shared source reader defaults to **Work only**. With the existing Work-start
+version 1 capability, **Choose an attempt (optional)** lazily reads that Work's
+central Attempt list. No latest Attempt, session or execution target is inferred.
+Choices show the recorded sequence, localized time and start stage; selecting one
+reads its exact detail and displays its full ID. Both responses must match the
+selected workspace and Work. This is reference association, not execution control.
+
+The existing list route uses 20-row pages and strictly advancing safe-integer
+cursors, including pages containing only hidden rows. **Read more attempts**
+rereads prior pages before displaying the combined choices. Refresh clears old
+metadata immediately, revalidates the selected detail and retains only current
+visible rows. Reading stops at 25 pages with an explicit partial-list notice.
+A detail refusal or identity mismatch clears displayed metadata and blocks a new
+link with that selection; it never silently falls back to Work only. The user can
+explicitly choose Work only or refresh. Work changes, source close and disposal
+fence pending reads. The central admission remains the final authority for access
+and same-Work membership at submission.
+
+Only the optional `attempt_id` joins `fixed_ref` in the existing durable form's
+draft and `pm.history.link` parameters. Titles, stages, dates and session details
+are not saved locally. Restoring a draft rereads its choice; an original immutable
+request overrides newer draft metadata, including an older Work-only request.
+Original key, parameters, target and preconditions remain unchanged. Receipt
+recovery does not depend on current picker availability; an unresolved intent
+locks selection, and a failed intent requires the existing explicit new-request
+action. A succeeded receipt arriving during restored reads cannot erase or retarget
+the displayed choice. Servers without the capability keep Work-only creation;
+previous original requests remain recoverable through their existing central path.
+
+English and zh-TW use the shared browser/desktop source and native select control.
+HTTP and injected IPC fixtures cover the same reads and operation body; route
+inventory checks include both existing Attempt endpoints. No new API, schema,
+Rust transport, start action, automatic PM input or model call is added. This
+E08/E10/T5 candidate does not establish native WebView or physical-mobile acceptance.
+
+### Relationship maintenance candidate
+
+The shared source form defaults to creating a relationship. **Replace a
+relationship (optional)** lists currently loaded, withdrawable associations for
+that same source entry. Selecting one rereads its central link and Work detail,
+checking current membership/creator authority, identity, active state and the
+displayed version. The replacement may change the destination Work, fixed text
+range or optional Attempt. No write happens during selection. A single existing
+`pm.history.link` operation carries `replaces_link_id` and
+`expected_old_link_version` together with the new fixed reference and destination
+preconditions; the central transaction preserves the old record and events.
+
+An explicit **Relationship ID** lookup also selects a readable relationship from
+another entry or source in the same workspace. The ID is only a lookup hint: a
+current central read must confirm its server, workspace, fixed reference, active
+state, creator/owner authority and Work before supplying its version. The review
+shows the original Work, source, entry and version. A relationship from the loaded
+entry list still has to match that entry's exact reference. There is no source
+scan, automatic replacement or inferred Work association. Both old and new
+sources must be readable through the existing APIs; a revoked source still uses
+the known-ID withdrawal flow below.
+
+Typing another ID retires the previous selection and blocks submission until
+the explicit read succeeds, or the choice is cleared. Invalid IDs make no API
+request. Only the validated ID and version enter the existing replacement draft;
+the old title, source reference and text are not added to local storage. Restoring
+a draft rechecks the same version. An unavailable old relationship does not
+prevent recovery of an already sent original operation.
+
+Only the old ID and version join the existing durable draft. An immutable original
+request takes precedence over newer fields, including an older create-only intent.
+Lost replies retain the same key even when the old association has disappeared.
+A mismatched or unavailable selection blocks a new submission without reverting
+to create mode. The user can explicitly clear the choice, or use **Reread selected
+relationship** to advance an unsent draft. Failed operations require the existing
+**New request** action first. Closing or switching Work fences late reads; a
+successful receipt clears the retired choice even during draft restoration.
+
+**Saved relationship IDs**, outside the source inspector, supports
+withdrawal after source access is lost. An actor/connection/workspace-specific
+local index remembers only previously read, withdrawable workspace, link, Work,
+source and entry IDs, creator and version. It stores no transcript, title, digest
+or fixed-reference body. The list displays opaque link/Work IDs and the last-read
+version and pages locally by 20. The index holds at most 500 records without
+eviction; pre-existing pending withdrawal intents remain separately recoverable.
+A storage failure or full index is explicit. It is not a central
+enumeration and cannot recover identifiers never read on this client.
+
+The cleanup control requires current explicit membership, manage/observe, the
+advertised unlink action and creator/owner authority. New requests use the last
+known version; only the central action checks current Work visibility, authority
+and compare-and-swap state. No source or excerpt read is needed for cleanup, and
+conflicts never silently advance the version or resend. Existing withdrawal
+drafts reuse their original namespace, request and key. An older index without
+workspace identity is admitted only when its exact original intent targets this
+workspace; the index alone cannot create a request. Damaged metadata fails closed
+and leaves original intents intact. Validated success removes only that known
+record and its legacy index entry; malformed receipts preserve recovery.
+
+The source inspector suspends cleanup forms to avoid concurrent controls for the
+same draft. Both surfaces preserve the existing durable operation and connection
+gates. English/zh-TW and HTTP/injected IPC use the same source. This adds no API,
+schema, native transport or CLI control. Discovery of unseen relationship IDs,
+derive and native/live acceptance remain open; known-ID
+cleanup does not establish complete revoked-source discovery or lifecycle coverage.
+
+### Remembering Work-side relationships for cleanup
+
+After explicitly opening a fixed excerpt from Board, Requirements, standalone Work
+or linked-session Work, a creator or workspace owner with manage/observe and the
+advertised unlink action can choose **Save relationship ID for cleanup**. The
+shared control rereads the exact central relationship before saving. State, version,
+Work, Attempt, fixed reference and creator must still match; standalone Work also
+rechecks its workspace/binding proof. Closing, switching Work, parent refresh or
+connection changes fence late responses. Reading alone does not save IDs.
+
+Only the existing seven-field identifier record enters the same account/connection/
+workspace-specific 500-record index used by **Saved relationship IDs**. No text,
+title, digest, reference body or reading selection is saved. Full or damaged storage
+is reported without eviction or replacing original withdrawal intents. Storage
+failures preserve the current excerpt and permit an explicit retry. The user can
+later withdraw the known ID from Resources → External conversations, including
+after source revocation, through the existing original-key recovery flow.
+
+This adds no central action, API, schema, native bridge or execution capability.
+The saved version is a recovery hint, not current authorization. It does not discover
+relationships that were never read on this client before their source was revoked.
+English and zh-TW share the browser/desktop component; fixture tests are not native
+or physical-mobile acceptance.
+
+### Work-side reader candidate
+
+The shared Board and Requirements Work inspectors offer **View linked excerpts**
+in English and zh-TW. They use the selected Work and workspace membership; opening a
+Work alone does not read external histories. The disclosure appears only for
+relationship version 1 with the fixed-reference schema, observe scope and an
+explicit workspace role. Older servers keep their existing inspector structure.
+
+Opening the disclosure reads active, currently visible relationships in pages of
+20. **Read more relationships** rereads earlier pages before advancing, including
+empty pages with hidden rows. Cursors must advance, identities must match the
+current workspace/Work/server and duplicate links are refused. The reader caps a
+view at 25 pages and labels that limit without claiming complete coverage. Each
+row shows the source ID, relationship time, whole-entry/text selection and any
+explicit Attempt association. It does not infer a title, session or execution.
+
+Selecting an excerpt reads the exact relationship, resolves its retained excerpt
+and reads the relationship again before displaying plaintext. Both relationship
+reads must match its active state, version, Work, Attempt, excerpt and canonical
+reference. This preserves the Work/Attempt visibility check around the source
+read. The server remains responsible for current grants and digest verification;
+the frontend compares the canonical fields without calculating replacement hashes.
+Reordered object fields do not change reference identity.
+
+The reader renders literal text and tool markers, with shortened/omitted content,
+partial history and unknown execution stated explicitly. **Source and coverage**
+shows the fixed reference and association IDs. Text, references and reading
+selection are not written to local storage. Reading creates no operation, Work,
+Attempt, approval, PM context or model request, and leaves original CLI sessions
+read-only. The source reader's text-range picker above creates text selections;
+this Work-side panel only reads them.
+
+An open reader rechecks its loaded pages and selected excerpt every 60 seconds.
+Refresh, pagination and pending parent Work reads clear previous content before
+publishing a new result. Withdrawal, denial, changed identity or failed reads hide
+all loaded relationships and plaintext; the user can explicitly retry. Closing
+the disclosure/inspector, changing Work, leaving its view or disposing the view
+cancels its timer and fences late responses. A revoked relationship cannot be
+restored by a still-pending excerpt response. Selecting a requirement only shows
+its existing explicit Work links; selecting one of those Works opens that Work's
+reader. There is no requirement-wide transcript aggregation or automatic adoption.
+Each mounted reader has its own accessibility target ID.
+
+The standalone `/item/{work_id}` page, including its linked-session Work view,
+uses the same reader inside a workspace disclosure. The ordinary Work record has
+no workspace binding: an explicit route `workspace` or the last visited workspace
+is only a navigation hint. Without a hint, the person selects a workspace from the
+current central list. An unavailable hint does not silently fall back to another
+workspace, and the client does not scan Work catalogues to discover membership.
+Before reading, central workspace and exact kanban-card reads must match the
+workspace, server, Work, project and binding. Those checks run again for each
+relationship refresh and selected excerpt, and after the excerpt resolves, ahead
+of the final relationship check. A changed server or binding, or a lost membership
+role, withdraws the current read.
+
+Parent Work safety reads suspend history immediately, including while an unrelated
+edit draft has focus. Successful current reads can restore the selected excerpt;
+failed reads withdraw it without using a stale Work record as authority. Workspace
+and operation events also invalidate an open reader independently of the edit form.
+Closing, changing workspace or navigation fences initial workspace proofs as well
+as later excerpt reads. Closing or resizing the linked-session Results inspector,
+or withdrawing its session, also clears the reader and its timer. Workspace choice
+and plaintext stay in memory; these controls add no new backend routes, schema,
+native transport or operations.
+
+HTTP and injected desktop IPC regressions exercise this shared frontend. They do
+not establish native WebView, real BAT/model or physical-mobile acceptance. Work
+derivation and native execution remain open alongside the unrevised PM lifecycle
+requirements. Relationship maintenance above covers same-entry replacement and
+locally known IDs after source revocation, plus explicit cross-source replacement
+by readable relationship ID. It does not discover unseen relationships.
 
 ## Narrow format profiles
 

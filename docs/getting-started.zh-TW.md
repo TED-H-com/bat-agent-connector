@@ -4,25 +4,31 @@
 
 ## 選擇相符的安裝包
 
-2026 年 10 月 22 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)仍為 Connector **0.2.12**／desktop **0.1.8**，來源 `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
+2026 年 11 月 9 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)為 Connector **0.2.17**／desktop **0.1.13**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
-穩定版尚未包含路線喚醒、本機服務復原及首次設定／狀態變更；預覽版已包含。#399–#403 在預覽版來源之後才合併，不在這個套件內。已合併、已發布、已安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.12；下載較新套件不代表已安裝或實機驗收。
+本穩定版加入共用 Web／桌面的固定外部對話摘錄與明確 Work／Attempt 關聯（#507），也可用明確關聯識別碼跨可讀來源替換（#508）。可在看板、需求頁及 Work 詳情閱讀，並保留來源授權、原操作 key 與 CLI 會話唯讀邊界。前版的對話保存、PM 摘要及更新／恢復修正仍保留。較早的預覽版保留為歷史版本。最終來源、CI 及各自獨立的合併、發布、安裝與實機證據見[目前交付狀態](product/implementation-status.md)。下方首次啟動步驟描述穩定版 0.2.17；下載較新套件不代表已安裝或實機驗收。
 
-| 平台 | 穩定版 0.1.8 資產 | 預覽版 0.1.9 資產 | 格式 |
+| 平台 | 穩定版 0.1.13 資產 | 預覽版 0.1.9 資產 | 格式 |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.13_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.13_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.13_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.13_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Windows 包未正式簽署，Mac 採 ad-hoc 簽署。正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
 
+### 更新既有桌面安裝
+
+Windows 請下載 `better-agent-dashboard_0.1.13_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
+
+發布檢查分別由 Connector 0.2.12 與 0.2.16 的固定發布來源建置舊核心，再升級至 0.2.17，核對原身分、資料與操作保留。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
+
 ## 首次啟動：你的本機 Connector
 
-安裝並開啟相符套件。包內含 Python runtime，會準備一套私人本機中央、資料與個人身分；這條流程不需先裝 Python／uv、輸入 actor、編輯憑證檔或複製 API token。尚未配置 BAT 主機時，Dashboard 會開啟**設定 → 連線**，並展開**準備開始工作 → 1. 連線至 BAT**。
+安裝並開啟相符套件。新安裝先選「提供本機工作區」或「兩者兼有」，再準備內附的 Python Connector、私人資料與個人身分；選「使用既有服務」則加入既有 Connector，不建立本機服務。既有安裝保留原連線與身分。這條本機流程不需先裝 Python／uv、輸入 actor、編輯憑證檔或複製 API token。尚未配置 BAT 主機時，Dashboard 會開啟**設定 → 連線**，並展開**準備開始工作 → 1. 連線至 BAT**。
 
 1. 將 BAT 複製的連線網址貼入密碼欄位，在本機填好連線資料。
-2. 核對**主機代號**，再按**驗證並儲存主機**。
+2. 核對**主機代號**，按**預覽連線**檢查變更，再按**套用連線**。
 3. 成功後按**查看工作階段**；人工工作階段維持唯讀。
 
 **連結 GitHub 儲存庫**與**設定驗證命令**預設收合，閱讀工作階段不需要先完成。派工、Git 工作或 Task Service 驗證需要時再設定。**允許受管工作**也預設收合，連線不會自動授予這些權限。
@@ -31,7 +37,7 @@
 
 ### 1. 連線至 BAT
 
-開啟「設定 → 連線 → 連線至 BAT」，使用「貼上 BAT 連線網址」。在 BAT v3.2.15 的「設定 → 遠端 → 遠端存取 → 連線網址 → 複製」取得網址；無介面模式可複製啟動訊息 `connect:` 行的網址。密碼欄位會在本機填好位址、權杖與憑證指紋後立即清空，欄位下方會以勾號確認讀取的位址與縮短的憑證指紋，不會顯示權杖。按「驗證並儲存主機」才會送出。手動修改位址或指紋後，確認文字會消失。
+開啟「設定 → 連線 → 連線至 BAT」，使用「貼上 BAT 連線網址」。在 BAT v3.2.15 的「設定 → 遠端 → 遠端存取 → 連線網址 → 複製」取得網址；無介面模式可複製啟動訊息 `connect:` 行的網址。密碼欄位會在本機填好位址、權杖與憑證指紋後立即清空，欄位下方會以勾號確認讀取的位址與縮短的憑證指紋，不會顯示權杖。預覽不會探測 BAT 或儲存設定；貼上的憑證可能先被私下暫存。「套用連線」才會驗證並儲存已預覽的設定。手動修改位址或指紋後，確認文字會消失。
 
 「主機代號」須以英文字母或數字開頭，只能使用英數字、`-`、`_` 或 `.`，例如 `local`。首次設定時，回送位址會建議 `local`；這只是代號建議，不會判定 BAT 與中央在同一台電腦，也不會授予本機執行權限。
 
@@ -45,7 +51,7 @@
 
 SSH 別名由中央所在電腦的服務帳號解析。使用打包本機中央時，就是桌面電腦；若加入遠端中央，須在該中央主機準備 SSH 存取。瀏覽器或 Tauri client 不會將自己的本機 SSH 金鑰轉送給中央。
 
-直接 BAT 開工若需共用 Git 中繼資料，須明確勾選「允許共用 Git 複本的獨立工作目錄」；沒有此需求就保持關閉，也不因此取得人工工作階段與獨立工作目錄的控制權。按「驗證並儲存主機」會做唯讀的連線與設定檔檢查，儲存不會派工。
+直接 BAT 開工若需共用 Git 中繼資料，須明確勾選「允許共用 Git 複本的獨立工作目錄」；沒有此需求就保持關閉，也不因此取得人工工作階段與獨立工作目錄的控制權。先按「預覽連線」，再按「套用連線」；連線與設定檔檢查是唯讀的，儲存不會派工。
 
 ### 2. 連結 GitHub 儲存庫
 
@@ -151,6 +157,35 @@ BAT 分析需要在所選 Linux BAT 主機安裝已審閱的專用 PM runtime；
 以上說明可用的產品操作，不表示已完成完整生命週期的真人驗收。實際 operation、來源、runtime
 與交付收據，需與離線測試和 CI 分開記錄。
 
+### 閱讀已保存的對話與請求 PM 摘要
+
+開啟 session 的**已保存的對話**並按**讀取保存歷史**，選定版本並分頁閱讀 Connector 已保存的文字；後續保存不會替換正在閱讀的版本。Connector 在背景收集已觀察到的 user／assistant 文字，不需要開著 Dashboard，也不呼叫模型。原文摘錄保留訊息版本參照。保存與回填都有上限，從未讀取且來源已不存在的內容無法補回。
+
+需要語意摘要時，在 PM 討論開啟**討論資料 → 脈絡 → 從這裡接續**，展開**已保存的對話（選填）**，按**瀏覽對話**、選取對話，再按**納入此保存版本**。填寫本次整理重點，透過已設定的 PM runtime 按**整理接續摘要**或**更新接續摘要**。摘要保存確切來源與模型判讀，不會採用範圍或接受交付；不完整歷史不能證明全部工作已完成。瀏覽或選取來源本身不呼叫模型。
+
+BAT 離線時，只要 Connector 可連線且目前仍有權限，就可讀先前保存文字。session 消失或已有保存歷史，都不能證明程序停止。文字／容量上限見[保存合約](design/session-retention.md)，來源與 runtime 前提見 [PM 接續合約](design/pm-continuation-brief.md)。
+
+### 將外部對話摘錄連到工作
+
+在 **Agent 資源 → 外部對話** 開啟可用來源，展開紀錄的**相關工作**，按
+**選擇工作**並選取既有 Work。若只需要部分內容，展開**選取文字範圍**，
+選取文字後按**預覽選取文字**；核對**將關聯的摘錄**後，再按**將摘錄連到工作**。
+**選擇執行輪次（選填）**可明確指定既有 Attempt；留空時只關聯 Work。
+
+需要替換時，展開**替換關聯（選填）**，選取已載入關聯，或填入**關聯識別碼**
+後按**讀取關聯**。識別碼查詢也支援同一工作區內另一則紀錄或來源，但原來源須
+仍可讀取；提交前核對原工作、來源與版本。來源失去權限後，可從
+**已保存的關聯識別資料**撤回先前讀過的關聯，服務仍會檢查目前權限。
+回覆遺失時，用**查回原請求**恢復同一操作。
+
+從看板、需求頁或 Work 詳情的**查看已關聯摘錄**閱讀固定參照，提示時選擇工作區。
+這些操作保留原 CLI 會話，不會核准範圍、啟動 Attempt 或完成 Work。
+來源設定與存取規則見[外部對話合約](design/external-conversation-history.md)。
+
+### 查看主機部署狀態
+
+從 session 清單開啟主機，選擇**主機部署狀態（唯讀）**。操作者須先在發出查詢的 Connector 設定選填的 SSH alias 與部署目錄；各 Connector 各自查詢。介面按需讀取 container、systemd 與已設定 Git 部署 metadata，不會安裝、重啟或更新服務。CLI 可用 `batc hosts deploy-status`；設定方式與部分結果限制見[部署觀察指南](design/host-deploy-status.md)。
+
 ### 讀取 AHP 主機 catalog
 
 在 workspace 的 **Agent 資源** 檢視展開 **AHP 觀察**。操作者需先在中央為此 workspace 設定
@@ -191,7 +226,7 @@ Dashboard 登入欄位不能填 BAT remote token。
 兩個已發布版本都含驗證安裝器；啟動腳本與安裝須使用同一 tag。穩定版：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.12/scripts/install.sh | sh -s -- --tag v0.2.12 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.17/scripts/install.sh | sh -s -- --tag v0.2.17 --channel-check stable
 ```
 
 預覽版：
@@ -317,7 +352,6 @@ batc api-token issue --actor mcp-agent --scope observe --scope operate --scope s
 或讓持有專屬權杖的 MCP 代理操作受管工作。檢查點路徑不會改動人工工作階段或原工作目錄。
 啟動與派工表單下的 **派工如何運作**說明工作樹、BAT 工作階段與成果追蹤。
 
-
 CLI 可讀取相同觀測與操作紀錄：
 
 ```bash
@@ -366,7 +400,6 @@ MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable �
 指令，再重試安裝或 `--verify-only`。安裝程式不會自動修改權限。
 若目錄擁有者不正確，僅移除寫入權限仍無法解決，請洽系統管理員。
 
-
 | 畫面／情況 | 檢查與處理 |
 | --- | --- |
 | 桌面要求外部中央／actor | 核對是否下載舊版 client-only 包，或已有外部設定。相符的 managed 候選包，一般首次啟動會自行準備本機中央。 |
@@ -401,13 +434,15 @@ MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable �
 
 | 作業系統 | 狀態資料庫 |
 | --- | --- |
-| Linux | `~/.local/share/io.betteragent.dashboard/central/state/tasks.sqlite3` |
-| macOS | `~/Library/Application Support/io.betteragent.dashboard/central/state/tasks.sqlite3` |
-| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\central\state\tasks.sqlite3` |
+| Linux | `~/.local/share/io.betteragent.dashboard/managed-central/state/tasks.sqlite3` |
+| macOS | `~/Library/Application Support/io.betteragent.dashboard/managed-central/state/tasks.sqlite3` |
+| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\managed-central\state\tasks.sqlite3` |
 
-`config/hosts.toml` 與 `installation.json` 也在相同的 `central` 目錄。
-這些是狀態與設定檔，不是匯出的日誌。桌面版目前**不會將 Connector 的標準輸出與
-錯誤輸出寫入日誌檔**；啟動錯誤只保留在記憶體。獨立 CLI 服務的輸出由啟動它的
+`config/hosts.toml` 與 `installation.json` 也在相同的 `managed-central` 目錄。
+這些是狀態與設定檔，不是匯出的日誌。受管理的 Python 服務會把錯誤輸出寫入
+`managed-central/service.log`；服務啟動之前的失敗可能尚未建立日誌。桌面端會丟棄
+短期 Python 啟動程序的錯誤輸出。診斷只匯出固定位置範本，不讀取檔案內容，也不代表日誌
+一定存在。獨立 CLI 服務的輸出由啟動它的
 終端機或服務管理工具接收。診斷資料不會猜測自訂資料庫位置；依目前
 `config.state_dir()`，Linux／macOS 預設為
 `~/.local/state/bat-agent-connector/tasks.sqlite3`，Windows 為

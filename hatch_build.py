@@ -65,8 +65,12 @@ class BuildProvenanceHook(BuildHookInterface):
         self._staging = TemporaryDirectory(prefix=".batc-provenance-", dir=self.directory)
         info = Path(self._staging.name) / "build-info.json"
         info.write_text(json.dumps({"commit": _build_commit(root)}) + "\n", encoding="utf-8")
-        package = "src/bat_agent_connector" if self.target_name == "sdist" else "bat_agent_connector"
-        build_data["force_include"][str(info)] = f"{package}/build-info.json"
+        # Wheels carry provenance under skill/, which v0.2.12 and older updaters
+        # exclude from their exact installed-vs-source file comparison; a file
+        # beside the modules makes those hosts fail installed_source_mismatch.
+        target = ("src/bat_agent_connector/build-info.json" if self.target_name == "sdist"
+                  else "bat_agent_connector/skill/build-info.json")
+        build_data["force_include"][str(info)] = target
         if self.target_name == "sdist":
             build_data["force_include"][str(root / "hatch_build.py")] = "hatch_build.py"
         else:

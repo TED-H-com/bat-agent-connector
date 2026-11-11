@@ -1830,9 +1830,28 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .exh-entry header { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
 .exh-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-body); }
 .exh-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
+[data-history-links] { margin-block-start: var(--space-3); }
+[data-history-links] summary { cursor: pointer; padding-block: var(--space-2); }
+[data-history-links] select { display: block; width: 100%; min-width: 0; margin-block: var(--space-2); }
+.exh-text-choice { margin-block: var(--space-3); }
+.exh-text-choice textarea { display: block; box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; margin-block: var(--space-2); }
+.exh-relation { display: grid; gap: var(--space-2); padding-block: var(--space-3); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+[data-history-links] .actions { flex-wrap: wrap; }
+[data-work-history-reader] summary { cursor: pointer; padding-block: var(--space-2); }
+[data-work-history-reader] button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+.exh-reference pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 799px) { [data-work-history-reader] summary, [data-work-history-reader] button { min-height: 44px; } }
+@media (max-width: 799px) { [data-history-links] button, [data-history-links] summary, [data-history-links] select { min-height: 44px; } }
 @media (max-width: 799px) { .exh-source button, .exh-actions button { min-height: 44px; } }
 
 @media (min-width: 800px) { [data-history-detail] > header > .ui-icon-button { display: inline-flex; } }
+
+[data-work-item-history-reader] > summary { cursor: pointer; padding-block: var(--space-2); }
+[data-work-item-history-reader] > label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+[data-history-workspace] { max-width: 100%; }
+@media (max-width: 799px) {
+  [data-work-item-history-reader] > summary, [data-history-workspace], [data-work-item-history] button { min-height: 44px; }
+}
 [data-pm-register] { --selected-row: var(--surface-3); }
 .pm-issues-tool:has(> details:not([open])) { display: none; }
 [data-pm-register], .reg-layout, .reg-main { min-width: 0; max-width: 100%; }
@@ -2927,6 +2946,10 @@ body.pm-mode #main { padding: 0; }
 main.session-view { display: flex; flex-direction: column; height: calc(100dvh - var(--shell-header-height, 48px)); overflow: auto; }
 main.session-view > .workspace-session-heading { flex: none; }
 main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+/* Keep live controls in flow above both the collapsed and expanded saved reader. */
+main.session-view > [data-session-archive] { flex: none; min-width: 0; }
+main.session-view:has(> [data-session-archive]) > .workspace-session { min-height: min-content; }
+main.session-view:has(> [data-session-archive][open]) > .workspace-session { flex: none; }
 .session-workspace .workspace-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .workspace-session-heading .ui-page-header { margin-bottom: 0; width: 100%; }
 .workspace-session-heading .session-mark { display: inline-flex; }

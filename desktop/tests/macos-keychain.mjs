@@ -1,7 +1,7 @@
 // Never change an operator's Keychain. Restore the disposable runner's configuration even on failure.
 import {testScratchRoot} from './test-scratch.mjs';
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync } from "../../scripts/hidden-child-process.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";

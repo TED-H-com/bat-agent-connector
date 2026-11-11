@@ -1,5 +1,7 @@
 """Stable public API for external housekeeping automation.
 
+For detailed documentation, refer to `docs/api-reference.md`.
+
 Exported names and signatures change only with a CHANGELOG entry and a
 deprecation period. API_VERSION identifies this facade's contract. Re-exported
 operations retain their existing semantics and safety gates; this module grants

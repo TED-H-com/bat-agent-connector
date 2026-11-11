@@ -68,7 +68,11 @@ pub fn spawn(command: &mut std::process::Command, flags: u32) -> io::Result<std:
     spawn_with(
         allows_breakaway(),
         flags,
-        |flags| command.creation_flags(flags).spawn(),
+        |flags| {
+            command
+                .creation_flags(crate::hidden_process::hidden_flags(flags))
+                .spawn()
+        },
         || {
             SESSION_LIFETIME.store(true, std::sync::atomic::Ordering::Relaxed);
             eprintln!(

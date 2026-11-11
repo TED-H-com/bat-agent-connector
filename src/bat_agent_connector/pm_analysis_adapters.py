@@ -26,7 +26,8 @@ def selection(params):
 
 def ordinary_params(params):
     selection(params)
-    return {key: value for key, value in params.items() if key not in {'adapter', 'intake_id', 'previous_brief_ref'}}
+    return {key: value for key, value in params.items()
+        if key not in {'adapter', 'intake_id', 'previous_brief_ref', 'retained_session_ref'}}
 
 
 def admission(ops, principal, target, params, pre):

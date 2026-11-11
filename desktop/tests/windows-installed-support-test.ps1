@@ -375,14 +375,25 @@ if ($IsWindows) {
     try {
         # Phase lines show which step used the budget if the self-test times out.
         Write-Host 'Compiling UIA probe tests'
-        & (Join-Path $framework 'csc.exe') /nologo /target:exe /platform:x64 /codepage:65001 /main:ManagedViewProbeTests "/out:$testProbe" `
-            "/reference:$(Join-Path $framework 'WPF/UIAutomationClient.dll')" `
-            "/reference:$(Join-Path $framework 'WPF/UIAutomationTypes.dll')" `
-            "/reference:$(Join-Path $framework 'WPF/WindowsBase.dll')" `
-            (Join-Path $PSScriptRoot 'windows-managed-view.cs') (Join-Path $PSScriptRoot 'windows-managed-view-test.cs')
-        if ($LASTEXITCODE -ne 0) { throw 'UIA probe regression compilation failed' }
+        $info = [Diagnostics.ProcessStartInfo]::new((Join-Path $framework 'csc.exe'))
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.Arguments = '/nologo /target:exe /platform:x64 /codepage:65001 /main:ManagedViewProbeTests ' +
+            '"/out:' + $testProbe + '" ' +
+            '"/reference:' + (Join-Path $framework 'WPF/UIAutomationClient.dll') + '" ' +
+            '"/reference:' + (Join-Path $framework 'WPF/UIAutomationTypes.dll') + '" ' +
+            '"/reference:' + (Join-Path $framework 'WPF/WindowsBase.dll') + '" ' +
+            '"' + (Join-Path $PSScriptRoot 'windows-managed-view.cs') + '" ' +
+            '"' + (Join-Path $PSScriptRoot 'windows-managed-view-test.cs') + '"'
+        $compiler = [Diagnostics.Process]::Start($info)
+        $compiler.WaitForExit()
+        if ($compiler.ExitCode -ne 0) { throw 'UIA probe regression compilation failed' }
         Write-Host 'Running UIA probe tests'
-        & $testProbe
-        if ($LASTEXITCODE -ne 0) { throw 'UIA probe regression failed' }
+        $info = [Diagnostics.ProcessStartInfo]::new($testProbe)
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $probe = [Diagnostics.Process]::Start($info)
+        $probe.WaitForExit()
+        if ($probe.ExitCode -ne 0) { throw 'UIA probe regression failed' }
     } finally { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }

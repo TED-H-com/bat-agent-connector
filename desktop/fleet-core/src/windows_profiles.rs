@@ -147,13 +147,13 @@ fn command(
     executable: &Path,
     values: impl IntoIterator<Item = (std::ffi::OsString, std::ffi::OsString)>,
 ) -> Result<Command> {
-    let mut command = Command::new(executable);
+    let mut command = crate::hidden_process::hidden_command(executable);
     command
         .current_dir(executable.parent().ok_or("BAT_EXECUTABLE_UNPROVEN")?)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
+        .creation_flags(crate::hidden_process::hidden_flags(CREATE_NO_WINDOW))
         .env_clear();
     let values: Vec<_> = values.into_iter().collect();
     command.envs(crate::monitor_launch::environment(values.clone()));

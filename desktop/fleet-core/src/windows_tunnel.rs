@@ -9,14 +9,11 @@ use crate::{
 use std::{
     io::ErrorKind,
     net::{SocketAddr, SocketAddrV4, TcpListener, TcpStream},
-    os::windows::process::CommandExt,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
-use windows_sys::Win32::System::{
-    SystemInformation::GetSystemDirectoryW, Threading::CREATE_NO_WINDOW,
-};
+use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
 
 /// Resolve through the OS, never PATH, a WebView field or an inherited SystemRoot variable.
 pub fn system_ssh() -> Result<PathBuf> {
@@ -62,6 +59,16 @@ impl HeldProcess for LaunchedProcess {
             _ => Err("STOP_UNCONFIRMED"),
         }
     }
+}
+// Initial launch and supervisor recovery both use this single command boundary.
+fn tunnel_command(executable: &Path, arguments: &[String]) -> Command {
+    let mut command = crate::hidden_process::hidden_command(executable);
+    command
+        .args(arguments)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    command
 }
 fn spawn_owned(command: &mut Command) -> std::result::Result<LaunchedProcess, SpawnFailure> {
     let mut child = command.spawn().map_err(|_| SpawnFailure::NotStarted)?;
@@ -136,20 +143,25 @@ impl Platform for WindowsPlatform<'_> {
         if !self.executable.is_file() {
             return Err(SpawnFailure::NotStarted);
         }
-        spawn_owned(
-            Command::new(&self.executable)
-                .args(plan.arguments())
-                .creation_flags(CREATE_NO_WINDOW)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null()),
-        )
+        spawn_owned(&mut tunnel_command(&self.executable, plan.arguments()))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tunnel_launch_command_has_no_console() {
+        let executable = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        let arguments = ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
+            "Add-Type -MemberDefinition '[DllImport(\"kernel32.dll\")] public static extern System.IntPtr GetConsoleWindow();' -Name Native -Namespace Test; if ([Test.Native]::GetConsoleWindow() -ne [IntPtr]::Zero) { exit 1 }"]
+            .map(String::from);
+        assert!(tunnel_command(&executable, &arguments)
+            .status()
+            .unwrap()
+            .success());
+    }
     #[test]
     fn endpoint_proof_requires_refusal_and_bind_with_a_bounded_windows_budget() {
         let refused = |timeout| {
@@ -251,7 +263,7 @@ mod tests {
             "--nocapture",
         ];
         let launch = spawn_owned(
-            Command::new(std::env::current_exe().unwrap())
+            crate::hidden_process::hidden_command(std::env::current_exe().unwrap())
                 .args(args)
                 .env("BAT_FLEET_TUNNEL_FIXTURE", "1")
                 .stdin(Stdio::null())

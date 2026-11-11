@@ -383,7 +383,7 @@ mod windows_cases {
         drop(publication_state::create_new_file(&target).unwrap());
         // Junction construction is mandatory and does not depend on symlink privilege.
         let junction = temp.0.join("junction");
-        let output = std::process::Command::new("cmd.exe")
+        let output = bat_fleet_core::hidden_process::hidden_command("cmd.exe")
             .args(["/d", "/c", "mklink", "/J"])
             .arg(&junction)
             .arg(&root)

@@ -170,3 +170,12 @@ General managed starts preserve `default`/`allow_all`; optional `confined` uses 
 a read-only verified host account), or Codex workspace-write/on-request. Permission modes do not prove OS enforcement;
 Codex is at most options_confirmed until W12. Confined sessions reject raises, persistent approvals and mode-widening
 ExitPlanMode answers. Cwd is not evidence of protection. A10 is not proven until the W12 live run.
+
+## 9. Network and Fleet Internals
+
+* **Websocket frame format:** The protocol uses JSON for message payloads. Frames can be sent as plain text frames or compressed binary frames. If compressed, the binary frame starts with `b"BATGZIP1\0"` followed by the `gzip(json)` payload.
+* **Reconnect backoff strategies:**
+  * **Websocket client:** Uses bounded per-subscriber event queues and a reconnect with backoff strategy.
+  * **Task Push:** Failed milestone pushes retry with a capped exponential backoff. The max backoff is `300` seconds (`max_backoff_s = 300`).
+  * **Inventory:** Failed requests use an exponential backoff. The max backoff is `600` seconds (`max_backoff_s = 600.0`).
+* **Fleet heartbeat intervals:** The `TaskDaemon` worker writes a heartbeat timestamp to the `daemon_owner` table every 2 seconds (`asyncio.sleep(2)`) for visibility. However, actual mutual exclusion for the singleton worker relies on OS-level file locks (`fcntl.flock`), not on this heartbeat.

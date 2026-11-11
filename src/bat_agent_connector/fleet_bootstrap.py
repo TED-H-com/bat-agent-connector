@@ -22,6 +22,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from bat_agent_connector import hidden_process
+
 LIMIT = 16_384
 MAX_DATABASE = 256 * 1024 * 1024
 MAX_WAL = 64 * 1024 * 1024
@@ -168,7 +170,7 @@ class Systemd:
             resource.setrlimit(resource.RLIMIT_FSIZE, (LIMIT, LIMIT))
         with tempfile.TemporaryFile() as output:
             try:
-                result = subprocess.run([SYSTEMCTL, "--user", "--no-pager", *arguments],  # noqa: S603
+                result = hidden_process.run([SYSTEMCTL, "--user", "--no-pager", *arguments],  # noqa: S603
                                         stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.DEVNULL,
                                         env=env, timeout=3, check=False, preexec_fn=bound)
             except (OSError, subprocess.TimeoutExpired):

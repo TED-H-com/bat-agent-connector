@@ -1,5 +1,62 @@
 # PM v1.2 開發狀態
 
+2026-11-09：[穩定版 0.2.17／0.1.13](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)
+已發布，包含已合併的 #507／#508，來源為 `0399db5a7b647486126c9bf7bb5900c40dc54ea7`。
+固定外部對話紀錄／文字範圍可連到既有 Work 與選填 Attempt，替換或撤回關聯，
+並從看板、需求頁與 Work 詳情閱讀；同一工作區內可用明確 ID 跨可讀來源替換。
+這些是 PM 的有來源參考資料，不會自動採用需求、做出決策、啟動執行或驗收成果。
+固定主線 CI、套件與升級 fixture 證據見[交付狀態](implementation-status.md)及發布清單。
+本輪沒有新增使用者安裝或實機驗收；PM v1.2、E00–E11、R0–R5、A01–A40 的
+未修訂待辦維持開放。下方舊版發布準備與分支段落保留各自當時狀態。
+
+November 9: Connector 0.2.17 / Desktop 0.1.13 is published from `0399db5a`,
+including #507 and #508. External-history references support Work evidence;
+they do not adopt requirements or decisions, execute work or accept delivery.
+Fixed-source CI and package evidence are recorded separately from installation
+and live acceptance. Unrevised PM v1.2 and open E/R/A requirements remain open.
+
+2026-11-05：#502 已合併為 `53171768`；`release/0.2.16` 正準備 Connector 0.2.16／Desktop 0.1.12 發布。
+修正 v0.2.12 受管理主機每小時更新的 `installed_source_mismatch`，將 wheel 來源證明移至
+`bat_agent_connector/skill/build-info.json`，並加入 `install_connector.py --repair-managed [--dry-run]`
+修復遭 `already_update_managed` 拒絕的受管理安裝。v0.2.12 主機將於下一次每小時計時器自動更新。
+發布來源與 CI 以 `release-manifest.json` 記錄為準；發布前仍需核對最終來源、CI 與套件 digest。
+本次僅為發布準備，尚未發布、安裝或新增實機驗收；已發布穩定版仍為 0.2.15／0.1.11。
+PM v1.2、E00–E11、R0–R5、A01–A40 其餘未完成範圍維持開放。
+
+November 5: #502 is merged as `53171768`; `release/0.2.16` is preparing Connector 0.2.16 / Desktop 0.1.12.
+It fixes hourly managed-update provenance checks on v0.2.12 hosts and adds explicit managed-install repair.
+Hosts on v0.2.12 auto-update on the next hourly timer. Release source and CI are recorded in
+`release-manifest.json`; final source, CI and package digests remain publication gates.
+This preparation claims no publication, installation or live acceptance. Stable remains 0.2.15 / 0.1.11;
+open PM v1.2 and E00–E11 / R0–R5 / A01–A40 requirements remain unchanged.
+
+2026-11-05：
+[穩定版 v0.2.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)
+交付 Connector 0.2.15／Desktop 0.1.11；#498 保存已觀察對話並透過既有明確 PM 操作
+整理固定版本，#495 提供按需主機部署唯讀觀察。來源 `82584a66dfac19ff8f1beebc1ca8fbb3b11f6aad`、
+已通過的最終 CI 與由 0.2.12／0.2.14 固定發布來源建置核心的升級檢查見[最新交付狀態](implementation-status.md)。
+本增量不把摘要當作決策或完整 PM，不新增 owner 安裝、真模型或實體裝置驗收，原 v1.2 待辦保留。
+
+November 5: Connector 0.2.15 / Desktop 0.1.11 includes
+#498 saved conversations and explicit PM continuation, plus #495 deployment observations.
+See delivery status for the fixed source, passed CI/artifact verification and both core-upgrade baselines built from pinned published sources.
+PM lifecycle work remains open; publication adds no owner installation or live acceptance evidence.
+Earlier entries below describe their own stages.
+
+2026-11-05：#498 已合併為 `7681c207`，正在準備 0.2.15／0.1.11 發布的
+[Connector 對話保存](../design/session-retention.md)增量：背景保存已觀察文字、固定版本閱讀，
+及附原訊息版本的確定性摘錄；接續增量讓既有 `pm.continuation.prepare` 明確選取
+保存版本，將有來源的目標／候選選項／問題／待辦判讀存入原 SQL run 與 receipt。
+語意判讀走已設定的 PM 路徑，不自動呼叫模型，partial 來源不能宣告全部完成。
+它不取代 PM 需求、決策、交付與維護；本增量尚未發布、安裝或實機驗收，也不關閉原有 v1.2 待辦。
+
+November 5: #498 is merged as `7681c207`; the 0.2.15 / 0.1.11 preparation includes Connector-owned
+conversation retention, immutable reading snapshots and source-linked extractive briefs.
+It lets an explicit existing PM continuation request use one exact saved snapshot,
+with semantic interpretations persisted in the original SQL run/receipt and current source-access checks.
+This does not replace PM lifecycle work or enable automatic model spending or decision adoption.
+This increment has no release, installation or live acceptance claim; earlier dated entries remain historical.
+
 2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `5f49e712` 的 55 個新增合併 PR，
 並列出 Fleet Apply 與本機參與者尚缺的能力。沒有新發布；預覽版仍為 Connector 0.2.13／desktop 0.1.9
 （`437ee6a7`），穩定版仍為 0.2.12／0.1.8。新增合併均未發布、安裝或實機驗收；下方保留歷史紀錄。

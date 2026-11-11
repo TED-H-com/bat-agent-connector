@@ -21,7 +21,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from . import dashboard_sync, platform_files, service
+from . import dashboard_sync, hidden_process, platform_files, service
 from .artifact_host import ArtifactHost
 from .client import BatClient
 from .config import git_transport, normalize_fingerprint, parse_config, tomllib
@@ -561,7 +561,7 @@ async def _probe_host(config, name):
 
 async def _probe_ssh(alias):
     # Use the existing known_hosts decision; never accept a new host key or execute caller commands.
-    process = await asyncio.create_subprocess_exec("ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+    process = await hidden_process.create_subprocess_exec("ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
         "-o", "ConnectTimeout=10", alias, "true", stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
     try:
@@ -640,6 +640,7 @@ def _activate(daemon, config, document, revision=None, *, runner=None):
         fleet._clients = {}
         fleet.config = config
     daemon._config = config
+    daemon.deploy_status.bindings = config.deploy_status
     daemon.usage_collector.config = config.usage
     daemon.history_collector.config = config.session_history
     daemon.inventory.config = config

@@ -1,0 +1,80 @@
+{
+  "redaction": [
+    "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)",
+    "(?i)\\b(?:authorization[\\x22\\x27]?\\s*[:=]\\s*|bearer\\s+)[^\\r\\n,;]+",
+    "(?i)\\b(?:[a-z_]*(?:token|password|passwd|secret|api_key|apikey)[a-z_]*|cloudflare_api_key)[\\x22\\x27]?\\s*[=:]\\s*(?:\"[^\"\\r\\n]*\"|'[^'\\r\\n]*'|[^\\s&;,\"'}]+)",
+    "[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/@]+@",
+    "\\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|cfut_[A-Za-z0-9_-]+|tskey-[A-Za-z0-9_-]+|(?:eyJ[A-Za-z0-9_-]*|[A-Za-z0-9_-]{10,})\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+)",
+    "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+  ],
+  "normalization": [
+    [
+      "(?i)\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b",
+      "<uuid>"
+    ],
+    [
+      "(?:[A-Za-z]:\\\\|/)[^\\s\\x22\\x27,;]+",
+      "<path>"
+    ],
+    [
+      "(?i)\\b(?:0x[0-9a-f]+|[0-9a-f]{8,})\\b",
+      "<hex>"
+    ],
+    [
+      ":\\d+\\b",
+      ":<port>"
+    ],
+    [
+      "\\b\\d+\\b",
+      "<n>"
+    ]
+  ],
+  "secrets": [
+    "Bearer short-secret",
+    "token=abc",
+    "PASSWORD=\"tiny\"",
+    "https://user:pass@example.invalid/a",
+    "ghp_exampletoken",
+    "github_pat_example",
+    "tskey-auth-example",
+    "eyJhbGci.eyJzdWI.signature",
+    "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----",
+    "/home/user@example.invalid/file",
+    "CF_API_TOKEN=secret",
+    "password=\"two words\"",
+    "cfut_examplecloudflaretoken",
+    "{'password': 'hidden words'}",
+    "{\"token\": \"hidden\"}"
+  ],
+  "fingerprints": [
+    {
+      "component": "bat-session",
+      "code": "session.resume.failed",
+      "msg": "failed 123 on /tmp/example port:8080 id 12345678-abcd-1234-abcd-123456789abc hex 0xdeadbeef",
+      "normalized": "failed <n> on <path> port:<port> id <uuid> hex <hex>",
+      "fingerprint": "8955a28f5c587e9d"
+    }
+  ],
+  "redaction_cases": [
+    {
+      "msg": "password=\"two words\"",
+      "expected": "[REDACTED]"
+    },
+    {
+      "msg": "https://alice:short@example.invalid/a?token=hidden&x=ok",
+      "expected": "[REDACTED]example.invalid/a?[REDACTED]&x=ok"
+    },
+    {
+      "msg": "Authorization: Basic dGVzdA==",
+      "expected": "[REDACTED]"
+    },
+    {
+      "msg": "{\"token\": \"hidden\"}",
+      "expected": "{\"[REDACTED]}"
+    },
+    {
+      "msg": "{'password': 'hidden words'}",
+      "expected": "{'[REDACTED]}"
+    }
+  ]
+}

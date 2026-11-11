@@ -28,7 +28,7 @@ def install(ops):
 
 def _base(ops, principal, target, params, pre):
     if (set(target) != {'workspace_id', 'thread_id'}
-            or set(params) - {'purpose', 'model', 'max_chars', 'timeout_s', 'adapter', 'previous_brief_ref'}
+            or set(params) - {'purpose', 'model', 'max_chars', 'timeout_s', 'adapter', 'previous_brief_ref', 'retained_session_ref'}
             or set(pre) != {'expected_version', 'expected_plan_version', 'expected_accepted_revision_id'}):
         raise error('Supply one discussion and exact discussion/plan versions')
     pm_native_operations._values(ops, principal, target, adapters.ordinary_params(params),
@@ -67,6 +67,13 @@ def _visible(db, principal, operation_id):
             return False
         if not pm_thread_contexts.frozen_visible(db, principal, op['target']['workspace_id'], context):
             return False
+        if 'retained_session_ref' in op['params'] or 'retained_session' in context:
+            from . import pm_retained_session_source
+            retained = context.get('retained_session')
+            if (not isinstance(retained, dict) or retained.get('ref') != op['params'].get('retained_session_ref')
+                    or not pm_retained_session_source.visible(db, principal, retained['ref'],
+                        selection=retained['selection'])):
+                return False
         for identity in context['source_operation_ids']:
             row = db.execute('SELECT * FROM operations WHERE operation_id=?', (identity,)).fetchone()
             if not row or not pm_access.visible(db, principal, OperationService._decode(row)):

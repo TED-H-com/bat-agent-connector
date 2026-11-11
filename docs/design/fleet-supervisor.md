@@ -9,8 +9,9 @@ remote BAT sessions remain outside its authority.
 The supervisor runs on the thread that holds `Global\\BatFleetMonitor_<SID>`.
 It first proves monitor absence across both BAT data directories, records its exact
 native process/argv/configuration pair, and creates an unpredictable epoch. Process
-effects never run in a WebView or readiness worker. A second login, inaccessible
-owner, malformed monitor record or conflicting owner prevents startup. Normal quit
+effects never run in a WebView or readiness worker. A positively proven second login, malformed monitor record or conflicting owner
+prevents startup. Inaccessible process candidates are skipped with a diagnostic;
+unknown receipt evidence still cannot authorize replacement or process effects. Normal quit
 and positive exit proof are required to replace a legacy owner; there is no forced
 monitor termination.
 
@@ -52,7 +53,7 @@ module; TCP alone never means ready.
 Completed results retain their original epoch/configuration/selection/generation and
 observation time. Old, cancelled, future or more-than-60-second-old observations
 cannot become fresh by republishing the status file. Unrelated preference changes
-invalidate old workers without resetting another host's exhausted recovery budget.
+invalidate old workers without resetting another host's recovery backoff.
 
 `fleet-desktop-status.json` preserves the reviewed schema, applied selection revision,
 configuration binding, per-entry observation time and safe readiness layers. Private
@@ -121,3 +122,32 @@ in the temporary harness; it does not execute those modules or validate native T
 The unmodified all-target MSVC build is blocked locally by the missing `lib.exe` C
 toolchain required by `ring`. Real Windows CI and packaged same/cross-login ownership,
 migration and live topology acceptance remain separate gates.
+
+## Resilient Windows monitor
+
+Windows startup retries transient preparation failures under the same held account
+mutex, restoring the exact previous monitor record if preparation fails after
+publication and before any child launch. The Windows loop logs iteration failures and retains its mutex and children while
+retrying uncertain evidence. Only successful quit/installation shutdown or a positive
+installation/monitor conflict ends the loop. Code-only diagnostics append to
+`fleet-monitor.log` in the roaming directory (configuration directory for failures
+before the runtime loads), rotating at 1 MiB to one backup. Arguments, inventory,
+credentials and process output are never written.
+
+Each owned SSH process and its configured loopback listener are checked, with a
+15-second listener grace period for a new SSH handshake. A positive
+process exit or connection refusal retires only its proven receipt using the existing
+stop-intent reconciliation, then retries after 5, 10, 20, 40 and at most 60 seconds.
+The supervisor enables continuous recovery; other bounded recovery callers keep their
+existing policy. Sixty seconds of positive owned liveness resets recovery.
+
+After restart, a selected healthy orphan can retain its original receipt and epoch
+when PID, FILETIME, executable, exact configured argv and login match, the original
+monitor is positively dead, and no stop intent exists. Stale or deselected owned
+orphans use the existing proven cleanup path. Unknown receipts and unsettled effects
+remain fenced. Adoption does not create new ownership evidence.
+
+`desktop/scripts/windows/install-fleet-monitor-task.ps1` backs up an existing task
+before registration and configures delayed current-user interactive logon, unlimited
+execution, IgnoreNew and 999 one-minute failure restarts. It is an operator installer,
+not an automatic change to a person's scheduled tasks.

@@ -1,6 +1,6 @@
 // Reproducible combined frontend + real central checkpoint contract test. Every host is MockBat.
 // First run `uv sync --extra dev` at repo root and `npm run build:all` in desktop.
-import { spawn } from "node:child_process";
+import { spawn } from "../../scripts/hidden-child-process.mjs";
 import { createInterface } from "node:readline";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
