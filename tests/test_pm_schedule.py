@@ -197,7 +197,6 @@ async def test_empty_plan_does_not_invent_a_schedule(ops):
     assert not any(node["kind"] == "issue" for node in nodes(body))
 
 
-@pytest.mark.freeze_time("2023-12-01T12:00:00Z")
 async def test_recorded_lines_keep_sessions_under_work_and_drop_unscoped_rows(ops):
     built = await lined(ops)
     wid, work, plan = built["wid"], built["work"], built["plan"]
@@ -336,7 +335,6 @@ async def test_undated_milestone_keeps_its_dependency_and_a_forecast_point_is_ex
     assert body["range"] == {"start": "2026-11-01", "end": "2026-11-08"}
 
 
-@pytest.mark.freeze_time("2023-12-01T12:00:00Z")
 async def test_replaced_baseline_drops_the_previous_forecast(ops):
     target, plan, *_ = await accepted(ops)
     wid = target["workspace_id"]
