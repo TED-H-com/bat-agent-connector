@@ -116,10 +116,13 @@ for (const locale of ['en','zh-TW']) for (const width of [390,1440]) test.descri
       const {action,target,params,preconditions,idempotency_key:key}=golden.operation;
       saved.intent={key,request:{action,target,params,preconditions}};
     }
-    const f = await mountSetupObservation(page,body,golden.operation,locale,undefined,{draft:saved,manualTicks:true,onWrite:async route => {
-      if(status==='reviewing'||status==='applying'){entered.resolve(); await release.promise;}
-      if(status==='applying')await route.fulfill({status:200,json:{operation:golden.operation}});
-      else await preview(route);
+    const f = await mountSetupObservation(page,body,golden.operation,locale,undefined,{draft:saved,manualTicks:true,
+      onOperationRead:async route => {
+        entered.resolve(); await release.promise;
+        await route.fulfill({status:200,json:{operations:[golden.operation],next_before:null,next_before_id:null}});
+      },onWrite:async route => {
+      if(status==='reviewing'){entered.resolve(); await release.promise;}
+      await preview(route);
     }});
     const expected = locale==='en'?{unsupported:'This Connector does not support connection review. Update it before continuing.',
       reviewing:'Reviewing connection','review changed':'Settings changed; review again',applying:'Applying connection'}:
@@ -136,7 +139,7 @@ for (const locale of ['en','zh-TW']) for (const width of [390,1440]) test.descri
       await expect(progress).toHaveText(expected[status]);
       const writes=[...f.posts];
       await tick(page);
-      // Observe the GET barrier independently of the deliberately held POST.
+      // Observe renewal independently of the held review POST or operation GET.
       await expect(f.fact('connection')).toContainText('OBSERVATION_NOT_RENEWED');
       await expect(progress).toHaveText(expected[status]);
       expect(f.reads.filter(path=>path.endsWith('/managed/setup'))).toHaveLength(2);

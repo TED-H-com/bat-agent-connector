@@ -1,13 +1,19 @@
 """Stable operation enumeration through HTTP and the disk journal."""
 
+import json
+from pathlib import Path
+from urllib.parse import parse_qs
+
 import pytest
 
+from bat_agent_connector.operations import OperationError
 from tests import test_setup_connections as connections
 from tests.test_api_v1 import token
 
 installed = connections.installed
 served_setup = connections.served_setup
 source = connections.source
+CURSORS = json.loads((Path(__file__).parent / "fixtures/operation-history-cursors.json").read_text())
 
 
 async def create(request, source, index, **kwargs):
@@ -57,3 +63,26 @@ async def test_empty_visibility_filtered_page_still_has_paired_continuation(inst
 async def test_operation_cursor_requires_a_bounded_pair(installed, served_setup, query):
     status, response = await served_setup("GET", "/api/v1/operations?" + query)
     assert status == 422 and response["error"]["code"] == "INVALID_FILTER"
+
+
+@pytest.mark.parametrize("vector", CURSORS, ids=lambda vector: vector["query"] or "no-cursor")
+async def test_operation_cursor_shared_native_vectors(installed, served_setup, vector):
+    status, response = await served_setup("GET", "/api/v1/operations?" + vector["query"])
+    assert status == (200 if vector["valid"] else 422)
+    if not vector["valid"]:
+        assert response["error"]["code"] == "INVALID_FILTER"
+    # Direct central callers use the same validation, including repeated fields
+    # passed by HTTP; no duplicate-key information is discarded at the adapter.
+    daemon, _, _ = installed
+    query = parse_qs(vector["query"], keep_blank_values=True)
+    args = {key: query[key] for key in ("before", "before_id") if key in query}
+    if vector["valid"]:
+        assert "operations" in daemon.ops.list(**args)
+    else:
+        with pytest.raises(OperationError, match="cursor"):
+            daemon.ops.list(**args)
+
+
+async def test_operation_cursor_keeps_unrelated_query_compatibility(installed, served_setup):
+    status, _ = await served_setup("GET", "/api/v1/operations?before=42&unexpected=value&limit=2&limit=3")
+    assert status == 200

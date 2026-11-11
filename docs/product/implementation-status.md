@@ -1,5 +1,18 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-11：Connector 0.2.18／Desktop 0.1.14 發布準備
+
+本分支同步套件、技能及身分 golden 的版本；最新穩定版升級 fixture 改用已發布
+0.2.17，保留 0.2.12 較早基準。這是發布準備，尚不代表發布、安裝或驗收；
+簽章、公證、signed updater feed、owner／真 BAT／模型及 R0–R5 驗收不因此完成。
+已發布下載文件與網站仍指向 0.2.17／0.1.13，待發布後另行更新。
+
+This branch prepares Connector 0.2.18 / Desktop 0.1.14 package, skill and identity
+golden versions. The latest-stable upgrade fixture uses published 0.2.17 alongside
+the earlier 0.2.12 baseline. Publication, installation, signing, notarization, a
+signed updater feed and owner/live acceptance remain separate gates. Published
+download documentation and the site retain 0.2.17 / 0.1.13 until publication.
+
 ## 2026-11-10：工作台清單調寬整合候選
 
 PR #480 的接手分支 `takeover/workbench-resize-20261110` 合併目前主線，
