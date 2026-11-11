@@ -1,9 +1,11 @@
 import {button} from './ui/components.js';
 import {historyRecords, historyRecord, historyDraftNamespace} from './pm-history-records.js';
+import {historyRecovery, historyWithdrawalForm} from './pm-history-recovery.js';
 
 // Known IDs are a local recovery index, never proof of current central authority.
 export function historyCleanup({h, t, alive, workspaceId, workspace, caps, namespace, form, errorBox}) {
   const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set();
+  const recovery = historyRecovery(localStorage, namespace, workspaceId);
   let active = false, disposed = false, count = 20, limited = false;
   const status = h('div', {role:'status'}), rows = h('div');
   const refresh = button({variant:'ghost', size:'sm', label:t('exh_cleanup_refresh'), onclick:draw});
@@ -42,6 +44,7 @@ export function historyCleanup({h, t, alive, workspaceId, workspace, caps, names
   function clearForms() {for (const value of forms) value.dispose(); forms.clear(); rows.replaceChildren(); refresh.disabled = more.disabled = false;}
   function remove(row) {
     records.remove(row.link_id);
+    if (!row.source_id || !row.entry_id) return;
     const key = `batc.pm.${historyDraftNamespace(namespace,row)}.withdrawals`;
     const pending = JSON.parse(localStorage.getItem(key) || '[]').filter(value=>value.link_id !== row.link_id);
     if (pending.length) localStorage.setItem(key,JSON.stringify(pending)); else localStorage.removeItem(key);
@@ -50,13 +53,15 @@ export function historyCleanup({h, t, alive, workspaceId, workspace, caps, names
     if (!supported() || !element.open || [...forms].some(value=>value.checking())) return;
     clearForms(); status.replaceChildren(); more.hidden = true;
     try {
-      const known = records.read(), byId = new Map(known.map(row=>[row.link_id,row]));
-      for (const row of legacyPending()) if (!byId.has(row.link_id)) byId.set(row.link_id,row);
-      const visible = [...byId.values()].filter(row=>allowed(row));
-      for (const row of visible.slice(0,count)) {
-        const isKnown = known.some(value=>value.link_id === row.link_id);
-        const editor = form({namespace:historyDraftNamespace(namespace,row), action:'pm.history.unlink', target:target(row), fields:{}, params:()=>({}),
-          preconditions:()=>({expected_link_version:row.version}), permitted:()=>isKnown && allowed(row), recoverPermitted:()=>allowed(row), label:'exh_unlink',
+      const known = records.read();
+      legacyPending(); // Preserve validation of the old marker collection too.
+      const visible = recovery.read().filter(value=>value.intent ? supported() : allowed(value.row));
+      for (const value of visible.slice(0,count)) {
+        const row = value.row;
+        const version = h('p', {class:'ui-meta'},t('exh_cleanup_version',{version:row.version}));
+        const editor = historyWithdrawalForm({h,t,form,recovery,row,errorBox,
+          permitted:()=>value.known && allowed(row), recoverPermitted:()=>supported(), label:'exh_unlink',
+          onResolve:selected=>{version.textContent = t('exh_cleanup_version',{version:selected.row.version});},
           onBeforeSaved:result=>{
             const version = editor.intentRequest()?.preconditions.expected_link_version;
             if (result?.link_id !== row.link_id || result.state !== 'withdrawn' || result.version !== version + 1) throw Error(t('pm_scope_mismatch'));
@@ -66,7 +71,7 @@ export function historyCleanup({h, t, alive, workspaceId, workspace, caps, names
           onStateChange:()=>{refresh.disabled = more.disabled = [...forms].some(value=>value.checking());}});
         const rowElement = h('div', {class:'exh-relation','data-history-cleanup-link':row.link_id},
           h('p', {class:'mono'}, row.link_id), h('a', {class:'mono',href:`#/item/${encodeURIComponent(row.work_item_id)}`},row.work_item_id),
-          h('p', {class:'ui-meta'},t('exh_cleanup_version',{version:row.version})), editor.box);
+          version, editor.box);
         forms.add(editor); rows.append(rowElement); editor.update();
       }
       more.hidden = visible.length <= count;
@@ -80,7 +85,7 @@ export function historyCleanup({h, t, alive, workspaceId, workspace, caps, names
       if (!allowed(link,false)) return;
       try {if (!records.remember(link)) limited = true;} catch {limited = true;}
     },
-    remove(linkId) {const row = records.read().find(value=>value.link_id === linkId); if (row) remove(row);},
+    remove(linkId) {const row = recovery.read().find(value=>value.row.link_id === linkId)?.row; if (row) remove(row);},
     setActive(value) {
       active = value; element.hidden = !supported();
       if (element.hidden) {clearForms(); status.replaceChildren(); element.open = false;}

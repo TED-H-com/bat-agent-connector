@@ -18132,7 +18132,7 @@ var frontendDigest = (value) => typeof value === "string" && value.length === 64
 var frontendBuild = Object.freeze({ frontend_digest: frontendDigest("__BATC_FRONTEND_DIGEST_PLACEHOLDER______________________________") });
 //#endregion
 //#region src/version-projection.js
-var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+var version$3 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
 var commit = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) && [40, 64].includes(value.length) ? value : null;
 var digest$12 = frontendDigest;
 var frontendLoadedAt = new Date().toISOString();
@@ -18163,7 +18163,7 @@ var updateResults = [
 ];
 var fact$1 = (id, value, source, at, period, extra = {}) => {
 	const selected = {
-		version: version$2(value?.version),
+		version: version$3(value?.version),
 		commit: commit(value?.commit),
 		digest: digest$12(value?.digest)
 	};
@@ -18179,7 +18179,7 @@ var fact$1 = (id, value, source, at, period, extra = {}) => {
 	};
 };
 var released = (id, candidate, source, at) => {
-	const known = version$2(candidate?.version) && commit(candidate?.commit) && time(at);
+	const known = version$3(candidate?.version) && commit(candidate?.commit) && time(at);
 	return fact$1(id, known ? candidate : null, source, known ? at : null, "release_check", { published_at: known ? time(candidate.published_at) : null });
 };
 function versionProjection(input = {}) {
@@ -18264,7 +18264,7 @@ function nativeFailureCode(error) {
 	return typeof value === "string" ? code(value.match(/^([A-Z][A-Z0-9_]{0,79})(?=$|: | \()/)?.[1]) : null;
 }
 var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
-var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
+var action$1 = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
 var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
 var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
@@ -18401,7 +18401,7 @@ function scrubDiagnostics(text) {
 		} catch {}
 		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
 		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
-		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$6(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+		return code(value) || reason(value) || version$3(value) || commit(value) || operationId$6(value) || action$1(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
 	}));
 }
 function sessionFacts(session) {
@@ -18541,7 +18541,7 @@ function buildDiagnostics(input) {
 						"unavailable",
 						"unknown"
 					]),
-					version: version$2(host.bat?.version ?? host.server_version),
+					version: version$3(host.bat?.version ?? host.server_version),
 					protocol: select(host.bat?.protocol, protocols),
 					capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, [
 						"claude",
@@ -18576,7 +18576,7 @@ function buildDiagnostics(input) {
 		},
 		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
 			id: operationId$6(op.operation_id),
-			action: action(op.action),
+			action: action$1(op.action),
 			status: op.status,
 			error_code: code(op.error_code ?? op.error?.code),
 			created_at: time(op.created_at),
@@ -21603,7 +21603,7 @@ var digest$9 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
 var ordered$1 = (value) => Array.isArray(value) ? value.map(ordered$1) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, ordered$1(value[key])])) : value;
-var same$10 = (a, b) => JSON.stringify(ordered$1(a)) === JSON.stringify(ordered$1(b));
+var same$11 = (a, b) => JSON.stringify(ordered$1(a)) === JSON.stringify(ordered$1(b));
 var clone$1 = (value) => structuredClone(value);
 var github = {
 	kind: "fixed_revision_verification",
@@ -21763,7 +21763,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		return model?.packages.find((row) => row.package_id === id);
 	}
 	function children(pkg) {
-		return (model?.operations || []).filter((op) => op.action === "repository.continue" && op.status === "succeeded" && op.params?.work_item_id === workId && same$10(op.external_refs?.admission_binding?.pm_handoff?.contract?.package_ref, {
+		return (model?.operations || []).filter((op) => op.action === "repository.continue" && op.status === "succeeded" && op.params?.work_item_id === workId && same$11(op.external_refs?.admission_binding?.pm_handoff?.contract?.package_ref, {
 			workspace_id: workspaceId,
 			package_id: pkg?.package_id,
 			document_digest: pkg?.document_digest
@@ -21840,9 +21840,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					return [];
 				}
 			};
-			const permittedCreate = () => canCreate() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$4.test(candidate.value) && (!fixedResult || pkg.value === fixedResult.package_id && child.value === fixedResult.execution_operation_id && candidate.value === fixedResult.candidate_commit) && reviewer.value && chosenCriteria().length > 0 && same$10(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
+			const permittedCreate = () => canCreate() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$4.test(candidate.value) && (!fixedResult || pkg.value === fixedResult.package_id && child.value === fixedResult.execution_operation_id && candidate.value === fixedResult.candidate_commit) && reviewer.value && chosenCriteria().length > 0 && same$11(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
 				try {
-					return same$10(row.condition, policy(row.choice));
+					return same$11(row.condition, policy(row.choice));
 				} catch {
 					return false;
 				}
@@ -21866,18 +21866,18 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					matrix.replaceChildren();
 					const saved = rows();
 					for (const criterion of chosenCriteria()) {
-						const field = choice("pmq_policy_profile"), old = saved.find((row) => same$10(row.criterion, criterion.criterion));
+						const field = choice("pmq_policy_profile"), old = saved.find((row) => same$11(row.criterion, criterion.criterion));
 						options(field, policyChoices());
 						field.value = old?.choice || "";
 						field.addEventListener("change", () => {
 							if (create.locked()) return;
-							const values = rows().filter((row) => !same$10(row.criterion, criterion.criterion));
+							const values = rows().filter((row) => !same$11(row.criterion, criterion.criterion));
 							if (field.value) values.push({
 								criterion: criterion.criterion,
 								condition: policy(field.value),
 								choice: field.value
 							});
-							const ordered = chosenCriteria().map((item) => values.find((row) => same$10(row.criterion, item.criterion)) || {
+							const ordered = chosenCriteria().map((item) => values.find((row) => same$11(row.criterion, item.criterion)) || {
 								criterion: item.criterion,
 								condition: null,
 								choice: ""
@@ -22022,13 +22022,13 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			row.original_outcome.qualified && !row.qualified ? text("pmq_original_qualified") : null,
 			h("details", {}, h("summary", {}, t("pmq_original_sources")), line("pmq_package", row.context.package_ref.package_id), line("pmq_digest", row.context.package_ref.document_digest), line("pmq_scope", row.context.plan_ref.scope_revision), line("pmq_binding", row.context.work_ref.binding_id), line("pmq_dod", row.context.dod_ref?.revision_id), h("a", { href: `#/op/${row.context.execution_operation_id}` }, t("pmq_execution")), h("p", { class: "pm-note-text" }, row.context.policy_rationale)),
 			...(row.context.criteria || []).map((item) => {
-				const saved = document?.criteria.find((value) => same$10(value.criterion, item.criterion));
+				const saved = document?.criteria.find((value) => same$11(value.criterion, item.criterion));
 				return h("details", {}, h("summary", {}, `${item.text} · ${t("pmq_" + (saved?.status || "unassessed"))}`), saved ? h("p", { class: "pm-note-text" }, saved.rationale) : null, saved?.verification ? line("pmq_verification", t("pmq_" + saved.verification.status)) : text("pmq_no_proof"));
 			}),
 			row.revocation ? h("div", {}, h("h4", {}, t("pmq_revoked")), h("p", { class: "pm-note-text" }, row.revocation.document.reason), line("pmq_by", row.revocation.actor)) : null,
 			h("details", {}, h("summary", {}, t("pmq_history_receipts")), ...row.history.map((item) => h("p", { class: "pm-source" }, `${item.version} · ${item.actor} · ${t("pmq_" + item.kind)} · `, h("a", { href: `#/op/${item.operation_id}` }, item.operation_id), h("span", {}, " · " + item.document_digest)))),
 			fixedResult ? null : use,
-			fixedResult ? text("pmq_result_help") : chosen && same$10(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help"),
+			fixedResult ? text("pmq_result_help") : chosen && same$11(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help"),
 			fixedResult && row.assessment && caps()?.features?.pm_workspaces?.quality_reviews?.discussion_contexts?.includes("quality_assessment") ? h("p", {}, h("a", { href: discussHref({
 				workspaceId,
 				title: t("pmq_discuss_title"),
@@ -22064,7 +22064,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		return Boolean(row?.assessment && row.applicable === true && !row.revocation);
 	}
 	function proofChoices(row, item) {
-		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$10(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
+		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$11(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
 	}
 	function buildAssessment(row) {
 		const key = row.review_id;
@@ -22340,7 +22340,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			await verifier.setSources(model.operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
 			status.replaceChildren(...filtered ? [text("pmq_filtered")] : []);
-			if (previous && selectable(current()) && same$10(previous, reference(current()))) emit(previous);
+			if (previous && selectable(current()) && same$11(previous, reference(current()))) emit(previous);
 			update();
 		} catch (err) {
 			if (valid(ticket)) failure(err);
@@ -24883,6 +24883,285 @@ function historyReplacement({ h, t, api, alive, workspaceId, matches, matchesWor
 	};
 }
 //#endregion
+//#region src/pm-history-recovery.js
+var action = "pm.history.unlink";
+var separator = `.${action}.`;
+var limit = 500;
+var object$7 = (value) => value !== null && typeof value === "object" && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+var exact$1 = (value, keys) => object$7(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+var same$10 = (a, b) => a === b || object$7(a) && object$7(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$10(a[key], b[key]));
+var invalid = () => Object.assign(Error("HISTORY_RECOVERY_INVALID"), { code: "HISTORY_RECOVERY_INVALID" });
+var changed = () => Object.assign(Error("HISTORY_RECOVERY_CHANGED"), { code: "HISTORY_RECOVERY_CHANGED" });
+var full = () => Object.assign(Error("HISTORY_RECOVERY_FULL"), { code: "HISTORY_RECOVERY_FULL" });
+var id$1 = (value, pattern) => typeof value === "string" && pattern.test(value);
+var version$2 = (value) => Number.isSafeInteger(value) && value > 0;
+var sameIntent = (a, b) => a && b && a.key === b.key && same$10(a.request, b.request) && (!a.operation_id || !b.operation_id || a.operation_id === b.operation_id);
+function targetOf(row, workspaceId) {
+	const target = {
+		workspace_id: workspaceId,
+		work_item_id: row?.work_item_id,
+		link_id: row?.link_id
+	};
+	if (row?.workspace_id !== void 0 && row.workspace_id !== workspaceId || !id$1(workspaceId, /^ws_[0-9a-f]{32}$/) || !id$1(target.work_item_id, /^wi_[0-9a-f]{20}$/) || !id$1(target.link_id, /^hxl_[0-9a-f]{32}$/)) throw invalid();
+	return target;
+}
+function envelope(saved, target) {
+	if (!exact$1(saved, saved?.intent === void 0 ? ["version", "values"] : [
+		"version",
+		"values",
+		"intent"
+	]) || saved.version !== 1 || !exact$1(saved.values, [])) throw invalid();
+	if (saved.intent === void 0) return;
+	const intent = saved.intent, request = intent?.request;
+	if (!object$7(intent) || Object.keys(intent).some((key) => ![
+		"key",
+		"request",
+		"operation_id",
+		"initialAdmissionRefused"
+	].includes(key)) || typeof intent.key !== "string" || !intent.key.trim() || intent.key.trim().length > 200 || Object.hasOwn(intent, "operation_id") && !id$1(intent.operation_id, /^op_[0-9a-f]{32}$/) || Object.hasOwn(intent, "initialAdmissionRefused") && typeof intent.initialAdmissionRefused !== "boolean" || !exact$1(request, [
+		"action",
+		"target",
+		"params",
+		"preconditions"
+	]) || request.action !== action || !exact$1(request.target, [
+		"workspace_id",
+		"work_item_id",
+		"link_id"
+	]) || !same$10(request.target, target) || !exact$1(request.params, []) || !exact$1(request.preconditions, ["expected_link_version"]) || !version$2(request.preconditions.expected_link_version)) throw invalid();
+}
+function historyRecovery(storage, namespace, workspaceId) {
+	if (typeof namespace !== "string" || !namespace) throw invalid();
+	targetOf({
+		work_item_id: "wi_" + "0".repeat(20),
+		link_id: "hxl_" + "0".repeat(32)
+	}, workspaceId);
+	const records = historyRecords(storage, namespace, workspaceId);
+	const cleanupNamespace = `${namespace}.history-cleanup.${workspaceId}`;
+	const cleanupPrefix = `batc.pm.${cleanupNamespace}.`, legacyPrefix = `batc.pm.${namespace}.history.`;
+	function descriptor(row, draftNamespace, target = targetOf(row, workspaceId), intent = null) {
+		return {
+			row,
+			namespace: draftNamespace,
+			target,
+			intent,
+			known: false,
+			sourceIndependent: draftNamespace === cleanupNamespace,
+			storageKey: `batc.pm.${draftNamespace}${separator}${JSON.stringify(target)}`
+		};
+	}
+	function read() {
+		const byId = new Map(records.read().map((row) => [row.link_id, {
+			...descriptor(row, historyDraftNamespace(namespace, row)),
+			known: true
+		}]));
+		const seen = new Set(), keys = new Set();
+		const count = storage.length;
+		if (!Number.isSafeInteger(count) || count < 0) throw invalid();
+		for (let i = 0; i < count; i++) {
+			const key = storage.key(i);
+			if (typeof key !== "string") throw invalid();
+			keys.add(key);
+		}
+		let pendingCount = 0;
+		for (const key of keys) {
+			const independent = key.startsWith(cleanupPrefix);
+			if (!independent && !key.startsWith(legacyPrefix)) continue;
+			const legacyName = !independent && key.slice(legacyPrefix.length).match(/^(\["[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}","shi_[0-9a-f]{32}"\])(.*)$/);
+			if (legacyName && !legacyName[2].startsWith(separator)) continue;
+			const split = key.lastIndexOf(separator);
+			if (split < 0) {
+				if (independent) throw invalid();
+				else continue;
+			}
+			const target = JSON.parse(key.slice(split + separator.length));
+			if (!id$1(target?.workspace_id, /^ws_[0-9a-f]{32}$/)) throw invalid();
+			if (target.workspace_id !== workspaceId) {
+				if (independent) throw invalid();
+				else continue;
+			}
+			if (!exact$1(target, [
+				"workspace_id",
+				"work_item_id",
+				"link_id"
+			]) || !same$10(target, targetOf(target, workspaceId)) || JSON.stringify(target) !== key.slice(split + separator.length)) throw invalid();
+			const draftNamespace = key.slice(8, split);
+			let source = {};
+			if (independent) {
+				if (draftNamespace !== cleanupNamespace) throw invalid();
+			} else {
+				const encoded = key.slice(legacyPrefix.length, split), identity = JSON.parse(encoded);
+				if (!Array.isArray(identity) || identity.length !== 2 || JSON.stringify(identity) !== encoded || !id$1(identity[0], /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/) || !id$1(identity[1], /^shi_[0-9a-f]{32}$/)) throw invalid();
+				source = {
+					source_id: identity[0],
+					entry_id: identity[1]
+				};
+			}
+			const raw = storage.getItem(key);
+			if (raw === null) continue;
+			const saved = JSON.parse(raw);
+			envelope(saved, target);
+			if (!saved.intent) continue;
+			if (seen.has(target.link_id) || independent && ++pendingCount > limit) throw invalid();
+			seen.add(target.link_id);
+			const known = byId.get(target.link_id);
+			if (known && known.row.work_item_id !== target.work_item_id) throw invalid();
+			const row = {
+				...known?.row,
+				...source,
+				...target,
+				version: saved.intent.request.preconditions.expected_link_version
+			};
+			byId.set(target.link_id, {
+				...descriptor(row, draftNamespace, target, saved.intent),
+				known: Boolean(known?.known)
+			});
+		}
+		return [...byId.values()];
+	}
+	function resolve(value) {
+		const target = targetOf(value, workspaceId);
+		if (!version$2(value?.version)) throw invalid();
+		const legacy = value.source_id !== void 0 || value.entry_id !== void 0 || value.fixed_ref !== void 0;
+		if (legacy && (!id$1(value.source_id ?? value.fixed_ref?.source_id, /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/) || !id$1(value.entry_id ?? value.fixed_ref?.entry_id, /^shi_[0-9a-f]{32}$/))) throw invalid();
+		if (!legacy && !exact$1(value, Object.hasOwn(value, "workspace_id") ? [
+			"workspace_id",
+			"work_item_id",
+			"link_id",
+			"version"
+		] : [
+			"work_item_id",
+			"link_id",
+			"version"
+		])) throw invalid();
+		const current = read().find((item) => item.row.link_id === target.link_id);
+		if (current) {
+			if (current.row.work_item_id !== target.work_item_id) throw invalid();
+			return current;
+		}
+		if (legacy) {
+			const row = historyRecord({
+				...value,
+				workspace_id: workspaceId
+			});
+			return descriptor(row, historyDraftNamespace(namespace, row));
+		}
+		return descriptor({
+			...target,
+			version: value.version
+		}, cleanupNamespace);
+	}
+	function inspect(selected, owned, capacity = true) {
+		const rows = read(), current = rows.find((item) => item.row.link_id === selected.row.link_id);
+		if (current && current.row.work_item_id !== selected.row.work_item_id) throw invalid();
+		if (current?.intent && !sameIntent(current.intent, owned)) throw owned ? invalid() : changed();
+		if (current && current.storageKey !== selected.storageKey && (!owned || current.intent)) throw changed();
+		if (capacity && selected.sourceIndependent && !current?.intent && rows.filter((item) => item.sourceIndependent && item.intent).length >= limit) throw full();
+		return current;
+	}
+	return {
+		read,
+		resolve,
+		admit: inspect,
+		beforePersist(selected, saved, storageKey, owned = saved.intent) {
+			if (storageKey !== selected.storageKey) throw invalid();
+			envelope(saved, selected.target);
+			inspect(selected, owned, Boolean(saved.intent));
+			if (saved.intent && saved.intent.request.preconditions.expected_link_version !== selected.row.version) throw invalid();
+		}
+	};
+}
+function historyWithdrawalForm({ h, t, form, recovery, row, permitted, recoverPermitted = permitted, beforeNew = () => {}, onResolve = () => {}, onError = () => false, onSaved = () => {}, errorBox, ...options }) {
+	const box = h("div"), notice = h("div", { role: "status" });
+	let editor, selected, owned, disposed = false, queued = false, completed = false, needsRead = false, lastError = null;
+	function report(error) {
+		if (lastError === error.code) return;
+		lastError = error.code;
+		notice.replaceChildren(errorBox(Error(t(error.code === "HISTORY_RECOVERY_FULL" ? "exh_cleanup_limit" : "exh_cleanup_invalid")), {
+			within: notice,
+			sourceRefresh: false
+		}));
+	}
+	function remount() {
+		if (queued || disposed) return;
+		queued = true;
+		queueMicrotask(() => {
+			queued = false;
+			if (!disposed) try {
+				mount();
+			} catch (error) {
+				report(error);
+			}
+		});
+	}
+	function ready(recovering) {
+		if (disposed || completed || !(recovering ? recoverPermitted() : permitted())) return false;
+		try {
+			recovery.admit(selected, owned);
+			return Boolean(owned) || !needsRead;
+		} catch (error) {
+			if (error.code === "HISTORY_RECOVERY_CHANGED" && !owned) remount();
+			else report(error);
+			return false;
+		}
+	}
+	function mount() {
+		const next = recovery.resolve(row);
+		editor?.dispose();
+		selected = next;
+		owned = next.intent;
+		needsRead = Boolean(owned?.initialAdmissionRefused);
+		notice.replaceChildren();
+		lastError = null;
+		onResolve(next);
+		editor = form({
+			...options,
+			namespace: next.namespace,
+			action,
+			target: next.target,
+			fields: {},
+			params: () => ({}),
+			pruneEmpty: next.sourceIndependent,
+			preconditions: () => {
+				recovery.admit(selected, owned);
+				beforeNew();
+				return { expected_link_version: selected.row.version };
+			},
+			permitted: () => ready(false),
+			recoverPermitted: () => ready(true),
+			beforePersist: (saved, key) => {
+				recovery.beforePersist(selected, saved, key, owned);
+				owned = saved.intent ? structuredClone(saved.intent) : null;
+			},
+			onError: (error) => {
+				if (["PM_HISTORY_LINK_CHANGED", "VERSION_CONFLICT"].includes(error.code)) needsRead = true;
+				if (typeof error.code === "string" && error.code.startsWith("HISTORY_RECOVERY_")) {
+					report(error);
+					return true;
+				}
+				return onError(error);
+			},
+			onSaved: async (result) => {
+				completed = true;
+				return onSaved(result);
+			}
+		});
+		box.replaceChildren(editor.box, notice);
+	}
+	mount();
+	return {
+		box,
+		update: () => editor.update(),
+		checking: () => editor.checking(),
+		intentRequest: () => editor.intentRequest(),
+		locked: () => editor.locked(),
+		operation: () => editor.operation(),
+		dispose: () => {
+			disposed = true;
+			editor.dispose();
+		}
+	};
+}
+//#endregion
 //#region src/pm-external-history-links.js
 var workId$1 = (value) => /^wi_[0-9a-f]{20}$/.test(value || "");
 var digest$8 = (value) => /^[0-9a-f]{64}$/.test(value || "");
@@ -24891,6 +25170,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 	const draftNamespace = `${namespace}.history.${JSON.stringify([sourceId, entry.entry_id])}`;
 	const selectionKey = `batc.pm.${draftNamespace}.work-selection`;
 	const withdrawalKey = `batc.pm.${draftNamespace}.withdrawals`;
+	const recovery = historyRecovery(localStorage, namespace, workspaceId);
 	let disposed = false, generation = 0, loaded = false, busy = false, after = null;
 	let preview = null, selected = "", editor = null, choosing = false, workAfter = null, workBusy = false;
 	let selectionSerial = 0, previewSerial = 0, previewBusy = false, workSelecting = false, currentWork = null, attemptPicker = null, replacement = null;
@@ -24945,30 +25225,35 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 		if (saved.length) localStorage.setItem(withdrawalKey, JSON.stringify(saved));
 		else localStorage.removeItem(withdrawalKey);
 	}
+	function pendingRecoveries() {
+		const pending = new Map(pendingWithdrawals().map((row) => [row.link_id, row]));
+		for (const value of recovery.read()) if (value.intent && value.row.source_id === sourceId && value.row.entry_id === entry.entry_id) pending.set(value.row.link_id, value.row);
+		return [...pending.values()];
+	}
 	function withdrawal(link, active = true) {
-		const target = {
+		const row = {
+			...link,
 			workspace_id: workspaceId,
-			work_item_id: link.work_item_id,
-			link_id: link.link_id
+			source_id: sourceId,
+			entry_id: entry.entry_id
 		};
+		const selected = recovery.resolve(row);
 		if (!active) {
-			if (!JSON.parse(localStorage.getItem(`batc.pm.${draftNamespace}.pm.history.unlink.${JSON.stringify(target)}`) || "null")?.intent) {
+			if (!selected.intent) {
 				rememberWithdrawal(link, true);
 				return null;
 			}
 		}
-		const remove = form({
-			namespace: draftNamespace,
-			action: "pm.history.unlink",
-			target,
-			fields: {},
-			params: () => ({}),
-			preconditions: () => {
-				rememberWithdrawal(link);
-				return { expected_link_version: link.version };
-			},
+		const remove = historyWithdrawalForm({
+			h,
+			t,
+			form,
+			recovery,
+			row,
+			errorBox,
+			beforeNew: () => rememberWithdrawal(link),
 			permitted: () => active && canUnlink(link),
-			recoverPermitted: () => canUnlink(link),
+			recoverPermitted: () => current(generation) && supported("pm.history.unlink") && Boolean(workspace()?.membership),
 			label: "exh_unlink",
 			onBeforeSaved: (result) => {
 				if (result?.link_id !== link.link_id || result.state !== "withdrawn" || result.version !== remove.intentRequest()?.preconditions.expected_link_version + 1) throw mismatch();
@@ -25153,7 +25438,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 			}
 			recoveryForms.clear();
 			rows.querySelectorAll("[data-history-withdrawal]").forEach((node) => node.remove());
-			for (const link of pendingWithdrawals()) if (!links.has(link.link_id) && canUnlink(link)) {
+			for (const link of pendingRecoveries()) if (!links.has(link.link_id)) {
 				const recovery = withdrawal(link, false);
 				if (recovery) rows.append(h("div", {
 					class: "exh-relation",
@@ -25431,6 +25716,7 @@ function externalHistoryLinks({ h, t, api, alive, workspaceId, workspace, caps, 
 //#region src/pm-history-cleanup.js
 function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, form, errorBox }) {
 	const records = historyRecords(localStorage, namespace, workspaceId), forms = new Set();
+	const recovery = historyRecovery(localStorage, namespace, workspaceId);
 	let active = false, disposed = false, count = 20, limited = false;
 	const status = h("div", { role: "status" }), rows = h("div");
 	const refresh = button({
@@ -25499,6 +25785,7 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 	}
 	function remove(row) {
 		records.remove(row.link_id);
+		if (!row.source_id || !row.entry_id) return;
 		const key = `batc.pm.${historyDraftNamespace(namespace, row)}.withdrawals`;
 		const pending = JSON.parse(localStorage.getItem(key) || "[]").filter((value) => value.link_id !== row.link_id);
 		if (pending.length) localStorage.setItem(key, JSON.stringify(pending));
@@ -25510,21 +25797,25 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 		status.replaceChildren();
 		more.hidden = true;
 		try {
-			const known = records.read(), byId = new Map(known.map((row) => [row.link_id, row]));
-			for (const row of legacyPending()) if (!byId.has(row.link_id)) byId.set(row.link_id, row);
-			const visible = [...byId.values()].filter((row) => allowed(row));
-			for (const row of visible.slice(0, count)) {
-				const isKnown = known.some((value) => value.link_id === row.link_id);
-				const editor = form({
-					namespace: historyDraftNamespace(namespace, row),
-					action: "pm.history.unlink",
-					target: target(row),
-					fields: {},
-					params: () => ({}),
-					preconditions: () => ({ expected_link_version: row.version }),
-					permitted: () => isKnown && allowed(row),
-					recoverPermitted: () => allowed(row),
+			const known = records.read();
+			legacyPending();
+			const visible = recovery.read().filter((value) => value.intent ? supported() : allowed(value.row));
+			for (const value of visible.slice(0, count)) {
+				const row = value.row;
+				const version = h("p", { class: "ui-meta" }, t("exh_cleanup_version", { version: row.version }));
+				const editor = historyWithdrawalForm({
+					h,
+					t,
+					form,
+					recovery,
+					row,
+					errorBox,
+					permitted: () => value.known && allowed(row),
+					recoverPermitted: () => supported(),
 					label: "exh_unlink",
+					onResolve: (selected) => {
+						version.textContent = t("exh_cleanup_version", { version: selected.row.version });
+					},
 					onBeforeSaved: (result) => {
 						const version = editor.intentRequest()?.preconditions.expected_link_version;
 						if (result?.link_id !== row.link_id || result.state !== "withdrawn" || result.version !== version + 1) throw Error(t("pm_scope_mismatch"));
@@ -25545,7 +25836,7 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 				}, h("p", { class: "mono" }, row.link_id), h("a", {
 					class: "mono",
 					href: `#/item/${encodeURIComponent(row.work_item_id)}`
-				}, row.work_item_id), h("p", { class: "ui-meta" }, t("exh_cleanup_version", { version: row.version })), editor.box);
+				}, row.work_item_id), version, editor.box);
 				forms.add(editor);
 				rows.append(rowElement);
 				editor.update();
@@ -25580,7 +25871,7 @@ function historyCleanup({ h, t, alive, workspaceId, workspace, caps, namespace, 
 			}
 		},
 		remove(linkId) {
-			const row = records.read().find((value) => value.link_id === linkId);
+			const row = recovery.read().find((value) => value.row.link_id === linkId)?.row;
 			if (row) remove(row);
 		},
 		setActive(value) {
@@ -54632,7 +54923,7 @@ var pmAvailable = (caps) => pmAvailability({
 	caps,
 	kind: "workspace"
 }).ready;
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, clientGate = () => null, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending", releaseAfterAcknowledgement = false, acknowledgedText = "", onAcknowledged = () => {}, acknowledgeStatus = null, beforePersist = () => {} }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -54679,6 +54970,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	});
 	const persist = () => {
 		guard();
+		beforePersist(saved, storage);
 		if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage);
 		else localStorage.setItem(storage, JSON.stringify(saved));
 	};
@@ -54918,6 +55210,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				if (stored?.intent?.key === intent.key && same$3(stored.intent.request, intent.request)) {
 					if (stored.intent.operation_id && stored.intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
 					stored.intent.operation_id = op.operation_id;
+					beforePersist(stored, storage);
 					localStorage.setItem(storage, JSON.stringify(stored));
 					for (const notify of receiptSubscribers.get(storage) || []) notify();
 				}
