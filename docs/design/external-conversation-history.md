@@ -358,10 +358,91 @@ record and its legacy index entry; malformed receipts preserve recovery.
 
 The source inspector suspends cleanup forms to avoid concurrent controls for the
 same draft. Both surfaces preserve the existing durable operation and connection
-gates. English/zh-TW and HTTP/injected IPC use the same source. This adds no API,
-schema, native transport or CLI control. Discovery of unseen relationship IDs,
-derive and native/live acceptance remain open; known-ID
-cleanup does not establish complete revoked-source discovery or lifecycle coverage.
+gates. English/zh-TW and HTTP/injected IPC use the same source. This known-ID UI
+adds no API, schema, native transport or CLI control. UI discovery of unseen
+relationship IDs, derive and native/live acceptance remain open. The separate
+cleanup-only API below does not establish complete lifecycle coverage.
+
+### Cleanup-only discovery API
+
+When `features.external_history.relationships.cleanup_discovery.version` is `1`,
+an authenticated explicit member with **observe and manage** may call
+`pm_history_cleanup_list(workspace_id, work_item_id, after?, limit?)` through RPC
+or MCP, or use:
+
+```text
+GET /api/v1/pm/workspaces/{workspace_id}/work/{work_item_id}/external-links/cleanup
+```
+
+This increment is per-Work only. `workspace_id` and `work_item_id` are required;
+HTTP accepts only `after` and `limit` query keys, no duplicate/empty values and no
+framed request body. MCP rejects unknown arguments. `limit` is an integer 1–50,
+default 50. `after` is omitted or JSON null for the first page, otherwise an opaque
+`hxl_` plus 32 lowercase hexadecimal characters. HTTP omits `after` for the first
+page. The strings `"null"`, `"[]"` and `"{}"` are invalid references, not JSON
+selectors. Other history reads retain their numeric cursor contracts.
+
+The selected Work must remain visible and currently bound to the workspace.
+Each candidate passes the same `_cleanup` decision as `pm.history.unlink`:
+explicit membership, observe, current Work visibility/binding, and creator or
+workspace owner. Global administrator status provides no membership or source
+override. A reader with manage may clean up their own relationships under this
+existing decision; discovery adds no separate role rule.
+
+The list includes **every active relationship the caller may withdraw now**,
+including those whose source conversation is still readable normally. It is not
+a stale-source list or a source-grant oracle. Owners can discover the existence
+and count, by paging, of relationships on a selected visible Work from other or
+former members; they learn no creator identity. Other members discover only
+their own relationships. This explicit metadata exception does not relax ordinary
+relationship lists, link detail, association or excerpt reads, which retain their
+current source-grant checks.
+
+The exact envelope is `{"links": [...], "next_after": null-or-link-ID}`. Each row
+has exactly `link_id`, `work_item_id` and `version`. There are no counts, creator
+fields, source/entry/Attempt IDs, titles, text, digests, paths, canonical references
+or native session identities. These three fields supply the existing unlink
+target and `expected_link_version`; no new mutation is introduced.
+
+Owner and creator queries use scoped active-row partial indexes and internal
+sequence keyset ordering, fetching at most `limit+1` candidates. At most `limit`
+are scanned, with bounded final authorization checks; there is no refill scan.
+When an extra candidate exists, `next_after` identifies the last scanned candidate,
+even if that candidate was withdrawn before projection. Empty pages with non-null
+cursors are valid. A withdrawn anchor remains usable under current cleanup
+authority. Unknown, foreign-Work/workspace or non-withdrawable anchors are refused.
+Internal sequence numbers and unrelated insertion gaps are never returned.
+
+Membership, role, Work visibility and binding are rechecked before returning.
+Their loss during a read fails the whole response; it does not return a filtered
+count or partial success. Between pages, the next request uses current authority.
+Withdrawn rows disappear; replacement/new links have new IDs and later sequences.
+Results are a **point-in-time view, not a reservation**, and no immutable multi-page
+snapshot is promised. Unlink rechecks current authority and exact version. A
+version conflict requires an explicit reread and review; never automatically
+advance the version, replace an uncertain request, or resend with a new key.
+
+Error transport conventions remain unchanged:
+
+| Condition | HTTP | RPC / MCP |
+| --- | --- | --- |
+| Missing credentials | 401, `error: {code: UNAUTHORIZED, message}` | RPC retains its authentication error (`error: "task API authorization failed"`, HTTP 400); MCP requires the caller's token and reports the existing ToolError, with no administrator fallback |
+| Missing observe or manage | 403, `error: {code: FORBIDDEN, message}` | RPC HTTP 400 with `error: code, message`; MCP ToolError wraps the same central code/message |
+| Semantic refusal | 404, existing `PM_HISTORY_SOURCE_UNAVAILABLE` code/message | RPC HTTP 400 with that code/message; MCP ToolError wraps that same central refusal |
+| Invalid selectors | Existing 422 codes/messages | RPC retains its HTTP 400 error wrapper; MCP uses SDK argument-validation ToolError or wraps the central input refusal |
+
+Both scope checks precede workspace/Work/link/cursor lookups. Unknown workspace,
+non-member/removed member, global administrator without membership, unavailable
+or unbound Work, cross-workspace Work and unauthorized cursors share the existing
+source-unavailable refusal. Error text does not expose source state. Ordinary
+indexed lookup/shared-resource timing is not promised to be indistinguishable.
+
+This read performs no operation, event, grant refresh, collector/file/provider
+access, derive, search, suggestion or execution. The native bridge permits only
+the exact GET path and typed query, with no body or PM idempotency header. The
+capability ships with the working backend; the current Saved relationship IDs UI
+does not automatically call it or expose a discovery control. Client discovery
+and its durable recovery integration are separately delivered increments.
 
 ### Remembering Work-side relationships for cleanup
 
