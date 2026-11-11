@@ -22926,8 +22926,12 @@ function originalAssessmentReader({ h, t, api, alive, workspaceId, serverId, cap
 				status.append(h("p", {}, t(context ? "pmq_result_changed" : "pmq_result_unresolved")), h("a", {
 					class: "ui-button secondary",
 					href: `#/pm/${workspaceId}/board?select=${pin.work_item_id}`,
-					onclick: () => {
+					onclick: (event) => {
+						event.preventDefault();
+						const destination = event.currentTarget.getAttribute("href");
 						close({ forget: true });
+						if (location.hash === destination) refreshOrigin();
+						else location.hash = destination;
 					}
 				}, t("pmq_open_current_result")));
 			} else {

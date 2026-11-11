@@ -104,7 +104,13 @@ export function originalAssessmentReader({h, t, api, alive, workspaceId, serverI
         quality?.dispose(); quality = null; editor.replaceChildren();
         status.append(h('p', {}, t(context ? 'pmq_result_changed' : 'pmq_result_unresolved')),
           h('a', {class: 'ui-button secondary', href: `#/pm/${workspaceId}/board?select=${pin.work_item_id}`,
-            onclick: () => {close({forget: true});}}, t('pmq_open_current_result')));
+            onclick: event => {
+              event.preventDefault();
+              const destination = event.currentTarget.getAttribute('href');
+              close({forget: true});
+              if (location.hash === destination) void refreshOrigin();
+              else location.hash = destination;
+            }}, t('pmq_open_current_result')));
       } else {
         if (!quality) quality = createWorkQuality({h, t, api, alive, workspaceId, serverId, caps, namespace, form, errorBox,
           assessmentSelection: pin, originalAssessment: original, onSourceUnavailable: error => fence?.withdraw(error),

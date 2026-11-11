@@ -1012,3 +1012,26 @@ test('an exact refusal removes the whole Overview source disclosure',async({page
   await expect(page.locator('[data-overview-delivery-assessment]')).toHaveCount(0);
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
 });
+
+import {workResultFixture as resultFixture} from './work-result-fixture.ts';
+test('Open current Result navigates from Overview and reads the selected Work Result',async({page})=>{
+  const base=fixture(),row=base.state.data.recent_deliveries.find((item:any)=>item.state==='accepted');
+  const work=resultFixture(),workCaps=(await work.dispatch({method:'GET',path:'/capabilities'})).data;
+  const enhanced={...base,dispatch:async(input:any)=>{
+    const response=await base.dispatch(input);
+    if(['/bootstrap','/capabilities'].includes(input.path)){
+      const caps=input.path==='/bootstrap'?response.data.capabilities:response.data;
+      Object.assign(caps.features.pm_workspaces,{work_start:workCaps.features.pm_workspaces.work_start,work_attempt_results:workCaps.features.pm_workspaces.work_attempt_results});
+    }
+    return response;
+  }};
+  const f=assessmentRoundtrip(enhanced,base.ids.workspaceId,row.work_item_id);row.assessment_ref=f.ref;
+  await boot(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-overview-delivery-assessment] summary').click();await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  f.state.envelope.sources.result_id='res_'+'2'.repeat(32);base.state.cursor++;
+  await reader.getByRole('link',{name:'Open current Result',exact:true}).click();
+  await expect(page.locator('[data-result-requirements]')).toBeVisible();
+  expect(await page.evaluate(()=>location.hash)).toBe('#/pm/'+base.ids.workspaceId+'/board?select='+row.work_item_id);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});

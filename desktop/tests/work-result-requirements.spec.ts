@@ -237,6 +237,11 @@ test('Result rollover keeps its original assessment pin and refuses the fixed ed
   await expect(reader.getByRole('button',{name:'Review this result',exact:true})).toHaveCount(0);
   await expect(reader.getByRole('link',{name:'Open current Result',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>location.hash)).toBe(before);
+  const reads=f.state.requests.filter(input=>input.path.endsWith('/result')).length;
+  await reader.getByRole('link',{name:'Open current Result',exact:true}).click();
+  await expect(page.locator('[data-result-requirements]')).toBeVisible();
+  expect(f.state.requests.filter(input=>input.path.endsWith('/result')).length).toBeGreaterThan(reads);
+  expect(await page.evaluate(()=>location.hash)).not.toContain('qa_');
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
 });
 
@@ -375,5 +380,26 @@ for(const server of [undefined,'foreign-fixture-server'])test(`exact destination
   await expect(reader.locator('[data-api-error]')).toBeVisible();
   await expect(reader).not.toContainText('Original conclusion: accepted');
   await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+import {followUpFixture} from './work-next-turn-fixture.ts';
+test('Open current Result navigates from a pinned session and reads the Board Result',async({page})=>{
+  const base=workResultFixture(),session=followUpFixture('en',{workspaceId,workItemId:workId(1)});
+  const hybrid={...base,dispatch:async(input:any)=> /^\/(sessions|hosts|observations)(\/|\?|$)/.test(input.path)||input.path==='/work-items/'+workId(1)
+    ?session.dispatch(input):base.dispatch(input)};
+  const f=assessmentRoundtrip(hybrid,workspaceId,workId(1));f.state.attempt.session={host:'demo',session_id:'search-results'};
+  const dispatch=async(input:any)=>input.path==='/work-items/'+workId(1)?session.dispatch(input):f.dispatch(input);
+  await mountConversation(page,false,dispatch);
+  await page.goto('/dashboard/?workbench=1#/session/demo/search-results?workspace='+workspaceId+'&work='+workId(1)+'&attempt='+attemptId);
+  await page.getByRole('button',{name:'Results',exact:true}).click();
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  f.state.envelope.sources.result_id='res_'+'2'.repeat(32);
+  await page.reload();await page.getByRole('button',{name:'Results',exact:true}).click();
+  await reader.getByRole('link',{name:'Open current Result',exact:true}).click();
+  await expect(page.locator('[data-result-requirements]')).toBeVisible();
+  expect(await page.evaluate(()=>location.hash)).toBe('#/pm/'+workspaceId+'/board?select='+workId(1));
   expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
 });
