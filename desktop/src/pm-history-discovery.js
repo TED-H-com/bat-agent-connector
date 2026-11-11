@@ -30,15 +30,14 @@ export function historyDiscovery({h,t,api,alive,workspaceId,enabled,errorBox,onC
     selected = works.has(select.value) ? select.value : '';
     clearPages(); status.replaceChildren(); sync(); onChange();
   }});
-  const read = button({variant:'secondary',size:'sm',label:t('exh_cleanup_read_ids'),onclick:()=>void readPage(true,false)});
-  const again = button({variant:'ghost',size:'sm',label:t('exh_cleanup_read_again'),onclick:()=>void readPage(true,true)});
+  const read = button({variant:'secondary',size:'sm',label:t('exh_cleanup_read_ids'),onclick:()=>void readPage(true,loaded)});
   const more = button({variant:'secondary',size:'sm',label:t('exh_more_links'),onclick:()=>void readPage(false,review)});
   const workMore = button({variant:'ghost',size:'sm',label:t('exh_more_work'),onclick:()=>void readWorks(false)});
   const retryWorks = button({variant:'ghost',size:'sm',label:t('exh_choose_work'),onclick:()=>void readWorks(true)});
   retryWorks.hidden = true;
   const chooser = h('div',{'data-history-cleanup-chooser':'',hidden:true},
     h('p',{class:'ui-meta'},t('exh_cleanup_discover_help')),h('label',{},t('exh_work'),select),workStatus,
-    h('div',{class:'exh-actions'},workMore,retryWorks,read,again,more),status);
+    h('div',{class:'exh-actions'},workMore,retryWorks,read,more),status);
   const discover = button({variant:'secondary',size:'sm',label:t('exh_cleanup_discover'),onclick:()=>{
     if (!available() || opened) return;
     opened = true; chooser.hidden = false; discover.setAttribute('aria-expanded','true');
@@ -50,11 +49,18 @@ export function historyDiscovery({h,t,api,alive,workspaceId,enabled,errorBox,onC
   const current = ticket => available() && opened && ticket === epoch;
   function clearPages() {serial++; busy = false; after = null; pages = 0; loaded = review = false; rows.clear(); ids.clear(); cursors.clear();}
   function sync() {
-    read.hidden = loaded; again.hidden = !loaded;
-    read.disabled = again.disabled = !available() || !selected || busy;
-    more.hidden = !loaded || after === null || pages >= 25; more.disabled = busy;
-    workMore.hidden = workAfter === null; workMore.disabled = retryWorks.disabled = workBusy;
+    const focused = document.activeElement;
+    read.textContent = t(loaded ? 'exh_cleanup_read_again' : 'exh_cleanup_read_ids');
+    read.disabled = !available() || !selected;
+    read.setAttribute('aria-disabled',String(busy));
+    more.hidden = !loaded || after === null || pages >= 25; more.setAttribute('aria-disabled',String(busy));
+    workMore.hidden = workAfter === null;
+    for (const control of [workMore,retryWorks]) control.setAttribute('aria-disabled',String(workBusy));
     status.setAttribute('aria-busy',String(busy));
+    if (opened && available()) {
+      if (focused === more && more.hidden) read.focus({preventScroll:true});
+      if (focused === workMore && workMore.hidden) select.focus({preventScroll:true});
+    }
   }
   function choices() {
     select.replaceChildren(h('option',{value:''},t('exh_select_work')),
@@ -65,7 +71,9 @@ export function historyDiscovery({h,t,api,alive,workspaceId,enabled,errorBox,onC
     if (!available() || !opened || workBusy) return;
     const ticket = epoch, cursor = reset ? 0 : workAfter;
     if (!reset && cursor === null) return;
-    workBusy = true; retryWorks.hidden = true; sync(); workStatus.replaceChildren();
+    workBusy = true;
+    if (document.activeElement === retryWorks) select.focus({preventScroll:true});
+    retryWorks.hidden = true; sync(); workStatus.replaceChildren();
     try {
       const data = await api('GET',`${endpoint}/kanban?after=${cursor}&limit=20`);
       if (!current(ticket)) return;
@@ -119,7 +127,7 @@ export function historyDiscovery({h,t,api,alive,workspaceId,enabled,errorBox,onC
     has:id=>available() && opened && rows.has(id),
     invalidate() {clearPages(); sync(); onChange();},
     forget(id) {rows.delete(id); serial++; busy = false; sync();},
-    focus:()=>{(loaded ? again : discover).focus({preventScroll:true});},
+    focus:()=>{(loaded ? read : discover).focus({preventScroll:true});},
     update() {element.hidden = !available(); if (element.hidden) reset(); else sync();},
     reset,dispose() {disposed = true; reset();},
   };

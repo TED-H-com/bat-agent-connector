@@ -28,6 +28,7 @@ test(`explicit cleanup discovery ${native?'IPC':'HTTP'} ${locale} ${width}`,asyn
   expect(f.discovery.requests).toHaveLength(requests);expect(f.discovery.reads).toEqual([]);readonly(f);
   await expect(discovery(page)).toContainText(locale==='en'?'including ones whose source you can still read':'包括來源仍可讀取的關聯');
   await read(page,locale).focus();await page.keyboard.press('Enter');await expect(rows(page)).toHaveCount(1);
+  await expect(discovery(page).getByRole('button',{name:STRINGS[locale].exh_cleanup_read_again,exact:true})).toBeFocused();
   expect(f.discovery.reads).toHaveLength(1);readonly(f);
   await expect(rows(page)).toContainText(linkId);await expect(rows(page)).not.toContainText('reader');
   await expect(rows(page)).not.toContainText('Member login');await expect(rows(page).locator('a')).toHaveAttribute('href',`#/item/${workId(1)}`);
@@ -41,6 +42,7 @@ test('owner rows have no creator identity and pagination walks 120 IDs once',asy
   await open(page,false,f);await choose(page);await read(page).click();await expect(rows(page)).toHaveCount(20);
   for(let n=2;n<=6;n++){await more(page).click();await expect(rows(page)).toHaveCount(n*20);}
   await expect(more(page)).toBeHidden();expect(f.discovery.reads).toHaveLength(6);
+  await expect(again(page)).toBeFocused();
   const ids=await rows(page).evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-history-cleanup-link')));
   expect(new Set(ids).size).toBe(120);await expect(cleanup(page)).not.toContainText('former-member');readonly(f);
 });

@@ -26384,13 +26384,7 @@ function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, on
 		variant: "secondary",
 		size: "sm",
 		label: t("exh_cleanup_read_ids"),
-		onclick: () => void readPage(true, false)
-	});
-	const again = button({
-		variant: "ghost",
-		size: "sm",
-		label: t("exh_cleanup_read_again"),
-		onclick: () => void readPage(true, true)
+		onclick: () => void readPage(true, loaded)
 	});
 	const more = button({
 		variant: "secondary",
@@ -26414,7 +26408,7 @@ function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, on
 	const chooser = h("div", {
 		"data-history-cleanup-chooser": "",
 		hidden: true
-	}, h("p", { class: "ui-meta" }, t("exh_cleanup_discover_help")), h("label", {}, t("exh_work"), select), workStatus, h("div", { class: "exh-actions" }, workMore, retryWorks, read, again, more), status);
+	}, h("p", { class: "ui-meta" }, t("exh_cleanup_discover_help")), h("label", {}, t("exh_work"), select), workStatus, h("div", { class: "exh-actions" }, workMore, retryWorks, read, more), status);
 	const discover = button({
 		variant: "secondary",
 		size: "sm",
@@ -26453,14 +26447,19 @@ function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, on
 		cursors.clear();
 	}
 	function sync() {
-		read.hidden = loaded;
-		again.hidden = !loaded;
-		read.disabled = again.disabled = !available() || !selected || busy;
+		const focused = document.activeElement;
+		read.textContent = t(loaded ? "exh_cleanup_read_again" : "exh_cleanup_read_ids");
+		read.disabled = !available() || !selected;
+		read.setAttribute("aria-disabled", String(busy));
 		more.hidden = !loaded || after === null || pages >= 25;
-		more.disabled = busy;
+		more.setAttribute("aria-disabled", String(busy));
 		workMore.hidden = workAfter === null;
-		workMore.disabled = retryWorks.disabled = workBusy;
+		for (const control of [workMore, retryWorks]) control.setAttribute("aria-disabled", String(workBusy));
 		status.setAttribute("aria-busy", String(busy));
+		if (opened && available()) {
+			if (focused === more && more.hidden) read.focus({ preventScroll: true });
+			if (focused === workMore && workMore.hidden) select.focus({ preventScroll: true });
+		}
 	}
 	function choices() {
 		select.replaceChildren(h("option", { value: "" }, t("exh_select_work")), ...[...works.values()].map((card) => h("option", { value: card.work_item_id }, card.work.title)));
@@ -26471,6 +26470,7 @@ function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, on
 		const ticket = epoch, cursor = reset ? 0 : workAfter;
 		if (!reset && cursor === null) return;
 		workBusy = true;
+		if (document.activeElement === retryWorks) select.focus({ preventScroll: true });
 		retryWorks.hidden = true;
 		sync();
 		workStatus.replaceChildren();
@@ -26585,7 +26585,7 @@ function historyDiscovery({ h, t, api, alive, workspaceId, enabled, errorBox, on
 			sync();
 		},
 		focus: () => {
-			(loaded ? again : discover).focus({ preventScroll: true });
+			(loaded ? read : discover).focus({ preventScroll: true });
 		},
 		update() {
 			element.hidden = !available();
