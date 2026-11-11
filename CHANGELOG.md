@@ -12,6 +12,9 @@
   including completed migrations, without restoring consumed drafts. Recover staged submissions through
   central operation reads with their original key and ID, without resubmitting a
   changed request. Browser and desktop share English/zh-TW validation and recovery.
+  Damaged legacy requests expose read-only original-request checks. Terminal results
+  allow the next change; an exhausted list permits an explicit local discard with
+  a new key for later setup. Partial, failed or mismatched reads remain locked.
 
 - Explicitly save a readable Work-side relationship ID into the existing cleanup
   index for later withdrawal after source revocation. Recheck current authority

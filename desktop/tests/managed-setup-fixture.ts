@@ -11,7 +11,7 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
   evidence?: {state: any, operation: any}) {
   const base = attentionFixture();
   const state = {actor: null as string | null, serverId: 'setup-central', principalId: 'setup-person', managed: managedStatusFixture(), managedCalls: [] as string[], stopBusy: false, stopBusyGeneric: false, stopPending: false, startStillStopping: false, startBusy: false,
-    posts: [] as any[], operationReads: [] as any[], operationPages: null as any[] | null,
+    posts: [] as any[], operationReads: [] as any[], operationPages: null as any[] | null, operationReadStatus: 200,
     holdOperation: false, releaseOperation: null as (() => void) | null, previews: [] as any[], staged: [] as any[], discoveries: [] as any[], discoveryVersion: 1, configuredProfile:'default',
     discoveryProfiles: null as any[] | null, discoveryWorkspaces: null as any[] | null, lost: false, refused: false, previewRefused: false,
     admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, connectionStatus: null as string | null, connected: true, extraHosts: [] as any[], repositories: [] as any[], reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profiles: null as any[] | null, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
@@ -61,12 +61,18 @@ export async function managedSetupFixture(page: Page, native: boolean, locale: s
     }
     if (path === '/operations' && input.method === 'GET') {
       state.operationReads.push(input);
+      if (state.operationReadStatus !== 200) return {status:state.operationReadStatus,data:{error:{code:'UNAVAILABLE',message:'Fixture read unavailable'}}};
       if (!state.scopes.includes('observe')) return {status:403,data:{error:{code:'FORBIDDEN',message:'Observation is unavailable'}}};
       const data = structuredClone(state.operationPages?.shift() || {operations:state.operation ? [state.operation] : [], next_before:null, next_before_id:null});
       if (state.holdOperation) await new Promise<void>(resolve => {state.releaseOperation = resolve;});
       return {status:200,data};
     }
-    if (path.startsWith('/operations/') && state.operation) {state.operationReads.push(input); return {status:200,data:{operation:state.operation}};}
+    if (path.startsWith('/operations/') && state.operation) {
+      state.operationReads.push(input);
+      const operation = structuredClone(state.operation);
+      if (state.holdOperation) await new Promise<void>(resolve => {state.releaseOperation = resolve;});
+      return {status:200,data:{operation}};
+    }
     if (path === '/operations' && input.method === 'POST') {
       state.posts.push(input);
       if (state.refused) return {status:state.refusalStatus,data:{error:{code:state.refusalCode,message:state.refusalMessage, ...(state.admissionRefused ? {admission_refused:true} : {})}}};

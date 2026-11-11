@@ -127,7 +127,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       : Object.keys(intent.request.target).length === 1 && typeof intent.request.target[intent.request.action === "setup.host" ? "host" : "repository"] === "string") &&
     (!intent.operation_id || /^op_[0-9a-f]{32}$/.test(intent.operation_id));
   const allowed = kind => caps()?.scopes?.includes("manage") && caps()?.actions?.some(action => action.action === `setup.${kind}` && action.allowed === true);
-  const damaged = !!saved.intent && !validIntent(saved.intent);
+  const damaged = () => !!saved.intent && !validIntent(saved.intent);
+  const usableKey = () => typeof saved.intent?.key === 'string' && saved.intent.key.length > 0 &&
+    saved.intent.key.length <= 200 && !/[\x00-\x1f\x7f]/.test(saved.intent.key);
+  let noOriginalVisible = false, recoverySerial = 0;
   const alive = () => {try {guard(); return !disposed;} catch {return false;}};
   const persist = () => {guard(); localStorage.setItem(key, JSON.stringify(setupDraftForStorage(saved)));};
   const terminal = () => ["succeeded", "failed", "cancelled"].includes(operation?.status);
@@ -283,15 +286,25 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   const retry = h("button", {class: "secondary", hidden: true, onclick: () => recover().catch(showError)}, t("setup_recover"));
   const next = h("button", {class: "secondary", hidden: true, onclick: () => {
-    if (!alive() || damaged || !terminal()) return;
+    if (!alive() || busy || !terminal()) return;
     const previous = saved;
     saved = {...saved, intent: null};
     if (operation?.status === "succeeded" && previous.intent.request.action === "setup.verification") saved.verification_base = null;
-    try {persist(); operation = null; hostDisclosure.open = true; update(); refresh().catch(showError);}
+    try {persist(); recoverySerial++; noOriginalVisible = false; operation = null; hostDisclosure.open = true; update(); refresh().catch(showError);}
     catch (error) {saved = previous; showError(error, {sourceRefresh:false});}
   }}, t("setup_next_change"));
+  const discard = h('button', {class: 'secondary', hidden: true, 'data-setup-discard': '', onclick: () => {
+    if (!alive() || !damaged() || !usableKey() || !noOriginalVisible) return;
+    const previous = saved;
+    saved = {...saved, intent: null};
+    try {
+      persist(); recoverySerial++; busy = false; noOriginalVisible = false;
+      operation = null; lookupKey = null; lookupCursor = null;
+      message.replaceChildren(); hostDisclosure.open = true; update(); refresh().catch(showError);
+    } catch (error) {saved = previous; showError(error, {sourceRefresh: false});}
+  }}, t('setup_discard_draft'));
   const sessions = h('a', {href: '#/sessions', class: 'ui-button primary', hidden: true, 'data-setup-sessions': ''}, t('setup_view_sessions'));
-  const actions = h('div', {class: 'actions', hidden: true, 'data-setup-actions': ''}, sessions, retry, next);
+  const actions = h('div', {class: 'actions', hidden: true, 'data-setup-actions': ''}, sessions, retry, next, discard);
   const hostDisclosure = h('details', {open: true, 'data-setup-connect': ''}, h('summary', {}, t('setup_host_title')), hostForm);
   const operationReceipt = h('div', {'data-setup-receipt': ''});
   const connectionStatus = h('div', {'data-setup-host-status': ''});
@@ -582,16 +595,24 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     const stale = base && base.revision !== snapshot?.revision;
     verificationNotice.hidden = !stale;
     verificationNotice.textContent = t("setup_verification_changed");
-    refreshButton.disabled = busy; retry.hidden = !saved.intent || terminal() || damaged; retry.disabled = busy;
-    next.hidden = !saved.intent || !terminal(); next.disabled = busy || damaged;
-    if (damaged) retry.disabled = true;
+    refreshButton.disabled = busy; retry.hidden = !saved.intent || terminal() || damaged() && !usableKey(); retry.disabled = busy;
+    retry.textContent = t(damaged() ? 'setup_recover_original' : 'setup_recover');
+    next.hidden = !saved.intent || !terminal(); next.disabled = busy;
+    discard.hidden = !damaged() || !usableKey() || !noOriginalVisible;
     receipt.replaceChildren();
     operationReceipt.replaceChildren();
     if (operation && snapshot) operationReceipt.append(h("a", {href: `#/op/${operation.operation_id}`, 'data-setup-operation': ''},
       t('setup_operation_receipt', {status: operation.status === 'succeeded' ? t('setup_operation_done') : operationStatusLabel(operation.status)})));
-    else if (saved.intent) receipt.append(h("p", {class: "note"}, t(saved.intent.problemCode ? 'setup_retained_request' : "setup_uncertain")));
+    if (damaged()) {
+      receipt.append(h('p', {class: 'note'}, t('setup_scrubbed_request')),
+        h('p', {style: 'overflow-wrap:anywhere', 'data-setup-original-key': ''}, t('setup_original_key', {key: saved.intent.key || '—'})));
+      if (saved.intent.operation_id) receipt.append(h('p', {style: 'overflow-wrap:anywhere'}, t('setup_original_id', {id: saved.intent.operation_id})));
+      if (!usableKey()) receipt.append(h('p', {class: 'note'}, t('setup_scrubbed_no_key')));
+      else if (noOriginalVisible) receipt.append(h('p', {class: 'note'}, t('setup_original_not_visible')), h('p', {class: 'note'}, t('setup_discard_explanation')));
+      else if (!operation) receipt.append(h('p', {class: 'note'}, t('setup_scrubbed_check')));
+    } else if (!operation && saved.intent) receipt.append(h("p", {class: "note"}, t(saved.intent.problemCode ? 'setup_retained_request' : "setup_uncertain")));
     sessions.hidden = !snapshot?.hosts?.length;
-    actions.hidden = sessions.hidden && retry.hidden && next.hidden;
+    actions.hidden = sessions.hidden && retry.hidden && next.hidden && discard.hidden;
     hostForm.querySelector('button[type=submit]').className = sessions.hidden ? 'primary' : 'secondary';
     reviewBox.hidden = !review;
     applyReview.disabled = !!locked || !review || !supported;
@@ -649,13 +670,17 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   function accept(candidate) {
     const intent = saved.intent;
-    if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor || candidate.action !== intent.request.action ||
-        !(intent.lookup_only ? equal(setupRequestForStorage({action: candidate.action, target: candidate.target,
+    if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor ||
+        !['setup.host', 'setup.repository', 'setup.verification'].includes(candidate.action) ||
+        intent.request.action && candidate.action !== intent.request.action ||
+        typeof candidate.status !== 'string' || !candidate.status ||
+        !object(candidate.target) || !object(candidate.params) || !object(candidate.preconditions) ||
+        !damaged() && !(intent.lookup_only ? equal(setupRequestForStorage({action: candidate.action, target: candidate.target,
           params: candidate.params, preconditions: candidate.preconditions}), intent.request) :
           equal({action: candidate.action, target: candidate.target, params: candidate.params, preconditions: candidate.preconditions}, intent.request)) ||
         candidate.idempotency_key !== intent.key ||
         intent.operation_id && candidate.operation_id !== intent.operation_id) throw Error(t("setup_receipt_mismatch"));
-    operation = candidate; intent.operation_id = candidate.operation_id; persist();
+    noOriginalVisible = false; operation = candidate; intent.operation_id = candidate.operation_id; persist();
     if (candidate.status === "succeeded") {
       unsaved.hidden = true;
       if (candidate.action === 'setup.host') hostDisclosure.open = false;
@@ -664,38 +689,59 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     update();
   }
   let lookupKey = null, lookupCursor = null;
-  async function findOriginal(intent) {
+  async function findOriginal(intent, current = alive) {
     if (lookupKey !== intent.key) {lookupKey = intent.key; lookupCursor = null;}
     // Each read is bounded. Continue explicitly from the last cursor if a long
     // history needs another batch; an incomplete/empty read never admits work.
     for (let page = 0; page < 20; page++) {
       const cursor = lookupCursor ? `&before=${lookupCursor.time}&before_id=${encodeURIComponent(lookupCursor.id)}` : '';
-      const result = await api('GET', `/operations?action=${encodeURIComponent(intent.request.action)}&actor=${encodeURIComponent(caps().actor)}&limit=200${cursor}`);
-      guard();
+      const action = intent.request.action ? `action=${encodeURIComponent(intent.request.action)}&` : '';
+      const result = await api('GET', `/operations?${action}actor=${encodeURIComponent(caps().actor)}&limit=200${cursor}`);
+      guard(); if (!current()) return;
+      if (damaged() && (!Object.hasOwn(result || {}, 'next_before') || !Object.hasOwn(result || {}, 'next_before_id')))
+        throw Error(t('setup_receipt_mismatch'));
       const parsed = operationPage(result, lookupCursor);
       if (!parsed || parsed.next && parsed.next.id === null) throw Error(t('setup_receipt_mismatch'));
+      if (damaged() && !parsed.next && (result.next_before !== null || result.next_before_id !== null))
+        throw Error(t('setup_receipt_mismatch'));
+      if (damaged() && parsed.operations.some(row => row.actor !== caps().actor || typeof row.idempotency_key !== 'string' ||
+          !row.idempotency_key || intent.request.action && row.action !== intent.request.action)) throw Error(t('setup_receipt_mismatch'));
       const matches = parsed.operations.filter(row => row.actor === caps().actor && row.idempotency_key === intent.key);
       if (matches.length > 1) throw Error(t('setup_receipt_mismatch'));
       if (matches.length) {lookupCursor = null; return matches[0];}
       lookupCursor = parsed.next;
-      if (!lookupCursor) break;
+      if (!lookupCursor) return null;
     }
     throw Error(t('setup_lookup_pending'));
   }
-  async function sendOriginal(submit = false) {
+  async function sendOriginal(submit = false, current = alive) {
     const intent = saved.intent;
-    const lookup = intent.lookup_only || !submit && intent.request.params.secret_ref;
+    const lookup = damaged() || intent.lookup_only || !submit && intent.request.params.secret_ref;
+    if (intent.operation_id && !/^op_[0-9a-f]{32}$/.test(intent.operation_id)) throw Error(t('setup_receipt_mismatch'));
     const result = intent.operation_id ? await api("GET", `/operations/${encodeURIComponent(intent.operation_id)}`)
-      : lookup ? {operation: await findOriginal(intent)} : await api("POST", "/operations?wait=3", intent.request, intent.key);
-    guard(); accept(result.operation);
+      : lookup ? {operation: await findOriginal(intent, current)} : await api("POST", "/operations?wait=3", intent.request, intent.key);
+    guard(); if (!current()) return;
+    if (lookup && !intent.operation_id && result.operation === null) {
+      if (damaged()) {noOriginalVisible = true; update(); return;}
+      throw Error(t('setup_lookup_pending'));
+    }
+    accept(result.operation);
   }
   async function recover() {
-    if (!alive() || busy || !saved.intent || damaged) return;
+    if (!alive() || busy || !saved.intent || damaged() && !usableKey()) return;
+    const intent = saved.intent, serial = ++recoverySerial;
+    const active = () => alive() && recoverySerial === serial;
+    const current = () => active() && saved.intent === intent;
+    if (damaged()) message.replaceChildren();
     busy = true; update();
     let sourceRefresh = false;
-    try {await sendOriginal(); sourceRefresh = true; await refresh();}
-    catch (error) {handleSubmissionError(error, saved.intent?.request.action.split('.')[1], {sourceRefresh});}
-    finally {busy = false; if (alive()) update();}
+    try {await sendOriginal(false, current); if (!current()) return; sourceRefresh = true; await refresh();}
+    catch (error) {if (current()) {
+      noOriginalVisible = false;
+      if (damaged()) showError(error, {sourceRefresh});
+      else handleSubmissionError(error, intent.request.action.split('.')[1], {sourceRefresh});
+    }}
+    finally {if (active()) {busy = false; update();}}
   }
   async function run(kind, defaults = false) {
     const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;

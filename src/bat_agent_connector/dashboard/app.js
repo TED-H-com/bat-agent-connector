@@ -11163,6 +11163,15 @@ var init_i18n = __esmMin((() => {
 			setup_required: "請填寫此欄位。",
 			setup_invalid_fingerprint: "請輸入 64 個十六進位字元的 SHA-256 憑證指紋，可含冒號。",
 			setup_retained_request: "原設定請求仍保留。請先查回這筆請求，再進行其他變更。",
+			setup_scrubbed_request: "已為安全起見移除儲存的請求內容。原請求無法再次送出。",
+			setup_original_key: "原請求代號：{key}",
+			setup_original_id: "原操作 ID：{id}",
+			setup_recover_original: "查回原請求",
+			setup_scrubbed_check: "以保留的代號唯讀查詢 Connector 的原請求紀錄。未釐清結果前，設定仍會鎖定。",
+			setup_scrubbed_no_key: "未保留可用的原請求代號，無法在此核對。請在操作紀錄中查看結果，並將此畫面的原操作 ID（若有）提供給 Connector 管理員協助處理；此草稿無法送出或在此捨棄。",
+			setup_original_not_visible: "此帳號在此伺服器上看不到具有這個代號的請求。已查至操作清單末端。",
+			setup_discard_draft: "捨棄儲存的草稿",
+			setup_discard_explanation: "原請求無法再次送出。捨棄只移除此本機紀錄，不會取消或變更伺服器上的任何操作。之後的設定會使用新的請求代號。",
 			setup_lookup_pending: "尚未找到原設定操作。原請求代號仍保留；再次查回只會讀取 Connector 紀錄，不會重新送出設定或暫存憑證。",
 			setup_view_sessions: "查看工作階段",
 			error_generic: "無法完成此要求，請查看詳細資料。",
@@ -12970,6 +12979,15 @@ var init_i18n = __esmMin((() => {
 			setup_required: "Fill in this field.",
 			setup_invalid_fingerprint: "Enter a SHA-256 fingerprint with 64 hexadecimal characters; colons are allowed.",
 			setup_retained_request: "The original request is kept. Check it before making another change.",
+			setup_scrubbed_request: "The saved request text was removed for safety. The original request cannot be sent again.",
+			setup_original_key: "Original request key: {key}",
+			setup_original_id: "Original operation ID: {id}",
+			setup_recover_original: "Check original request",
+			setup_scrubbed_check: "Read the original Connector record using the retained key. Setup stays locked until the result is resolved.",
+			setup_scrubbed_no_key: "No usable original request key was retained, so this draft cannot be reconciled here. Inspect operation history and ask the Connector administrator for help, providing the original operation ID shown here if available. This draft cannot be sent or discarded here.",
+			setup_original_not_visible: "No request with this key is visible to this account on this server. The operation list was read to its end.",
+			setup_discard_draft: "Discard saved draft",
+			setup_discard_explanation: "The original request cannot be sent again. Discarding removes only this local record; it does not cancel or change any server operation. Later setup uses a new request key.",
 			setup_lookup_pending: "The original setup operation has not been found. Its key is retained. Check again to read Connector records; this never resubmits setup or stages a credential.",
 			setup_view_sessions: "View sessions",
 			error_generic: "This request could not be completed. Check Details.",
@@ -60028,7 +60046,9 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		"setup.verification"
 	].includes(intent.request?.action) && /^[0-9a-f]{64}$/.test(intent.request?.preconditions?.config_revision) && object(intent.request?.params) && object(intent.request?.target) && (intent.request.action === "setup.verification" ? Object.keys(intent.request.target).length === 0 && validVerification(intent.request.params) : Object.keys(intent.request.target).length === 1 && typeof intent.request.target[intent.request.action === "setup.host" ? "host" : "repository"] === "string") && (!intent.operation_id || /^op_[0-9a-f]{32}$/.test(intent.operation_id));
 	const allowed = (kind) => caps()?.scopes?.includes("manage") && caps()?.actions?.some((action) => action.action === `setup.${kind}` && action.allowed === true);
-	const damaged = !!saved.intent && !validIntent(saved.intent);
+	const damaged = () => !!saved.intent && !validIntent(saved.intent);
+	const usableKey = () => typeof saved.intent?.key === "string" && saved.intent.key.length > 0 && saved.intent.key.length <= 200 && !/[\x00-\x1f\x7f]/.test(saved.intent.key);
+	let noOriginalVisible = false, recoverySerial = 0;
 	const alive = () => {
 		try {
 			guard();
@@ -60370,7 +60390,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		class: "secondary",
 		hidden: true,
 		onclick: () => {
-			if (!alive() || damaged || !terminal()) return;
+			if (!alive() || busy || !terminal()) return;
 			const previous = saved;
 			saved = {
 				...saved,
@@ -60379,6 +60399,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			if (operation?.status === "succeeded" && previous.intent.request.action === "setup.verification") saved.verification_base = null;
 			try {
 				persist();
+				recoverySerial++;
+				noOriginalVisible = false;
 				operation = null;
 				hostDisclosure.open = true;
 				update();
@@ -60389,6 +60411,35 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			}
 		}
 	}, t("setup_next_change"));
+	const discard = h("button", {
+		class: "secondary",
+		hidden: true,
+		"data-setup-discard": "",
+		onclick: () => {
+			if (!alive() || !damaged() || !usableKey() || !noOriginalVisible) return;
+			const previous = saved;
+			saved = {
+				...saved,
+				intent: null
+			};
+			try {
+				persist();
+				recoverySerial++;
+				busy = false;
+				noOriginalVisible = false;
+				operation = null;
+				lookupKey = null;
+				lookupCursor = null;
+				message.replaceChildren();
+				hostDisclosure.open = true;
+				update();
+				refresh().catch(showError);
+			} catch (error) {
+				saved = previous;
+				showError(error, { sourceRefresh: false });
+			}
+		}
+	}, t("setup_discard_draft"));
 	const sessions = h("a", {
 		href: "#/sessions",
 		class: "ui-button primary",
@@ -60399,7 +60450,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		class: "actions",
 		hidden: true,
 		"data-setup-actions": ""
-	}, sessions, retry, next);
+	}, sessions, retry, next, discard);
 	const hostDisclosure = h("details", {
 		open: true,
 		"data-setup-connect": ""
@@ -60854,20 +60905,30 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		verificationNotice.hidden = !stale;
 		verificationNotice.textContent = t("setup_verification_changed");
 		refreshButton.disabled = busy;
-		retry.hidden = !saved.intent || terminal() || damaged;
+		retry.hidden = !saved.intent || terminal() || damaged() && !usableKey();
 		retry.disabled = busy;
+		retry.textContent = t(damaged() ? "setup_recover_original" : "setup_recover");
 		next.hidden = !saved.intent || !terminal();
-		next.disabled = busy || damaged;
-		if (damaged) retry.disabled = true;
+		next.disabled = busy;
+		discard.hidden = !damaged() || !usableKey() || !noOriginalVisible;
 		receipt.replaceChildren();
 		operationReceipt.replaceChildren();
 		if (operation && snapshot) operationReceipt.append(h("a", {
 			href: `#/op/${operation.operation_id}`,
 			"data-setup-operation": ""
 		}, t("setup_operation_receipt", { status: operation.status === "succeeded" ? t("setup_operation_done") : operationStatusLabel(operation.status) })));
-		else if (saved.intent) receipt.append(h("p", { class: "note" }, t(saved.intent.problemCode ? "setup_retained_request" : "setup_uncertain")));
+		if (damaged()) {
+			receipt.append(h("p", { class: "note" }, t("setup_scrubbed_request")), h("p", {
+				style: "overflow-wrap:anywhere",
+				"data-setup-original-key": ""
+			}, t("setup_original_key", { key: saved.intent.key || "—" })));
+			if (saved.intent.operation_id) receipt.append(h("p", { style: "overflow-wrap:anywhere" }, t("setup_original_id", { id: saved.intent.operation_id })));
+			if (!usableKey()) receipt.append(h("p", { class: "note" }, t("setup_scrubbed_no_key")));
+			else if (noOriginalVisible) receipt.append(h("p", { class: "note" }, t("setup_original_not_visible")), h("p", { class: "note" }, t("setup_discard_explanation")));
+			else if (!operation) receipt.append(h("p", { class: "note" }, t("setup_scrubbed_check")));
+		} else if (!operation && saved.intent) receipt.append(h("p", { class: "note" }, t(saved.intent.problemCode ? "setup_retained_request" : "setup_uncertain")));
 		sessions.hidden = !snapshot?.hosts?.length;
-		actions.hidden = sessions.hidden && retry.hidden && next.hidden;
+		actions.hidden = sessions.hidden && retry.hidden && next.hidden && discard.hidden;
 		hostForm.querySelector("button[type=submit]").className = sessions.hidden ? "primary" : "secondary";
 		reviewBox.hidden = !review;
 		applyReview.disabled = !!locked || !review || !supported;
@@ -60971,7 +61032,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function accept(candidate) {
 		const intent = saved.intent;
-		if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor || candidate.action !== intent.request.action || !(intent.lookup_only ? equal(setupRequestForStorage({
+		if (!candidate || !/^op_[0-9a-f]{32}$/.test(candidate.operation_id) || candidate.actor !== caps()?.actor || ![
+			"setup.host",
+			"setup.repository",
+			"setup.verification"
+		].includes(candidate.action) || intent.request.action && candidate.action !== intent.request.action || typeof candidate.status !== "string" || !candidate.status || !object(candidate.target) || !object(candidate.params) || !object(candidate.preconditions) || !damaged() && !(intent.lookup_only ? equal(setupRequestForStorage({
 			action: candidate.action,
 			target: candidate.target,
 			params: candidate.params,
@@ -60982,6 +61047,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 			params: candidate.params,
 			preconditions: candidate.preconditions
 		}, intent.request)) || candidate.idempotency_key !== intent.key || intent.operation_id && candidate.operation_id !== intent.operation_id) throw Error(t("setup_receipt_mismatch"));
+		noOriginalVisible = false;
 		operation = candidate;
 		intent.operation_id = candidate.operation_id;
 		persist();
@@ -60993,17 +61059,21 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		update();
 	}
 	let lookupKey = null, lookupCursor = null;
-	async function findOriginal(intent) {
+	async function findOriginal(intent, current = alive) {
 		if (lookupKey !== intent.key) {
 			lookupKey = intent.key;
 			lookupCursor = null;
 		}
 		for (let page = 0; page < 20; page++) {
 			const cursor = lookupCursor ? `&before=${lookupCursor.time}&before_id=${encodeURIComponent(lookupCursor.id)}` : "";
-			const result = await api("GET", `/operations?action=${encodeURIComponent(intent.request.action)}&actor=${encodeURIComponent(caps().actor)}&limit=200${cursor}`);
+			const result = await api("GET", `/operations?${intent.request.action ? `action=${encodeURIComponent(intent.request.action)}&` : ""}actor=${encodeURIComponent(caps().actor)}&limit=200${cursor}`);
 			guard();
+			if (!current()) return;
+			if (damaged() && (!Object.hasOwn(result || {}, "next_before") || !Object.hasOwn(result || {}, "next_before_id"))) throw Error(t("setup_receipt_mismatch"));
 			const parsed = operationPage(result, lookupCursor);
 			if (!parsed || parsed.next && parsed.next.id === null) throw Error(t("setup_receipt_mismatch"));
+			if (damaged() && !parsed.next && (result.next_before !== null || result.next_before_id !== null)) throw Error(t("setup_receipt_mismatch"));
+			if (damaged() && parsed.operations.some((row) => row.actor !== caps().actor || typeof row.idempotency_key !== "string" || !row.idempotency_key || intent.request.action && row.action !== intent.request.action)) throw Error(t("setup_receipt_mismatch"));
 			const matches = parsed.operations.filter((row) => row.actor === caps().actor && row.idempotency_key === intent.key);
 			if (matches.length > 1) throw Error(t("setup_receipt_mismatch"));
 			if (matches.length) {
@@ -61011,31 +61081,52 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				return matches[0];
 			}
 			lookupCursor = parsed.next;
-			if (!lookupCursor) break;
+			if (!lookupCursor) return null;
 		}
 		throw Error(t("setup_lookup_pending"));
 	}
-	async function sendOriginal(submit = false) {
+	async function sendOriginal(submit = false, current = alive) {
 		const intent = saved.intent;
-		const lookup = intent.lookup_only || !submit && intent.request.params.secret_ref;
-		const result = intent.operation_id ? await api("GET", `/operations/${encodeURIComponent(intent.operation_id)}`) : lookup ? { operation: await findOriginal(intent) } : await api("POST", "/operations?wait=3", intent.request, intent.key);
+		const lookup = damaged() || intent.lookup_only || !submit && intent.request.params.secret_ref;
+		if (intent.operation_id && !/^op_[0-9a-f]{32}$/.test(intent.operation_id)) throw Error(t("setup_receipt_mismatch"));
+		const result = intent.operation_id ? await api("GET", `/operations/${encodeURIComponent(intent.operation_id)}`) : lookup ? { operation: await findOriginal(intent, current) } : await api("POST", "/operations?wait=3", intent.request, intent.key);
 		guard();
+		if (!current()) return;
+		if (lookup && !intent.operation_id && result.operation === null) {
+			if (damaged()) {
+				noOriginalVisible = true;
+				update();
+				return;
+			}
+			throw Error(t("setup_lookup_pending"));
+		}
 		accept(result.operation);
 	}
 	async function recover() {
-		if (!alive() || busy || !saved.intent || damaged) return;
+		if (!alive() || busy || !saved.intent || damaged() && !usableKey()) return;
+		const intent = saved.intent, serial = ++recoverySerial;
+		const active = () => alive() && recoverySerial === serial;
+		const current = () => active() && saved.intent === intent;
+		if (damaged()) message.replaceChildren();
 		busy = true;
 		update();
 		let sourceRefresh = false;
 		try {
-			await sendOriginal();
+			await sendOriginal(false, current);
+			if (!current()) return;
 			sourceRefresh = true;
 			await refresh();
 		} catch (error) {
-			handleSubmissionError(error, saved.intent?.request.action.split(".")[1], { sourceRefresh });
+			if (current()) {
+				noOriginalVisible = false;
+				if (damaged()) showError(error, { sourceRefresh });
+				else handleSubmissionError(error, intent.request.action.split(".")[1], { sourceRefresh });
+			}
 		} finally {
-			busy = false;
-			if (alive()) update();
+			if (active()) {
+				busy = false;
+				update();
+			}
 		}
 	}
 	async function run(kind, defaults = false) {
