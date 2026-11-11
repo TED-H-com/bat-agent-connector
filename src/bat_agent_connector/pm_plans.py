@@ -73,6 +73,7 @@ def schema(journal):
             """CREATE TABLE IF NOT EXISTS pm_plan_applied (
                 operation_id TEXT PRIMARY KEY, result TEXT NOT NULL, created_at REAL NOT NULL)""",
             "CREATE INDEX IF NOT EXISTS pm_plan_workspace ON pm_plan_revisions(workspace_id,sequence)",
+            "CREATE INDEX IF NOT EXISTS pm_plan_adoption_revision ON pm_plan_adoptions(workspace_id,revision_id,created_at)",
         ):
             journal.db.execute(statement)
         for table in ("pm_plan_revisions", "pm_plan_git_receipts", "pm_plan_adoptions", "pm_plan_applied"):
@@ -107,8 +108,13 @@ def source_operation_ids(db, workspace_id, revision_id, *, include_adoption=True
         if previous:
             sources.add(_revision(db, workspace_id, previous)["operation_id"])
     if include_adoption:
-        adoption = db.execute("SELECT operation_id FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=? ORDER BY created_at DESC LIMIT 1",
-                              (workspace_id, revision_id)).fetchone()
+        # Preserve the old scan's first-rowid timestamp tie, even for historical
+        # duplicate revisions. Equality on the maximum time keeps both lookups
+        # indexed without a temporary sort (also in adoption and get_plan below).
+        adoption = db.execute("""SELECT operation_id FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=?
+            AND created_at=(SELECT MAX(created_at) FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=?)
+            ORDER BY rowid LIMIT 1""",
+                              (workspace_id, revision_id) * 2).fetchone()
         if adoption:
             sources.add(adoption["operation_id"])
     return sorted(sources)
@@ -456,8 +462,10 @@ def adopt_revision(ctx):
         current = head(ctx.service.db, workspace_id)
         previous_id = current["accepted_revision_id"]
         previous = _revision(ctx.service.db, workspace_id, previous_id) if previous_id else None
-        prior_adoption = ctx.service.db.execute("SELECT scope_revision FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=? ORDER BY created_at DESC LIMIT 1",
-                                                (workspace_id, previous_id)).fetchone() if previous_id else None
+        prior_adoption = ctx.service.db.execute("""SELECT scope_revision FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=?
+            AND created_at=(SELECT MAX(created_at) FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=?)
+            ORDER BY rowid LIMIT 1""",
+                                                (workspace_id, previous_id) * 2).fetchone() if previous_id else None
         structured_changed = previous is None or previous["scope_digest"] != revision["scope_digest"]
         prose_changed = previous is not None and any(previous["document"][key] != revision["document"][key]
                                                     for key in ("markdown", "title"))
@@ -557,8 +565,10 @@ def _get_plan(ops, principal, workspace_id, revision_id):
     _require_revision_sources(ops.db, principal, workspace_id, revision_id)
     revision = _revision(ops.db, workspace_id, revision_id)
     revision_files(ops.db, workspace_id, revision_id)
-    adoption = ops.db.execute("SELECT result,rationale,created_at FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=? ORDER BY created_at DESC LIMIT 1",
-                              (workspace_id, revision_id)).fetchone()
+    adoption = ops.db.execute("""SELECT result,rationale,created_at FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=?
+            AND created_at=(SELECT MAX(created_at) FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=?)
+            ORDER BY rowid LIMIT 1""",
+                              (workspace_id, revision_id) * 2).fetchone()
     revision["adoption"] = {**json.loads(adoption[0]), "rationale": adoption[1], "created_at": adoption[2]} if adoption else None
     revision["status"] = "adopted" if adoption else "draft"
     revision["structured_scope_digest"] = revision.pop("scope_digest")
