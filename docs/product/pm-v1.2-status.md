@@ -2,7 +2,8 @@
 
 Connector 0.2.18／Desktop 0.1.14：[版本與交付紀錄](implementation-status.md#connector-0218desktop-0114-交付)
 及[發布頁](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18)。
-#521 已合併版本準備、#454／#518／#519 與 fixture filter 修正；來源、CI、發布、
+已於 2026-11-11 12:16 UTC 發布，固定來源 `e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270`；主線 CI 與資產核對見交付紀錄。
+#521 已合併版本準備、#454／#519 與 fixture filter 修正，#518 先行合併；來源、CI、發布、
 安裝與實機驗收分別記錄，不將已合併或 fixture 通過當作安裝／驗收。
 本版包含 Workbench 清單調寬、完成訊息引用複製、原始需求證據、設定草稿憑證
 排除與原請求恢復、cursor／loopback 驗證、清理 ID 保存及 updater ZIP 處理。
@@ -12,7 +13,8 @@ E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂生命週期待辦保持開
 下方日期段落描述各自當時狀態，不取代上述版本交付紀錄。
 
 Connector 0.2.18 / Desktop 0.1.14: see the linked release and delivery record.
-#521 merges version preparation, #454/#518/#519 and the fixture-filter fix.
+#521 merges version preparation, #454/#519 and the fixture-filter fix; #518 was merged earlier.
+Published on 2026-11-11 at 12:16 UTC from `e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270`; see delivery status for verified main CI and assets.
 Branch, merged, released, installed and live-tested evidence remain separate.
 Changes include Workbench resizing, completed-message quotes, original requirement
 evidence, credential-safe setup drafts and original-request recovery, cursor/loopback

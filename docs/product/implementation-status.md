@@ -3,11 +3,15 @@
 ## Connector 0.2.18／Desktop 0.1.14 交付
 
 分支：`release/upgrade-baseline-0.2.17` 的版本準備已整合；合併：#521 納入
-#454、#518、#519 與 workflow fixture filter 修正。#511 的 Work-side 清理 ID
-保存與 #516 的 loopback 驗證也已在主線；各分支舊紀錄保留於下方。
+#454、#519 與 workflow fixture filter 修正；#518 的 Workbench 整合、#511 的 Work-side
+清理 ID 保存與 #516 的 loopback 驗證先行合併於主線；各分支舊紀錄保留於下方。
 
 版本：[Connector 0.2.18／Desktop 0.1.14](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18)。
 套件來源及 fixture 回執以發布附件 `release-manifest.json` 為準，校驗碼見 `SHA256SUMS`。
+已於 2026-11-11 12:16 UTC 發布，固定來源為 `e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270`。
+該來源的 [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43013349147)
+與 [desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43013349011) 均通過。
+八個公開資產的名稱、大小與 SHA-256 已與發布清單及本機檔案核對一致。
 升級 fixture 使用固定發布的 0.2.12 與 0.2.17 核心，保留原身分、工作區與操作；
 這不等於舊桌面安裝器到新安裝器的完整升級驗收。
 
@@ -23,10 +27,14 @@ Desktop updater plugin 2.14.1 使用 zip 9.5.1 處理 ZIP；不因此提供 sign
 E00–E11、R0–R5、A01–A40 與未修訂的 PM v1.2 生命週期待辦保持開放；
 持續開發授權不等於 R0／R1 接受。
 
-Branch: version preparation is integrated. Merged: #521 includes #454, #518, #519
-and the workflow fixture-filter fix; #511 cleanup-ID saving and #516 loopback
-validation are also on main. Release details for Connector 0.2.18 / Desktop 0.1.14
+Branch: version preparation is integrated. Merged: #521 includes #454, #519
+and the workflow fixture-filter fix; #518 Workbench integration, #511 cleanup-ID saving
+and #516 loopback validation were merged to main earlier. Release details for Connector 0.2.18 / Desktop 0.1.14
 are linked above; the manifest and checksums record package source and fixture provenance.
+Published on 2026-11-11 at 12:16 UTC from `e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270`. The fixed-source
+[backend](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43013349147)
+and [desktop](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43013349011) main/push runs passed. All eight public asset names, sizes and SHA-256 digests
+match the verified release manifest and local files.
 The core-upgrade baselines are 0.2.12 and 0.2.17; they do not prove old-to-new desktop
 installer acceptance. Changes cover Workbench resizing, completed-message quotes,
 original requirement evidence, credential-safe setup drafts and original-request

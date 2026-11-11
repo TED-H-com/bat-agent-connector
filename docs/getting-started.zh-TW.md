@@ -4,7 +4,7 @@
 
 ## 選擇相符的安裝包
 
-[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18)為 Connector **0.2.18**／desktop **0.1.14**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
+2026 年 11 月 11 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18)為 Connector **0.2.18**／desktop **0.1.14**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
 Connector 0.2.18 加入 Workbench 清單調寬、完成訊息的引用複製，以及 Result 與 Live Overview 的原始需求證據。設定草稿不保存含憑證的儲存庫網址或暫存憑證 handle，保留原請求恢復；另收緊操作歷史 cursor 與 loopback 驗證，並可明確保存可讀關聯 ID 供日後清理。Desktop 0.1.14 將 updater plugin 更新至 2.14.1，透過 zip 9.5.1 處理 ZIP。 前版的外部對話關聯及對話保存仍保留。分支、合併、發布、安裝與實機驗證分別見[交付狀態](product/implementation-status.md)。下方首次啟動步驟描述 0.2.18；下載套件不代表已安裝或實機驗收。
 
@@ -15,7 +15,7 @@ Connector 0.2.18 加入 Workbench 清單調寬、完成訊息的引用複製，�
 | Mac Intel | `better-agent-dashboard_0.1.14_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
 | Linux | `better-agent-dashboard_0.1.14_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
-請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Linux 與 Windows 套件未簽章；macOS 採 ad-hoc 簽章，未公證。沒有 signed updater feed。本版不新增 owner 安裝、實體裝置或真 BAT／模型驗收證據。 Linux 原生憑證持久儲存仍不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
+請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Linux 與 Windows 套件未簽章；macOS 採 ad-hoc 簽章，未公證。沒有 signed updater feed。本版不新增 owner 安裝、實體裝置或真 BAT／模型驗收證據。Linux 原生憑證持久儲存仍不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
 
 ### 更新既有桌面安裝
 

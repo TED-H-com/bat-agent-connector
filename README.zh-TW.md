@@ -71,7 +71,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 ## 安裝與連線
 
-Connector 0.2.18 加入 Workbench 清單調寬、完成訊息的引用複製，以及 Result 與 Live Overview 的原始需求證據。設定草稿不保存含憑證的儲存庫網址或暫存憑證 handle，保留原請求恢復；另收緊操作歷史 cursor 與 loopback 驗證，並可明確保存可讀關聯 ID 供日後清理。Desktop 0.1.14 將 updater plugin 更新至 2.14.1，透過 zip 9.5.1 處理 ZIP。 完整變更見 [CHANGELOG](CHANGELOG.md)。
+Connector 0.2.18 加入 Workbench 清單調寬、完成訊息的引用複製，以及 Result 與 Live Overview 的原始需求證據。設定草稿不保存含憑證的儲存庫網址或暫存憑證 handle，保留原請求恢復；另收緊操作歷史 cursor 與 loopback 驗證，並可明確保存可讀關聯 ID 供日後清理。Desktop 0.1.14 將 updater plugin 更新至 2.14.1，透過 zip 9.5.1 處理 ZIP。完整變更見 [CHANGELOG](CHANGELOG.md)。
 
 最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18)是 Connector **0.2.18**／desktop **0.1.14**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，固定於 `437ee6a7143a82e32eae1d6a008203b2df072aaf`（`437ee6a7`）。每版各有八個檔案：Python wheel 與 sdist、Linux deb、兩個 macOS DMG、Windows 安裝器、`release-manifest.json` 及 `SHA256SUMS`。從發布頁選擇桌面套件，並核對來源清單與校驗碼。Linux 與 Windows 套件未簽章；macOS 採 ad-hoc 簽章，未公證。沒有 signed updater feed。本版不新增 owner 安裝、實體裝置或真 BAT／模型驗收證據。
 
