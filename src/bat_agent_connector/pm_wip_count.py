@@ -46,6 +46,123 @@ LINEAGE_SQL = """SELECT resource_id FROM pm_source_lineage
 TASK_EVENTS_SQL = "SELECT * FROM events WHERE task_id=? ORDER BY kind,event_id LIMIT ?"
 
 
+# Explicit admission-lineage inventory. Never infer newer actions as no-hold.
+# The inventory test derives its expected set from the admission sources.
+LINEAGE_ACTIONS = {
+    "artifact.accept": "no_hold",
+    "artifact.capture.managed": "no_hold",
+    "delivery.merge_and_deploy": "no_hold",
+    "deployment.rollback": "no_hold",
+    "deployment.start": "no_hold",
+    "github.pr.merge": "no_hold",
+    "github.pr.publish": "no_hold",
+    "integration.apply": "no_hold",
+    "integration.handoff": "no_hold",
+    "integration.preview": "no_hold",
+    "pm.ahp.observe": "no_hold",
+    "pm.backlog.revise": "no_hold",
+    "pm.continuation.prepare": "no_hold",
+    "pm.conversation.adopt": "no_hold",
+    "pm.conversation.propose": "no_hold",
+    "pm.dependencies.capture": "no_hold",
+    "pm.dependencies.declare": "no_hold",
+    "pm.dependencies.retract": "no_hold",
+    "pm.dod.revise": "no_hold",
+    "pm.evidence.capture": "no_hold",
+    "pm.execution.runtime.observe": "no_hold",
+    "pm.execution.verify": "no_hold",
+    "pm.follow_up.analyze": "no_hold",
+    "pm.follow_up.prepare": "no_hold",
+    "pm.github.import": "no_hold",
+    "pm.github.observe": "no_hold",
+    "pm.governance.adoption.link": "no_hold",
+    "pm.governance.decide": "no_hold",
+    "pm.governance.record": "no_hold",
+    "pm.governance.revise": "no_hold",
+    "pm.history.link": "no_hold",
+    "pm.history.unlink": "no_hold",
+    "pm.input.confirm": "no_hold",
+    "pm.input.record": "no_hold",
+    "pm.issue.cancel": "no_hold",
+    "pm.issue.publish": "no_hold",
+    "pm.lifecycle.close": "no_hold",
+    "pm.lifecycle.pause": "no_hold",
+    "pm.lifecycle.reopen": "no_hold",
+    "pm.lifecycle.retain_inflight": "no_hold",
+    "pm.lifecycle.set_stage": "no_hold",
+    "pm.maintenance.check": "no_hold",
+    "pm.maintenance.repair": "no_hold",
+    "pm.maintenance.repair.evidence.record": "no_hold",
+    "pm.maintenance.repair.runtime.observe": "no_hold",
+    "pm.maintenance_policy.adopt": "no_hold",
+    "pm.maintenance_review.candidate.record": "no_hold",
+    "pm.maintenance_review.complete": "no_hold",
+    "pm.maintenance_review.follow_up.record": "no_hold",
+    "pm.maintenance_review.note": "no_hold",
+    "pm.maintenance_review.prepare": "no_hold",
+    "pm.meeting.complete": "no_hold",
+    "pm.meeting.context.revise": "no_hold",
+    "pm.meeting.create": "no_hold",
+    "pm.meeting.draft": "no_hold",
+    "pm.meeting.follow_up.record": "no_hold",
+    "pm.meeting.note": "no_hold",
+    "pm.message.append": "no_hold",
+    "pm.overview.assess": "no_hold",
+    "pm.plan.adopt": "no_hold",
+    "pm.plan.draft": "no_hold",
+    "pm.product_goal.revise": "no_hold",
+    "pm.project.bind": "no_hold",
+    "pm.quality.review.create": "no_hold",
+    "pm.quality.review.record": "no_hold",
+    "pm.quality.review.revoke": "no_hold",
+    "pm.release_baseline.register": "no_hold",
+    "pm.roadmap.baseline.set": "no_hold",
+    "pm.roadmap.forecast.set": "no_hold",
+    "pm.roadmap.observe": "no_hold",
+    "pm.run.analyze": "no_hold",
+    "pm.run.bat.analyze": "no_hold",
+    "pm.run.prepare": "no_hold",
+    "pm.session.quiescence.observe": "no_hold",
+    "pm.snapshot.create": "no_hold",
+    "pm.spec.materialize": "no_hold",
+    "pm.sprint.cancel": "no_hold",
+    "pm.sprint.close": "no_hold",
+    "pm.sprint.create": "no_hold",
+    "pm.sprint.goal.revise": "no_hold",
+    "pm.sprint.select": "no_hold",
+    "pm.sprint.start": "no_hold",
+    "pm.thread.create": "no_hold",
+    "pm.thread.plan": "no_hold",
+    "pm.thread.plan.revise": "no_hold",
+    "pm.thread.rename": "no_hold",
+    "pm.wip_policy.save": "no_hold",
+    "pm.work.bind": "no_hold",
+    "pm.work_batch.evidence.record": "no_hold",
+    "pm.work_batch.start": "no_hold",
+    "pm.work_input.defer": "no_hold",
+    "pm.work_package.create": "no_hold",
+    "pm.work_profile.save": "no_hold",
+    "pm.workload.capture": "no_hold",
+    "pm.workspace.adapter.select": "no_hold",
+    "pm.workspace.create": "no_hold",
+    "pm.workspace.member.set": "no_hold",
+    "repository.continue": "no_hold",
+    "session.answer": "control",
+    "session.interrupt": "control",
+    "session.labels.set": "no_hold",
+    "session.position": "no_hold",
+    "session.read": "no_hold",
+    "session.record_verification": "no_hold",
+    "session.send": "input",
+    "work.adopt_and_start": "no_hold",
+    "work.start": "no_hold",
+    "work_item.approve": "no_hold",
+    "work_item.continue": "no_hold",
+    "work_item.order": "no_hold",
+    "work_item.pin": "no_hold",
+    "work_item.update": "no_hold",
+}
+
 class _Unavailable(Exception):
     pass
 
@@ -150,6 +267,13 @@ class _Collector:
             return self.executions[key]
         associated = ([self.source(row[0]) for row in self.rows(LINEAGE_SQL, (op['operation_id'],))]
                       if attempt else [])
+        input_kinds = {}
+        if attempt:
+            for later in associated:
+                if later['action'] not in LINEAGE_ACTIONS:
+                    raise _Unavailable
+                if LINEAGE_ACTIONS[later['action']] == 'input':
+                    input_kinds[later['operation_id']] = self.input_kind(attempt, op, later)
         steps = self.steps(op)
         released = self.unsent(op, steps)
         for later in associated:
@@ -158,7 +282,7 @@ class _Collector:
         if not released and self.works[wi][1] and op["status"] == "succeeded":
             if not pm_work_start._uncertain_db(self.db, op["operation_id"]):
                 if attempt:
-                    released = self.attempt_complete(attempt, op, associated)
+                    released = self.attempt_complete(attempt, op, associated, input_kinds)
                 elif pm_execution_runtime.relation(self.ops, op) is not None:
                     proof = pm_execution_runtime.proof(self.ops, self.principal, op)
                     released = bool(proof and pm_execution_runtime._settled(self.ops, op, proof["observation_operation_id"]))
@@ -173,16 +297,33 @@ class _Collector:
         return (op['status'] in {'cancelled', 'failed'} and not steps
                 and not pm_work_start._uncertain_db(self.db, op['operation_id']))
 
-    def attempt_complete(self, attempt, handoff, associated):
+    def input_kind(self, attempt, handoff, op):
+        session = pm_work_start._child_session(handoff)
+        if session and op['target'] == session:
+            return 'direct'
+        target = {'workspace_id': self.wid, 'work_item_id': attempt['work_item_id']}
+        refs = op.get('external_refs') or {}
+        binding = (refs.get('admission_binding') or {}).get('work_follow_up') or {}
+        if op['target'] == target and session:
+            rows = self.rows('SELECT * FROM work_inputs WHERE operation_id=? LIMIT ?',
+                             (op['operation_id'],), bound=1)
+            if rows:
+                row = rows[0]
+                expected = {**target, 'attempt_id': attempt['attempt_id'], **session}
+                if (all(row[k] == v and binding.get(k) == v for k, v in expected.items())
+                        and binding.get('execution_operation_id') == handoff['operation_id']
+                        and refs.get('resolved_target') == session):
+                    return 'work'
+        raise _Unavailable
+
+    def attempt_complete(self, attempt, handoff, associated, input_kinds):
         """Apply only saved original generation/turn evidence; never query runtime."""
-        if not pm_execution_runtime._settled(self.ops, handoff, handoff['operation_id']):
-            return False
         later_markers = set()
         for op in associated:
             if op['operation_id'] == handoff['operation_id']:
                 continue
-            if op['action'] not in {'session.send', 'session.answer', 'session.interrupt'}:
-                continue  # All descendants were authorized and checked by original settlement above.
+            if LINEAGE_ACTIONS[op['action']] == 'no_hold' or input_kinds.get(op['operation_id']) == 'work':
+                continue  # Work inputs retain their existing row/marker path below.
             steps = self.steps(op)
             if self.input_unsent(op, steps):
                 continue

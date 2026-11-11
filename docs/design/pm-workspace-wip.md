@@ -44,8 +44,9 @@ generation cannot release capacity; later queued input keeps the hold. Before
 Attempt release (including unsent-original release), enumerate every operation associated with the original execution
 in `pm_source_lineage`, authorize each source and charge both lineage rows and
 original operations to the record budget. Source authorization also applies while
-management is open or reopened, even when its WIP already occupies the same unit. Reuse the existing settled-lineage
-predicate, including its conservative 256-descendant settlement limit. This scans
+management is open or reopened, even when its WIP already occupies the same unit. Classify authorized lineage operations explicitly; non-input read, metadata and
+review actions never occupy capacity. Unknown action kinds give generic unknown.
+The Attempt path has no 256-descendant cap: its enumeration uses the global record budget. This scans
 all action kinds, not just `work_inputs` or a `session.send` filter. Hidden sources
 and record overflow use the same generic unknown response.
 
@@ -56,9 +57,11 @@ receipts for their exact markers and original generation. Accepted or uncertain
 sends retain the hold; a cancelled-before-execution input can release on original
 unsent evidence. Answer/interrupt operations without independently correlated
 turn evidence remain held conservatively; a terminal ACK does not invent that
-missing contract. Other associated actions use the existing settlement predicate.
+missing contract. Other associated actions do not extend an Attempt hold.
 For batch
-execution reuse original runtime completion and settled-lineage predicates;
+execution reuse original runtime completion and settled-lineage predicates,
+including the inherited 256-descendant known-hold limit shared with Workload
+(not a WIP enumeration bound);
 fixed verification alone is insufficient. Unsupported/older completion evidence
 keeps an identified commitment held. This read neither gathers new evidence nor
 broadens the result collector or creates a completion authority.
@@ -207,3 +210,45 @@ shapes. Canonical skill/adapters and pinned inventories describe advisory behavi
 only. Planned UI uses the independent read in existing Kanban/readiness views for
 client-side warnings; this backend does not add frontend behavior or an admission
 check. Enforcement would require a separate product decision and contract.
+
+## Attempt lineage action inventory
+
+Admission sources are `pm_source_lineage.DERIVED_ACTIONS`,
+`pm_delivery_lineage.ACTIONS`, all registered `pm.*` actions, and
+`repository.continue` with `pm_handoff`. `LINEAGE_ACTIONS` is an explicit table;
+its inventory test derives the expected set from those four admission sources.
+Every source is authorized and charged regardless of its classification.
+
+Input: `session.send`. Controls: `session.answer`, `session.interrupt`.
+No-hold actions:
+
+`artifact.accept`, `artifact.capture.managed`, `delivery.merge_and_deploy`, `deployment.rollback`, `deployment.start`.
+`github.pr.merge`, `github.pr.publish`, `integration.apply`, `integration.handoff`, `integration.preview`.
+`pm.ahp.observe`, `pm.backlog.revise`, `pm.continuation.prepare`, `pm.conversation.adopt`, `pm.conversation.propose`.
+`pm.dependencies.capture`, `pm.dependencies.declare`, `pm.dependencies.retract`, `pm.dod.revise`, `pm.evidence.capture`.
+`pm.execution.runtime.observe`, `pm.execution.verify`, `pm.follow_up.analyze`, `pm.follow_up.prepare`, `pm.github.import`.
+`pm.github.observe`, `pm.governance.adoption.link`, `pm.governance.decide`, `pm.governance.record`, `pm.governance.revise`.
+`pm.history.link`, `pm.history.unlink`, `pm.input.confirm`, `pm.input.record`, `pm.issue.cancel`.
+`pm.issue.publish`, `pm.lifecycle.close`, `pm.lifecycle.pause`, `pm.lifecycle.reopen`, `pm.lifecycle.retain_inflight`.
+`pm.lifecycle.set_stage`, `pm.maintenance.check`, `pm.maintenance.repair`, `pm.maintenance.repair.evidence.record`, `pm.maintenance.repair.runtime.observe`.
+`pm.maintenance_policy.adopt`, `pm.maintenance_review.candidate.record`, `pm.maintenance_review.complete`, `pm.maintenance_review.follow_up.record`, `pm.maintenance_review.note`.
+`pm.maintenance_review.prepare`, `pm.meeting.complete`, `pm.meeting.context.revise`, `pm.meeting.create`, `pm.meeting.draft`.
+`pm.meeting.follow_up.record`, `pm.meeting.note`, `pm.message.append`, `pm.overview.assess`, `pm.plan.adopt`.
+`pm.plan.draft`, `pm.product_goal.revise`, `pm.project.bind`, `pm.quality.review.create`, `pm.quality.review.record`.
+`pm.quality.review.revoke`, `pm.release_baseline.register`, `pm.roadmap.baseline.set`, `pm.roadmap.forecast.set`, `pm.roadmap.observe`.
+`pm.run.analyze`, `pm.run.bat.analyze`, `pm.run.prepare`, `pm.session.quiescence.observe`, `pm.snapshot.create`.
+`pm.spec.materialize`, `pm.sprint.cancel`, `pm.sprint.close`, `pm.sprint.create`, `pm.sprint.goal.revise`.
+`pm.sprint.select`, `pm.sprint.start`, `pm.thread.create`, `pm.thread.plan`, `pm.thread.plan.revise`.
+`pm.thread.rename`, `pm.wip_policy.save`, `pm.work.bind`, `pm.work_batch.evidence.record`, `pm.work_batch.start`.
+`pm.work_input.defer`, `pm.work_package.create`, `pm.work_profile.save`, `pm.workload.capture`, `pm.workspace.adapter.select`.
+`pm.workspace.create`, `pm.workspace.member.set`, `repository.continue`.
+`session.labels.set`, `session.position`, `session.read`, `session.record_verification`.
+`work.adopt_and_start`, `work.start`, `work_item.approve`, `work_item.continue`, `work_item.order`.
+`work_item.pin`, `work_item.update`.
+
+A send is a Work input only when its stored target is exactly the workspace/Work,
+its existing `work_inputs` row and immutable admission binding name this
+Attempt/original execution, and its resolved session is this Attempt's session.
+It retains the existing Work-input marker path. A send whose stored target is
+exactly the Attempt host/session is a direct input. Anything else is generic
+unknown, including a mismatched resolved target; targets are never rewritten.
