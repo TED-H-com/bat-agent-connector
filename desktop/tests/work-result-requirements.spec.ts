@@ -478,3 +478,53 @@ test('a new account cannot restore a pending original assessment from the retire
     expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
   }finally{release();}
 });
+
+test('a distinct IPC server retires the pending exact read without renewing the pin',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));let switched=false;
+  const secondServer='second-fixture-server',seenServers:string[]=[];
+  const dispatch=async(input:any)=>{
+    const reply=await f.dispatch(input);
+    if(input.path==='/bootstrap'){
+      if(switched)reply.data.sync.server_id=secondServer;
+      seenServers.push(reply.data.sync.server_id);
+    }
+    return reply;
+  };
+  await open(page,{...base,dispatch},true);
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path='/assessments/'+f.ref.operation_id;
+  // Observe the actual held IPC reply after its value has crossed the bridge.
+  await page.evaluate(path=>{
+    const host=(window as any).__TAURI_INTERNALS__,invoke=host.invoke;
+    (window as any).__heldExactIpc={started:false,completed:false};
+    host.invoke=async(command:string,args:any)=>{
+      const held=command==='connector_request'&&args.input.path.includes(path);
+      if(held)(window as any).__heldExactIpc.started=true;
+      const response=await invoke(command,args);
+      if(held)(window as any).__heldExactIpc.completed=true;
+      return response;
+    };
+  },path);
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    const pinnedRoute=await page.evaluate(()=>location.hash);
+    await page.evaluate(()=>{location.hash='#/settings';});
+    await page.getByRole('button',{name:'Disconnect',exact:true}).click();
+    switched=true;f.state.envelope.identity.server_id=secondServer;
+    await page.getByRole('button',{name:'Connect',exact:true}).click();await expect(page).toHaveURL(/#\/home$/);
+    expect(seenServers.at(-1)).toBe(secondServer);expect(seenServers[0]).not.toBe(secondServer);
+    expect(await page.evaluate(()=>(window as any).__heldExactIpc)).toEqual({started:true,completed:false});
+    release();await page.waitForFunction(()=>(window as any).__heldExactIpc.completed);
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(resolve)));
+    await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+    f.state.hold=null;f.state.envelope.requirements.items=[];
+    await page.evaluate(hash=>{location.hash=hash;},pinnedRoute);
+    await expect(page.locator('[data-work-result]')).toBeVisible();
+    await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+    await expect(page.locator('[data-pm-action="pm.quality.review.record"]')).toHaveCount(0);
+    expect(f.state.requests.filter(input=>input.path.includes(path))).toHaveLength(1);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});
