@@ -276,9 +276,6 @@ class _Collector:
                     input_kinds[later['operation_id']] = self.input_kind(attempt, op, later)
         steps = self.steps(op)
         released = self.unsent(op, steps)
-        for later in associated:
-            if released and later['action'] in {'session.send', 'session.answer', 'session.interrupt'}:
-                released = self.input_unsent(later, self.steps(later))
         if not released and self.works[wi][1] and op["status"] == "succeeded":
             if not pm_work_start._uncertain_db(self.db, op["operation_id"]):
                 if attempt:
@@ -290,12 +287,6 @@ class _Collector:
         if not released:
             self.groups["unresolved_execution"].add(wi)
         return released
-
-    def input_unsent(self, op, steps):
-        if op['action'] == 'session.send':
-            return self.unsent(op, steps)
-        return (op['status'] in {'cancelled', 'failed'} and not steps
-                and not pm_work_start._uncertain_db(self.db, op['operation_id']))
 
     def input_kind(self, attempt, handoff, op):
         session = pm_work_start._child_session(handoff)
@@ -322,14 +313,11 @@ class _Collector:
         for op in associated:
             if op['operation_id'] == handoff['operation_id']:
                 continue
-            if LINEAGE_ACTIONS[op['action']] == 'no_hold' or input_kinds.get(op['operation_id']) == 'work':
+            if LINEAGE_ACTIONS[op['action']] != 'input' or input_kinds.get(op['operation_id']) == 'work':
                 continue  # Work inputs retain their existing row/marker path below.
             steps = self.steps(op)
-            if self.input_unsent(op, steps):
+            if self.unsent(op, steps):
                 continue
-            if op['action'] != 'session.send':
-                # These controls have no independently correlated new-turn result contract.
-                return False
             send = next((row for row in steps if row['name'] == 'send'), None)
             if op['status'] != 'succeeded' or send is None or send['status'] != 'succeeded':
                 return False

@@ -55,9 +55,15 @@ permissions) and `session.interrupt`. Later sends, including direct host/session
 sends, require terminal original send receipts and correlated terminal result
 receipts for their exact markers and original generation. Accepted or uncertain
 sends retain the hold; a cancelled-before-execution input can release on original
-unsent evidence. Answer/interrupt operations without independently correlated
-turn evidence remain held conservatively; a terminal ACK does not invent that
-missing contract. Other associated actions do not extend an Attempt hold.
+unsent evidence. Answer/interrupt never create or extend a hold. An answer continues an input
+that is already held: the collector cannot record its terminal boundary while
+a question is pending. An interrupt only ends work. Neither control ACK nor
+a refused answer creates a new commitment. Other associated actions do not extend an Attempt hold.
+A proven-unsent original has no Attempt turn and is not served by the result
+collector (which requires a succeeded handoff). A later direct input therefore
+does not recreate that execution commitment. This is a known under-count of
+external/direct activity; management WIP still applies. All its lineage sources
+remain authorized, classified and charged before returning a count.
 For batch
 execution reuse original runtime completion and settled-lineage predicates,
 including the inherited 256-descendant known-hold limit shared with Workload
