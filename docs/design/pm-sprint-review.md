@@ -36,6 +36,15 @@ assessment produces an unresolved item. Multiple Works for one requirement must
 all qualify. A completed review never changes because of a later assessment.
 Access to original evidence is still rechecked on every read.
 
+A Result's binding, plan and requirement IDs come only from its original readable
+package context and selected package requirements. Rebinding the same Work never
+relabels those facts. A historical Result for a different Sprint binding remains
+selectable and adds `original_binding_differs`; it contributes neither coverage
+nor acceptance to that binding, which retains `result_not_selected` when uncovered.
+Aggregation uses the original binding/plan relation and only its represented
+requirements. An unproven original relation remains unresolved or unavailable;
+Work identity alone is never a substitute.
+
 ## Decisions and explicit Planning
 
 Guided draft decisions additionally require an `owner_actor` and `follow_up_ids`.

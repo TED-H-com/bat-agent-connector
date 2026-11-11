@@ -154,6 +154,27 @@ def resolve(ops, principal, meeting, context, basis, *, project=False):
         binding = pm_sprints._binding(ops, principal, wid, item["binding_id"])
         original = value["receipt"]
         package = value["package"]
+        # Work identity selects the Sprint row, never the Result's relation.
+        # The exact package reader has already authorized and proved this context.
+        original_context = package["document"]["context"] if package else None
+        if original_context and original_context["work_ref"]["work_item_id"] != value["work_item_id"]:
+            raise mismatch()
+        original_binding = original_context["work_ref"]["binding_id"] if original_context else None
+        original_plan = (
+            {
+                key: original_context["plan_ref"][key]
+                for key in ("revision_id", "document_digest", "scope_revision")
+            }
+            if original_context
+            else None
+        )
+        requirements = [row["id"] for row in package["document"]["requirements"]] if package else []
+        binding_matches = bool(
+            original_context
+            and original_binding == binding["binding_id"]
+            and original_plan["revision_id"] == binding["plan_revision_id"]
+            and set(requirements) <= set(binding["requirement_ids"])
+        )
         if saved is not None and (
             saved["context"]["work_ref"]["work_item_id"] != value["work_item_id"]
             or saved["context"]["execution_operation_id"] != value["execution_operation_id"]
@@ -166,14 +187,14 @@ def resolve(ops, principal, meeting, context, basis, *, project=False):
             "reference": source,
             "receipt": original,
             "work_item_id": value["work_item_id"],
-            "binding_id": binding["binding_id"],
-            "plan_ref": pm_sprints._plan(ops, principal, wid, binding["plan_revision_id"]),
+            "binding_id": original_binding,
+            "plan_ref": original_plan,
             "package_ref": {k: package[k] for k in ("workspace_id", "package_id", "document_digest")}
             if package
             else None,
             "assessment": saved,
             "quality": None,
-            "requirements": binding["requirement_ids"],
+            "requirements": requirements,
         }
         if project:
             doc = original["document"]
@@ -185,6 +206,8 @@ def resolve(ops, principal, meeting, context, basis, *, project=False):
             )
             if not package:
                 fact["gaps"].append("no_visible_explicit_requirement_relation")
+            elif not binding_matches:
+                fact["gaps"].append("original_binding_differs")
             if saved is None:
                 fact["gaps"].extend(("acceptance_missing", "verification_missing", "dod_unassessed"))
             else:
@@ -270,15 +293,18 @@ def freeze(ops, principal, meeting, context, basis):
     for revision in resolved["governance"]:
         if revision["document"]["status"] != "reported_resolved":
             gaps.append({"source_id": revision["revision_id"], "reason": "unresolved_governance"})
-    by_work = {}
+    by_binding = {}
+    selected_bindings = {item["binding_id"] for item in context["selected_items"]}
     for result in resolved["results"]:
-        by_work.setdefault(result["work_item_id"], []).append(result)
+        if result["binding_id"] and "original_binding_differs" not in result["gaps"]:
+            key = result["binding_id"], result["plan_ref"]["revision_id"]
+            by_binding.setdefault(key, []).append(result)
         gaps.extend(
             {"source_id": result["reference"]["result_id"], "reason": reason} for reason in result["gaps"]
         )
     for item in context["selected_items"]:
         binding = pm_sprints._binding(ops, principal, meeting["workspace_id"], item["binding_id"])
-        contributions = by_work.get(item["work_item_id"], [])
+        contributions = by_binding.get((binding["binding_id"], binding["plan_revision_id"]), [])
         if not contributions:
             gaps.extend(
                 {"source_id": item["binding_id"], "reason": reason}
@@ -287,7 +313,8 @@ def freeze(ops, principal, meeting, context, basis):
         for rid in binding["requirement_ids"]:
             key = binding["plan_revision_id"], rid
             statuses = []
-            for result in contributions:
+            represented = [result for result in contributions if rid in result["requirements"]]
+            for result in represented:
                 original = result["assessment"]
                 rows = original["assessment"]["document"]["requirements"] if original else []
                 status = next((r["status"] for r in rows if r["requirement_id"] == rid), "unassessed")
@@ -305,7 +332,7 @@ def freeze(ops, principal, meeting, context, basis):
                 {
                     "work_item_id": item["work_item_id"],
                     "acceptance": status,
-                    "qualified": bool(contributions) and all(r["qualified"] for r in contributions),
+                    "qualified": bool(represented) and all(r["qualified"] for r in represented),
                 }
             )
     rows = [
@@ -337,7 +364,7 @@ def freeze(ops, principal, meeting, context, basis):
         "coverage": {
             "snapshot": context["snapshot_ref"],
             "selected_results": len(resolved["results"]),
-            "selected_bindings": len(by_work),
+            "selected_bindings": len({binding for binding, _ in by_binding} & selected_bindings),
             "sprint_bindings": len(context["selected_items"]),
         },
     }
