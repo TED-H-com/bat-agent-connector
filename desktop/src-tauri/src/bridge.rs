@@ -2446,15 +2446,24 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
                 "snapshot_id" if impact => {
-                    value.len() == 39 && value.starts_with("pmsnap_")
-                        && value[7..].bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                    value.len() == 39
+                        && value.starts_with("pmsnap_")
+                        && value[7..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
                 "binding_ids" if impact => {
                     let ids: Vec<_> = value.split(',').collect();
-                    !value.is_empty() && ids.len() <= 50
+                    !value.is_empty()
+                        && ids.len() <= 50
                         && ids.iter().collect::<std::collections::HashSet<_>>().len() == ids.len()
-                        && ids.iter().all(|id| id.len() == 37 && id.starts_with("pmwb_")
-                            && id[5..].bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()))
+                        && ids.iter().all(|id| {
+                            id.len() == 37
+                                && id.starts_with("pmwb_")
+                                && id[5..]
+                                    .bytes()
+                                    .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                        })
                 }
                 "binding_ids" if comparison => {
                     value.is_empty()
@@ -2929,11 +2938,20 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Saved history cannot be used as a live turn observation".into());
         }
     }
-    if pm && path.ends_with("/plan-impact")
-        && !["snapshot_id", "from_revision_id", "to_revision_id", "binding_ids"]
-            .iter().all(|key| query_keys.contains(*key))
+    if pm
+        && path.ends_with("/plan-impact")
+        && ![
+            "snapshot_id",
+            "from_revision_id",
+            "to_revision_id",
+            "binding_ids",
+        ]
+        .iter()
+        .all(|key| query_keys.contains(*key))
     {
-        return Err("Impact preview requires a snapshot, both revisions and explicit bindings".into());
+        return Err(
+            "Impact preview requires a snapshot, both revisions and explicit bindings".into(),
+        );
     }
     if quality_assessment
         && !(query_keys.contains("version") && query_keys.contains("document_digest"))
@@ -3029,15 +3047,41 @@ mod tests {
         for extra in ["&actor=x", "&snapshot_id=", "&limit=1", "&journal_cursor=0"] {
             assert!(validate_request(&get(&format!("{root}?{query}{extra}"))).is_err());
         }
-        for invalid in ["".to_string(), "null".into(), "[]".into(),
-                        format!("{binding},{binding}"), format!("{binding},"),
-                        (0..51).map(|i| format!("pmwb_{i:032x}")).collect::<Vec<_>>().join(",")] {
-            assert!(validate_request(&get(&format!("{root}?{}", query.replace(binding, &invalid)))).is_err());
+        for invalid in [
+            "".to_string(),
+            "null".into(),
+            "[]".into(),
+            format!("{binding},{binding}"),
+            format!("{binding},"),
+            (0..51)
+                .map(|i| format!("pmwb_{i:032x}"))
+                .collect::<Vec<_>>()
+                .join(","),
+        ] {
+            assert!(validate_request(&get(&format!(
+                "{root}?{}",
+                query.replace(binding, &invalid)
+            )))
+            .is_err());
         }
-        let fifty = (0..50).map(|i| format!("pmwb_{i:032x}")).collect::<Vec<_>>().join("%2C");
-        assert!(validate_request(&get(&format!("{root}?{}", query.replace(binding, &fifty)))).is_ok());
-        for key in ["snapshot_id", "from_revision_id", "to_revision_id", "binding_ids"] {
-            let missing = query.split('&').filter(|pair| !pair.starts_with(key)).collect::<Vec<_>>().join("&");
+        let fifty = (0..50)
+            .map(|i| format!("pmwb_{i:032x}"))
+            .collect::<Vec<_>>()
+            .join("%2C");
+        assert!(
+            validate_request(&get(&format!("{root}?{}", query.replace(binding, &fifty)))).is_ok()
+        );
+        for key in [
+            "snapshot_id",
+            "from_revision_id",
+            "to_revision_id",
+            "binding_ids",
+        ] {
+            let missing = query
+                .split('&')
+                .filter(|pair| !pair.starts_with(key))
+                .collect::<Vec<_>>()
+                .join("&");
             assert!(validate_request(&get(&format!("{root}?{missing}"))).is_err());
         }
         assert!(validate_request(&get(root)).is_err());
