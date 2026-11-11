@@ -1062,6 +1062,9 @@ created time then operation ID. Follow paired `next_before` / `next_before_id` a
 Timestamp-only cursors retain strict less-than behavior. This read capability does
 not imply that a native participant is available. 本機操作清單須成對使用兩個續頁值；
 可見結果為空仍可能有下一頁，不能當作已讀完或 native 已可用。
+The shared [operation history](shared-frontend.md#attention-and-work-updates) follows
+the same cursor contract to find and reopen original connection operations. It does
+not activate a native participant or submit another connection operation.
 
 Lost acceptance replies are read back with the identical request/key; known IDs use
 pure GET. A claimed uncertain effect is never resent and never rotates its epoch.
@@ -1121,6 +1124,31 @@ runner 未退出時回 `CONNECTION_OPERATION_RUNNING`。確定回執不能被改
 兩種人工決定都不重送、不清空 locks，也不撤銷已知設定。native 收據只提供本機證據，
 server 無法驗證本機寫入時間，不能據此證明中央可達性或遠端擁有權。
 此證據不代表實機驗收完成。
+
+#### Original-operation recovery in the shared UI
+
+The existing operation detail page presents `setup.connection.apply` and
+`connection.reference.detach` recovery from their public operation fields. A dispatched
+step and receipt references alone cannot establish local success. A completed native
+step, a projection conflict, and a recorded unknown-result closure have distinct English
+and Traditional Chinese explanations. Configuration-only uncertainty keeps ordinary
+cancel semantics. The two special close buttons describe the existing central decisions:
+close with the local result unproven, or close without saving the shared association.
+Neither means rollback, service stop, credential revocation or native readiness.
+
+Read original operation uses only `GET /operations/{id}`. Continue and close use the
+existing original-ID resume/cancel endpoints, without a new operation or key. A shared
+in-flight guard prevents repeated clicks from sending either recovery action again.
+After an unsuccessful reply, connection controls require a successful original-operation
+read before another mutation. Failed reads withdraw old controls; late replies cannot
+restore a departed view. Focus stays on the active control, or moves to the original-read
+button when that control disappears. The server still owns authorization, runner-exit
+checks and final receipt decisions.
+
+這是既有操作頁的恢復說明，涵蓋本機結果未知、已完成步驟與共用關聯儲存衝突。
+兩種結束方式保留原回執與效果，讀取只查原操作；回覆未確認前不重送。
+這項 E03／E11 介面增量不提供新的 Apply／detach 入口，也不啟用 native participant。
+HTTP／IPC fixtures 的回覆遺失與重開測試不等於 A29／A30 或 R0–R5 實機驗收。
 
 
 #### Connection reference detach

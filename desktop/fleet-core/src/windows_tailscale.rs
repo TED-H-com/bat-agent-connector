@@ -12,7 +12,6 @@ use std::{
     path::{Path, PathBuf},
     process::Stdio,
 };
-use tokio::process::Command;
 use windows::Win32::{
     System::Com::CoTaskMemFree,
     UI::Shell::{
@@ -105,7 +104,8 @@ impl Installation {
         if self.cli.is_none() {
             return LoginState::Unknown;
         }
-        let mut command = Command::new(self.directory.join("tailscale.exe"));
+        let mut command =
+            crate::hidden_process::hidden_tokio_command(self.directory.join("tailscale.exe"));
         command
             .args(["status", "--json"])
             .env_clear()
@@ -115,7 +115,7 @@ impl Installation {
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(true)
-            .creation_flags(0x0800_0000);
+            .creation_flags(crate::hidden_process::hidden_flags(0x0800_0000));
         tailscale::query_status(command).await
     }
 
@@ -124,15 +124,15 @@ impl Installation {
             return Spawn::NotStarted;
         }
         // No arguments: only the vendor's existing tray application is opened.
-        let child = std::process::Command::new(self.directory.join("tailscale-ipn.exe"))
+        let child = crate::hidden_process::hidden_command(self.directory.join("tailscale-ipn.exe"))
             .env_clear()
             .envs(crate::monitor_launch::environment(std::env::vars_os()))
             .current_dir(&self.directory)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .creation_flags(0x0000_0400)
-            .spawn(); // CREATE_UNICODE_ENVIRONMENT; no shell/window hiding.
+            .creation_flags(crate::hidden_process::hidden_flags(0x0000_0400))
+            .spawn(); // CREATE_UNICODE_ENVIRONMENT; hide only any console; retain the vendor tray UI.
         match child {
             Ok(_held_child) => Spawn::Started,
             Err(_) => Spawn::NotStarted,

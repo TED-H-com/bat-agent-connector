@@ -1,5 +1,697 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-10：Work 閱讀端保存清理識別資料（已合併未發布）
+
+[#511](https://github.com/TED-H-com/bat-agent-connector/pull/511) 已合併為
+`12f0f01a1f0909526ce156e002be725fc9b7eb39`。34 項 PR checks 及合併後主線 backend／desktop CI
+通過；本機 Python 3.13 全套為 9,927 passed、84 skipped，10,011 項測試完整性核對通過。
+此增量尚未發布、安裝或實機驗收。Claude Code 的完整接手資料見[交接筆記](claude-code-handoff-2026-11-10.md)。
+
+`feat/work-history-cleanup-index-20261110` 在已發布的 0.2.17／0.1.13 之上，
+讓看板、需求頁、獨立／會話內 Work 的固定摘錄閱讀器明確保存可撤回關聯的 ID。
+保存前重讀中央關聯與版本／來源／Work／creator；切頁、關閉與父層撤權隔離晚到回覆。
+只使用原有依帳號／連線／工作區隔離的 500 筆 ID 索引，不保存正文、標題或 digest；
+空間已滿或損壞不驅逐既有資料，原撤回 intent／key 不變。之後來源撤權，仍可從
+「資源 → 外部對話 → 已保存的關聯 ID」沿用原操作撤回。
+
+本機共用前端 build／browser 產物、614 項 Node 測試與 298 項相關介面回歸已通過，
+包含 HTTP／注入 IPC、撤權後原 key 恢復、身份隔離、滿額／損壞索引、晚到回覆
+及 390px 繁中保存畫面。Ruff、公開內容與 staged secret 檢查通過；Python 全套
+與完整 CI 證據另記於 PR，不以 fixture 取代 native 或 live acceptance。
+
+這是 E08／E10、EC-1.1 T5 的共用前端增量，沒有 backend、schema 或 native transport
+變更；未讀且已撤權的 ID 發現、Work derive、原生執行與 PM v1.2 未修訂工作仍開放。
+此段記錄分支實作，不宣稱發布、安裝或實機驗收；E00–E11、R0–R5、A01–A40
+未完成範圍保留，持續開發授權不等於 R0／R1 接受。驗證與合併狀態見
+[#511](https://github.com/TED-H-com/bat-agent-connector/pull/511)。
+
+November 10 continuation: the shared Work reader can explicitly save validated
+relationship identifiers into the existing cleanup index. Later source revocation
+still permits original-key withdrawal; no transcript or original intent is replaced.
+This frontend increment is separate from publication and live acceptance and does
+not discover unseen revoked-source relationships or complete the PM lifecycle.
+
+## 2026-11-09：Connector 0.2.17／Desktop 0.1.13 已發布
+
+[穩定版 v0.2.17](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)
+已發布，固定來源為 `0399db5a7b647486126c9bf7bb5900c40dc54ea7`。
+[#507](https://github.com/TED-H-com/bat-agent-connector/pull/507) 整合外部對話的
+固定紀錄／文字範圍、Work／Attempt 關聯、替換與撤回，以及 Board、Requirements、
+獨立／會話內 Work 閱讀入口；[#508](https://github.com/TED-H-com/bat-agent-connector/pull/508)
+補上同一工作區內以明確關聯 ID 替換另一個可讀來源。中央重讀權限與版本，
+保留原操作 key、歷史與唯讀 CLI 邊界，不新增 schema 或 data step。
+
+該來源的 [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/42596030240)
+與 [desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/42596030227)
+均通過，包含四版 Python 的完整分片核對、四平台建置、隔離原生安裝 fixture，
+以及由固定 0.2.12／0.2.16 發布來源建置核心的升級保留檢查。
+八個公開資產的大小與 GitHub SHA-256 均核對一致；來源、套件、升級與安裝 fixture
+的確切回執身分見發布附件 `release-manifest.json`，套件與清單另可用 `SHA256SUMS` 核對。
+
+本機依序完成 Ruff、Python 3.13 與 3.10 全套；發布整合基底各為 9,925 passed、
+84 skipped、零失敗，完整覆蓋 10,009 項測試、436 個檔案。跨來源續作另通過兩版
+Python 的 104 項回歸、253 項相關介面案例與 614 項 Node 測試；最終主線 CI
+包含新增的中央跨來源案例。另完成 60 次回執恢復競態檢查、真 Connector HTTP
+的六個撤權流程及中央 PM 整合檢查。測試只用 mock BAT／providers 與磁碟暫存，
+本機 fixture 已清理。
+
+合併與發布已完成；本輪沒有手動安裝到使用者主機，也沒有新增真 BAT／模型、
+原生使用者操作或實體手機驗收。Linux／Windows 套件未簽章，macOS 採 ad-hoc
+簽章且未公證。歷史圖庫仍固定於 0.2.13／0.1.9，Desktop／site-demo 的離線
+producer receipt 仍不齊全，因此不宣稱完整離線組裝資格；套件一致性與原生 CI
+是各自獨立的證據。
+
+本輪屬 E08／E10／E11、EC-1.1 T5 增量，不關閉 E00–E11、R0–R5、A01–A40
+或 PM v1.2 未修訂待辦。未讀關聯 ID 發現、Work derive、原生執行及完整生命週期
+仍需續作；owner 的持續開發授權不等於 R0／R1 接受。下方候選段落保留各自當時狀態。
+
+Connector 0.2.17 / Desktop 0.1.13 is published from `0399db5a`, including #507 and
+#508. Fixed-source backend/native CI and all eight uploaded asset digests passed;
+the release manifest records package and fixture provenance. Publication adds no
+owner installation or live acceptance. Historical gallery and incomplete offline
+producer receipts remain explicit, and open PM lifecycle and E/R/A work continues.
+
+## 2026-11-09：跨來源關聯替換續作（分支）
+
+`feat/history-cross-source-replacement-20261109` 接續 #507 的發布候選，補上
+同一工作區內以明確關聯 ID 替換另一則紀錄或來源。查詢會重新確認中央來源、
+Work、權限與版本，顯示原工作與來源後才可提交既有原子操作；輸入中的新 ID
+先停用提交，查詢失敗不自動變成建立關聯。原來源不可讀時仍使用既有撤回入口。
+
+草稿只增加已驗證的舊 ID／版本，原 request 與 key 優先；未讀 ID 發現、來源掃描、
+derive 和原生執行不在這個增量。已通過 253 項相關 HTTP／注入 IPC 介面案例、
+614 項 Node 測試及 104 項 Python 回歸（含 Codex／Claude 兩種 fixture 的跨來源
+中央操作、舊紀錄與原 key 保留）。完整候選檢查另行記錄，不以局部回歸代替。
+這是 E08／E10、EC-1.1 T5 的分支增量，尚未合併、發布、安裝或實機驗收；
+E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂待辦維持開放。
+
+The continuation adds explicit replacement by readable relationship ID across
+entries and sources in one workspace. Central reads establish the original Work,
+source and version; original requests retain recovery authority. Focused UI,
+Node and Python checks passed. The branch is not merged, released, installed or
+live-accepted, and does not complete the remaining lifecycle or execution work.
+
+## 2026-11-09：Connector 0.2.17／Desktop 0.1.13 整合候選
+
+`release/history-links-20261109` 整合 `f340211c` 至 `7e382aec` 的外部歷史
+關聯、閱讀入口與測試修復，準備 0.2.17／0.1.13。共用英文／繁中介面可預覽
+整則或固定文字摘錄、選取既有 Work／Attempt、替換同一紀錄關聯及撤回已知 ID；
+Board、Requirements 和獨立／會話內 Work 詳情可重新授權後閱讀摘錄。
+保留原操作 key、來源唯讀、明確工作區綁定與中央權威，不新增 schema 或 data step。
+
+前一版 [v0.2.16](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.16)
+已於 2026-11-05 發布，來源為 `2f9386df38c71974144e58a77496f9f52b687f40`；
+下方「準備發布」保留當時紀錄。本候選將最新穩定版升級 fixture 固定到這個來源，
+保留另一個 0.2.12 基準。版本、canonical skill 與 generated adapters 同步更新。
+
+`7e382aec` 的 Python 3.13／3.10 全套證據與前端 475 項介面回歸見下方紀錄；
+整合候選仍須通過最終 CI、四個平台套件與來源／digest 核對才發布。
+本段是分支準備，不宣稱合併、發布、安裝或實機驗收。這是 E08／E10／E11、
+EC-1.1 T5 增量；E00–E11、R0–R5、A01–A40 和 PM v1.2 未修訂待辦維持開放。
+接續仍含跨來源替換、未讀關聯 ID 發現、Work derive 與原生執行。
+
+The integration candidate prepares Connector 0.2.17 / Desktop 0.1.13 for the shared
+external-history linking and reading flow. Current authorization, original intents
+and read-only sources remain authoritative. Final CI and package verification are
+publication gates; installation and real-device acceptance remain separate.
+
+## 2026-11-09：排程日期與 Fleet 測試環境修正候選
+
+`fix/deterministic-python-validation-20261108` 接續 `d65ec38a`，處理前輪全套的
+16 項失敗。排程測試只固定 `pm_schedule` 模組的觀察時鐘，涵蓋今天恰好等於來源
+日期與遠晚於來源日期兩種情況；替換 baseline 後，精確驗證有效列與 range 不再帶入
+舊 forecast，保留合法的 `as_of`／`set_at`。沒有全域替換標準函式庫的 datetime。
+
+新增本機 Linux 磁碟測試工具 `scripts/pytest-disktmp`，使用自有磁碟暫存並在正常
+或失敗退出後清理。共享上層權限不符合 Fleet 合約時，可用 `--private-tmp` 建立
+自有 root／tmp 的掛載環境；檔案仍在原磁碟上，正式 guard 與共享目錄權限維持不變。
+Fleet 增加 10 項拒絕案例：先證明安全路徑可正常讀取，再分別讓自有 ancestor、state、
+journal、lock、unit 可由群組或其他人寫入，確認不會啟動服務。工具的 7 項案例驗證
+磁碟身分、參數、退出碼、清理及無關目錄保留；執行方式見
+[開發指南](../../CONTRIBUTING.md)。
+
+Ruff 通過，Python 3.13 與 3.10 全套依序完成，各為 9,925 passed、84 skipped、
+0 failed／errors。每版完整性檢查核對 10,009 項測試、436 個檔案、16 個不重複
+分片，兩版 collection SHA 相同。只有含 Fleet 的分片需要私有掛載環境，工具
+自身在外層執行，因此沒有額外的巢狀 namespace 跳過。前輪 16 項失敗原因已排除，
+測試暫存已清理，開發環境恢復 Python 3.13。
+
+此候選只修改測試、測試工具與開發文件，沒有產品後端、前端、schema 或原生行為
+變更。前輪 E08／E10、EC-1.1 T5 候選仍未合併、發布、安裝或實機驗收；其餘
+E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂工作維持開放。
+
+This continuation makes schedule assertions independent of the calendar date and
+provides disk-backed fixture paths with real ownership checks for Fleet. Ten new
+refusal cases preserve the guard; seven wrapper cases verify disk identity,
+cleanup and unrelated-directory preservation. Python 3.13 and 3.10 each pass all
+16 shards with identical exact coverage: 9,925 passed, 84 skipped and no failures
+or errors. Fixture directories are cleaned up. Production behavior and E/R/A acceptance remain
+unchanged; this candidate is unmerged, unpublished, uninstalled and not live-tested.
+
+## 2026-11-08：需求與獨立 Work 的外部對話閱讀候選
+
+`feat/work-history-surfaces-20261107` 接續 `2a65f5d9`，先以 `02b9ff13` 納入主線
+`c7836ffb` 的 TaskCoordinator 測試，再將既有固定摘錄閱讀元件接到 Requirements
+的 Work inspector，以及獨立／會話內的 Work 詳情。需求本身只保留既有 Work
+關聯；閱讀摘錄不代表需求採納、驗收、執行成功或自動 PM 輸入。
+
+獨立 Work 紀錄沒有工作區綁定，所以由目前中央清單提供工作區選擇。網址中的
+workspace 或最後瀏覽工作區只作為導覽提示；無提示時不自動選取，失效提示也不
+改用另一個工作區。重讀中央 workspace 與精確 kanban card，核對 Work／project／
+server／binding 後才讀關聯；每次列表、摘錄與最後顯示前重新核對。沒有掃描所有
+工作區的 Work 清單或推斷權限，正文及閱讀選取不寫入本機儲存。
+
+沿用來源授權、固定參照、關聯前後重讀、分頁及定時更新。需求切換、Work／工作區
+切換、父頁讀取及失敗均先清除正文，隔離晚到回覆；較舊的成功父頁回覆不能覆蓋較新
+拒絕。會話內「結果」側欄關閉、縮成手機版面或來源撤回也清除閱讀器與計時器，
+重新開啟須重新驗證。這些讀取不改動編輯中的 Work 草稿或既有 operation key。
+
+最終共用來源的 475 項 HTTP／注入 IPC 介面測試、614 項 Node 測試與 159 項相關
+Python 測試通過。介面包含 55 項新增入口案例，以及看板、需求、來源關聯、Attempt／
+文字選取、關聯維護、結果來源、待辦及 Workbench 回歸。雙入口建置與 ruff 通過；
+英文／繁中 390／1440 px 截圖已檢查，新工作區選單與手機展開控制至少 44 px。
+公開內容檢查及 staged secret scan 通過。
+
+Python 3.13 全套十六分片完成：9,891 passed、84 skipped、16 failed，沒有 errors。
+Collection manifests 核對 9,991 項、435 個檔案，沒有遺漏或重複；完整檢查仍記為
+失敗。14 個 Fleet bootstrap 案例 ID 與前輪完全相同，錯誤均含
+`BOOTSTRAP_STATE_UNPROVEN`：測試路徑上層的 0775 權限遭安全檢查拒絕。相同未修改
+模組放在隔離容器的安全磁碟路徑後，44 項通過；沒有修改共享目錄權限或安全檢查。
+
+另兩項未修改的 `tests/test_pm_schedule.py` 測試，在 2026-11-08 發生日期碰撞：
+`test_recorded_lines_keep_sessions_under_work_and_drop_unscoped_rows` 要求 `as_of`
+日期不在固定來源日期內；`test_replaced_baseline_drops_the_previous_forecast` 要求整個
+回應不含 2026-11-08，但合法的 `as_of`／`set_at` 正是當天。排程 range 與 forecast
+斷言先前均已通過；兩項單獨執行也重現相同失敗，日期相依的測試斷言仍待維護。
+本輪沒有 Python 原始碼或測試變更，測試暫存與容器已清理。
+
+此為 E08／E10、EC-1.1 T5 的未合併增量，沒有新增 Python 後端、schema 或 Rust
+變更；尚未發布、安裝或實機驗收。跨來源替換、未讀 ID 的發現、derive、原生執行與
+PM v1.2 未修訂工作仍開放。E00–E11、R0–R5、A01–A40 維持原狀；HTTP／注入 IPC
+及 responsive fixtures 不代表原生 WebView、真 BAT／模型或實體手機驗收。
+
+The existing fixed-excerpt reader now serves Requirements Work inspectors and
+standalone or linked-session Work details. Workspace hints require current central
+binding checks; parent refreshes and Results visibility changes clear stale text
+while preserving unrelated drafts. This unmerged E08/E10/T5 candidate adds no new
+backend/schema/native transport changes or publication, installation or live
+acceptance. UI (475), Node (614) and focused Python (159) checks passed. Full Python
+3.13 coverage remains failed: 9,891 passed, 84 skipped, 16 failed with complete
+collection coverage. Fourteen failures match the previous Fleet permission cases;
+that unchanged module passed all 44 tests at a secure container path. Two unchanged
+schedule tests independently reproduce date-dependent assertions against November 8
+in valid observation timestamps. Their recorded schedule assertions pass; the test
+assumptions still need maintenance.
+
+## 2026-11-07：外部對話關聯替換與撤權後撤回候選
+
+`feat/history-relationship-maintenance-20261107` 接續 `804eb826`，在共用來源表單
+加入英文／繁中選填替換關聯。可選同一紀錄中已載入、可撤回的關聯，重讀中央關聯
+與 Work 明細，確認身分、角色及舊版本後，以一筆既有 `pm.history.link` 原子操作
+替換 Work、文字範圍或 Attempt 關聯。保留舊關聯與事件，不建立執行或自動 PM 輸入。
+
+來源閱讀器外另有「已保存的關聯識別資料」。它以目前身分／連線／工作區隔離，只
+保存先前讀取且可撤回的識別資料、建立者與版本，不保存正文、標題或 digest。
+每頁 20 筆，新索引最多 500 筆，舊版待確認請求另外保留復原入口；不移除較早
+紀錄來容納新資料。來源撤權後可明確
+撤回已知 ID；中央仍檢查目前 Work 可見性、角色、操作權限與版本，沒有從路徑、
+來源名稱或本機索引推斷權限。這不是中央完整清單，不能找回未曾讀取的 ID。
+
+替換與撤回沿用 durable form、原 request／key 及連線 gate。舊版索引只有在找到
+同工作區的原撤回 intent 時才提供復原，不能據此建立新請求。錯誤收據與損壞資料
+保留原 intent；版本衝突不自動重送或換版。較新草稿不會改寫舊版建立關聯請求，
+切換 Work／關閉及收據與顯示重讀競態也不會恢復已撤回的選取。
+
+最終共用來源的 292 項 HTTP／注入 IPC 介面測試、614 項 Node 測試及 169 項相關
+Python 測試通過。介面包含 43 項新增維護案例，以及 Attempt／文字選取、來源關聯、
+Work 閱讀器、看板、Workbench 與共用表單／收據回歸。雙入口建置、ruff、公開內容
+檢查及 staged secret scan 通過。已檢查英文／繁中 390／1440 px 截圖；手機撤回
+按鈕保留 44 px 高度，展開及返回沿用共用元件。
+
+Python 3.13 全套十六分片完成：9,866 passed、84 skipped、14 failed，沒有 errors。
+Collection manifests 核對 9,964 項、434 個檔案，沒有遺漏或重複；完整檢查仍記為
+失敗。14 個案例 ID 與前輪完全相同，均在未修改的 Fleet bootstrap 模組，錯誤均含
+`BOOTSTRAP_STATE_UNPROVEN`：測試路徑上層的 0775 權限遭安全檢查拒絕。相同完整
+模組以磁碟暫存掛載隔離容器的安全路徑後，44 項通過。沒有修改共享目錄權限、
+安全檢查或 fixtures；測試暫存與容器均已清理。
+
+此為 E08／E10、EC-1.1 T5 的未合併增量，未修改 Python 後端或 Rust；尚未發布、
+安裝或實機驗收。HTTP／注入 IPC 及 responsive fixtures 不代表原生 WebView、
+真 BAT／模型或實體手機驗收。跨來源替換、未讀 ID 發現、其他 Work 閱讀入口、
+derive、原生執行及 PM v1.2 未修訂工作仍開放；E00–E11、R0–R5、A01–A40 維持原狀。
+
+The shared history form can atomically replace a same-entry relationship and
+withdraw locally known associations after source revocation. A bounded index
+stores identifiers only; current central authority, version checks and immutable
+original operations remain in force. This unmerged E08/E10/T5 candidate adds no
+backend/native transport change or publication, installation or live acceptance.
+UI (292), Node (614) and focused Python (169) checks passed. The complete Python
+run remains failed: 9,866 passed, 84 skipped and the same 14 Fleet bootstrap
+permission failures as before, with complete disjoint coverage. The unchanged
+Fleet module passed all 44 tests at a secure container path using disk fixtures.
+
+## 2026-11-07：外部對話摘錄的選填 Attempt 關聯候選
+
+`feat/history-attempt-selection-20261107` 接續 `194892ed`，在既有來源閱讀器加入
+英文／繁中執行輪次選擇。預設只關聯 Work，展開選填區才讀中央 Attempt 清單；
+使用者明確選取後，另讀明細核對同一 workspace／Work。沒有自動選最新一輪，
+也不建立 Attempt、控制原 CLI、呼叫模型或自動加入 PM 輸入。
+
+沿用既有 list／detail API、`pm.history.link`、Work 版本／binding 及 durable form。
+分頁涵蓋隱藏紀錄並重新驗證先前頁面，最多 25 頁；重新讀取先清除舊資料。
+拒絕、身分不符、切換 Work 或關閉來源不會讓晚到回覆恢復舊資料。只在草稿保存
+選取 ID，原始 request 優先於較新欄位；遺失回覆、舊版 Work-only intent、已確認
+收據和顯示讀取同時完成，都維持原 key／target／params／preconditions。
+未通過驗證的選取不會默默改成只關聯 Work；使用者可明確清除或重新讀取。
+
+最終共用來源的 249 項相關 HTTP／注入 IPC 介面測試、602 項 Node 測試及 169 項
+相關 Python 測試通過。介面包含 34 項新增 Attempt 案例，以及既有文字選取、關聯、
+Work 閱讀器、看板、Workbench 和共用表單／收據回歸。雙入口建置、ruff、公開內容
+檢查及 staged secret scan 通過。英文／繁中 390／1440 px 截圖已檢查；新增區塊
+捲入畫面後的四項版面檢查再驗通過，手機選單及重新讀取按鈕保留 44 px 高度。
+
+Python 3.13 全套八分片完成：9,866 passed、84 skipped、14 failed，沒有 errors。
+Collection manifests 核對 9,964 項、434 個檔案，沒有遺漏或重複；完整檢查仍記為
+失敗。14 個失敗案例 ID 與前輪完全相同，皆在未修改的 Fleet bootstrap 模組，
+錯誤均含 `BOOTSTRAP_STATE_UNPROVEN`：測試路徑的上層 0775 權限遭安全檢查拒絕。
+相同完整模組放在隔離容器的安全路徑、掛載磁碟暫存後，44 項通過。沒有修改共享
+目錄權限、安全檢查或 fixtures；測試暫存與容器均已清理。
+
+此為 E08／E10、EC-1.1 T5 的未合併分支增量，沒有 Python 後端或 Rust 變更；
+尚未發布、安裝或實機驗收。注入 IPC／responsive fixtures 不等同原生 WebView、
+真 BAT／模型或實體手機。關聯替換、撤權後清理、其他 Work 閱讀入口、derive 與
+原生執行仍開放，E00–E11、R0–R5、A01–A40 及 PM v1.2 未修訂工作維持原狀。
+
+The shared history form can associate a fixed excerpt with an explicitly selected
+existing Attempt of the same Work. Work-only linking remains the default; current
+list/detail reads, opaque-ID drafts and immutable original requests preserve the
+existing central authority. UI (249), Node (602) and focused Python (169) checks
+passed. The complete Python run remains failed: 9,866 passed, 84 skipped and the
+same 14 Fleet bootstrap permission failures as the previous run, with complete
+disjoint coverage. The unchanged Fleet module passed all 44 tests at a secure
+container path with disk-backed fixtures. This unmerged E08/E10/T5 candidate
+claims no publication, installation, native execution or live acceptance.
+
+## 2026-11-07：外部對話文字範圍摘錄候選
+
+`feat/history-text-selection-20261107` 接續 `7c75c1ae`，在共用來源閱讀器加入
+英文／繁中「選取文字範圍」。可在唯讀欄位選取單一文字部分，明確預覽後連到既有
+Work，或切回整則紀錄。文字位置從瀏覽器 UTF-16／換行表示轉回原文 Unicode
+codepoint；emoji、CRLF、反向選取與工具標記邊界保留。鍵盤 Shift 搭配左右方向鍵、
+Home／End 可選取文字，原文不能編輯。未預覽的選取不會直接提交。
+
+沿用中央固定參照、`pm.history.link` 與 durable form。只保存固定參照 metadata，
+不保存原文或預覽正文；重開草稿會重新讀取並核對原參照。已送出的原 operation
+request 優先於表單欄位，包括缺少新 metadata 的舊版整則 intent；復原不換 key、
+參數、目標或 preconditions。預覽期間停用提交／切換，失敗、撤權與關閉清除正文，
+晚到回覆不能恢復舊畫面。沒有新 API、schema、後端邏輯或原生控制。
+
+最終來源的 215 項 HTTP／注入 IPC 介面回歸、602 項 Node 測試及 169 項相關 Python
+測試已通過；雙入口建置、ruff、公開內容檢查及 staged secret scan 也已通過。
+介面回歸包含 31 項文字範圍案例、原有閱讀／關聯／看板／Workbench，及 39 項共用
+表單／收據回歸。另已檢查英文／繁中 390／1440 px 截圖，並重現及修正「原操作
+先完成、草稿摘錄稍後回來」造成表單停用的時序。最終標準建置產生相同瀏覽器資產，
+Dashboard／靜態提供測試另驗 11 項通過。
+
+Python 3.13 全套八分片：9,866 passed、84 skipped、14 failed，沒有 errors。
+Collection manifests 確認 9,964 項、434 個檔案、無遺漏或重複；完整檢查仍記為失敗。
+14 個案例 ID 與前輪完全相同，皆在未修改的 Fleet bootstrap 模組，錯誤均為
+`BOOTSTRAP_STATE_UNPROVEN`。測試路徑上層的 0775 權限先被安全檢查拒絕；相同
+完整模組以磁碟暫存掛載隔離容器安全路徑後，44 項通過。沒有改變共享目錄權限、
+安全檢查或 fixtures，容器與測試暫存均已清理。本輪未修改 Python 後端邏輯或 Rust。
+
+此為 E08／E10、EC-1.1 T5 的分支增量，尚未合併、發布、安裝或實機驗收。
+HTTP／注入 IPC 及 responsive fixtures 不等同原生 WebView、真 BAT／模型或實體手機。
+Attempt 選擇、關聯替換、撤權後清理、其他 Work 閱讀入口、derive 與原生執行仍開放。
+E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂生命週期待辦維持原狀。
+
+The shared source reader can preview and link an exact text range, preserving
+original Unicode/newline offsets, read-only keyboard selection and the central
+reference. Drafts store reference metadata only; original operation requests own
+recovery, including older whole-entry intents. UI (215), Node (602) and focused
+Python (169) checks passed. The full Python run remains failed: 9,866 passed,
+84 skipped and the same 14 Fleet bootstrap permission failures as the prior run,
+with complete disjoint collection coverage. The unchanged Fleet module passed
+all 44 tests at a secure container path with disk-backed fixtures. This unmerged
+E08/E10/T5 increment claims no release, installation, native execution or live acceptance.
+
+## 2026-11-07：Work 看板的外部對話摘錄閱讀候選
+
+`feat/work-history-reader-20261107` 接續 `fdb37bc6`，在原有 Board Work inspector
+加入英文／繁中「查看已關聯摘錄」。沿用既有 Work 選擇、中央關聯／摘錄 API 及
+`desktop/src` 共用介面，未新增後端、schema、原生控制或第二套 Dashboard。
+每次閱讀會驗證關聯、讀取固定摘錄，再確認 Work／Attempt 關聯仍有效才顯示正文。
+分頁重讀既有頁面，開啟時每分鐘重新檢查；權限或來源失效、Work 切換與關閉檢視器
+會清除內容並隔離晚到回覆。文字、工具標記、原參照、部分歷史與執行未知各自明示。
+正文及閱讀選擇不寫入 localStorage，單純閱讀不產生 operation、PM context 或模型請求。
+
+222 個不同的 HTTP／注入 IPC 介面案例、581 項 Node 與 169 項相關 Python 測試已通過；
+另完成 ruff、雙入口建置及英文／繁中 390／1440 px 截圖檢查。介面回歸涵蓋既有
+來源閱讀／關聯操作、Board、Workbench，以及新閱讀區的撤權、固定參照、分頁、
+定時更新、父層 Work 重讀和晚到回覆。另驗證既有開工草稿與 Attempt 成果共存：
+參考資料不改草稿，也不混入執行成果。兩輪介面檢查分別為 143 及 118 項通過
+（其中 39 項重疊）；最終 generated assets 的 Dashboard／靜態提供測試 11 項通過。
+
+Python 3.13 全套八分片：9,866 passed、84 skipped、14 failed。Collection manifests
+確認 9,964 項、434 個檔案、無遺漏或重複；完整檢查仍記為失敗。14 個失敗案例
+與前輪完全相同，皆為未修改的 Fleet bootstrap 測試受到暫存目錄上層 0775 權限
+影響，被 `_secure_path` 拒絕。相同完整模組以磁碟暫存掛載隔離容器安全路徑後，
+44 項通過；沒有改變共享目錄權限、安全檢查或 fixture。暫存資料與容器已清理。
+公開內容檢查與秘密掃描通過。本輪沒有修改 Python 後端邏輯或 Rust。
+
+此為 E08／E10、EC-1.1 T5 的分支增量，尚未合併、發布、安裝或實機驗收。
+HTTP／注入 IPC 與 responsive fixtures 不等同原生 WebView、真 BAT／模型或實體手機。
+本輪閱讀入口僅在 Board Work inspector；獨立 Work 頁與 requirement inspector
+尚未加入同一入口。文字範圍／Attempt 選擇、替換、撤權後清理、derive 與原生執行
+仍開放，E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂生命週期待辦維持原狀。
+
+The unmerged Board-inspector candidate reads fixed external-history excerpts
+through the existing central API, rechecking the Work/Attempt relationship before
+displaying plaintext. Pagination, periodic reads and view retirement preserve
+current access and fence late responses. Distinct UI regressions (222), Node tests (581)
+and focused Python checks (169) passed. The full Python run remains failed:
+9,866 passed, 84 skipped and 14 failed, with complete, disjoint collection coverage.
+The failing cases exactly match the previous run's Fleet bootstrap ancestor-permission
+failures; the unchanged module passed all 44 tests at a secure container path with
+disk-backed fixtures. This increment claims no release, installation, native
+execution or live acceptance.
+
+## 2026-11-06：外部對話與既有 Work 的共用操作介面候選
+
+`feat/external-history-work-links-20261106` 接續 `f340211c` 的桌面傳輸增量。
+共用 `desktop/src` 已加入英文／繁中整則紀錄預覽、既有 Work 選擇、關聯清單及撤回。
+來源、權限、Work binding／版本及操作結果仍由 Python 中央決定；前端使用原有
+durable form，保留固定參照與原 operation key。撤回成功但回覆遺失、關聯已離開
+active 清單時，也能從只保存 ID 的索引查回原操作。預覽正文不進 localStorage。
+瀏覽器資產由共用來源重建，沒有第二套 Dashboard 或新 schema。
+
+已通過 44 項瀏覽器／注入 IPC 回歸、581 項 Node 測試、169 項相關 Python 測試、
+ruff、共用前端雙入口建置及公開內容檢查。回歸包含固定參照、原 key 恢復、消失的
+撤回關聯、兩則紀錄對同一 Work 的獨立 intent、權限、分頁、版本衝突、晚到回覆及
+英文／繁中版面。最終產物另重驗 Dashboard／靜態提供測試。
+
+Python 3.13 全套八分片共 9,964 項：9,866 passed、84 skipped、14 failed。
+Collection manifests 證明 434 個檔案、無遺漏或重複；完整檢查仍記為失敗。
+14 項失敗與前一輪相同，全部在未修改的 Fleet bootstrap 模組，原因為測試目錄的
+上層具有群組寫入權限（0775），被 `_secure_path` 拒絕。相同程式與完整該模組在
+隔離容器內以安全路徑掛載磁碟暫存資料後，44 項通過。沒有改變共享目錄權限、
+安全檢查或 fixture；容器與測試資料已移除。略過項目沿用原有平台、選跑整合、
+具名 CLI 版本或已移除能力的規則。本輪沒有修改 Python 後端邏輯或 Rust。
+
+狀態：已在分支實作，尚未合併、發布、安裝或實機驗收。
+HTTP 與注入 IPC fixtures 不等同原生 WebView、真 BAT／模型或實體手機驗收。
+這是 E08／E10、EC-1.1 T5 的局部增量；文字範圍／Attempt 選擇、替換及 Work 側摘錄
+閱讀仍開放。E00–E11、R0–R5、A01–A40 與未修訂的 PM v1.2 生命週期待辦維持原狀。
+
+The shared E08/E10/T5 candidate adds whole-entry preview, existing Work selection,
+linking and withdrawal through central actions and the existing durable form.
+Lost replies retain their original intent, including withdrawals absent from the
+active list. UI regressions (44), Node tests (581) and focused Python checks (169)
+passed. The full Python run remains failed: 9,866 passed, 84 skipped and 14 failed,
+all in unchanged Fleet bootstrap tests rejecting group-writable ancestors. That
+entire module passed 44 tests with disk-backed fixtures mounted at a secure
+container path. This claims no merge, release, installation or live acceptance.
+
+## 2026-11-06：外部對話關聯的桌面傳輸候選
+
+分支 `fix/external-history-desktop-parity-20261106` 以 `d78cfc70` 為基底，
+接續 E08／E10、EC-1.1 T5：既有 HTTP／MCP 的固定摘錄預覽、摘錄讀取、Work 關聯
+清單／詳情及來源反查，現在也可通過 Tauri 的受限 bridge。
+Rust 只驗證路徑、精確欄位、固定 ID／digest、文字範圍及分頁上限；
+Python 中央仍負責目前來源授權、workspace membership、版本、關聯與 durable operations。
+沒有新增 schema、第二個排程器、原生 CLI 控制或關聯 UI。
+
+已通過相關 Python 測試 158 項、Node 測試 581 項、ruff、Rust 格式檢查與公開內容檢查。
+Rust 1.98 對實際 bridge 驗證程式與測試的獨立編譯有 58 項通過，包含新增的兩項測試；
+這個隔離編譯只涵蓋請求驗證，不能替代整個 Tauri binary 的建置。
+完整原生測試因本機缺少 GTK／WebKit／DBus 開發套件而未完成。
+Python 3.13 完整五分片共 9,964 項：9,866 passed、84 skipped、14 failed。
+Collection manifests 已確認 434 個檔案、無遺漏或重複；原完整檢查仍記為失敗，
+不因後續局部重驗改寫原結果。14 項失敗全在未修改的 `test_fleet_bootstrap.py`：
+主機測試目錄的上層具有群組寫入權限（0775），被原有 `_secure_path` 正確拒絕。
+相同程式與整個該模組改以隔離容器的安全路徑掛載磁碟暫存資料後，44 項全部通過；
+沒有變更主機共享目錄權限、產品安全檢查或 fixture。容器與測試資料已移除。
+84 項略過依原有平台、選跑整合、具名 CLI 版本或已移除能力的規則保留。
+更早的測試曾因暫存路徑超過 Unix socket 長度限制失敗；縮短磁碟暫存路徑後
+改跑上述完整五分片。原失敗與中止紀錄保留，沒有改變產品逾時或減少覆蓋。
+
+狀態：已在分支實作，尚未合併、發布、安裝或實機驗收。
+E00–E11、R0–R5、A01–A40 與 PM v1.2 其餘待辦維持原狀。
+
+The unmerged E08/E10 candidate admits existing fixed-history relationship reads
+through the restricted desktop transport. Central authorization and durable
+operations remain authoritative. Focused Python tests, all Node tests and the
+isolated Rust request-validator tests passed. The full Python run selected all
+9,964 tests without gaps or duplicates: 9,866 passed, 84 skipped and 14 failed.
+All failures came from unchanged Fleet bootstrap tests refusing group-writable
+temporary-directory ancestors. The unchanged module passed all 44 tests with a
+disk-backed temporary directory mounted at a secure container path; the original
+full-run failure is retained. No host permissions or product guards were relaxed.
+Missing Linux native development libraries prevent a full Tauri test run.
+No release, installation, native CLI execution or live acceptance is claimed.
+
+## 2026-11-05：Connector 0.2.16／Desktop 0.1.12 發布準備
+
+2026-11-05：#502 已合併為 `53171768`；`release/0.2.16` 正準備 Connector 0.2.16／Desktop 0.1.12 發布。
+修正 v0.2.12 受管理主機每小時更新的 `installed_source_mismatch`，將 wheel 來源證明移至
+`bat_agent_connector/skill/build-info.json`，並加入 `install_connector.py --repair-managed [--dry-run]`
+修復遭 `already_update_managed` 拒絕的受管理安裝。v0.2.12 主機將於下一次每小時計時器自動更新。
+發布來源與 CI 以 `release-manifest.json` 記錄為準；發布前仍需核對最終來源、CI 與套件 digest。
+本次僅為發布準備，尚未發布、安裝或新增實機驗收；已發布穩定版仍為 0.2.15／0.1.11。
+PM v1.2、E00–E11、R0–R5、A01–A40 其餘未完成範圍維持開放。
+
+November 5: #502 is merged as `53171768`; `release/0.2.16` is preparing Connector 0.2.16 / Desktop 0.1.12.
+It fixes hourly managed-update provenance checks on v0.2.12 hosts and adds explicit managed-install repair.
+Hosts on v0.2.12 auto-update on the next hourly timer. Release source and CI are recorded in
+`release-manifest.json`; final source, CI and package digests remain publication gates.
+This preparation claims no publication, installation or live acceptance. Stable remains 0.2.15 / 0.1.11;
+open PM v1.2 and E00–E11 / R0–R5 / A01–A40 requirements remain unchanged.
+
+## 2026-11-05：Connector 0.2.15／Desktop 0.1.11 發布
+
+[穩定版 v0.2.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)
+於 2026-11-05 11:26:09 UTC 發布 Connector 0.2.15、Desktop 0.1.11 與八個檔案，固定來源為
+`82584a66dfac19ff8f1beebc1ca8fbb3b11f6aad`。
+該來源的 [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/42013172939) 與
+[desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/42013173068) 全部通過：
+backend 26／26 jobs，Python 3.10–3.13 各 9,940 tests；desktop 18／18 jobs。
+八個公開檔案的大小與 API SHA-256 均核對相符，公開 manifest／checksums 與本機驗證內容一致。
+`release-manifest.json` SHA-256 為 `29fac0c65aaff0fcd688bf4b4d064c78b0a8b015bd7d9da4c004afb4c298d62d`；
+stable updater discovery 也選到此版與相同來源。原始檔案與驗證範圍以發布頁的
+`release-manifest.json`、`SHA256SUMS` 及發布說明為準。
+
+#498（`7681c207`）加入 Connector SQLite 背景文字保存、有界回填、固定版本閱讀與
+有原訊息版本的摘錄，Dashboard 不必保持開啟。PM 可透過既有已設定路徑，明確選擇保存版本
+產生有來源的接續摘要，原 SQL run／receipt 與存取限制繼續適用；不自動呼叫模型、
+採納決策或由不完整對話宣告工作完成。未曾讀取且來源已不存在的文字無法補回。
+#495 另加入選填、按需的 SSH 主機部署唯讀觀察，不會安裝、重啟或更新遠端服務。
+詳見[保存合約](../design/session-retention.md)、[PM 接續](../design/pm-continuation-brief.md)
+與[部署觀察](../design/host-deploy-status.md)。
+
+核心升級 fixture 分別從 Connector 0.2.12 的固定發布來源 `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`
+與 0.2.14 的 `24f76015776cb3bcc46877c11874dc500627fae3` 建置舊核心，再升級至本版，
+核對身分、資料與原操作保留。這是核心升級測試；未執行舊桌面安裝器到新安裝器的完整升級。
+Windows 發布接續情境亦未執行，仍需 POSIX 測試 BAT 主機；本版 Windows／兩種 Mac
+安裝 fixture 的套件 digest 證據另列於 manifest。
+Windows 更新請從系統匣退出後執行 0.1.11 安裝器，保留既有資料。
+Linux／Windows 未簽章，macOS 為 ad-hoc 簽章且未 notarize；不宣稱可使用正式桌面簽章更新。
+
+已合併、已發布與實際安裝分開記錄。本版沒有新增 owner 電腦、真 BAT／模型、
+實體手機驗收，也不宣稱已重現或解決某台電腦的連線失敗。
+圖庫仍固定於 0.2.13／0.1.9 的歷史合成來源，不是新版截圖或實機驗收。
+套件 wheel／sdist／Dashboard／managed runtime 的來源一致性檢查通過；
+完整離線組裝仍受 Desktop／site-demo producer receipt 缺口與歷史圖庫來源限制，
+不能把已驗證的套件子集稱為完整單一候選組裝通過。
+本項沿 E04／E08／E09／E10／E11、EC-1.1 T3／T4／T6 交付；
+PM v1.2、E00–E11、R0–R5、A01–A40 其餘未完成範圍仍保留。
+
+Stable v0.2.15 publishes Connector 0.2.15 / Desktop 0.1.11 from the exact source
+and CI recorded above. #498 adds background saved conversations and explicit PM
+continuation from fixed message versions; #495 adds optional host deployment
+observations. Both exact-source CI workflows passed, and all eight public assets
+matched the verified digests and sizes. Upgrade fixtures build older cores from
+pinned published 0.2.12 and 0.2.14 sources; old-installer upgrade tests and Windows
+publication continuity remain outside that evidence. Package-subset consistency
+passed; missing Desktop/site-demo producer receipts and historical screenshots
+still limit full offline assembly. Publication does not establish user
+installation, real BAT/model or physical-device acceptance. Gallery provenance
+remains at 0.2.13 / 0.1.9; remaining PM lifecycle and E/R/A work stays open.
+Earlier preparation and release entries below retain their historical scope.
+
+## 2026-11-05：對話保存已合併，0.2.15／0.1.11 發布準備
+
+[#498](https://github.com/TED-H-com/bat-agent-connector/pull/498) 已合併為 `7681c207`，
+合併 tree 與通過完整 CI 的 `48fc3bd8` 相同。Connector 背景將已讀到的 BAT 對話保存至
+SQLite，提供固定版本、來源摘錄及明確 PM 接續摘要；詳見[對話保存合約](../design/session-retention.md)。
+原 session 消失不會刪除已保存內容，未曾讀到就刪除的來源仍無法補回。
+PM 模型摘要由既有明確操作觸發，沿用來源權限與原操作紀錄，不自動採納決策或宣告工作完成。
+
+`release/0.2.15-desktop-0.1.11` 準備 Connector 0.2.15／Desktop 0.1.11，
+並以正式 0.2.14 的固定來源驗證實際核心升級。發布前需核對最終 main 的 CI、
+套件來源與 digest；目前尚未發布或安裝，也沒有新的真 BAT／模型、Windows owner 或實體手機驗收。
+這是 E04／E08／E09／E10、EC-1.1 T3／T4／T6 增量；PM v1.2、E00–E11、R0–R5、A01–A40
+其餘未完成範圍維持開放。穩定版下載仍是下方 0.2.14，直到新版正式發布。
+
+PR #498 is merged as 7681c207 with the same tree as fully tested 48fc3bd8.
+Background SQLite retention, fixed saved versions and explicit source-grounded PM continuation
+are preparing for Connector 0.2.15 / Desktop 0.1.11. Final main-source CI and package
+provenance remain publication gates. No publication, user installation or live acceptance
+is claimed by this preparation entry; the remaining PM lifecycle and E/R/A work stays open.
+
+
+## 2026-11-04：Connector 0.2.14／Desktop 0.1.10 發布
+
+[穩定版 v0.2.14](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.14)
+提供 Connector 0.2.14、Desktop 0.1.10 與八個發布檔案；完整來源、套件 digest
+及對應 CI 見該版 `release-manifest.json`、`SHA256SUMS` 與發布說明。
+#496 整合 #494 的三個修正，並納入主線已累積的 Windows 背景服務、
+本機 Connector 恢復、Fleet 監控及原操作查回改善。
+新版本修正未連線診斷的本機假 401、保留已設定 Fleet 的恢復入口，並修正資料與日誌目錄說明。
+Windows 舊未簽章套件請從系統匣退出後執行新版安裝器，保留既有應用程式資料。
+
+已合併、已發布與使用者安裝分開記錄：本版沒有新增 owner 電腦、真 BAT／模型或
+實體手機驗收證據，也不宣稱已重現或消除某台電腦的舊版故障。
+完整離線組裝檢查仍受 Desktop／demo receipt 缺口與歷史 gallery 來源限制；
+明確的套件子集檢查、原生 CI 與暫存安裝 fixture 各自列明，不混稱完整驗收。
+本項交付 E03／E11 恢復改善；E00–E11、R0–R5、A01–A40 及 PM v1.2
+其餘未完成工作仍依現有計畫接續。下方保留準備階段及失敗紀錄。
+
+Stable v0.2.14 publishes Connector 0.2.14 / Desktop 0.1.10. Its release manifest
+identifies the exact source, asset digests and CI evidence. #496 includes #494
+and the accumulated managed-service, Windows and Fleet recovery changes.
+Publication does not establish installation on an owner's machine or live BAT/model
+and physical-device acceptance. Offline component consistency and native installation
+fixtures retain their stated scopes; historical screenshots remain pinned to 0.1.9.
+Open E/R/A and PM v1.2 work remains open. Earlier preparation and failure records follow.
+
+## 2026-11-04：Connector 0.2.14／Desktop 0.1.10 發布準備（分支）
+
+依 owner 要求直接推進更新，不再以舊版現場排查作為發布準備的前置條件。
+`release/0.2.14-desktop-0.1.10` 包含 #494 的未連線診斷與 Fleet 恢復入口，
+以及主線已合併的 Windows 背景程序、服務恢復與 Fleet 監控修正。
+Python／桌面版本一起前進；打包升級測試改以正式 0.2.12／0.1.8 的固定來源為起點，
+驗證原身分、資料與操作意圖的保留。新版套件仍走未簽章安裝器的手動更新方式。
+本機兩份實際核心的 0.2.12 → 0.2.14 升級測試通過，含並行啟動、忙碌拒絕、
+原發布操作與資料保留。首次候選 CI 找出 canonical／產生的技能版本尚未同步，
+已更新來源版本並重新產生兩個 adapter；該次失敗不列為通過證據。
+後續 Intel Mac CI 找出測試用共用鎖的等待競爭：釋放後其他 fixture 可先取得鎖，
+原五秒收件期限因而誤判失敗。測試改在既有有界 admission 完成、join waiter 後收件，
+保留持鎖時不得進入的斷言；未增加子程序工作期限或改動產品行為。修正後 CI 另行記錄。
+目前為發布候選：尚未合併、發布、安裝或實機驗證，不能據此宣稱舊版故障已在現場消失。
+E03／E11 的恢復改善不代表 E00–E11、A01–A40、R0–R5 或 PM v1.2 全部驗收。
+
+## 2026-11-04：未連線時的 Fleet 恢復與啟動診斷（分支）
+
+`fix/disconnected-startup-diagnostics-20261104` 從 `a3204616` 接續。
+診斷匯出在尚無前端憑證時不再自行新增 capabilities 401；來源標為未嘗試，
+真正 HTTP 拒絕仍保留。桌面匯出新增唯讀 native／managed 狀態、錯誤碼與各自讀取時間，
+並提供 Python `managed-central/service.log` 的固定位置範本；不匯出私人路徑、身分或錯誤全文。
+同時依原生安裝器修正既有診斷與雙語指南的資料庫目錄：`central` 改為 `managed-central`。
+首次連線設定尚未完成時，已設定且支援的本機 Fleet 仍能從設定頁讀取與接續原轉換。
+重新開啟只查回原紀錄，需使用者按既有按鈕才推進；未設定的 Fleet 維持原首次設定畫面。
+本項是 E03／E11 恢復與診斷增量，不代表實機 Fleet 轉換、Connector 啟動或 BAT 連線已恢復，
+也不代表 E00–E11、A01–A40、R0–R5 或 PM v1.2 未完成項目已驗收。
+
+This branch adds disconnected-startup evidence without making Connector calls
+that cannot leave the client. Native and managed status reads remain independent,
+read-only and fenced by connection epoch. Real HTTP 401 responses remain visible.
+Existing configured Fleet also remains reachable during incomplete Connector setup,
+with explicit continuation of the original migration and no automatic start.
+Node 581 and related browser/IPC 138 checks pass (4 declared skips), with both builds and Ruff.
+The corrected managed installation paths also pass 32 diagnostic Node checks and
+43 diagnostic browser/IPC checks after rebuilding both frontends.
+The initial new UI cases used an ambiguous export-button locator; the corrected
+cases pass in both locales. Full Python regression was interrupted to include the
+subsequently confirmed Fleet recovery fix; its replacement run is in progress. This branch is not
+merged, released, installed or live-tested; no private incident files are committed.
+
+## 2026-11-04 續作：操作紀錄完整續頁（分支）
+
+從主線 `dfefdbfc` 接續；前項原操作恢復已由
+[#489](https://github.com/TED-H-com/bat-agent-connector/pull/489) 合併為 `8878efc8`，
+該來源 PR 與主線 CI 通過。下方 11 月 3 日的分支與本機失敗紀錄保留為當時證據。
+
+`fix/operation-history-cursors-20261104` 修正共用操作紀錄只傳時間續頁、
+因而跳過同時間操作的問題，沿用後端已有的時間／ID 配對。
+可見結果為空仍保留明確續頁；無效或倒退游標保留已載入結果，等使用者重新整理。
+背景刷新保留分頁深度、搜尋、篩選與原操作選取，舊版僅時間的中央服務仍相容。
+設計見 [操作紀錄](../design/shared-frontend.md#attention-and-work-updates)。
+
+本項是 E03／E11 的唯讀查找與恢復增量，HTTP／IPC fixtures 涵蓋 A29／A30
+原操作查回的介面路徑；E00–E11 其餘工作、A01–A40 驗收、R0–R5 及 PM v1.2
+未完成項目仍開放。本分支尚未合併、發布、安裝或實機驗收；正式 Fleet
+Apply／detach、本機 participant 與首次設定完整接線不在本項內。
+
+This branch continues from `dfefdbfc`, after original-operation recovery merged in
+#489 (`8878efc8`, PR and main CI passed). Shared history now preserves the server's
+timestamp/ID cursor and explicit continuation through empty visible pages. Refresh
+retains loaded depth, search, filters and a selected original still in the window;
+invalid cursors keep prior rows with an error. Timestamp-only servers remain compatible.
+This E03/E11 read/recovery increment is not completion of E00–E11, A01–A40, R0–R5 or
+open PM v1.2 requirements. It is not merged, released, installed or live-tested.
+
+本機驗證：Node 579、相關瀏覽器／IPC 97、既有後端游標與隔離案例 9 通過；
+兩種前端建置、Ruff、公開內容與 staged 秘密掃描通過。完整回歸以固定 PR 來源 CI
+另行記錄。首次 UI 執行找出續頁焦點遺失並修正；選取視窗的刷新案例改用正常事件
+刷新，避免對手機已被 inspector 遮住的按鈕發送點擊。原失敗／中止紀錄仍保留。
+
+Local validation: Node 579, related browser/IPC 97 and existing backend cursor/
+confinement checks 9 passed, along with both frontend builds, Ruff, public content
+and staged secret checks. Full regression is recorded separately against the PR head.
+Initial UI failures exposed lost pagination focus, now fixed; selected-inspector
+refresh is exercised through events, including the mobile modal. Initial failures
+and interrupted runs remain in the local logs.
+
+PR #492 的首次網站 CI 另發現主線 #490 已更換截圖工具 import，但公開截圖 manifest
+仍記錄舊工具 hash。本分支以同一已發布來源 `437ee6a7` 的獨立 checkout 重新擷取
+16 張圖、48 組雙語響應式檢查，更新真實擷取時間與 digest；671 個連結／靜態資源及
+網站瀏覽器檢查通過。產品來源、版本與實機驗收宣告沒有改變，原 CI 失敗仍保留。
+
+The first #492 website CI found a stale capture-tool hash inherited from #490.
+All 16 screenshots were recaptured from the same published `437ee6a7` source in an
+isolated checkout, with 48 bilingual responsive checks. The refreshed manifest records
+the actual capture and digests; 671 link/asset checks and the website browser checks
+passed. The product source, release and acceptance claims remain unchanged; the initial
+CI failure remains recorded.
+
+## 2026-11-03 續作：原連線操作的恢復說明（分支）
+
+從主線 `4986c7e4` 接續 EC-1.1 首次使用與恢復穩定化。
+`fix/connection-operation-recovery-20261103` 在既有操作頁區分本機結果未知、
+本機步驟完成及共用關聯儲存衝突，提供雙語說明與符合原取消語義的結束按鈕。
+查詢與恢復使用原 operation ID；連點只送一次，回覆未確認時先讀回，讀取失敗移除舊控制，
+離頁後的晚到回覆不恢復原畫面。原 key、回執、已知設定效果與中央授權均保留。
+契約及限制見 [原操作恢復](../design/fleet-configuration.md#original-operation-recovery-in-the-shared-ui)。
+
+本項是 E03／E11 的恢復介面增量；HTTP／IPC fixtures 對應 A29／A30 的查回與重開原則，
+不宣告 A01–A40 或 R0–R5 驗收完成。E00–E11 其餘缺口及 PM v1.2 未完成範圍仍保留。
+本分支未合併、未發布、未安裝、未實機驗收；沒有新增 Apply／detach 入口，
+正式 participant 儲存、執行與首次設定接線仍待完成。下方保留既有歷史紀錄。
+
+This branch continues first-use and recovery stabilization from `4986c7e4`. The shared
+operation page explains unknown local results and completed effects whose association
+was not saved, using the original read/resume/cancel endpoints. It preserves evidence
+and prevents repeated in-flight recovery requests. This is an E03/E11 UI increment,
+not R0–R5 acceptance or completion of A01–A40. It is not merged, released, installed or
+live-tested; production Fleet Apply/detach activation and the remaining v1.2 work stay open.
+
+驗證來源為 `4bcfa791`：Node 572、相關瀏覽器案例 53（最後修改後新案例另跑 28）、
+相關 Python 案例 169 均通過；兩種前端建置、產物同步、Ruff、公開內容與秘密掃描通過。
+完整 Python 3.13 回歸為 **9723 passed、82 skipped、14 failed**，不是整輪全綠。
+14 個失敗均在 `test_fleet_bootstrap.py`：磁碟暫存目錄的祖先目錄原為 0775，
+因此既有安全檢查拒絕 fixture；暫時收緊為 0755 後，完整回歸結束再整檔重跑 **44 passed**。
+沒有修改後端、安全檢查、測試斷言或等待條件；原權限已還原，任務測試暫存已清除。
+更早一次完整執行因 Unix socket 暫存路徑過長而中止，改用短的磁碟 basetemp 後重跑；
+原中止與失敗輸出均保留於本機驗證紀錄。這些本機結果不代表 native／實機驗收。
+
+Validation at `4bcfa791`: Node 572, related browser 53 (28 new cases rerun after the
+final change), and related Python 169 passed; builds, generated assets, Ruff, public
+content and secret checks passed. Full Python 3.13 finished with 9723 passed, 82 skipped
+and 14 bootstrap failures caused by group-writable scratch ancestors. The entire affected
+file passed all 44 tests after temporarily correcting those permissions; original modes
+were restored and test scratch removed. The full run remains recorded as failed, and the
+earlier Unix-socket path-length interruption is retained. No backend or test rules changed.
+
 2026-10-23：[最新主線進度](progress-2026-10-23.md)記錄至 `5f49e712` 的 55 個新增合併 PR，
 並列出 Fleet Apply 與本機參與者尚缺的能力。沒有新發布；預覽版仍為 Connector 0.2.13／desktop 0.1.9
 （`437ee6a7`），穩定版仍為 0.2.12／0.1.8。新增合併均未發布、安裝或實機驗收；下方保留歷史紀錄。

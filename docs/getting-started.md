@@ -4,25 +4,31 @@
 
 ## Choose the matching package
 
-As checked on October 22, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12) remains Connector **0.2.12** / desktop **0.1.8**, from `14c62830240148b14a4d28a9c428f7f8b5ba8bf3`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
+As checked on November 9, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17) is Connector **0.2.17** / desktop **0.1.13**, with its exact source recorded in `release-manifest.json`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
 
-The stable package predates the route wake-up, managed-service recovery and first-run/status changes now included in the preview. #399–#403 merged after the preview source and are not in that package. See [delivery status](product/implementation-status.md) for merged, published, installed and live-tested evidence. The first-launch steps below describe stable 0.2.12; downloading a newer package does not establish installation or live acceptance.
+This stable package adds fixed external-conversation excerpts and explicit Work/Attempt relationships across the shared browser and desktop UI (#507), including replacement across readable sources by an explicit relationship ID (#508). Read them from Board, Requirements and Work details while retaining source authorization, original operation keys and read-only CLI sessions. Earlier conversation retention, PM summaries and update/recovery fixes remain available. The older preview remains available as a historical build. See [delivery status](product/implementation-status.md) for the exact source and CI, and separate merged, published, installed and live-tested evidence. The first-launch steps below describe stable 0.2.17; downloading a newer package does not establish installation or live acceptance.
 
-| Platform | Stable 0.1.8 asset | Preview 0.1.9 asset | Package |
+| Platform | Stable 0.1.13 asset | Preview 0.1.9 asset | Package |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.8_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.8_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.8_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.8_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.13_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.13_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.13_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.13_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 Use the platform asset on the release page. Separate GitHub Actions candidates may require sign-in and expire. Windows packages are unsigned; Mac bundles use ad-hoc signing. Formal signing, Mac notarization, production update channels and a Linux persistent native credential vault are outside this delivery. GitHub's release label does not establish real-device stability.
 
+### Update an existing desktop
+
+For Windows, download `better-agent-dashboard_0.1.13_windows_x64.exe`, quit Dashboard through its tray menu, then run the installer. Preserve the existing application data; do not delete the Connector journal or credentials. Existing unsigned test packages cannot use the in-app signed update path. Other platforms use their matching package above.
+
+The release checks build older Connector cores from pinned published 0.2.12 and 0.2.16 sources, then exercise the upgrade to 0.2.17 while checking retained identity, data and original operations. These core fixtures do not exercise an old desktop installer upgrading to a new installer or establish recovery on your machine. Final source and passed CI evidence are recorded in [delivery status](product/implementation-status.md).
+
 ## First launch: your local Connector
 
-Install and open the matching package. It contains the Python runtime and prepares one private local central, its data and your personal identity. You do not install Python / uv, enter an actor, edit credential files or copy an API token for this path. With no BAT host configured, the initial Dashboard opens **Settings → Connection**, with **Get ready to work → 1. Connect BAT** expanded.
+Install and open the matching package. On a new installation, choose **Provide a local workspace** or **Both** to prepare the bundled Python Connector, its private data and your personal identity. **Use existing services** joins an existing Connector without creating a local one. Existing installations retain their saved connection and identity. You do not install Python / uv, enter an actor, edit credential files or copy an API token for this path. With no BAT host configured, the initial Dashboard opens **Settings → Connection**, with **Get ready to work → 1. Connect BAT** expanded.
 
 1. Paste the connection URL copied from BAT into the masked field. It fills the connection details locally.
-2. Check the **Host ID**, then choose **Verify and save host**.
+2. Check the **Host ID**, choose **Review connection**, inspect the proposed changes, then choose **Apply connection**.
 3. After success, choose **View sessions**. Human sessions remain read-only.
 
 **Bind a GitHub repository** and **Configure verification commands** start collapsed. They are optional for reading sessions. Set them up when dispatch, Git work or Task Service verification needs them. Managed-work permissions also start collapsed; connecting does not grant them.
@@ -31,7 +37,7 @@ Install and open the matching package. It contains the Python runtime and prepar
 
 ### 1. Connect BAT
 
-In **Settings → Connection → Connect BAT**, use **Paste BAT connection URL**. In BAT v3.2.15, copy it from **Settings → Remote → Remote Access → Connection URL → Copy**. With headless BAT, copy the URL from the startup banner's `connect:` line. The password field clears as soon as the address, credential and certificate fingerprint have been filled locally; a check-mark line confirms the address and abbreviated fingerprint without showing the token. Nothing is sent until **Verify and save host**. Editing the endpoint or fingerprint by hand clears that confirmation.
+In **Settings → Connection → Connect BAT**, use **Paste BAT connection URL**. In BAT v3.2.15, copy it from **Settings → Remote → Remote Access → Connection URL → Copy**. With headless BAT, copy the URL from the startup banner's `connect:` line. The password field clears as soon as the address, credential and certificate fingerprint have been filled locally; a check-mark line confirms the address and abbreviated fingerprint without showing the token. Review does not probe BAT or save configuration; pasted credentials may be privately staged. **Apply connection** verifies and saves the reviewed configuration. Editing the endpoint or fingerprint by hand clears that confirmation.
 
 Enter a **Host ID** starting with a letter or number, using only letters, numbers, `-`, `_` or `.` (for example `local`). On first use, a loopback address suggests `local`; this is a name suggestion and does not establish where BAT runs or grant local execution permissions.
 
@@ -45,7 +51,7 @@ Expand **Allow managed work** when enabling dispatch. Choose the intended conver
 
 The SSH alias is resolved by the central service account on the central computer. For the bundled local central this is the desktop computer; when joining a remote central, prepare SSH access on that central host. The browser or Tauri client does not forward its local SSH keys to central.
 
-**Allow Git worktrees sharing a clone** is an explicit opt-in when a direct BAT start needs shared Git metadata. Leave it off when that is not intended. It does not grant control over manual sessions or worktrees. Click **Verify and save host**; the connection/profile checks are read-only and saving does not dispatch work.
+**Allow Git worktrees sharing a clone** is an explicit opt-in when a direct BAT start needs shared Git metadata. Leave it off when that is not intended. It does not grant control over manual sessions or worktrees. Choose **Review connection**, then **Apply connection**; the connection/profile checks are read-only and saving does not dispatch work.
 
 ### 2. Bind a GitHub repository
 
@@ -188,6 +194,40 @@ These steps describe available product actions, not a claim that full
 lifecycle live acceptance has run. Record actual operation, source, runtime and
 delivery receipts separately from offline tests and CI.
 
+### Read saved conversations and request a PM summary
+
+Open a session's **Saved conversation** panel and choose **Read saved history** to read text already retained by this Connector. Choose a saved version and page through it; later captures do not replace the version being read. The Connector collects observed user/assistant text in the background without an open Dashboard or model call. Saved excerpts retain their original message version references. Retention and backfill are bounded; content that was never read and is no longer available at its source cannot be reconstructed.
+
+For a semantic summary, open a PM discussion's **Discussion info → Context → Continue from here**. Under **Saved conversation (optional)**, choose **Browse conversations**, select a conversation, then **Include this saved version**. Enter the summary focus and choose **Prepare continuation** (or **Update continuation**) through the configured PM runtime. The saved brief records its exact sources and model interpretation; it does not adopt scope or accept delivery. Incomplete history cannot establish that all work is finished. Browsing or selecting a source does not call the model.
+
+Saved text may remain readable while BAT is offline, provided the Connector is reachable and current access remains authorized. Missing sessions and saved history do not prove that a process stopped. See the [retention contract](design/session-retention.md) for text/storage bounds and [PM continuation](design/pm-continuation-brief.md) for source and runtime requirements.
+
+### Link external conversation excerpts to Work
+
+In **Agents → External conversations**, open an available source and an entry's
+**Related Work**. Choose **Choose a Work**, then select the existing Work. To use
+part of the entry, open **Choose a text range**, select text and choose **Preview
+selected text**. Review **Excerpt to link** before choosing **Link excerpt to Work**.
+**Choose an attempt (optional)** attaches the same excerpt to an explicitly selected
+existing Attempt; leaving it empty links only the Work.
+
+To replace a relationship, open **Replace a relationship (optional)** and choose
+a loaded relationship, or enter its **Relationship ID** and choose **Read relationship**.
+The latter also supports another entry or source in the same workspace, while that
+source remains readable. Review the original Work, source and version before
+submitting. **Saved relationship IDs** can withdraw previously read relationships
+after source access is lost, subject to current authority. For a lost reply, use
+**Check original request** to recover the same operation.
+
+Open **View linked excerpts** in Board, Requirements or Work details to read the
+fixed references. Choose the workspace when prompted. These actions preserve the
+original CLI sessions and do not approve scope, start an Attempt or complete Work.
+Source setup and access rules are in the [external conversation contract](design/external-conversation-history.md).
+
+### Observe host deployment status
+
+Open a host from the session list and choose **Host deployment status (read-only)**. An operator first configures that querying Connector's optional SSH aliases and deployment directories; each Connector queries independently. The view reads container, systemd and configured Git deployment metadata on demand. It does not install, restart or update services. CLI users can run `batc hosts deploy-status`; configuration and partial-result limits are described in the [deployment observation guide](design/host-deploy-status.md).
+
 ### Read an AHP host catalog
 
 In the workspace's **Agents** view, expand **AHP observations**. An operator must first configure an
@@ -243,10 +283,10 @@ It creates a private version directory under
 For an existing uv tool installation, see [adoption and restoration](connector-updates.md#adopting-an-existing-uv-tool-installation).
 
 Both published versions include the installer. Pin the same tag for the bootstrap
-and installation. For stable **v0.2.12**:
+and installation. For stable **v0.2.17**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.12/scripts/install.sh | sh -s -- --tag v0.2.12 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.17/scripts/install.sh | sh -s -- --tag v0.2.17 --channel-check stable
 ```
 
 For prerelease **v0.2.13-preview.20261022**:
@@ -393,7 +433,6 @@ then continue in a new managed session; or let a scoped MCP agent drive managed 
 The checkpoint path keeps the person's session and checkout read-only. The Start and
 dispatch forms explain the worktree, BAT session and tracked evidence in **How dispatch works**.
 
-
 The CLI offers the same observation and operation records:
 
 ```bash
@@ -443,7 +482,6 @@ suggested command for that directory and retry installation or `--verify-only`.
 The installer never changes permissions automatically. If the owner is wrong,
 removing write permissions alone will not fix ownership; ask the administrator.
 
-
 | What you see | What to check / do |
 | --- | --- |
 | Desktop asks for an external central / actor | Check whether this is an older client-only artifact or an existing external configuration. On the matching managed candidate, ordinary first launch prepares local central automatically. |
@@ -481,14 +519,17 @@ may differ):
 
 | OS | State database |
 | --- | --- |
-| Linux | `~/.local/share/io.betteragent.dashboard/central/state/tasks.sqlite3` |
-| macOS | `~/Library/Application Support/io.betteragent.dashboard/central/state/tasks.sqlite3` |
-| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\central\state\tasks.sqlite3` |
+| Linux | `~/.local/share/io.betteragent.dashboard/managed-central/state/tasks.sqlite3` |
+| macOS | `~/Library/Application Support/io.betteragent.dashboard/managed-central/state/tasks.sqlite3` |
+| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\managed-central\state\tasks.sqlite3` |
 
-`config/hosts.toml` and `installation.json` are inside the same `central` directory.
-These are state/configuration files, not exported logs. The desktop does **not**
-persist Connector stdout/stderr; startup error lines stay in memory. For a
-standalone CLI service, stdout/stderr go to its launching terminal/service manager;
+`config/hosts.toml` and `installation.json` are inside the same `managed-central`
+directory. These are state/configuration files, not exported logs. The managed
+Python service writes stderr to `managed-central/service.log`; failures before
+that service is launched may leave no log. The desktop discards stderr from the
+short-lived Python launcher. Diagnostics exports fixed location templates, not
+file contents or proof that a log exists. For a standalone CLI service,
+stdout/stderr go to its launching terminal/service manager;
 the configured journal location is not inferred by diagnostics. Default journal
 templates follow `config.state_dir()`: `~/.local/state/bat-agent-connector/tasks.sqlite3`
 on Linux/macOS and `~\.local\state\bat-agent-connector\tasks.sqlite3` on Windows,

@@ -38,6 +38,14 @@ def _table(rows: list[list[Any]], headers: list[str]) -> None:
         print(fmt.format(*[v if len(v) <= 48 else v[:47] + "…" for v in r]))
 
 
+def r_deploy_status(o):
+    for row in o["hosts"]:
+        print(row["host"] + ": " + row.get("error", row.get("collected_at", "")))
+        for key in ("containers", "compose_projects", "systemd", "deploys", "errors"):
+            for item in row.get(key, []):
+                print("  " + key + ": " + json.dumps(item, ensure_ascii=False))
+
+
 def r_hosts(o):
     _table(
         [
@@ -213,6 +221,9 @@ async def _run(args) -> Any:
     fleet = Fleet(cfg, read_only=args.read_only, idle_timeout=0, actor="cli")
     try:
         c = args.cmd
+        if c == "hosts" and args.hosts_command == "deploy-status":
+            from .deploy_status import DeployStatus
+            return await DeployStatus(cfg.deploy_status).document(args.host), r_deploy_status
         if c == "hosts":
             return await service.hosts_list(fleet, probe=not args.no_probe), r_hosts
         if c == "status":
@@ -444,6 +455,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sp.add_parser("hosts", help="list configured hosts (+ probe)")
     p.add_argument("--no-probe", action="store_true")
+    hs = p.add_subparsers(dest="hosts_command")
+    dp = hs.add_parser("deploy-status", help="read configured host deployment status over SSH")
+    dp.add_argument("--host")
+    dp.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
     p = sp.add_parser("status", help="host status")
     p.add_argument("host")
     p = sp.add_parser("workspaces", help="list workspaces")

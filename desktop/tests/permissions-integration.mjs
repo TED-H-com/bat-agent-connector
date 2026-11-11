@@ -1,6 +1,6 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 // Shared generated UI against actual central operations. Every BAT frame goes to MockBat.
-import {spawn} from "node:child_process";
+import {spawn} from "../../scripts/hidden-child-process.mjs";
 import {createInterface} from "node:readline";
 import {mkdir} from "node:fs/promises";
 import {delimiter, resolve} from "node:path";

@@ -1,20 +1,29 @@
 # Connector automatic updates / Connector 自動更新
 
-Connector **0.2.10** includes automatic updates (introduced in 0.2.7). Start with the
-[published preview](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.10-preview.20261018)
+Connector **0.2.15** includes automatic updates (introduced in 0.2.7). Start with the
+[published stable release](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)
 and its matching source manifest and checksums.
+
+This release adds background saved-conversation retention and explicit PM summaries
+of fixed saved versions (#498), plus optional read-only host deployment observations
+(#495). The enrolled Connector updater applies the new core to future launches;
+it does not replace the desktop application. Desktop 0.1.11 uses the separate manual
+package update described in the [installation guide](getting-started.md#update-an-existing-desktop).
+The release's bundled-core fixtures build older cores from pinned published
+0.2.12 and 0.2.14 sources before upgrading them; old desktop installer upgrades are separate.
+exact source/CI and their validation scope are recorded in [delivery status](product/implementation-status.md).
+Existing processes keep their loaded version until their ordinary restart.
 
 The [verified operator installer](getting-started.md#2-install-connector)
 produces `rollout-receipt.json` in its private version directory after verifying
-the real installation. Use a published tag containing the installer (the current
-v0.2.10 preview predates it); the plain `uv tool install` alternative does not
+the real installation. The v0.2.15 tag contains this installer; the plain `uv tool install` alternative does not
 produce an enrollment receipt. On Linux retain this receipt and use its printed
 absolute path below. `--enable-updates` runs enrollment and scheduling for you. Enrollment verifies
 the receipt, installed source, canonical skill and the published release channel.
 It refuses unknown/customized installations rather than replacing their files.
 
 ```bash
-batc-update enable --channel preview --receipt /path/to/rollout-receipt.json
+batc-update enable --channel stable --receipt /path/to/rollout-receipt.json
 batc-update schedule
 batc-update status
 ```
@@ -79,8 +88,14 @@ application configuration remain unchanged.
 
 ## 發布與使用邊界
 
-Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前已發布預覽版為 0.2.10。
-驗證安裝器會產生 `rollout-receipt.json`；需選擇含安裝器的已發布 tag（0.2.10 尚未包含）。保留收據，再用上方指令
+Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前穩定版為 0.2.15。
+本版加入背景對話保存、明確請求的固定版本 PM 摘要（#498）及選填的主機部署唯讀觀察（#495）。
+Connector 更新供下次啟動使用，不會替換桌面程式；Desktop 0.1.11 另依
+[安裝指南](getting-started.zh-TW.md#更新既有桌面安裝)手動更新。
+bundled-core fixture 先由 0.2.12 與 0.2.14 固定發布來源建置舊核心再升級；
+舊桌面安裝器的完整升級另有範圍。最終來源／CI
+見[交付狀態](product/implementation-status.md)；既有程序仍載入原版，直到正常重啟。
+本版的驗證安裝器會產生 `rollout-receipt.json`。保留收據，再用上方指令
 選擇 `preview` 或 `stable` 並啟用排程。未知或被自行修改的安裝不會被接管。
 
 每小時自動檢查，最多錯開 15 分鐘。無人登入的主機需確認使用者 systemd
@@ -127,3 +142,28 @@ enrollment, upgrade, launchers and rollback. An already loaded interpreter keeps
 its original identity while a new launch gets the new version; a journal sentinel
 stays unchanged. A repeated stage uses the verified installation without fetching.
 It does not contact BAT, run a model, or modify an existing installation.
+
+## Repairing an update-managed install
+
+On v0.2.12 hosts after v0.2.14, the `batc-update` journal can report
+`{"status": "failed", "code": "installed_source_mismatch"}` each hour. The wheel
+added generated provenance at `bat_agent_connector/build-info.json`, which the
+older updater compares against the source tree. v0.2.16+ puts wheel provenance
+under `bat_agent_connector/skill/build-info.json`, excluded by the legacy source
+comparison, so these hosts heal automatically on the next hourly timer once that
+release is published on their channel.
+
+Ordinary reinstall refuses an enrolled install with `already_update_managed`.
+For explicit manual repair, download `install_connector.py` from the requested
+release and use its actual tag in place of `vX`:
+
+```sh
+python3 install_connector.py --tag vX --repair-managed --dry-run
+python3 install_connector.py --tag vX --repair-managed
+```
+
+Repair requires Linux, private valid updater state, and a uv tool Git installation
+from this repository. The dry run validates state, installation provenance and
+release metadata without writes. Activation uses the existing updater transaction;
+the previous current release remains available for rollback. Pending updater
+transactions must finish before repair. Existing sessions are not restarted.

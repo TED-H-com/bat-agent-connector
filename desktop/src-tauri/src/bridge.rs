@@ -110,6 +110,63 @@ fn validate_repository_preview(body: Option<&Value>) -> Result<(), String> {
     Ok(())
 }
 
+// Retained selections are logical references only. The central service resolves
+// their bytes and rechecks source grants, membership and the original digest.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HistoryExcerptPreview {
+    source_id: String,
+    entry_id: String,
+    expected_content_digest: String,
+    selection: HistoryExcerptSelection,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum HistoryExcerptSelection {
+    Entry {},
+    Text {
+        part_index: u32,
+        start_codepoint: u32,
+        end_codepoint: u32,
+    },
+}
+
+fn validate_history_excerpt_preview(body: Option<&Value>) -> Result<(), String> {
+    let doc: HistoryExcerptPreview = serde_json::from_value(
+        body.cloned()
+            .ok_or("History excerpt preview body is required")?,
+    )
+    .map_err(|_| "Invalid typed history excerpt preview request")?;
+    static SOURCE: OnceLock<Regex> = OnceLock::new();
+    static ENTRY: OnceLock<Regex> = OnceLock::new();
+    if !SOURCE
+        .get_or_init(|| Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$").unwrap())
+        .is_match(&doc.source_id)
+        || !ENTRY
+            .get_or_init(|| Regex::new(r"^shi_[0-9a-f]{32}$").unwrap())
+            .is_match(&doc.entry_id)
+        || doc.expected_content_digest.len() != 64
+        || !doc
+            .expected_content_digest
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    {
+        return Err("Invalid fixed history source, entry or digest".into());
+    }
+    if let HistoryExcerptSelection::Text {
+        part_index,
+        start_codepoint,
+        end_codepoint,
+    } = doc.selection
+    {
+        if part_index >= 128 || start_codepoint >= end_codepoint || end_codepoint > 16_000 {
+            return Err("History excerpt requires one bounded text range".into());
+        }
+    }
+    Ok(())
+}
+
 // Start preview creates no operation, write frame, or database row. The unique-candidate
 // path may read BAT `workspace:load` and GitHub; those reads are not writes.
 fn validate_start_preview(body: Option<&Value>) -> Result<(), String> {
@@ -1856,8 +1913,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static GET: OnceLock<Regex> = OnceLock::new();
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
-        GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/history(?:/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})?|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/overview-assessments(?:/pmoa_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+        GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|hosts/deploy-status|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
+            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/history(?:/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}(?:/associations)?)?|/history-excerpts/hxe_[0-9a-f]{64}|/external-links/hxl_[0-9a-f]{32}|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/overview-assessments(?:/pmoa_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs|external-links))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1867,7 +1924,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             r"delivery/previews/mpv_[0-9a-f]{32}|integrations/previews/ipv_[0-9a-f]{32}|integrations/op_[0-9a-f]{32})$")).unwrap())
     } else if input.method == "POST" {
         POST.get_or_init(|| {
-            Regex::new(r"^/(?:managed/setup/(?:secrets|preview|discover)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
+            Regex::new(r"^/(?:managed/setup/(?:secrets|preview|discover)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:history-excerpt-preview|work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
                 .unwrap()
         })
     } else {
@@ -1926,6 +1983,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Adopt-and-start preview accepts no query or operation key".into());
         }
         validate_adopt_start_preview(input.body.as_ref())?;
+    }
+    if input.method == "POST" && path.ends_with("/history-excerpt-preview") {
+        if input.path != path || input.idempotency_key.is_some() {
+            return Err("History excerpt preview accepts no query or operation key".into());
+        }
+        validate_history_excerpt_preview(input.body.as_ref())?;
     }
     if path.ends_with("/start-preview") {
         if input.path != path || input.idempotency_key.is_some() {
@@ -1994,6 +2057,14 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
         None
     };
     let schedule = pm && path.ends_with("/schedule");
+    let history_associations = pm
+        && path.split('/').nth(4) == Some("history")
+        && path.split('/').count() == 7
+        && path.ends_with("/associations");
+    let history_links = pm
+        && path.split('/').nth(4) == Some("work")
+        && path.split('/').count() == 7
+        && path.ends_with("/external-links");
     let mut query_keys = std::collections::HashSet::new();
     for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
         if key.chars().chain(value.chars()).any(char::is_control) {
@@ -2101,6 +2172,25 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let attempt_changes = path.contains("/work-attempts/") && path.ends_with("/changes");
             let attempt_diff = path.contains("/work-attempts/") && path.ends_with("/diff");
             let valid = match key.as_ref() {
+                "entry_id" if history_associations => {
+                    value.len() == 36
+                        && value.starts_with("shi_")
+                        && value[4..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "after" if history_associations || history_links => {
+                    !value.is_empty()
+                        && value.len() <= 19
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n >= 0)
+                }
+                "limit" if history_associations || history_links => {
+                    !value.is_empty()
+                        && value.len() <= 2
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=50).contains(&n))
+                }
                 "kind" if path.ends_with("/context-bundle") => value == "overview_assessment",
                 "before" if overview_assessment_list => {
                     !value.is_empty()
@@ -2558,6 +2648,25 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             }
             continue;
         }
+        if path.starts_with("/sessions/")
+            && path.ends_with("/messages")
+            && matches!(key.as_ref(), "source" | "snapshot_id")
+        {
+            let valid = match key.as_ref() {
+                "source" => matches!(value.as_ref(), "live" | "retained"),
+                "snapshot_id" => {
+                    value.len() == 64
+                        && value
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                }
+                _ => false,
+            };
+            if input.method != "GET" || !valid || !query_keys.insert(key.to_string()) {
+                return Err("Saved conversation query is invalid".into());
+            }
+            continue;
+        }
         if key == "max_message_chars" {
             if input.method != "GET"
                 || !path.starts_with("/sessions/")
@@ -2569,6 +2678,19 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 || !query_keys.insert(key.to_string())
             {
                 return Err("Session message size query is invalid".into());
+            }
+            continue;
+        }
+        if path == "/hosts/deploy-status" {
+            if key != "host"
+                || value.is_empty()
+                || value.len() > 256
+                || !value
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+                || !query_keys.insert(key.to_string())
+            {
+                return Err("Deployment status requires one logical host selector".into());
             }
             continue;
         }
@@ -2738,6 +2860,17 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Central query parameter is not allowed".into());
         }
     }
+    if path.starts_with("/sessions/") && path.ends_with("/messages") {
+        let retained = url::form_urlencoded::parse(query.as_bytes())
+            .any(|(key, value)| key == "source" && value == "retained");
+        let after = url::form_urlencoded::parse(query.as_bytes()).any(|(key, _)| key == "after");
+        if (query_keys.contains("snapshot_id") && !retained) || (retained && after) {
+            return Err("Saved history cannot be used as a live turn observation".into());
+        }
+    }
+    if history_associations && !query_keys.contains("entry_id") {
+        return Err("History associations require an exact retained entry".into());
+    }
     if pm && path.ends_with("/dependencies/impact") && !query_keys.contains("dependency") {
         return Err(
             "Dependency impact requires a captured dependency key / 相依影響需要已擷取的相依識別碼"
@@ -2816,6 +2949,45 @@ mod tests {
         thread,
     };
     #[test]
+    fn retained_session_reads_use_fixed_snapshot_selectors() {
+        let root = "/sessions/demo/session-full-id/messages";
+        let snapshot = "a".repeat(64);
+        for query in [
+            "source=retained".into(),
+            "source=live&after=batc-original-turn".into(),
+            format!("source=retained&snapshot_id={snapshot}&last_n=30&offset=60&max_chars=60000&max_message_chars=16000"),
+            format!("snapshot_id={snapshot}&source=retained"),
+        ] {
+            let path = format!("{root}?{query}");
+            assert!(validate_request(&request("GET", &path)).is_ok(), "{path}");
+            assert!(validate_request(&request("POST", &path)).is_err(), "{path}");
+        }
+        for query in [
+            "source=other".into(),
+            "source=retained&source=retained".into(),
+            "source=retained&snapshot_id=short".into(),
+            format!("source=retained&snapshot_id={}", "A".repeat(64)),
+            format!("source=retained&snapshot_id={snapshot}&snapshot_id={snapshot}"),
+            format!("snapshot_id={snapshot}"),
+            format!("source=live&snapshot_id={snapshot}"),
+            "source=retained&after=batc-original-turn".into(),
+            "after=batc-original-turn&source=retained".into(),
+        ] {
+            let path = format!("{root}?{query}");
+            assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
+        }
+        assert!(validate_request(&request(
+            "GET",
+            "/sessions/demo/session-full-id?source=retained"
+        ))
+        .is_err());
+        assert!(validate_request(&request(
+            "GET",
+            &format!("/hosts?source=retained&snapshot_id={snapshot}")
+        ))
+        .is_err());
+    }
+    #[test]
     fn managed_setup_has_only_typed_private_staging_and_fixed_routes() {
         assert!(validate_request(&request("GET", "/managed/setup")).is_ok());
         let mut input = request("POST", "/managed/setup/secrets");
@@ -2842,6 +3014,20 @@ mod tests {
         assert!(validate_request(&request("GET", "/managed/setup?host=other")).is_err());
         assert!(validate_request(&request("GET", "/managed/setup/secrets")).is_err());
     }
+    #[test]
+    fn deployment_status_is_a_fixed_read_with_one_host_selector() {
+        assert!(validate_request(&request("GET", "/hosts/deploy-status?host=fixture")).is_ok());
+        for path in [
+            "/hosts/deploy-status?host=",
+            "/hosts/deploy-status?host=one&host=two",
+            "/hosts/deploy-status?command=restart",
+            "/hosts/deploy-status?host=/srv",
+        ] {
+            assert!(validate_request(&request("GET", path)).is_err());
+        }
+        assert!(validate_request(&request("POST", "/hosts/deploy-status")).is_err());
+    }
+
     #[test]
     fn setup_discovery_uses_the_existing_fixed_http_forwarder() {
         let mut input = request("POST", "/managed/setup/discover");
@@ -3003,6 +3189,170 @@ mod tests {
         let mut write = get(&format!("{root}/example"));
         write.method = "POST".into();
         assert!(validate_request(&write).is_err());
+    }
+
+    #[test]
+    fn external_history_relationship_reads_keep_exact_scope_and_bounds() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111";
+        let entry = "shi_22222222222222222222222222222222";
+        let excerpt = format!("/history-excerpts/hxe_{}", "3".repeat(64));
+        let link = "/external-links/hxl_44444444444444444444444444444444";
+        let work = "/work/wi_55555555555555555555/external-links";
+        let associations = format!("/history/example/associations?entry_id={entry}");
+        for suffix in [
+            excerpt.clone(),
+            link.into(),
+            work.into(),
+            format!("{work}?after=0&limit=1"),
+            format!("{work}?after=9223372036854775807&limit=50"),
+            associations.clone(),
+            format!("{associations}&after=0&limit=50"),
+            // A source ID is not an endpoint name.
+            "/history/history-excerpt-preview".into(),
+            "/history/associations?after=0&limit=100".into(),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for list in [format!("{root}{work}?"), format!("{root}{associations}&")] {
+            for query in [
+                "limit=0",
+                "limit=51",
+                "limit=-1",
+                "limit=true",
+                "limit=1.0",
+                "limit=1&limit=2",
+                "after=-1",
+                "after=1.0",
+                "after=true",
+                "after=9223372036854775808",
+                "after=0&after=1",
+                "before=1",
+                "actor=other",
+                "workspace_id=other",
+                "path=/private",
+                "refresh=1",
+            ] {
+                assert!(
+                    validate_request(&get(&format!("{list}{query}"))).is_err(),
+                    "{list}{query}"
+                );
+            }
+        }
+        for suffix in [
+            "/history/example/associations".into(),
+            "/history/example/associations?entry_id=".into(),
+            format!("{associations}&entry_id={entry}"),
+            format!(
+                "/history/example/associations?entry_id={}",
+                entry.to_uppercase()
+            ),
+            format!("{work}?entry_id={entry}"),
+            format!("{excerpt}?limit=1"),
+            format!("{link}?after=0"),
+            format!("{excerpt}/raw"),
+            format!("{link}/resume"),
+            "/external-links/hxl_short".into(),
+            "/history-excerpts/hxe_short".into(),
+            format!("/history/%2e%2e/associations?entry_id={entry}"),
+            format!("/history/../associations?entry_id={entry}"),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        for suffix in [&excerpt, link, work, &associations] {
+            let mut req = get(&format!("{root}{suffix}"));
+            req.body = Some(serde_json::json!({}));
+            assert!(validate_request(&req).is_err());
+            req.body = None;
+            req.method = "POST".into();
+            assert!(validate_request(&req).is_err());
+        }
+    }
+
+    #[test]
+    fn external_history_preview_requires_a_typed_fixed_selection() {
+        let path = "/pm/workspaces/ws_11111111111111111111111111111111/history-excerpt-preview";
+        let body = serde_json::json!({
+            "source_id": "review-history", "entry_id": format!("shi_{}", "2".repeat(32)),
+            "expected_content_digest": "a".repeat(64), "selection": {"kind": "entry"}
+        });
+        let mut req = get(path);
+        req.method = "POST".into();
+        req.body = Some(body.clone());
+        assert!(validate_request(&req).is_ok());
+        for selection in [
+            serde_json::json!({"kind":"text", "part_index":0, "start_codepoint":0, "end_codepoint":1}),
+            serde_json::json!({"kind":"text", "part_index":127, "start_codepoint":15999, "end_codepoint":16000}),
+        ] {
+            req.body.as_mut().unwrap()["selection"] = selection;
+            assert!(validate_request(&req).is_ok());
+        }
+        for selection in [
+            serde_json::json!({"kind":"entry", "path":"/private"}),
+            serde_json::json!({"kind":"text", "part_index":0, "start_codepoint":0}),
+            serde_json::json!({"kind":"text", "part_index":128, "start_codepoint":0, "end_codepoint":1}),
+            serde_json::json!({"kind":"text", "part_index":0, "start_codepoint":1, "end_codepoint":1}),
+            serde_json::json!({"kind":"text", "part_index":0, "start_codepoint":2, "end_codepoint":1}),
+            serde_json::json!({"kind":"text", "part_index":0, "start_codepoint":0, "end_codepoint":16001}),
+            serde_json::json!({"kind":"text", "part_index":true, "start_codepoint":0, "end_codepoint":1}),
+            serde_json::json!({"kind":"text", "part_index":0, "start_codepoint":-1, "end_codepoint":1}),
+            serde_json::json!({"kind":"text", "part_index":0, "start_codepoint":0, "end_codepoint":1.0}),
+            serde_json::json!({"kind":"text", "part_index":0, "start_codepoint":0, "end_codepoint":1, "actor":"other"}),
+            serde_json::json!({"kind":"latest"}),
+            serde_json::json!(null),
+        ] {
+            req.body.as_mut().unwrap()["selection"] = selection;
+            assert!(validate_request(&req).is_err(), "{:?}", req.body);
+        }
+        for (key, value) in [
+            ("source_id", serde_json::json!("../private")),
+            ("source_id", serde_json::json!("a".repeat(129))),
+            ("entry_id", serde_json::json!("latest")),
+            ("expected_content_digest", serde_json::json!("A".repeat(64))),
+            ("expected_content_digest", serde_json::json!("a".repeat(63))),
+            ("path", serde_json::json!("/private")),
+            ("workspace_id", serde_json::json!("other")),
+            ("actor", serde_json::json!("other")),
+            ("method", serde_json::json!("pm_workspaces_list")),
+        ] {
+            let mut invalid = body.clone();
+            invalid[key] = value;
+            req.body = Some(invalid);
+            assert!(validate_request(&req).is_err(), "{key}");
+        }
+        for key in [
+            "source_id",
+            "entry_id",
+            "expected_content_digest",
+            "selection",
+        ] {
+            let mut invalid = body.clone();
+            invalid.as_object_mut().unwrap().remove(key);
+            req.body = Some(invalid);
+            assert!(validate_request(&req).is_err(), "{key}");
+        }
+        for invalid in [
+            None,
+            Some(serde_json::json!(null)),
+            Some(serde_json::json!([])),
+        ] {
+            req.body = invalid;
+            assert!(validate_request(&req).is_err());
+        }
+        req.body = Some(body);
+        for suffix in ["?", "?actor=other", "?limit=1"] {
+            req.path = format!("{path}{suffix}");
+            assert!(validate_request(&req).is_err());
+        }
+        req.path = path.into();
+        req.idempotency_key = Some("original-key".into());
+        assert!(validate_request(&req).is_err());
+        assert!(validate_request(&get(path)).is_err());
     }
 
     #[test]
@@ -5915,7 +6265,7 @@ mod tests {
             "Prepare the dev Python environment before native integration tests"
         );
         let mut peer = Peer(
-            std::process::Command::new(python)
+            bat_fleet_core::hidden_process::hidden_command(python)
                 .arg(repository.join("desktop/tests/updater-credentials-fixture.py"))
                 .arg("--data-dir")
                 .arg(directory.path())

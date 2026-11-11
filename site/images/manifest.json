@@ -3,7 +3,7 @@
   "frontend_source_commit": "437ee6a7143a82e32eae1d6a008203b2df072aaf",
   "source_pin_kind": "merged",
   "frontend_source_tree": "14bd3cd86480fcae49bc9d7f66e9807e05fdd6b8",
-  "captured_at": "2026-10-22T19:26:37.481Z",
+  "captured_at": "2026-11-04T03:46:18.966Z",
   "fixture_clock": "2026-10-13T09:00:00.000Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
@@ -107,7 +107,7 @@
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "0084571d3ec83cfdba529d5f8c5f3f6a48d21f26f4db4bb9ee623ab7e32ac5ac"
+      "sha256": "8e113ff9d54c6a9dd8aba50aab9761ca3bd0981b677c640409171df1909d3354"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",
@@ -168,7 +168,7 @@
     },
     {
       "file": "discussions-en.png",
-      "sha256": "1270fc38b9320b7c2e3f5399f80167f530b5c2214362422886dfbfc08f72c393",
+      "sha256": "6c3f0d68c1be98523d93323be9b560d981d2e6c53dd3454db4735498cb0f5ef7",
       "scenario": "discussions",
       "locale": "en-US",
       "viewport": {
@@ -207,7 +207,7 @@
     },
     {
       "file": "requirements-en.png",
-      "sha256": "735b1fb0d4aa0658e98677cb904bcb2ef89855813e99e97afa976de01c309c4f",
+      "sha256": "7cd1ef06d6b08a5a1b9246205022d65a6dd29e351903fc191016522b41106155",
       "scenario": "requirements",
       "locale": "en-US",
       "viewport": {
@@ -480,7 +480,7 @@
     },
     {
       "file": "discussions-zh.png",
-      "sha256": "a636ebfb286edf8cde9336763c00718e137a7a54f53bb5cad1647250c3c75ad1",
+      "sha256": "fec1cb7321e777dd594bcdd5d2530572f271a9b82691dd199ef082c76e3ad722",
       "scenario": "discussions",
       "locale": "zh-TW",
       "viewport": {
@@ -519,7 +519,7 @@
     },
     {
       "file": "requirements-zh.png",
-      "sha256": "e85b6df7947e20cab4862f9aa891850453224dca49f1c75de5bcb4e154a1d76c",
+      "sha256": "9ce177fd9695304517fe89b6ec033b6683fb12af1e30ae8bcea6fb5772dfbf61",
       "scenario": "requirements",
       "locale": "zh-TW",
       "viewport": {

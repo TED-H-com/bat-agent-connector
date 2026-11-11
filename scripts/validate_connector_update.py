@@ -96,8 +96,11 @@ from pathlib import Path
 from bat_agent_connector import build_identity
 package = Path(build_identity.__file__).parent
 direct = json.loads(metadata.distribution('bat-agent-connector').read_text('direct_url.json'))
+embedded = package / 'skill/build-info.json'
+if not embedded.exists():
+    embedded = package / 'build-info.json'
 print(json.dumps({'identity': build_identity.build_identity(),
-                  'embedded_commit': json.loads((package / 'build-info.json').read_text())['commit'],
+                  'embedded_commit': json.loads(embedded.read_text())['commit'],
                   'vcs_commit': direct['vcs_info']['commit_id']}))
 """], env=env))
     assert facts["identity"] == {"version": release["version"], "commit": release["commit"], "source": "vcs"}

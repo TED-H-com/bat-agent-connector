@@ -296,7 +296,7 @@ def test_relabelled_package_still_has_to_match_candidate_bytes(candidates, tmp_p
     changed = tmp_path / "relabelled.whl"
     with zipfile.ZipFile(wheel_a) as good, zipfile.ZipFile(wheel_b) as other, zipfile.ZipFile(changed, "w") as output:
         for entry in other.infolist():
-            data = good.read(entry.filename) if entry.filename == "bat_agent_connector/build-info.json" else other.read(entry)
+            data = good.read(entry.filename) if entry.filename == "bat_agent_connector/skill/build-info.json" else other.read(entry)
             output.writestr(entry, data)
     result = validate(a["sha"], [receipt(component, changed)], source=a["source"], required=[component])
     reason = "PACKAGE_SOURCE_DIFFERS" if component == "wheel" else "DASHBOARD_SOURCE_DIFFERS"

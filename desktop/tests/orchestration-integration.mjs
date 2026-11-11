@@ -1,6 +1,6 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 // Browser recovery against real central preparation, child authority and receipts; MockBat only.
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
 import {once} from 'node:events';

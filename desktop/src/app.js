@@ -9,7 +9,7 @@ import {layoutDecision} from './workbench-mode.js';
 import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
 import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation, connectionReturn} from './work-paths.js';
-import {buildDiagnostics, buildLine, errorRing, sessionFacts} from './diagnostics.js';
+import {buildDiagnostics, buildLine, errorRing, sessionFacts, nativeFailureCode} from './diagnostics.js';
 import {diagnosticsDialog} from './diagnostics-dialog.js';
 import {versionProjection} from './version-projection.js';
 import {versionFacts} from './version-facts.js';
@@ -24,6 +24,7 @@ import {joinLabel} from './label-text.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
 import {sessionHref, workSessionContext} from './session-navigation.js';
 import {readWorkSessionContext} from './work-session-context.js';
+import {workItemHistory} from './pm-work-item-history.js';
 import {workResultPanel} from './pm-work-result.js';
 import {checkDelivery, prGroups, prPills} from './pm-work-inspector.js';
 import {viewState} from './ui/view-state.js';
@@ -43,6 +44,7 @@ import {parsePullRequest} from "./delivery-input.js";
 import {sessionLabelsPanel, validLabels} from "./session-labels.js";
 import {readArtifactContent} from "./transport/artifact-content.ts";
 import {conversationPanel, readingSummary} from "./conversation.js";
+import {sessionArchivePanel} from './session-archive.js';
 import {composerShortcut} from "./composer-shortcut.js";
 import {treeInteractions} from "./tree-interactions.js";
 import {modelPreferencesPanel} from "./model-preferences.js";
@@ -65,6 +67,7 @@ import { groupedSessions, matchesSession, runtimeStale, sessionActivity, session
 import { capturePanel } from "./capture.js";
 import { taskControlsPanel } from "./task-controls.js";
 import { operationList } from "./operation-list.js";
+import {connectionOperationRecovery, connectionOperationNotice} from './connection-operation.js';
 import { permissionsPanel } from "./permissions.js";
 import { approvalsPanel } from "./approvals.js";
 import { sessionStartPanel } from "./session-start.js";
@@ -90,10 +93,10 @@ let diagnosticRevision = 0, diagnosticsPreview = null;
 const versionPainters = new Set();
 let versionReads = {epoch:-1}, nativeVersionRead = null;
 const paintVersions = () => {for(const paint of [...versionPainters])paint();};
-function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch) {
+function rememberVersionRead(key, data, at = new Date().toISOString(), epoch = state.epoch, error = null) {
   if(epoch !== state.epoch)return;
   if(versionReads.epoch !== epoch)versionReads = {epoch};
-  versionReads[key] = {data,at};
+  versionReads[key] = {data,at,error};
   if (key === 'capabilities' && data && state.health) state.health.currentCaps = data;
   paintVersions();
 }
@@ -102,8 +105,12 @@ async function readNativeVersions() {
   if(nativeVersionRead?.epoch === state.epoch)return nativeVersionRead.promise;
   const epoch = state.epoch;
   const promise = Promise.allSettled([
-    nativeStatus().then(value => rememberVersionRead('native',value.app_build,undefined,epoch)),
-    managedControl({action:'status'}).then(value => rememberVersionRead('managed',value,undefined,epoch)),
+    nativeStatus().then(value => {
+      rememberVersionRead('native',value.app_build,undefined,epoch);
+      rememberVersionRead('nativeConnection',value,undefined,epoch);
+    }, error => rememberVersionRead('nativeConnection',null,undefined,epoch,{code:nativeFailureCode(error) || 'NATIVE_STATUS_UNAVAILABLE'})),
+    managedControl({action:'status'}).then(value => rememberVersionRead('managed',value,undefined,epoch),
+      error => rememberVersionRead('managed',null,undefined,epoch,{code:nativeFailureCode(error) || 'MANAGED_STATUS_UNAVAILABLE'})),
   ]).finally(() => {if(nativeVersionRead?.epoch === epoch)nativeVersionRead=null;});
   nativeVersionRead = {epoch,promise};
   return promise;
@@ -117,6 +124,7 @@ function diagnosticsClient(caps = versionReads.epoch === state.epoch ? versionRe
   return {caps, appBuild:reads.native?.data, desktop:nativeDesktop,
     online:state.online, nativeReadAt:reads.native?.at, capabilitiesReadAt:reads.capabilities?.at,
     managedRuntime:reads.managed?.data, managedReadAt:reads.managed?.at,
+    nativeConnectionRead:reads.nativeConnection, managedConnectionRead:reads.managed,
     adapterRead:reads.adapter ? {document:reads.adapter.data,at:reads.adapter.at} : null,
     adapterRunRead:reads.adapterRun ? {run:reads.adapterRun.data,at:reads.adapterRun.at} : null,
     updater:reads.updater?.data, updaterReadAt:reads.updater?.at,
@@ -134,7 +142,8 @@ async function openDiagnostics() {
       try {return {data:await api('GET',path),completed:true,at:new Date().toISOString()};}
       catch(error){return {error:{status:error.status,code:error.code},at:new Date().toISOString()};}
     };
-    const capabilities=await read('/capabilities');caps=capabilities.data || null;
+    // No credential means no request can reach the Connector. Do not fabricate a server 401.
+    const capabilities=await read('/capabilities',null,true,!!state.token);caps=capabilities.data || null;
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(!caps?.scopes?.includes('observe'))withdrawDiagnostics();
     const revision=diagnosticRevision;
@@ -1872,6 +1881,28 @@ async function viewHostDiscovery(main, host) {
     caps: () => state.caps, guard: () => assertView(connection), namespace: connection.namespace,
     source: {kind: "discovery", host, profile_id: profile}, errorBox, opStatus}) : null;
   if (repair) main.append(repair.box);
+  const deployBox = h("section", {class: "panel"});
+  const deployBody = h("div", {"aria-live": "polite"});
+  const deployButton = h("button", {type: "button"}, t("deploy_status"));
+  deployButton.addEventListener("click", async () => {
+    deployButton.disabled = true;
+    try {
+      const data = await api("GET", `/hosts/deploy-status?host=${encodeURIComponent(host)}`); assertView(connection);
+      deployBody.replaceChildren(...data.hosts.map(row => {
+        const box = h("div", {}, h("p", {}, row.error ? t("deploy_code_" + row.error) : `${row.hostname} · ${row.collected_at}`));
+        if (row.error) return box;
+        for (const key of ["containers", "compose_projects", "systemd", "deploys", "errors"]) {
+          const section = h("details", {open: key === "errors" && !!row.errors?.length}, h("summary", {}, `${t("deploy_" + key)} (${row[key]?.length || 0})`));
+          for (const item of row[key] || []) section.append(h("p", {}, Object.entries(item).map(([name, value]) => `${t("deploy_field_" + name)}: ${["error", "code"].includes(name) && value ? t("deploy_code_" + value) : typeof value === "object" ? JSON.stringify(value) : value}`).join(" · ")));
+          box.append(section);
+        }
+        return box;
+      }));
+    } catch (error) {
+      if (connection.generation === generation && connection.epoch === state.epoch) deployBody.replaceChildren(errorBox(error, {within: deployBody}));
+    } finally {deployButton.disabled = false;}
+  });
+  deployBox.append(deployButton, deployBody); main.append(deployBox);
   const load = async () => {
     try {const data = await api("GET", `/hosts/${encodeURIComponent(host)}/discovery`); assertView(connection); head.replaceChildren(discoveryEvidence(data.scopes));}
     catch (error) {head.append(errorBox(error, {within:head}));}
@@ -2168,6 +2199,11 @@ async function viewSession(main, host, sid, context = null) {
   const workspaceNode = h("div", {class: "workspace-session session-workspace", "data-session-view": ""}, lane, results);
   const withdrawnSlot = h("div", {class: "session-withdrawn"});
   main.append(head, workspaceNode);
+  // The live workspace may be gone while retained text is still independently authorized.
+  // Its old contents are withdrawn too; a new explicit read rechecks retained-source access.
+  const archive = state.caps?.features?.session_archive?.version === 1 ? sessionArchivePanel({h, t, api, host, sessionId:sid, when,
+    guard: () => {assertView(connection); if (disposed) throw new ApiError(410, 'VIEW_CHANGED', 'View retired');}}) : null;
+  if (archive) main.append(archive.box);
   const perspectives = isWorkbench ? workbenchViews({main, head, work: workspaceNode, results, namespace: connection.namespace,
     workspace: sessionWorkspace || host, host, sessionId: sid, workId: workRecord?.work_item?.work_item_id, t}) : null;
   const originHref = () => {
@@ -2579,6 +2615,7 @@ async function viewSession(main, host, sid, context = null) {
   const withdraw = (kind, error = null) => {
     const first = !withdrawn;
     withdrawn = kind;
+    archive?.clear();
     followUp?.suspend();
     fixedResult?.withdraw();
     perspectives?.withdraw();
@@ -2652,6 +2689,9 @@ async function viewSession(main, host, sid, context = null) {
   // Keep the subscription after a partial initial failure. The view already contains controls;
   // returning here would let later journal pages be acknowledged without refreshing them.
   try { await refresh(); if (!withdrawn) await settleRefreshes([cps.load(), labels.refresh()]); } catch { /* retain the failure and drafts */ }
+  // A citation is an explicit saved read. Start it after initial live withdrawal
+  // so a missing live session cannot cancel that independent authorization.
+  archive?.openSnapshot(params.get('retained_snapshot'));
   const reload = debounceRefresh(() => refresh(true), 500), reloadCps = debounceRefresh(cps.load, 500);
   const off = onEvents(ev => {
     observations.changed(ev);
@@ -2678,7 +2718,7 @@ async function viewSession(main, host, sid, context = null) {
   const syncReady = () => {try {assertView(connection); if (!disposed) updateControls();} catch { /* the view already left */ }};
   const followSync = setTimeout(syncReady, 0);
   const offFollowOnline = onOnline(syncReady);
-  return () => {disposed = true; clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); fixedResult?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
+  return () => {disposed = true; archive?.dispose(); clearTimeout(followSync); offFollowOnline(); followUp?.dispose(); fixedResult?.dispose(); perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
     cps.clear(); results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
 }
 
@@ -3496,14 +3536,56 @@ async function viewOperations(main, filter = "all") {
 async function viewOperation(main, id) {
   freshPage();
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  let repair;
+  let repair, connectionRecovery, controlBusy = false, needsReadback = false, readSerial = 0;
   const panel = h("div", { class: "panel" });
   main.append(panel);
+  const focusedControl = () => connectionRecovery && panel.contains(document.activeElement)
+    ? document.activeElement.getAttribute('data-operation-control') : null;
+  const restoreControl = key => {
+    if (!key) return;
+    const controls = [...panel.querySelectorAll('[data-operation-control]')];
+    (controls.find(node => node.dataset.operationControl === key)
+      || controls.find(node => node.dataset.operationControl === 'refresh'))?.focus();
+  };
+  const paintControls = () => {
+    for (const node of panel.querySelectorAll('[data-operation-control]')) {
+      const blocked = controlBusy || (needsReadback && node.dataset.operationControl !== 'refresh');
+      if (blocked) node.setAttribute('aria-disabled', 'true');
+      else node.removeAttribute('aria-disabled');
+    }
+    const notice = panel.querySelector('[data-connection-readback]');
+    if (notice) notice.hidden = !needsReadback;
+  };
+  const readOriginal = async () => {
+    if (controlBusy || !panel.isConnected) return;
+    try { assertView(connection); } catch { return; }
+    controlBusy = true; paintControls();
+    try { await render(); }
+    finally { controlBusy = false; paintControls(); }
+  };
+  const control = async verb => {
+    if (controlBusy || needsReadback || !panel.isConnected) return;
+    controlBusy = true; readSerial++; paintControls();
+    try {
+      assertView(connection);
+      await api('POST', `/operations/${id}/${verb}`, {});
+      assertView(connection);
+      await render();
+    } catch (e) {
+      if (!panel.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+      needsReadback = !!connectionRecovery;
+      panel.append(errorBox(e, {sourceRefresh:false, within:panel}));
+    } finally { controlBusy = false; paintControls(); }
+  };
   const render = async (fromEvent = false) => {
+    const request = ++readSerial;
     const opens = drawerOpens;
     try {
       const { operation: op, work_items: linked, cleanup_receipts: cleanupReceipts } = await api("GET", `/operations/${id}`);
       assertView(connection);
+      if (request !== readSerial || !panel.isConnected) return;
+      connectionRecovery = connectionOperationRecovery(op);
+      needsReadback = false;
       if (!repair && state.caps?.features?.managed_repairs?.version === 1 &&
           ["cleanup.apply", "task.verify", "session.record_verification"].includes(op.action) && ["failed", "needs_attention"].includes(op.status)) {
         repair = repairPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection), namespace: connection.namespace,
@@ -3528,9 +3610,8 @@ async function viewOperation(main, id) {
         } }, t("retry_deploy")) : null;
       const needsConfirm = op.action === "checkpoint.continue" && ["SOURCE_MOVED", "SOURCE_UNAVAILABLE"].includes(op.error_code);
       const resume = op.status === "needs_attention" && !needsConfirm
-        ? h("button", { class: "primary", title: t("resume_help"), onclick: async () => {
-          try { await api("POST", `/operations/${id}/resume`, {}); render(); } catch (e) { panel.append(errorBox(e, {sourceRefresh:false, within:panel})); }
-        } }, t(op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume")) : null;
+        ? h("button", { class: "primary", title: t("resume_help"), 'data-operation-control': 'resume',
+          onclick: () => control('resume') }, t(connectionRecovery?.resumeKey || (op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume"))) : null;
       const confirmSource = op.status === "needs_attention" && needsConfirm ? h("button", { class: "primary", onclick: async () => {
         const connection = {epoch: state.epoch, namespace: state.namespace, generation};
         let sourceRefresh = true;
@@ -3555,16 +3636,17 @@ async function viewOperation(main, id) {
             r.conflict_files ? h("span", { class: "error" }, " ", r.conflict_files.join(", ")) : null),
           chip(r.method || "-"), chip(t("receipt_" + r.effective_status), r.effective_status === "delivered" ? "ok" : "")))];
       }
-      const cancel = !TERMINAL.includes(op.status)
-        ? h("button", { class: "danger", onclick: async () => {
-          try { await api("POST", `/operations/${id}/cancel`, {}); render(); } catch (e) { panel.append(errorBox(e, {sourceRefresh:false, within:panel})); }
-        } }, t("cancel"))
+      const cancel = !TERMINAL.includes(op.status) && !connectionRecovery?.cancelBlocked
+        ? h("button", { class: "danger", 'data-operation-control': 'cancel', onclick: () => control('cancel') },
+          t(connectionRecovery?.cancelKey || "cancel"))
         : null;
       if (!panel.isConnected) return;
       if (holdRender(fromEvent, opens)) { idleReload = () => render(true); return; }
+      const focus = focusedControl();
       freshPage();
       fill(panel, pageHeader({title: actionLabel(op.action), pill: statusPill(operationStatusKey(op.status))}),
         h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText(op.error_code) || t("reason_unavailable"), "bad") : null),
+        connectionOperationNotice(connectionRecovery, {h, t, refresh: readOriginal, busy: controlBusy, readback: needsReadback}),
         ...(linked?.length ? [linkedItems(linked)] : []),
         h("dl", { class: "kv" },
           h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")),
@@ -3611,11 +3693,21 @@ async function viewOperation(main, id) {
           state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op)
             ? h("a", {href: `#/artifact-review/operation/${op.operation_id}`}, t("ar_open")) : null,
           confirmSource, resume, retry, cancel));
-    } catch (e) { fill(panel, errorBox(e, {within:panel})); }
+      paintControls();
+      restoreControl(focus);
+    } catch (e) {
+      if (request !== readSerial || !panel.isConnected || connection.epoch !== state.epoch || connection.generation !== generation) return;
+      const focus = focusedControl();
+      needsReadback = !!connectionRecovery;
+      fill(panel, errorBox(e, {within:panel}), connectionRecovery ? connectionOperationNotice(
+        {...connectionRecovery, kind: 'original'}, {h, t, refresh: readOriginal, busy: controlBusy, readback: needsReadback}) : null);
+      paintControls();
+      restoreControl(focus);
+    }
   };
   await render();
   const off = liveReload(render, ["operation", "integration", "cleanup"]);
-  return () => {off(); repair?.dispose();};
+  return () => {readSerial++; off(); repair?.dispose();};
 }
 
 function mergeRecovery(op) {
@@ -4065,9 +4157,13 @@ async function viewNativeSettings(main) {
     setup.prepend(h("span", {class: "brand-mark", "aria-hidden": "true"}),
       h("p", {}, t("global_first_sentence")),
       h("a", {href: setupGuide()}, t("global_setup_guide")));
-    return () => disposeUpdates?.();
+    // Existing local Fleet recovery must not depend on the Connector booting.
+    // Keep new/unconfigured installations focused on their first setup step.
+    const fleet = await fleetAvailability().catch(() => null);
+    if (mine !== generation || !main.isConnected) {disposeUpdates?.(); return;}
+    if (fleet?.configured !== true || fleet?.platform_supported !== true) return () => disposeUpdates?.();
   }
-  frame.show("desktop");
+  if (!firstConnection) frame.show("desktop");
   const disposeFleet = await mountFleet(fleetRoot, {h, t, onStatus: rememberFleetHealth});
   if (mine !== generation || !main.isConnected) { disposeFleet?.(); disposeUpdates?.(); return; }
   const disposeTailscale = await fleetTailscale(fleetRoot, () => {
@@ -4513,7 +4609,10 @@ async function viewWorkItem(main, wid) {
   const panel = h("div", {});
   const reading = h("div", {});
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  let mutable = true;
+  const historyPanel = workItemHistory({h, t, api, alive: () => assertView(connection), caps: () => state.caps, workId: wid, namespace: connection.namespace,
+    workspaceHint: new URLSearchParams(location.hash.split('?')[1]).get('workspace') || lastWorkspace(connection.namespace),
+    visibilityRoot: main.closest('.ui-inspector')});
+  let mutable = true, historyReadGeneration = 0;
   const archiveLocks = new Map();
   const blocked = h("p", {class: "note warn", hidden: true}, t("parent_archived"));
   main.append(blocked);
@@ -4522,8 +4621,10 @@ async function viewWorkItem(main, wid) {
     if (!mutable) throw new ApiError(409, "ITEM_ARCHIVED", t("parent_archived"));
   };
   const refreshSafety = async () => {
+    const historyRead = ++historyReadGeneration; historyPanel.suspend();
     try {
       const data = await api("GET", `/work-items/${wid}`); assertView(connection);
+      if (historyRead === historyReadGeneration) historyPanel.setWork(data);
       rememberObservation("work_item", wid, data, itemDependencies(data));
       mutable = !data.work_item.archived && !data.project.archived;
       blocked.hidden = mutable;
@@ -4541,7 +4642,7 @@ async function viewWorkItem(main, wid) {
         for (const [control, disabled] of archiveLocks) control.disabled = disabled;
         archiveLocks.clear();
       }
-    } catch (error) { fill(notice, errorBox(error, {within:notice})); throw error; }
+    } catch (error) { if (historyRead === historyReadGeneration) historyPanel.withdraw(); fill(notice, errorBox(error, {within:notice})); throw error; }
   };
   let draft = null; // the edit form's values after a stale save, put back into the reloaded form
   // Fields made once and moved into each render: a re-render never throws away what is being typed.
@@ -4553,7 +4654,7 @@ async function viewWorkItem(main, wid) {
   kind.onchange();
   const results = state.caps?.features?.work_item_results?.version === 1 ? resultSourcesPanel({h, t, api,
     guard: () => assertView(connection), workItemId: wid, linkTarget, onEvents, errorBox}) : null;
-  main.append(manageNote() || "", notice, reading, results?.box || "", panel);
+  main.append(manageNote() || "", notice, reading, results?.box || "", panel, historyPanel.element);
   let displayedItem = null, renderQueue = Promise.resolve();
   const showReading = (w, progress) => {
     const readingSupported = state.caps?.features?.work_item_reads?.version === 1 && progress;
@@ -4582,11 +4683,13 @@ async function viewWorkItem(main, wid) {
   const renderNow = async (fromEvent = false) => {
     if (!panel.isConnected) return;
     const opens = drawerOpens;
+    const historyRead = ++historyReadGeneration; historyPanel.suspend();
     let data;
     try { data = await api("GET", `/work-items/${wid}`); }
-    catch (e) { fill(panel, errorBox(e, {within:panel})); return; }
+    catch (e) { if (historyRead === historyReadGeneration) historyPanel.withdraw(); fill(panel, errorBox(e, {within:panel})); return; }
     if (!panel.isConnected) return;
     assertView(connection);
+    if (historyRead === historyReadGeneration) historyPanel.setWork(data);
     rememberObservation("work_item", wid, data, itemDependencies(data));
     if (holdRender(fromEvent, opens)) {
       if (displayedItem) showReading(displayedItem, data.work_item.reading);
@@ -4698,7 +4801,10 @@ async function viewWorkItem(main, wid) {
   const repair = /^op_[0-9a-f]{32}$/.test(displayedItem?.operation_id) && state.caps?.features?.managed_repairs?.version === 1 ? repairWorkItemPanel({h, t, api,
     guard: () => assertView(connection), projectId: displayedItem.project_id, workItemId: wid, originOperationId: displayedItem.operation_id, errorBox}) : null;
   if (repair) {panel.before(repair.box); await repair.refresh();}
-  try {assertView(connection);} catch {repair?.dispose(); results?.dispose(); return;}
+  try {assertView(connection);} catch {historyPanel.dispose(); repair?.dispose(); results?.dispose(); return;}
+  const offHistory = onEvents(event => {
+    if (event.resource_type?.startsWith('pm_') || event.resource_type === 'operation') historyPanel.refresh();
+  });
   const offRepair = repair ? onEvents(event => {
     if (event.resource_type === "operation" || observationAffected("work_item", wid, event)) return repair.refresh();
   }) : null;
@@ -4707,7 +4813,7 @@ async function viewWorkItem(main, wid) {
   // to blur; renderNow still defers presentation while the person is typing.
   const off = liveReload(render, event => observationAffected("work_item", wid, event), refreshSafety,
     () => editing || (typing() && main.contains(document.activeElement)));
-  return () => {off?.(); offRepair?.(); repair?.dispose(); results?.dispose();};
+  return () => {off?.(); offHistory(); historyPanel.dispose(); offRepair?.(); repair?.dispose(); results?.dispose();};
 }
 
 // Start agent work from a linked checkpoint, with this item's words as the instructions; the new operation is

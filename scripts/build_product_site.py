@@ -438,14 +438,14 @@ for en, zh, d, dz in [
     (
         "Match the package",
         "核對套件",
-        "Stable: Connector 0.2.12 / desktop 0.1.8, source 14c62830. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
-        "穩定版：Connector 0.2.12／desktop 0.1.8，來源 14c62830。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
+        "Stable: Connector 0.2.17 / desktop 0.1.13, source recorded in release-manifest.json. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
+        "穩定版：Connector 0.2.17／desktop 0.1.13，完整來源見 release-manifest.json。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
     ),
     (
         "Connect your environment",
         "連接環境",
-        "Get ready to work opens 1. Connect BAT. Paste BAT’s connection URL, check Host ID, then Verify and save host. After success, choose View sessions. Repository binding and verification commands stay collapsed until needed.",
-        "準備開始工作會展開「1. 連線至 BAT」。貼上 BAT 連線網址、核對主機代號，再按「驗證並儲存主機」。成功後按「查看工作階段」；儲存庫與驗證命令需要時再展開。",
+        "On a new installation, choose Provide a local workspace for a bundled Connector or Use existing services to join one. In 1. Connect BAT, check the connection details, choose Review connection, then Apply connection. After success, choose View sessions. Repository binding and verification commands stay collapsed until needed.",
+        "新安裝可選「提供本機工作區」準備內附 Connector，或選「使用既有服務」加入現有服務。在「1. 連線至 BAT」核對資料，按「預覽連線」，再按「套用連線」。成功後按「查看工作階段」；儲存庫與驗證命令需要時再展開。",
     ),
     (
         "Follow one result",
@@ -459,6 +459,21 @@ parts.append(
     '</ol><div class="install-current">'
     + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
+        "Stable 0.2.17 was published on November 9, 2026; its exact source is recorded in release-manifest.json. Its backend and desktop CI passed, and the eight public assets match the verified checksums. Source and validation details are linked below.",
+        "穩定版 0.2.17 於 2026 年 11 月 9 日發布，完整來源記錄於 release-manifest.json。該來源的 backend 與 desktop CI 均通過，八個公開檔案亦核對校驗碼相符；來源及驗證細節見下方連結。",
+        "p",
+    )
+    + bi(
+        "0.2.17 links fixed external-conversation entries or text ranges to existing Work and optional Attempts. Review, replace or withdraw relationships, and read authorized excerpts from Board, Requirements and Work details. Original CLI sessions remain read-only; references do not approve or complete work. Earlier saved conversations and explicit PM summaries remain available.",
+        "0.2.17 可將固定外部對話紀錄或文字範圍連到既有 Work 與選填 Attempt，檢閱、替換或撤回關聯，並從看板、需求頁及 Work 詳情閱讀已授權摘錄。原 CLI 會話仍維持唯讀，參考資料不代表核准或完成工作；前版的對話保存及明確 PM 摘要仍保留。",
+        "p",
+    )
+    + bi(
+        "On Windows, quit Dashboard from its tray menu and install the 0.1.13 package while preserving application data. Existing unsigned test packages cannot use in-app signed updates. Upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.16 sources; old-installer upgrades are separate. CI does not establish recovery on your computer or real BAT/model acceptance.",
+        "Windows 請從系統匣退出 Dashboard，再安裝 0.1.13 套件並保留應用程式資料。既有未簽章測試包不能使用內建簽章更新。升級 fixture 使用由 0.2.12 與 0.2.16 固定發布來源建出的核心，舊安裝器的完整升級另有範圍；CI 不代表已修復你的電腦或通過真 BAT／模型驗收。",
+        "p",
+    )
+    + bi(
         "Advanced users can explicitly join an existing central. The published release includes fixed source and checksum records. These are unsigned or ad-hoc-signed development builds, not a stable signed update channel. Closing the UI leaves central work running.",
         "進階使用者可明確加入既有中央。已發布版本附有固定來源與校驗紀錄。這些是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
         "p",
@@ -469,7 +484,7 @@ parts.append(
         "p",
     )
     + bi("Stable", "穩定版", "p")
-    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.12 --channel-check stable</code></pre>'
+    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.17 --channel-check stable</code></pre>'
     + bi("Prerelease", "預覽版", "p")
     + '<pre class="install-command" tabindex="0" aria-label="Preview installer arguments / 預覽版安裝器參數"><code>--tag v0.2.13-preview.20261022 --channel-check preview</code></pre>'
     + bi(
@@ -486,9 +501,9 @@ parts.append(
         "button light lang-zh",
     )
     + link(
-        repo + "/releases/tag/v0.2.12",
-        "Download stable 0.2.12 →",
-        "下載穩定版 0.2.12 →",
+        repo + "/releases/tag/v0.2.17",
+        "Download stable 0.2.17 →",
+        "下載穩定版 0.2.17 →",
         "text-link",
     )
     + link(
@@ -499,6 +514,7 @@ parts.append(
     )
     + doc("scripts/install_connector.py", "Installer source", "安裝器原始碼", "text-link")
     + doc("docs/connector-updates.md", "Connector automatic updates", "Connector 自動更新", "text-link")
+    + doc("docs/product/implementation-status.md", "Source, CI and delivery status", "來源、CI 與交付狀態", "text-link")
     + "</div></div></div></section>"
 )
 parts.append(

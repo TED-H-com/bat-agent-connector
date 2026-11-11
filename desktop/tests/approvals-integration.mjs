@@ -1,6 +1,6 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 // Shared generated UI against actual central bulk/child operations and MockBat only.
-import {spawn} from "node:child_process";
+import {spawn} from "../../scripts/hidden-child-process.mjs";
 import {createInterface} from "node:readline";
 import {delimiter, resolve} from "node:path";
 import {once} from "node:events";

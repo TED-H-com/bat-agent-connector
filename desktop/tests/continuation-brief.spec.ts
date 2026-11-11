@@ -4,6 +4,7 @@ import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 
 const action='pm.continuation.prepare', run='pmr_'+'7'.repeat(32), operation='op_'+'8'.repeat(32);
+const archiveFirst='c'.repeat(64), archiveSecond='d'.repeat(64);
 async function fixture(locale='en') {
   const f=demoFixture({locale,discussions:true}), root=`/pm/workspaces/${f.ids.workspaceId}`;
   const detail=f.discussion.details.get(f.ids.threadIdea);
@@ -18,9 +19,32 @@ async function fixture(locale='en') {
       adopted_decisions:[],rejected_directions:[{text:'Do not add referrals to this release.',source_refs:['message.one']}],
       candidates:[],completed_evidence:[],open_questions:[],remaining_work:[]}};
   detail.continuation_brief=saved;
-  const state={choice:null as string|null,writes:[] as any[],withdrawn:false,unavailable:false,lost:false,operation:null as any};
+  const state={choice:null as string|null,writes:[] as any[],withdrawn:false,unavailable:false,lost:false,operation:null as any,
+    archiveEnabled:false,archiveLatest:archiveFirst,archiveRefused:0,archiveReads:[] as URL[],
+    archiveBinding:'e'.repeat(64),archiveHold:false,archiveRelease:null as null|(()=>void),
+    archivePaged:false,archiveInventoryReads:[] as URL[],threadRefused:0};
   const dispatch=async(input:any)=>{
-    const path=new URL(input.path,'http://fixture').pathname;
+    const url=new URL(input.path,'http://fixture'),path=url.pathname;
+    if(state.archiveEnabled && path==='/sessions'){
+      state.archiveInventoryReads.push(url);
+      return {status:200,data:state.archivePaged&&!url.searchParams.has('cursor')?{
+        sessions:[{host:'demo',session_id:'first-session',title:'First page conversation'}],next_cursor:'saved cursor/one'}:{sessions:[
+        {host:'demo',session_id:'session-1',title:'Saved manual conversation',provenance:'manual',gone_at:1792320000}],next_cursor:null}};
+    }
+    if(state.threadRefused && path===root+'/threads/'+f.ids.threadIdea)
+      return {status:state.threadRefused,data:{error:{code:'FORBIDDEN',message:'Discussion source unavailable'}}};
+    if(state.archiveEnabled && path==='/sessions/demo/session-1/messages' && url.searchParams.get('source')==='retained'){
+      state.archiveReads.push(url);
+      const snapshot=url.searchParams.get('snapshot_id')||state.archiveLatest;
+      const value={status:state.archiveRefused||200,data:state.archiveRefused?{error:{code:'NOT_FOUND',message:'Private archive diagnostic'}}:
+        {host:'demo',session_id:'session-1',source:'retained',snapshot_id:snapshot,saved_at:1792320000,
+          retained_session_ref:{version:1,server_id:'fixture server/opaque',host:'demo',session_id:'session-1',binding:state.archiveBinding,snapshot_id:snapshot},
+          coverage:{history_complete:false,clipped_messages:1},source_status:'source_unavailable',offset:0,next_offset:null,
+          brief:{kind:'extractive',items:[]},messages:[{id:'saved-one',role:'user',text:'Private retained source body',revision:archiveFirst,clipped:false}],
+          snapshots:[{snapshot_id:archiveFirst,saved_at:1792320000},{snapshot_id:archiveSecond,saved_at:1792320060}]}};
+      if(state.archiveHold){state.archiveHold=false;await new Promise<void>(resolve=>{state.archiveRelease=resolve;});}
+      return value;
+    }
     if(input.method==='POST' && input.body?.action===action){
       state.writes.push(structuredClone(input));
       state.operation??={...input.body,operation_id:operation,actor:f.ids.actor,status:'succeeded',result:{run_id:run},idempotency_key:input.idempotency_key};
@@ -32,6 +56,7 @@ async function fixture(locale='en') {
     if(path==='/capabilities' || path==='/bootstrap'){
       const caps=path==='/bootstrap'?value.data.capabilities:value.data;
       caps.actions.push({action,allowed:true});
+      if(state.archiveEnabled)caps.features.session_archive={version:1,pm_continuation:true};
     }
     if(path===root+'/capabilities')value.data.structured_analysis={version:1,actions:{[action]:{adapters:[
       {adapter:'codex-native-linux',action_registered:true,authorized:true,eligible_for_preflight:!state.unavailable},
@@ -44,6 +69,136 @@ async function fixture(locale='en') {
   };
   return {f,state,saved,detail,dispatch};
 }
+
+async function openRetainedPicker(page:any,x:Awaited<ReturnType<typeof fixture>>,native=false,locale='en'){
+  x.state.archiveEnabled=true;
+  await page.setViewportSize({width:locale==='en'?1440:390,height:900});
+  await page.addInitScript((value:string)=>Object.defineProperty(navigator,'language',{get:()=>value}),locale);
+  await mountConversation(page,native,x.dispatch);
+  await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
+  await page.locator('[data-discussion-panel-toggle]').click();
+  const tools=page.locator('[data-continuation-tools]'),picker=tools.locator('[data-pm-retained-session]');
+  await picker.locator('summary').click();
+  await picker.getByRole('button',{name:locale==='en'?'Browse conversations':'瀏覽對話',exact:true}).click();
+  await picker.getByRole('combobox',{name:locale==='en'?'Choose a conversation':'選擇對話',exact:true}).selectOption(JSON.stringify(['demo','session-1']));
+  await expect(picker.getByRole('button',{name:locale==='en'?'Include this saved version':'納入此保存版本',exact:true})).toBeVisible();
+  return {tools,picker};
+}
+
+for(const locale of ['en','zh-TW']) for(const native of [false,true])test(`saved-session continuation pins one selected source without running on browse ${locale} ${native?'IPC':'HTTP'}`,async({page})=>{
+  const x=await fixture(locale);x.state.archiveLatest=archiveSecond;
+  const {tools,picker}=await openRetainedPicker(page,x,native,locale);
+  await picker.getByRole('combobox',{name:locale==='en'?'Saved version':'保存版本',exact:true}).selectOption(archiveFirst);
+  const search=picker.getByRole('searchbox');await search.fill('manual');await search.press('Enter');
+  expect(x.state.writes).toEqual([]);
+  await picker.getByRole('button',{name:locale==='en'?'Include this saved version':'納入此保存版本',exact:true}).click();
+  const exact={version:1,server_id:'fixture server/opaque',host:'demo',session_id:'session-1',binding:x.state.archiveBinding,snapshot_id:archiveFirst};
+  const persisted=await page.evaluate(()=>Object.entries(localStorage).find(([key])=>key.includes('.pm.continuation.prepare.'))?.[1]);
+  expect(JSON.parse(JSON.parse(persisted!).values.retained_session)).toEqual(exact);
+  expect(persisted).not.toContain('Private retained source body');
+  x.state.archiveLatest=archiveSecond;
+  await tools.locator('button[type=submit]').click();
+  await expect.poll(()=>x.state.writes.length).toBe(1);
+  expect(x.state.writes[0].body.params.retained_session_ref).toEqual(exact);
+  expect(x.f.discussion.writes).toEqual([]);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+for(const native of [false,true])test(`saved-session continuation recovers the same source and key after lost acknowledgement ${native?'IPC':'HTTP'}`,async({page})=>{
+  const x=await fixture(),{tools,picker}=await openRetainedPicker(page,x,native);
+  await picker.getByRole('button',{name:'Include this saved version',exact:true}).click();
+  x.state.lost=true;
+  await tools.locator('button[type=submit]').click();await expect(tools).toContainText('Reply unavailable');
+  const original=structuredClone(x.state.writes[0]),reads=x.state.archiveReads.length;
+  x.state.archiveLatest=archiveSecond;x.state.archiveRefused=403;
+  await page.reload();await page.locator('[data-discussion-panel-toggle]').click();
+  await tools.locator('button[type=submit]').click();
+  await expect.poll(()=>x.state.writes.length).toBe(2);
+  expect(x.state.writes[1]).toEqual(original);
+  expect(x.state.archiveReads).toHaveLength(reads);
+});
+
+test('saved-session draft rechecks the original binding and refuses replacement after reload',async({page})=>{
+  const x=await fixture(),{tools,picker}=await openRetainedPicker(page,x);
+  await picker.getByRole('button',{name:'Include this saved version',exact:true}).click();
+  x.state.archiveBinding='f'.repeat(64);x.state.archiveLatest=archiveSecond;
+  await page.reload();await page.locator('[data-discussion-panel-toggle]').click();
+  await picker.locator('summary').click();
+  await expect(picker).toContainText('selected saved source is unavailable');
+  expect(x.state.archiveReads.at(-1)!.searchParams.get('snapshot_id')).toBe(archiveFirst);
+  await expect(tools.locator('button[type=submit]')).toBeDisabled();
+  expect(x.state.writes).toEqual([]);
+  await picker.getByRole('button',{name:'Use discussion only',exact:true}).click();
+  await expect(tools.locator('button[type=submit]')).toBeEnabled();
+});
+
+test('saved-session citations open their fixed archive version',async({page})=>{
+  const x=await fixture();x.state.archiveEnabled=true;x.state.archiveLatest=archiveSecond;
+  x.saved.source_references['message.one']={kind:'retained_session_message',host:'demo',session_id:'session-1',snapshot_id:archiveFirst,
+    binding:x.state.archiveBinding,id:'saved-one',revision:archiveFirst};
+  await mountConversation(page,false,x.dispatch);
+  await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
+  const reader=page.locator('[data-continuation-brief]');await reader.locator(':scope > details > summary').click();
+  await reader.getByRole('link',{name:'Saved source 1',exact:true}).first().click();
+  await expect(page.locator('[data-session-archive]')).toHaveAttribute('open','');
+  await expect(page.locator('[data-archive-message="saved-one"]')).toContainText('Private retained source body');
+  expect(x.state.archiveReads.at(-1)!.searchParams.get('snapshot_id')).toBe(archiveFirst);
+  expect(x.state.writes).toEqual([]);
+});
+
+test('saved-session picker loads gone conversations through explicit bounded pages',async({page})=>{
+  const x=await fixture();x.state.archiveEnabled=true;x.state.archivePaged=true;
+  await mountConversation(page,false,x.dispatch);
+  await page.goto(`/dashboard/#/pm/${x.f.ids.workspaceId}/discussions/${x.f.ids.threadIdea}`);
+  await page.locator('[data-discussion-panel-toggle]').click();
+  const picker=page.locator('[data-pm-retained-session]');await picker.locator('summary').click();
+  await picker.getByRole('button',{name:'Browse conversations',exact:true}).click();
+  const more=picker.getByRole('button',{name:'Load more conversations',exact:true});await expect(more).toBeVisible();
+  expect(x.state.archiveInventoryReads).toHaveLength(1);
+  expect(x.state.archiveInventoryReads[0].searchParams.get('limit')).toBe('50');
+  expect(x.state.archiveInventoryReads[0].searchParams.get('include_gone')).toBe('true');
+  await picker.getByRole('searchbox').fill('manual');
+  await expect(picker.getByRole('combobox',{name:'Choose a conversation',exact:true}).locator('option')).toHaveCount(1);
+  expect(x.state.archiveReads).toHaveLength(0);
+  await more.click();
+  const sessions=picker.getByRole('combobox',{name:'Choose a conversation',exact:true});
+  await expect(sessions.locator('option')).toHaveCount(2);
+  expect(x.state.archiveInventoryReads).toHaveLength(2);
+  expect(x.state.archiveInventoryReads[1].searchParams.get('cursor')).toBe('saved cursor/one');
+  expect(x.state.archiveInventoryReads[1].searchParams.get('include_gone')).toBe('true');
+  await expect(more).toBeHidden();
+  await sessions.selectOption(JSON.stringify(['demo','session-1']));
+  await expect(picker.getByRole('button',{name:'Include this saved version',exact:true})).toBeVisible();
+  expect(x.state.writes).toEqual([]);
+});
+
+for(const native of [false,true])test(`saved-session late reads cannot restore a withdrawn discussion ${native?'IPC':'HTTP'}`,async({page})=>{
+  const x=await fixture(),{tools,picker}=await openRetainedPicker(page,x,native);
+  if(native)await page.evaluate(()=>{
+    const boundary=(window as any).__TAURI_INTERNALS__,invoke=boundary.invoke;
+    boundary.invoke=async(command:string,args:any)=>{
+      const reply=await invoke(command,args);
+      if(command==='connector_request'&&reply.data?.source==='retained')
+        (window as any).__fixtureSavedReply=reply.data.snapshot_id;
+      return reply;
+    };
+  });
+  x.state.archiveHold=true;
+  await picker.getByRole('combobox',{name:'Saved version',exact:true}).selectOption(archiveSecond);
+  await expect.poll(()=>Boolean(x.state.archiveRelease)).toBe(true);
+  x.state.threadRefused=403;
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
+  await expect(page.locator('[data-discussion-composer]')).toBeDisabled();
+  const response=native?null:page.waitForResponse(value=>value.url().includes('snapshot_id='+archiveSecond));
+  x.state.archiveRelease!();
+  if(native)await expect.poll(()=>page.evaluate(()=>(window as any).__fixtureSavedReply)).toBe(archiveSecond);
+  else await(await response!).finished();
+  await expect(picker.getByRole('link',{name:'Open this saved version',exact:true})).toHaveCount(0);
+  await expect(tools.locator('button[type=submit]')).toBeDisabled();
+  expect(x.state.writes).toEqual([]);
+  expect(await page.evaluate(()=>Object.entries(localStorage).find(([key])=>key.includes('.pm.continuation.prepare.'))?.[1]||'')).not.toContain('Private retained source body');
+});
 
 for(const locale of ['en','zh-TW']) for(const native of [false,true])test(`continuation uses one explicit sourced request ${locale} ${native?'IPC':'HTTP'}`,async({page})=>{
   const x=await fixture(locale), {f,state}=x, width=locale==='en'?1440:390;

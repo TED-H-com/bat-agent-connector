@@ -69,7 +69,7 @@ def in_place_packages(tmp_path_factory):
             "import json;from pathlib import Path;from importlib import metadata;"
             "from bat_agent_connector import build_identity as identity;"
             "print(json.dumps({'build':identity.build_identity(),"
-            "'embedded':json.loads(Path(identity.__file__).with_name('build-info.json').read_text())['commit'],"
+            "'embedded':json.loads(Path(identity.__file__).with_name('skill').joinpath('build-info.json').read_text())['commit'],"
             "'direct_url':json.loads(metadata.distribution('bat-agent-connector').read_text('direct_url.json'))"
             "['vcs_info']['commit_id']}))"
         )

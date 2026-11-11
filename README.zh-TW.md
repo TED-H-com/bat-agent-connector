@@ -71,9 +71,11 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 ## 安裝與連線
 
-最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.12)是 Connector **0.2.12**／desktop **0.1.8**，固定於 `14c62830`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，固定於 `437ee6a7143a82e32eae1d6a008203b2df072aaf`（`437ee6a7`）。每版各有八個檔案：Python wheel 與 sdist、Linux deb、兩個 macOS DMG、Windows 安裝器、`release-manifest.json` 及 `SHA256SUMS`。從發布頁選擇桌面套件，並核對來源清單與校驗碼。這些仍是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道。
+Connector 0.2.17 加入共用的[外部對話關聯](docs/design/external-conversation-history.md)（#507、#508）。可預覽整則紀錄或固定文字範圍，連到既有 Work 與選填 Attempt，替換或撤回關聯，並從看板、需求頁及 Work 詳情閱讀已授權摘錄。明確 ID 查詢支援替換同一工作區內另一個可讀來源的關聯。原 CLI 會話維持唯讀，參考資料不代表核准或完成工作；前版的對話保存、明確 PM 摘要與主機唯讀觀察仍保留。
 
-Connector 請依[驗證安裝器說明](docs/getting-started.zh-TW.md#2-安裝-connector)操作。穩定版使用 `--tag v0.2.12 --channel-check stable`；本預覽版使用 `--tag v0.2.13-preview.20261022 --channel-check preview`，啟動安裝腳本也取自同一 tag。安裝器必須指定 tag，通道檢查預設為 `preview`，可接受穩定版與預覽版；`stable` 會拒絕預覽版。Linux 加上 `--enable-updates` 才會登記同一通道並啟用排程；單純安裝不會啟用更新。依據見[安裝器原始碼](scripts/install_connector.py)與[更新指南](docs/connector-updates.md)。
+最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.17)是 Connector **0.2.17**／desktop **0.1.13**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，固定於 `437ee6a7143a82e32eae1d6a008203b2df072aaf`（`437ee6a7`）。每版各有八個檔案：Python wheel 與 sdist、Linux deb、兩個 macOS DMG、Windows 安裝器、`release-manifest.json` 及 `SHA256SUMS`。從發布頁選擇桌面套件，並核對來源清單與校驗碼。這些仍是未簽章或 ad-hoc 簽章的開發版本，尚非穩定的簽章更新通道。
+
+Connector 請依[驗證安裝器說明](docs/getting-started.zh-TW.md#2-安裝-connector)操作。穩定版使用 `--tag v0.2.17 --channel-check stable`；本預覽版使用 `--tag v0.2.13-preview.20261022 --channel-check preview`，啟動安裝腳本也取自同一 tag。安裝器必須指定 tag，通道檢查預設為 `preview`，可接受穩定版與預覽版；`stable` 會拒絕預覽版。Linux 加上 `--enable-updates` 才會登記同一通道並啟用排程；單純安裝不會啟用更新。依據見[安裝器原始碼](scripts/install_connector.py)與[更新指南](docs/connector-updates.md)。
 
 已登記的更新器在 `stable` 提供符合條件的較新穩定版，在 `preview` 提供符合條件的較新穩定版或預覽版；穩定通道不會提供本預覽版。後續開發包可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對成功的平台 job 與來源；Actions artifacts 可能到期。
 
@@ -88,7 +90,7 @@ Connector 請依[驗證安裝器說明](docs/getting-started.zh-TW.md#2-安裝-c
 
 桌面包會準備相符 Python runtime、私人背景中央、資料與個人身分。
 
-首次使用會開啟**準備開始工作 → 1. 連線至 BAT**。貼上 BAT 連線網址、核對**主機代號**，再按**驗證並儲存主機**。成功後按**查看工作階段**。儲存庫綁定與驗證命令預設收合，工作需要時再設定。
+新安裝先選擇「提供本機工作區」、「使用既有服務」或「兩者兼有」；既有安裝保留原連線與身分。使用本機 Connector 時，開啟**準備開始工作 → 1. 連線至 BAT**，核對連線資料，按**預覽連線**，再按**套用連線**。成功後按**查看工作階段**。儲存庫綁定與驗證命令預設收合，工作需要時再設定。
 
 **加入既有中央是明確選擇的進階路徑。** 連線失敗不會另外建立專案資料庫，關閉 Dashboard 視窗也不會停止中央工作。
 

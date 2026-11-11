@@ -10,7 +10,7 @@ impl Drop for ChildGuard {
 }
 fn child() -> ChildGuard {
     ChildGuard(
-        Command::new(std::env::current_exe().unwrap())
+        crate::hidden_process::hidden_command(std::env::current_exe().unwrap())
             .args([
                 "--ignored",
                 "--exact",
@@ -136,7 +136,7 @@ fn tunnel_stop_refuses_changed_record_then_uses_held_handle() {
     let epoch = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     let marker = format!("SetEnv=BAT_FLEET_MONITOR={epoch}");
     let mut child = ChildGuard(
-        Command::new(std::env::current_exe().unwrap())
+        crate::hidden_process::hidden_command(std::env::current_exe().unwrap())
             .args([
                 "--ignored",
                 "--exact",

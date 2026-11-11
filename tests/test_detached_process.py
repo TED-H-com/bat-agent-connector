@@ -1,7 +1,6 @@
 """Job policy and creation refusal never hide a real launch failure or duplicate a child."""
 import ctypes as c
 import io
-from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -39,7 +38,7 @@ def test_failed_policy_query_is_conservative():
 def test_windows_spawn_flags_and_fixed_warning(monkeypatch, allowed):
     monkeypatch.setattr(detached, "job_allows_breakaway", lambda: allowed)
     popen = Mock()
-    monkeypatch.setattr(detached, "subprocess", SimpleNamespace(Popen=popen))
+    monkeypatch.setattr(detached.hidden_process, "popen", popen)
     log = io.BytesIO()
     child = detached.spawn(["fixed-runtime", "serve"], windows=True, creationflags=0x208, stderr=log)
     assert child is popen.return_value
@@ -52,7 +51,7 @@ def test_access_denied_retries_once_without_breakaway(monkeypatch):
     denied = OSError("synthetic private data must not be logged")
     denied.winerror = 5
     popen = Mock(side_effect=[denied, object()])
-    monkeypatch.setattr(detached, "subprocess", SimpleNamespace(Popen=popen))
+    monkeypatch.setattr(detached.hidden_process, "popen", popen)
     log = io.BytesIO()
     detached.spawn(["fixed-runtime"], windows=True, creationflags=0x208, stderr=log)
     assert [call.kwargs["creationflags"] for call in popen.call_args_list] == [0x1000208, 0x208]
@@ -62,7 +61,7 @@ def test_access_denied_retries_once_without_breakaway(monkeypatch):
 def test_other_spawn_errors_are_not_retried(monkeypatch):
     monkeypatch.setattr(detached, "job_allows_breakaway", lambda: True)
     popen = Mock(side_effect=OSError("launch failed"))
-    monkeypatch.setattr(detached, "subprocess", SimpleNamespace(Popen=popen))
+    monkeypatch.setattr(detached.hidden_process, "popen", popen)
     with pytest.raises(OSError):
         detached.spawn(["fixed-runtime"], windows=True, creationflags=0x208, stderr=io.BytesIO())
     assert popen.call_count == 1
@@ -72,7 +71,7 @@ def test_posix_preserves_new_session_without_querying_windows(monkeypatch):
     policy = Mock(side_effect=AssertionError("Windows-only"))
     monkeypatch.setattr(detached, "job_allows_breakaway", policy)
     popen = Mock()
-    monkeypatch.setattr(detached, "subprocess", SimpleNamespace(Popen=popen))
+    monkeypatch.setattr(detached.hidden_process, "popen", popen)
     detached.spawn(["fixed-runtime"], windows=False, start_new_session=True, stderr=io.BytesIO())
     assert popen.call_args.kwargs["start_new_session"] is True
     assert "creationflags" not in popen.call_args.kwargs

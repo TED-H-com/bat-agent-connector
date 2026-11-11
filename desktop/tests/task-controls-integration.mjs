@@ -1,6 +1,6 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 // Real central control versions/receipts with MockBat; no remote or installed effects.
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createInterface} from 'node:readline';
 import {resolve, delimiter} from 'node:path';
 import {once} from 'node:events';

@@ -19,7 +19,7 @@ try {
 const fixtureFile = path.join(folder, 'fixture.json');
 const output = process.env.BATC_BROWSER_OUTPUT || path.resolve('test-results/delivery');
 await fs.mkdir(output, {recursive: true});
-const {spawn} = await import('node:child_process');
+const {spawn} = await import('../../scripts/hidden-child-process.mjs');
 const python = path.join(backend, process.platform === 'win32' ? '.venv/Scripts/python.exe' : '.venv/bin/python');
 child = spawn(python, [path.join(backend, 'tests/manual/delivery_dashboard_fixture.py')], {
   cwd: backend, env: {...process.env, BATC_BROWSER_FIXTURE: fixtureFile, PYTHONPATH: backend},

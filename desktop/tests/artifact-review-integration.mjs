@@ -1,6 +1,6 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 // Exact shared UI against real central managed capture and review, without live providers.
-import {spawn} from 'node:child_process';
+import {spawn} from '../../scripts/hidden-child-process.mjs';
 import {createHash} from 'node:crypto';
 import {createInterface} from 'node:readline';
 import {readFile,mkdir} from 'node:fs/promises';

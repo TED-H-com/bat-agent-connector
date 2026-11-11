@@ -1,10 +1,11 @@
 import {disclosure, button} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {structuredAnalysis} from './pm-structured-analysis.js';
+import {retainedSessionSelection, retainedSessionHref} from './pm-retained-session.js';
 
 const ACTION = 'pm.continuation.prepare';
 // The existing run owns the version, adapter and recovery. Refresh only reads.
-export function continuationBrief({h,t,form,input,labelled,caps,capability,thread,permitted,target,refresh,onOpen}) {
+export function continuationBrief({h,t,api,guard,form,input,labelled,caps,capability,thread,permitted,target,refresh,onOpen}) {
   let head = null, ready = false, signature = '', request, status;
   const source = () => thread()?.continuation_brief;
   const usable = () => source()?.available === true && source()?.document && source()?.validation?.status === 'format_valid';
@@ -12,19 +13,24 @@ export function continuationBrief({h,t,form,input,labelled,caps,capability,threa
   const adapter = structuredAnalysis({h,t,labelled,action:ACTION,capability,legacyEligible:()=>false,authorized,readable:()=>Boolean(thread())});
   const purpose = input('pcb_purpose', {multiline:true,max:4000,value:t('pcb_default_purpose')});
   const previous = h('input', {type:'hidden',value:'', 'data-pm-default':''});
-  request = form({action:ACTION,target,fields:{purpose,adapter:adapter.field,previous},
-    params: values => ({purpose:values.purpose,...adapter.params(values),max_chars:64000,
+  const retained = retainedSessionSelection({h,t,api,guard,caps,thread,authorized});
+  request = form({action:ACTION,target,fields:{purpose,adapter:adapter.field,previous,retained_session:retained.value},
+    params: values => ({purpose:values.purpose,...adapter.params(values),...retained.params(values),max_chars:64000,
       ...(values.previous ? {previous_brief_ref:JSON.parse(values.previous)} : {})}),
     preconditions:()=>({expected_version:thread().thread.version,expected_plan_version:head.version,expected_accepted_revision_id:head.accepted_revision_id}),
-    permitted:()=>authorized() && adapter.eligible() && Boolean(head),recoverPermitted:authorized,
-    label:'pcb_prepare',onSaved:refresh,onStateChange:()=>{adapter.update(request);if(ready) render();},
-    extra:h('div',{class:'pm-fields'},labelled('pcb_purpose',purpose),adapter.box,previous)});
+    permitted:()=>authorized() && adapter.eligible() && Boolean(head) && retained.valid(),recoverPermitted:authorized,
+    label:'pcb_prepare',onSaved:refresh,onStateChange:()=>{adapter.update(request);retained.update();if(ready) render();},
+    extra:h('div',{class:'pm-fields'},labelled('pcb_purpose',purpose),adapter.box,retained.box,previous)});
+  retained.bind(request);
   const reader = h('section',{'data-continuation-brief':'',hidden:true});
   const tools = h('section',{'data-continuation-tools':'',hidden:true},h('h3',{},t('pcb_title')),
     h('p',{class:'muted'},t('pcb_help')),request.box);
   function links(row, saved) {
     return h('span',{class:'pm-source'},...(row.source_refs || []).flatMap((key,index)=>{
       const ref=saved.source_references?.[key];
+      if(ref?.kind==='retained_session_message' && typeof ref.host==='string' && typeof ref.session_id==='string'
+        && /^[0-9a-f]{64}$/.test(ref.snapshot_id))
+        return [index ? ' · ' : ' ',h('a',{href:retainedSessionHref(ref)},t('pcb_saved_source')+' '+(index+1))];
       return ref?.operation_id ? [index ? ' · ' : ' ',h('a',{href:'#/op/'+encodeURIComponent(ref.operation_id)},t('pd_source_record')+' '+(index+1))] : [];
     }));
   }
@@ -67,6 +73,6 @@ export function continuationBrief({h,t,form,input,labelled,caps,capability,threa
       // Metadata follows the selected immutable brief, never a new operation key.
       if(request.values().previous!==value)request.set('previous',value);
     }
-    adapter.update(request);render();request.update();
-  },recheck(){request.recheck();}};
+    adapter.update(request);retained.update();render();request.update();
+  },recheck(){request.recheck();},dispose(){retained.dispose();}};
 }

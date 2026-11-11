@@ -1,0 +1,67 @@
+[
+  {
+    "path": "desktop/fleet-core/src/hidden_process.rs",
+    "pattern": "Command::new|creation_flags",
+    "justification": "Single shared Rust constructor applies CREATE_NO_WINDOW; Windows console test verifies behavior."
+  },
+  {
+    "path": "scripts/hidden-child-process.mjs",
+    "pattern": "child_process",
+    "justification": "Single Node wrapper enforces windowsHide=true after caller options."
+  },
+  {
+    "path": "src/bat_agent_connector/hidden_process.py",
+    "pattern": "subprocess|asyncio",
+    "justification": "Single Python wrapper ORs CREATE_NO_WINDOW on Windows; Linux options remain unchanged."
+  },
+  {
+    "path": "desktop/src-tauri/src/fleet-startup.ps1",
+    "pattern": "^& \\$env:BATC_FLEET_ADAPTER$",
+    "justification": "Invokes the trusted PowerShell script in the existing hidden adapter process; does not create an external process."
+  },
+  {
+    "path": "desktop/tests/windows-installed-support-test.ps1",
+    "pattern": "^& \\$(?:clock|slowClock|floorClock)\\.Advance \\d+$",
+    "justification": "Invokes a fixture scriptblock in-process, not an executable."
+  },
+  {
+    "path": "src/bat_agent_connector/cleanup_host.py",
+    "pattern": "subprocess\\.(run|Popen)",
+    "justification": "Self-contained POSIX host program transported over SSH; no local Windows process is launched here. Keep package-free remote execution."
+  },
+  {
+    "path": "src/bat_agent_connector/artifact_host_helper.py",
+    "pattern": "subprocess\\.(run|Popen)",
+    "justification": "Self-contained POSIX host program transported over SSH; no local Windows process is launched here. Keep package-free remote execution."
+  },
+  {
+    "path": "src/bat_agent_connector/artifact_capture_helper.py",
+    "pattern": "subprocess\\.(run|Popen)",
+    "justification": "Self-contained POSIX host program transported over SSH; no local Windows process is launched here. Keep package-free remote execution."
+  },
+  {
+    "path": "src/bat_agent_connector/repository_sync_host.py",
+    "pattern": "subprocess\\.(run|Popen)",
+    "justification": "Self-contained POSIX host program transported over SSH; no local Windows process is launched here. Keep package-free remote execution."
+  },
+  {
+    "path": "src/bat_agent_connector/worktree_merge_host.py",
+    "pattern": "subprocess\\.(run|Popen)",
+    "justification": "Self-contained POSIX host program transported over SSH; no local Windows process is launched here. Keep package-free remote execution."
+  },
+  {
+    "path": "src/bat_agent_connector/pm_revision_host.py",
+    "pattern": "subprocess\\.(run|Popen)",
+    "justification": "Self-contained POSIX host program transported over SSH; no local Windows process is launched here. Keep package-free remote execution."
+  },
+  {
+    "path": "src/bat_agent_connector/pm_spec_sources_host.py",
+    "pattern": "subprocess\\.(run|Popen)",
+    "justification": "Self-contained POSIX host program transported over SSH; no local Windows process is launched here. Keep package-free remote execution."
+  },
+  {
+    "path": "desktop/tests/hidden-child-process.test.ts",
+    "pattern": "^const options = \\{encoding: 'utf8', windowsHide: false\\};$",
+    "justification": "Regression input verifies the shared wrapper overrides a caller request to show a console without mutating caller options."
+  }
+]

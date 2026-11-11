@@ -32,8 +32,10 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake
 from . import PROTOCOL, __version__
 from .channels import check_allowed, is_write, timeout_for
 from .config import HostConfig
+from .errlog import log_error
 from .errors import (
     AuthError,
+    BatError,
     ChannelNotAllowed,
     ConnectionLost,
     FingerprintMismatch,
@@ -44,6 +46,14 @@ from .redact import redact
 from .resource_policy import WriteGrant, check_grant
 
 log = logging.getLogger("bat_agent_connector.client")
+
+
+def _record_invoke_error(channel: str, msg: object, reason: str = "failed") -> None:
+    session = channel.startswith(("claude:", "codex:"))
+    component = "bat-session" if session else "bat-connector"
+    prefix = "session" if session else "connector"
+    operation = "resume" if session and "resume" in channel else "invoke"
+    log_error(component, f"{prefix}.{operation}.{reason}", msg)
 
 GZIP_MAGIC = b"BATGZIP1\0"
 DEFAULT_MAX_FRAME = 48 * 1024 * 1024
@@ -227,7 +237,12 @@ class BatClient:
         async with self._conn_lock:
             if self.connected:
                 return
-            await self._connect_locked()
+            try:
+                await self._connect_locked()
+            except (BatError, OSError, asyncio.TimeoutError) as exc:
+                code = "connector.auth.failed" if isinstance(exc, AuthError) else "connector.connect.failed"
+                log_error("bat-connector", code, exc)
+                raise
 
     async def _connect_locked(self) -> None:
         token = self.host.resolve_token()
@@ -351,8 +366,10 @@ class BatClient:
                     fut.set_result(obj)
         except ConnectionClosed as e:
             reason = f"connection closed ({e.rcvd.code if e.rcvd else 'no close frame'})"
+            log_error("bat-connector", "connector.connection.lost", reason, level="warn")
         except Exception as e:  # pragma: no cover - defensive
             reason = f"reader error: {type(e).__name__}"
+            log_error("bat-connector", "connector.reader.failed", e)
         finally:
             self.closed_reason = reason
             err = ConnectionLost(f"{self.host.name}: {reason}")
@@ -401,6 +418,8 @@ class BatClient:
             await self._ws.send(encoded)
             return await _wait_with_timeout(fut, timeout)
         except asyncio.TimeoutError:
+            channel = str(frame.get("channel", ""))
+            _record_invoke_error(channel, "invoke timed out", "timeout")
             raise InvokeTimeout(
                 f"{self.host.name}: {frame.get('channel', frame['type'])} timed out after {timeout:.0f}s"
             ) from None
@@ -429,6 +448,7 @@ class BatClient:
                  "channel": canonical, "params": params}
         reply = await self._roundtrip(frame, timeout_for(canonical))
         if reply.get("type") == "invoke-error":
+            _record_invoke_error(canonical, reply.get('error'))
             raise InvokeError(f"{self.host.name}: {canonical}: {redact(reply.get('error'))}")
         if canonical == "claude:get-session-meta" and (reply.get("type") != "invoke-result" or "result" not in reply):
             raise InvokeError("session metadata reply does not prove presence or absence")
@@ -495,6 +515,7 @@ class BatClient:
                 self.last_used = time.monotonic()
                 if reply.get("type") == "invoke-error":
                     err = redact(reply.get("error"))
+                    _record_invoke_error(canonical, err)
                     if BUSY_TEXT in err and attempt + 1 < attempts:
                         await _retry_pause(0.5 * (attempt + 1))
                         continue
@@ -503,6 +524,9 @@ class BatClient:
                     raise InvokeError("session metadata reply does not prove presence or absence")
                 return reply.get("result")
             except ConnectionLost as e:
+                session = canonical.startswith(("claude:", "codex:"))
+                log_error("bat-session" if session else "bat-connector",
+                          "session.reconnect.failed" if session else "connector.reconnect.failed", e)
                 # Only Claude's send-message is idempotent by clientMessageId;
                 # Codex ignores that field and callers disable this retry.
                 last_exc = e

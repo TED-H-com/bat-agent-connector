@@ -1,6 +1,6 @@
 import {httpEventDelivery} from './event-delivery.mjs';
 // Run the canonical generated UI against an independently integrated cleanup backend.
-import {spawn} from "node:child_process";
+import {spawn} from "../../scripts/hidden-child-process.mjs";
 import {createInterface} from "node:readline";
 import {readFile} from "node:fs/promises";
 import {resolve} from "node:path";

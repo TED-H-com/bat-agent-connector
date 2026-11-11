@@ -210,15 +210,16 @@ mod tests {
             token: Zeroizing::new("fixture-keychain-token".into()),
         };
         OsVault.write(&binding, &record.encode().unwrap()).unwrap();
-        let child = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--ignored",
-                "--exact",
-                "credentials::macos::tests::keychain_readback_child",
-            ])
-            .env("BATC_KEYCHAIN_TEST_BINDING", &binding)
-            .status()
-            .unwrap();
+        let child =
+            bat_fleet_core::hidden_process::hidden_command(std::env::current_exe().unwrap())
+                .args([
+                    "--ignored",
+                    "--exact",
+                    "credentials::macos::tests::keychain_readback_child",
+                ])
+                .env("BATC_KEYCHAIN_TEST_BINDING", &binding)
+                .status()
+                .unwrap();
         assert!(child.success(), "Separate-process Keychain readback failed");
         let reopened = OsVault;
         assert_eq!(

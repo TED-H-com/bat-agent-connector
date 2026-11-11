@@ -9,6 +9,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -234,18 +235,92 @@ def verify_adoption(home, release, *, allow_downgrade=False):
         raise InstallError("adoption_installation_invalid") from exc
 
 
+def verify_repair(home):
+    """Bounded read-only validation; bootstrap and installed counterpart stay identical."""
+    state_path = home / ".local/share/bat-agent-connector/update/state.json"
+    try:
+        descriptor = os.open(state_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                    and not info.st_mode & 0o077 and info.st_nlink == 1
+                    and info.st_size <= 1024 * 1024, "repair_state_invalid")
+            raw = stream.read(1024 * 1024 + 1)
+        require(len(raw) <= 1024 * 1024, "repair_state_invalid")
+        state = json.loads(raw)
+        require(type(state["format"]) is int and state["format"] == 1
+                and type(state["epoch"]) is int and state["epoch"] == 1
+                and state["channel"] in ("stable", "preview") and type(state["enabled"]) is bool
+                and isinstance(state["versions"], dict) and state["versions"], "repair_state_invalid")
+        for sha, record in state["versions"].items():
+            require(re.fullmatch(r"[0-9a-f]{40}", sha) and isinstance(record, dict)
+                    and Path(record["root"]).is_absolute()
+                    and record["release"]["commit"] == sha
+                    and isinstance(record["release"]["version"], str)
+                    and re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", record["release"]["version"])
+                    and record["release"]["epoch"] == 1
+                    and isinstance(record["release"]["tag"], str)
+                    and re.fullmatch(r"v[0-9][A-Za-z0-9.+-]{0,95}", record["release"]["tag"])
+                    and type(record["release"]["prerelease"]) is bool
+                    and isinstance(record["release"]["skill_sha256"], str)
+                    and re.fullmatch(r"[0-9a-f]{64}", record["release"]["skill_sha256"])
+                    and isinstance(record["proof"], dict)
+                    and Path(record["proof"]["package"]).is_relative_to(
+                        Path(record["root"]) / "tools/bat-agent-connector/lib")
+                    and all(isinstance(record["proof"][key], str)
+                            and re.fullmatch(r"[0-9a-f]{64}", record["proof"][key])
+                            for key in ("files", "python_files", "skill_sha256")), "repair_state_invalid")
+        require(state["current"] in state["versions"]
+                and (state["previous"] is None or state["previous"] in state["versions"]), "repair_state_invalid")
+        # An interrupted transaction must be recovered by its original updater first.
+        require(not state.get("pending") and not state.get("enrollment"), "repair_state_invalid")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        raise InstallError("repair_state_invalid") from None
+    try:
+        record = state["versions"][state["current"]]
+        tool = Path(record["root"]) / "tools/bat-agent-connector"
+        require(tool.resolve() == tool.absolute() and (tool / "uv-receipt.toml").is_file(),
+                "repair_install_not_managed")
+        package = Path(record["proof"]["package"])
+        require(package.resolve() == package.absolute(), "repair_install_not_managed")
+        distributions = list(package.parent.glob("bat_agent_connector-*.dist-info"))
+        require(len(distributions) == 1, "repair_install_not_managed")
+        metadata = distributions[0] / "direct_url.json"
+        require(metadata.resolve() == metadata.absolute() and metadata.stat().st_size <= 1024 * 1024,
+                "repair_install_not_managed")
+        doc = json.loads(metadata.read_bytes())
+        # Updater-staged installs record the private scratch clone that stage()
+        # verified against the published tag, not the remote repository URL.
+        scratch = re.escape((Path(record["root"]) / "scratch").as_uri())
+        require(isinstance(doc.get("url"), str)
+                and (doc["url"] in (REPOSITORY, REPOSITORY + ".git")
+                     or re.fullmatch(scratch + r"/source-[A-Za-z0-9_]+/repository", doc["url"]))
+                and doc["vcs_info"]["vcs"] == "git"
+                and isinstance(doc["vcs_info"]["commit_id"], str)
+                and re.fullmatch(r"[0-9a-f]{40}", doc["vcs_info"]["commit_id"])
+                and doc["vcs_info"]["commit_id"] == state["current"], "repair_install_not_managed")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        raise InstallError("repair_install_not_managed") from None
+    return state
+
+
 def install(args, *, home=None, download=fetch, run=command):
     home = Path.home() if home is None else Path(home)
     require(sys.platform.startswith("linux") or sys.platform == "darwin", "unsupported_platform")
-    require(not args.enable_updates or sys.platform.startswith("linux"), "automatic_updates_require_linux")
+    repair = getattr(args, "repair_managed", False)
+    require(not (repair and (getattr(args, "adopt_existing", False) or getattr(args, "restore_adopted", None)
+                            or args.verify_only or args.enable_updates or args.root)), "repair_options_conflict")
+    require(not (args.enable_updates or repair) or sys.platform.startswith("linux"), "automatic_updates_require_linux")
     require(os.getuid() != 0 or args.allow_root, "root_requires_allow_root")
     state = home / ".local/share/bat-agent-connector/update/state.json"
-    require(args.verify_only or not (state.exists() or state.is_symlink()), "already_update_managed")
+    require(repair or args.verify_only or not (state.exists() or state.is_symlink()), "already_update_managed")
+    if repair:
+        verify_repair(home)
     release = resolve(args.tag, args.channel_check, download)
     root = (args.root or home / ".local/share/bat-agent-connector/releases" / release["commit"]).absolute()
     adoption = verify_adoption(home, release, allow_downgrade=getattr(args, "allow_downgrade", False)) if getattr(args, "adopt_existing", False) else None
     if args.dry_run:
-        return {"status": "verified_release", "release": release, "writes": False}
+        return {"status": "verified_repair" if repair else "verified_release", "release": release, "writes": False}
     uv = shutil.which("uv")
     git = shutil.which("git")
     require(uv and git, "uv_and_git_required")
@@ -285,7 +360,8 @@ def install(args, *, home=None, download=fetch, run=command):
                     "adoption_installation_changed")
         result = json.loads(run([str(python), "-I", "-m", "bat_agent_connector.installer", str(root),
                                  json.dumps(release), "--source", str(source),
-                                 *(["--adoption", json.dumps(adoption)] if adoption else [])], env=env))
+                                 *(["--adoption", json.dumps(adoption)] if adoption else []),
+                                 *(["--repair-managed"] if repair else [])], env=env))
     receipt = root / "rollout-receipt.json"
     if args.enable_updates:
         run([str(root / "bin/batc-update"), "enable", "--channel", args.channel_check,
@@ -298,9 +374,11 @@ def install(args, *, home=None, download=fetch, run=command):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag")
-    parser.add_argument("--adopt-existing", action="store_true")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--repair-managed", action="store_true")
+    modes.add_argument("--adopt-existing", action="store_true")
     parser.add_argument("--allow-downgrade", action="store_true")
-    parser.add_argument("--restore-adopted", type=Path)
+    modes.add_argument("--restore-adopted", type=Path)
     parser.add_argument("--channel-check", choices=("stable", "preview"), default="preview")
     parser.add_argument("--root", type=Path, help="New private version directory; does not relocate user configuration")
     parser.add_argument("--dry-run", action="store_true", help="Verify release metadata only; no writes")

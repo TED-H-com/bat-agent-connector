@@ -4,7 +4,7 @@ use bat_fleet_core::{
 };
 use std::{
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     time::{Duration, Instant},
 };
 use tokio::{net::TcpListener, time::Instant as Deadline};
@@ -45,7 +45,7 @@ fn fixture() -> (Temporary, PathBuf) {
         b"[package]\nname='tailscale'\nversion='0.0.0'\nedition='2021'\n[workspace]\n",
     )
     .unwrap();
-    let child = Command::new(env!("CARGO"))
+    let child = bat_fleet_core::hidden_process::hidden_command(env!("CARGO"))
         .args(["build", "--offline", "-j1", "--manifest-path"])
         .arg(temp.0.join("Cargo.toml"))
         .env("CARGO_TARGET_DIR", temp.0.join("target"))
