@@ -30069,7 +30069,7 @@ function tableCells(line) {
 	if (cell || !text.endsWith("|")) cells.push(cell.trim());
 	return separators ? cells : null;
 }
-function messageBlocks(source) {
+function messageBlocks(source, { quotes = false } = {}) {
 	if (source.length > 2e5) return [{
 		kind: "text",
 		text: source
@@ -30102,7 +30102,7 @@ function messageBlocks(source) {
 			});
 			continue;
 		}
-		if (quotePrefix.test(lines[i])) {
+		if (quotes && quotePrefix.test(lines[i])) {
 			flush();
 			const body = [];
 			while (i < lines.length && quotePrefix.test(lines[i])) body.push(lines[i++].replace(quotePrefix, ""));
@@ -30118,7 +30118,7 @@ function messageBlocks(source) {
 			const rows = [];
 			i += 2;
 			while (i < lines.length && rows.length < 100) {
-				if (quotePrefix.test(lines[i])) break;
+				if (quotes && quotePrefix.test(lines[i])) break;
 				const cells = tableCells(lineText(lines[i]));
 				if (!cells || cells.length !== header.length) break;
 				rows.push(cells);
@@ -30148,13 +30148,13 @@ function inline(h, text) {
 	return nodes;
 }
 function renderMessage(h, t, source, copy, { canCopyQuote = () => false } = {}) {
-	return messageBlocks(source).map((block) => {
+	return messageBlocks(source, { quotes: true }).map((block) => {
 		if (block.kind === "quote") return h("blockquote", { class: "message-quote" }, h("div", { class: "message-quote-bar" }, h("button", {
 			class: "mini message-quote-copy",
 			type: "button",
 			hidden: !canCopyQuote(),
-			onclick: () => {
-				if (canCopyQuote()) copy(block.text);
+			onclick: (event) => {
+				if (event.currentTarget.isConnected && canCopyQuote()) copy(block.text);
 			}
 		}, t("message_copy_quote"))), h("div", { class: "message-text" }, ...inline(h, block.text)));
 		if (block.kind === "code") return h("div", { class: "message-code" }, h("div", { class: "message-code-bar" }, h("span", { class: "muted" }, block.language || t("message_code")), h("button", {

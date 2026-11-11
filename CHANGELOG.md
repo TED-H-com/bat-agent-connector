@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Copy explicit quotes from individually completed conversation messages in
+  English and zh-TW, preserving nested markers, spacing and original line endings.
+  Keep selection and reader position across refreshes, retire removed copy controls,
+  and preserve literal quoted text in shared PM document readers.
+
 - Explicitly save a readable Work-side relationship ID into the existing cleanup
   index for later withdrawal after source revocation. Recheck current authority
   and relationship identity; preserve original operation recovery, the 500-record

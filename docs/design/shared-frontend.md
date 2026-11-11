@@ -71,6 +71,9 @@ reference, not a new dependency or copied runtime.
   flag. Missing, running, failed and unknown status do not enable it; session idle,
   archive coverage and reading receipts never substitute for message completion.
   Status-only refresh changes copy availability without replacing selected text.
+  Removed quote controls cannot copy again if a later revision restores identical
+  text. Quote parsing is explicitly enabled by the conversation renderer; shared
+  PM document readers keep literal quote markers and their existing structure.
   Whole-message/code copy retain their existing behavior and source-size limits.
   This independently written interaction follows the
   [Project Hub reference](https://github.com/kieiken/project-hub/blob/cfe3ab221f03f84d334ae7b97608dd31f3e643be/hub/public/app-messages.js);

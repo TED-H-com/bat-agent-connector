@@ -19,7 +19,12 @@ for (const native of [false, true]) {
       await page.exposeFunction('fixtureCopy', (text: string) => copied.push(text));
       await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', {value:{writeText:(text: string) => (window as any).fixtureCopy(text)}}));
       page.on('pageerror', error => errors.push(error.message));
-      await mountConversation(page, native, dispatch); await page.goto('/dashboard/#/session/demo/session-1');
+      await mountConversation(page, native, async input => {
+        const result = await dispatch(input);
+        // Other output may still be streaming after this message completes.
+        if (input.path.includes('/messages')) result.data.streaming = true;
+        return result;
+      }); await page.goto('/dashboard/#/session/demo/session-1');
       const row = page.locator('[data-message-id="quote"]');
       await expect(row.locator('blockquote')).toHaveCount(2);
       await expect(row.locator('blockquote strong')).toHaveText('Keep');
@@ -37,6 +42,9 @@ for (const native of [false, true]) {
       await row.getByRole('button', {name:label.quote, exact:true}).last().focus();
       await page.keyboard.press('Enter'); await expect.poll(() => copied.length).toBe(5);
       await page.screenshot({path:info.outputPath(`quote-${transport}-${locale}-${width}.png`)});
+      const stored = await page.evaluate(() => JSON.stringify(Object.entries(localStorage)));
+      expect(stored).not.toContain('Nested decision');
+      expect(stored).not.toContain('Second quote');
       expect(errors).toEqual([]); expect(data.writes).toEqual([]);
     });
 
@@ -89,6 +97,12 @@ for (const native of [false, true]) {
       await expect.poll(() => saved(page)).toEqual(checkpoint(data.cursor));
       await page.evaluate(() => (window as any).oldQuoteCopy.click()); expect(copied).toHaveLength(1);
       await button.click(); await expect.poll(() => copied.at(-1)).toBe('Revised content');
+      // Returning to identical text must not revive an already removed control.
+      message.text = '> First part\n> More output'; data.cursor++;
+      await expect.poll(() => saved(page)).toEqual(checkpoint(data.cursor));
+      await page.evaluate(() => (window as any).oldQuoteCopy.click());
+      expect(copied).toHaveLength(2);
+      await button.click(); await expect.poll(() => copied).toEqual(['First part\nMore output', 'Revised content', 'First part\nMore output']);
       expect(data.writes).toEqual([]);
     });
   }

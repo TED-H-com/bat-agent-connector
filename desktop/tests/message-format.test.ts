@@ -1,6 +1,16 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {messageBlocks, tableCells} from '../src/message-format.js';
+import {messageBlocks as formatBlocks, tableCells} from '../src/message-format.js';
+
+const messageBlocks = (source: string) => formatBlocks(source, {quotes: true});
+
+test('document callers retain literal quote markers unless they opt into conversation quotes', () => {
+  const source = '> # Quoted heading\n> - Quoted task\n> nested\r\n';
+  assert.deepEqual(formatBlocks(source), [{kind:'text', text:source}]);
+  assert.deepEqual(formatBlocks('| A | B |\n| --- | --- |\n> C | D |'), [
+    {kind:'table', header:['A','B'], rows:[['> C','D']]},
+  ]);
+});
 
 test('fenced code preserves CRLF, empty lines and unclosed streaming content', () => {
   assert.deepEqual(messageBlocks('before\n```js\r\nconst x = 1;\r\n\r\n```\r\nafter'), [

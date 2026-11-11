@@ -25,6 +25,17 @@ async function savePlan(page:any, text = '# First visit\n\nKeep <script>literal 
 }
 
 for (const native of [false,true]) test.describe(native ? 'native plans' : 'web plans', () => {
+  test('conversation quote formatting preserves literal quoted headings and tasks in plans', async ({page}) => {
+    const f=planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);
+    await openThreadTab(page,'plan');
+    await savePlan(page, '# First visit\n\n> # Quoted heading\n> - Quoted task\n> Keep the source marker.');
+    const document = page.locator('[data-pm-revision] .pm-plan-document');
+    await expect(document).toContainText('> # Quoted heading');
+    await expect(document).toContainText('> - Quoted task');
+    await expect(document.getByRole('heading', {name:'Quoted heading',exact:true})).toHaveCount(0);
+    await expect(document.locator('li, .message-quote-copy')).toHaveCount(0);
+  });
+
   test('Planning can select later inputs while keeping saved document revisions fixed', async({page}) => {
     const f=planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan'); await savePlan(page);
     const original=structuredClone(f.state.revisions[0]);

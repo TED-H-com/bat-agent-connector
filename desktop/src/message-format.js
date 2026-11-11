@@ -21,7 +21,7 @@ export function tableCells(line) {
   return separators ? cells : null;
 }
 
-export function messageBlocks(source) {
+export function messageBlocks(source, {quotes = false} = {}) {
   if (source.length > 200000) return [{kind: "text", text: source}];
   const lines = source.match(/[^\n]*\n|[^\n]+$/g) || [];
   if (lines.length > 4000) return [{kind: "text", text: source}];
@@ -38,7 +38,7 @@ export function messageBlocks(source) {
       blocks.push({kind: "code", language: fence[2].trim(), text: body.join("")});
       continue;
     }
-    if (quotePrefix.test(lines[i])) {
+    if (quotes && quotePrefix.test(lines[i])) {
       flush(); const body = [];
       // One explicit outer layer only. Keep nested markers, Markdown, whitespace
       // and line endings; unmarked lines are not inferred to belong to a quote.
@@ -49,7 +49,7 @@ export function messageBlocks(source) {
     if (header?.length && header.length <= 40 && divider?.length === header.length && divider.every(cell => /^:?-{3,}:?$/.test(cell))) {
       flush(); const rows = []; i += 2;
       while (i < lines.length && rows.length < 100) {
-        if (quotePrefix.test(lines[i])) break;
+        if (quotes && quotePrefix.test(lines[i])) break;
         const cells = tableCells(lineText(lines[i]));
         if (!cells || cells.length !== header.length) break;
         rows.push(cells); i++;
@@ -73,11 +73,11 @@ function inline(h, text) {
 }
 
 export function renderMessage(h, t, source, copy, {canCopyQuote = () => false} = {}) {
-  return messageBlocks(source).map(block => {
+  return messageBlocks(source, {quotes: true}).map(block => {
     if (block.kind === "quote") return h("blockquote", {class: "message-quote"},
       h("div", {class: "message-quote-bar"},
         h("button", {class: "mini message-quote-copy", type: "button", hidden: !canCopyQuote(),
-          onclick: () => {if (canCopyQuote()) copy(block.text);}}, t("message_copy_quote"))),
+          onclick: event => {if (event.currentTarget.isConnected && canCopyQuote()) copy(block.text);}}, t("message_copy_quote"))),
       h("div", {class: "message-text"}, ...inline(h, block.text)));
     if (block.kind === "code") return h("div", {class: "message-code"},
       h("div", {class: "message-code-bar"}, h("span", {class: "muted"}, block.language || t("message_code")),
