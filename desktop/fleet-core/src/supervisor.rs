@@ -27,6 +27,7 @@ use std::{
 use tokio::{sync::Notify, task::JoinHandle};
 
 /// Native configuration only. These paths are never accepted from a WebView.
+#[derive(Clone)]
 pub struct Options {
     pub configuration: Paths,
     pub roaming: PathBuf,
@@ -39,6 +40,9 @@ pub trait Effects: Observation {
     fn prove_absence(&self, configuration: &Configuration) -> Result<()>;
     fn record(&self, configuration: &Configuration, epoch: &str) -> Result<MonitorRecord>;
     fn verify_owner(&self, configuration: &Configuration, lease: &MonitorLease) -> Result<()>;
+    fn listening(&self, _configuration: &Configuration, _name: &str) -> Result<bool> {
+        Ok(true)
+    }
     fn launch(
         &mut self,
         context: &tunnel::Context<'_>,
@@ -71,8 +75,9 @@ impl Work {
     }
 }
 struct Owned<C> {
-    launch: Launched<C>,
+    launch: Launched<Option<C>>,
     run: Option<Run>,
+    listener_after: u64,
 }
 struct Host<C> {
     label: String,
@@ -151,28 +156,39 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
             configuration.verify_current()?;
             effects.prove_absence(&configuration)
         })?;
-        effects.verify_owner(&configuration, &lease)?;
-        let store = Store::new(options.roaming.clone());
-        let selection = store.read(&configuration)?;
-        let device_path = lease.directory().join("fleet-probe-device-id");
-        let old = files::read(&device_path)?;
-        let device = match &old {
-            Some(bytes) => std::str::from_utf8(bytes)
-                .ok()
-                .map(str::trim)
-                .filter(|s| crate::ownership::epoch_valid(s))
-                .ok_or("DEVICE_ID_UNPROVEN")?
-                .to_owned(),
-            None => {
-                let device = format!("{:032x}", rand::random::<u128>());
-                files::replace(&device_path, None, device.as_bytes(), || {
-                    effects.verify_owner(&configuration, &lease)
-                })?;
-                device
+        let prepared = (|| {
+            effects.verify_owner(&configuration, &lease)?;
+            let store = Store::new(options.roaming.clone());
+            let selection = store.read(&configuration)?;
+            let device_path = lease.directory().join("fleet-probe-device-id");
+            let old = files::read(&device_path)?;
+            let device = match &old {
+                Some(bytes) => std::str::from_utf8(bytes)
+                    .ok()
+                    .map(str::trim)
+                    .filter(|s| crate::ownership::epoch_valid(s))
+                    .ok_or("DEVICE_ID_UNPROVEN")?
+                    .to_owned(),
+                None => {
+                    let device = format!("{:032x}", rand::random::<u128>());
+                    files::replace(&device_path, None, device.as_bytes(), || {
+                        effects.verify_owner(&configuration, &lease)
+                    })?;
+                    device
+                }
+            };
+            let client_info = json!({"appName":"BAT Fleet Monitor", "appVersion":env!("CARGO_PKG_VERSION"),
+            "label":"fleet-monitor", "deviceId":device, "platform":"windows"});
+            Ok((store, selection, client_info))
+        })();
+        let (store, selection, client_info) = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                // No child has been launched during startup. Retire only our exact lease.
+                let _ = lease.abandon_start(|| effects.prove_exclusive());
+                return Err(error);
             }
         };
-        let client_info = json!({"appName":"BAT Fleet Monitor", "appVersion":env!("CARGO_PKG_VERSION"),
-            "label":"fleet-monitor", "deviceId":device, "platform":"windows"});
         let applied_revision = selection.revision.clone();
         let mut out = Self {
             options,
@@ -191,7 +207,10 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
             quitting: false,
             stopped: false,
         };
-        out.add_hosts()?;
+        if let Err(error) = out.add_hosts() {
+            let _ = out.lease.abandon_start(|| out.effects.prove_exclusive());
+            return Err(error);
+        }
         Ok(out)
     }
     /// Wake transitions interrupt the native idle wait, so short wake attempts
@@ -224,6 +243,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
             let routes = Routes::from_inventory(&self.configuration.inventory, name)?;
             let mut policy = HostPolicy::new(&routes, generation.clone());
             policy.notify_wakes(self.route_progress.clone());
+            policy.continuous_recovery();
             self.hosts.insert(
                 name.into(),
                 Host {
@@ -288,18 +308,20 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         let marker = dir
             .join("fleet-tunnel-stop-intents")
             .join(format!("{}.json", file.name));
-        let marker_bytes = serde_json::to_vec(&json!({"schema_version":1,"record_digest":crate::digest(&file.bytes),"pid":record.process.pid,"created":record.process.created})).map_err(|_| "OWNER_UNPROVEN")?;
+        let marker_bytes = files::stop_intent_bytes(&file.bytes, record)?;
         let ended = origin_state(
             record.process.pid,
             &record.process.created,
             &self.effects.state(record.process.pid),
         ) == ProcessState::Dead;
         let previous = files::read(&marker)?;
-        if previous
-            .as_ref()
-            .is_some_and(|bytes| bytes != &marker_bytes)
-        {
-            return Err("TUNNEL_RECORD_CHANGED");
+        if let Some(bytes) = &previous {
+            files::classify_intent(
+                files::TunnelKind::StopIntent,
+                bytes,
+                &file.name,
+                Some((&file.bytes, record)),
+            )?;
         }
         if !ended {
             if previous.is_some() {
@@ -332,7 +354,7 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
             files::replace(&marker, None, &marker_bytes, || {
                 self.effects.verify_owner(&self.configuration, &self.lease)
             })?;
-            let mode = if owned {
+            let mode = if owned && record.process.monitor_instance == self.lease.epoch() {
                 StopMode::Owned {
                     current_epoch: self.lease.epoch(),
                 }
@@ -346,9 +368,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         // restart to prove the child ended and finish without another stop.
         self.clear_launch_intent(file)?;
         if let Some(bytes) = files::read(&marker)? {
-            if bytes != marker_bytes {
-                return Err("TUNNEL_RECORD_CHANGED");
-            }
+            files::classify_intent(
+                files::TunnelKind::StopIntent,
+                &bytes,
+                &file.name,
+                Some((&file.bytes, record)),
+            )?;
             files::remove(&marker, &bytes)?;
         }
         files::remove(&file.path, &file.bytes)?;
@@ -367,19 +392,12 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         let Some(bytes) = files::read(&path)? else {
             return Ok(());
         };
-        let doc = crate::strict_json::parse(&bytes, files::BOUND)?;
-        if doc["schema_version"] != 1
-            || doc["name"] != file.name
-            || doc["monitor_instance"] != record.process.monitor_instance
-            || doc["arguments"]
-                != serde_json::to_value(&record.process.arguments).map_err(|_| "OWNER_UNPROVEN")?
-            || !record
-                .origin
-                .as_ref()
-                .is_some_and(|o| doc["monitor_pid"] == o.pid && doc["monitor_created"] == o.created)
-        {
-            return Err("TUNNEL_START_UNSETTLED");
-        }
+        files::classify_intent(
+            files::TunnelKind::LaunchIntent,
+            &bytes,
+            &file.name,
+            Some((&file.bytes, record)),
+        )?;
         files::remove(&path, &bytes)
     }
     fn owned_file(name: &str, owned: &Owned<E::Child>) -> TunnelFile {
@@ -479,6 +497,84 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         }
         Ok(())
     }
+    /// Keep the original receipt and epoch: adoption never rewrites creation evidence.
+    fn adopt(&mut self, file: &TunnelFile, now: u64) -> Result<bool> {
+        let Some(host) = self.hosts.get(&file.name) else {
+            return Ok(false);
+        };
+        if !host.selected || host.owned.is_some() {
+            return Ok(false);
+        }
+        let Ok(record) = &file.record else {
+            return Ok(false);
+        };
+        if record.process.owner_sid != self.lease.record.owner_sid
+            || record.process.session_id != self.lease.record.session_id
+            || record.created_filetime.is_none()
+            || !record.origin.as_ref().is_some_and(|origin| {
+                origin_state(origin.pid, &origin.created, &self.effects.state(origin.pid))
+                    == ProcessState::Dead
+            })
+        {
+            return Ok(false);
+        }
+        let Some(actual) = crate::discovery::candidate(self.effects.observe(record.process.pid))
+        else {
+            return Ok(false);
+        };
+        if !actual
+            .tunnel_evidence()
+            .is_ok_and(|e| record.process.matches(&e))
+            || Some(actual.created_filetime) != record.created_filetime
+        {
+            return Ok(false);
+        }
+        let alias = actual.arguments.last().ok_or("OWNER_UNPROVEN")?;
+        let Ok(plan) = Plan::new(
+            &self.configuration,
+            &self.selection,
+            &file.name,
+            alias,
+            &record.process.monitor_instance,
+        ) else {
+            return Ok(false);
+        };
+        if plan.arguments() != actual.arguments
+            || self.effects.listening(&self.configuration, &file.name) != Ok(true)
+        {
+            return Ok(false);
+        }
+        let directory = file
+            .path
+            .parent()
+            .and_then(Path::parent)
+            .ok_or("OWNER_UNPROVEN")?;
+        if files::read(
+            &directory
+                .join("fleet-tunnel-stop-intents")
+                .join(format!("{}.json", file.name)),
+        )?
+        .is_some()
+        {
+            return Ok(false);
+        }
+        self.verify()?;
+        if files::read(&file.path)?.as_deref() != Some(&file.bytes) {
+            return Err("TUNNEL_RECORD_CHANGED");
+        }
+        self.clear_launch_intent(file)?;
+        self.hosts.get_mut(&file.name).unwrap().owned = Some(Owned {
+            launch: Launched {
+                child: None,
+                record: record.clone(),
+                record_path: file.path.clone(),
+                record_bytes: file.bytes.clone(),
+            },
+            run: None,
+            listener_after: now,
+        });
+        Ok(true)
+    }
     async fn reconcile_records(&mut self, now: u64) -> Result<HashMap<String, &'static str>> {
         let scan = files::scan(&self.options.roaming, &self.lease)?;
         let mut blocked = HashMap::new();
@@ -501,14 +597,24 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     &record.process.created,
                     &self.effects.state(record.process.pid),
                 );
-                if process == ProcessState::Dead {
+                let listener_down = matches!(process, ProcessState::Live { .. })
+                    && now >= owned.listener_after
+                    && self.effects.listening(&self.configuration, &file.name) == Ok(false);
+                if process == ProcessState::Dead || listener_down {
+                    crate::monitor_log::event(if listener_down {
+                        "TUNNEL_LISTENER_DOWN"
+                    } else {
+                        "TUNNEL_PROCESS_DEAD"
+                    });
                     h.invalidate().await;
-                    if let Some(run) = h.owned.as_ref().and_then(|o| o.run.as_ref()) {
-                        h.policy.exited(run, now, false)?;
-                    }
                     match self.stop_file(&file, true) {
                         Ok(()) => {
                             let host = self.hosts.get_mut(&file.name).unwrap();
+                            if let Some(run) = host.owned.as_ref().and_then(|o| o.run.as_ref()) {
+                                host.policy.exited(run, now, false)?;
+                            } else {
+                                host.policy.untracked_exit(now);
+                            }
                             host.owned = None;
                             if host
                                 .failure
@@ -522,7 +628,13 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                         }
                     }
                 } else {
-                    let actual = owned.launch.child.snapshot();
+                    let actual = match &owned.launch.child {
+                        Some(child) => child.snapshot(),
+                        None => self
+                            .effects
+                            .observe(record.process.pid)
+                            .and_then(|p| p.ok_or("OWNER_UNPROVEN")),
+                    };
                     if !actual.as_ref().is_ok_and(|p| {
                         p.tunnel_evidence()
                             .is_ok_and(|evidence| record.process.matches(&evidence))
@@ -545,6 +657,10 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                     }
                 }
             } else {
+                if self.adopt(&file, now)? {
+                    crate::monitor_log::event("TUNNEL_ADOPTED");
+                    continue;
+                }
                 match self.stop_file(&file, false) {
                     Ok(()) => (),
                     Err(error) => {
@@ -555,6 +671,9 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
         }
         for name in files::scan(&self.options.roaming, &self.lease)?.blocked {
             blocked.insert(name, "TUNNEL_START_UNSETTLED");
+        }
+        for error in blocked.values() {
+            crate::monitor_log::event(error);
         }
         // A missing/replaced ownership receipt never becomes permission to relaunch.
         for (name, host) in &self.hosts {
@@ -770,19 +889,33 @@ impl<E: Effects, F: ProbeFactory, R: RouteProbe + Send + 'static> Supervisor<E, 
                                 let run = host.policy.started(&choice, &host.generation, now);
                                 host.route = run.as_ref().ok().map(|_| choice.observation(now));
                                 host.owned = Some(Owned {
-                                    launch,
+                                    launch: Launched {
+                                        child: Some(launch.child),
+                                        record: launch.record,
+                                        record_path: launch.record_path,
+                                        record_bytes: launch.record_bytes,
+                                    },
                                     run: run.ok(),
+                                    // SSH may still be completing its initial handshake.
+                                    listener_after: now.saturating_add(15000),
                                 });
                                 host.observation = None;
                                 host.next_probe = 0;
                             }
                             Err("TUNNEL_START_FAILED") => {
+                                crate::errlog::event(
+                                    "bat-tunnel",
+                                    "tunnel.respawn.failed",
+                                    "TUNNEL_START_FAILED",
+                                    serde_json::json!({}),
+                                );
                                 host.policy.launch_failed(&choice, &host.generation, now)?;
                                 host.failure = Some(("TUNNEL_DOWN", Layer::Tunnel));
                                 return Ok(());
                             }
                             Err("INSTALLATION_CHANGED") => return Err("INSTALLATION_CHANGED"),
                             Err(error) => {
+                                crate::monitor_log::event(error);
                                 host.failure = Some((error, Layer::Tunnel));
                                 return Ok(());
                             }

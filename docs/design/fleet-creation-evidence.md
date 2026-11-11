@@ -1,9 +1,13 @@
 # Native Fleet creation evidence
 
 `fleet-core::creation_evidence` provides bounded records, guarded storage contracts,
-and a pure ownership resolver. It has no production Windows adapter, native route,
-IPC, configuration writer, or public Apply entrypoint. Native integration must
-supply `EvidenceIo` on one blocking thread. Launcher serializes all evidence
+and a pure ownership resolver. The [Windows adapter](../../desktop/fleet-core/src/windows_creation/native.rs#L129)
+implements ownership reads, while its explicit [writer scope](../../desktop/fleet-core/src/windows_creation/writer.rs#L13)
+provides guarded appends, recorded directory creation and first-reservation bootstrap.
+These cores have no production caller, native route, IPC or public Apply entrypoint.
+Windows adapter 已提供 ownership 讀取，明確 writer scope 則提供受 guard 保護的追加、
+逐層目錄建立證據與首次 reservation bootstrap；這些核心尚無 production caller、
+native route、IPC 或公開 Apply 入口。Native integration must keep `EvidenceIo` on one blocking thread. Launcher serializes all evidence
 operations. New reservations and admissions additionally hold Monitor and prove
 absence through `verify_effect_context`; the write fence repeats that check.
 Migration-intent admission additionally requires `verify_no_pending_migration`
@@ -22,6 +26,24 @@ native first-create operation reserves four absent slots before generator use.
 Existing external configuration is ReferenceOnly when its origin is known;
 unproven state is Unknown. No API here adopts it, repairs its ACL, rolls it back,
 or changes the backend to obtain ownership.
+
+The [single-level writer](../../desktop/fleet-core/src/windows_creation/writer.rs#L293)
+records each reserved directory before permitting descendants; [create-only publication](../../desktop/fleet-core/src/windows_creation/writer.rs#L404)
+rechecks the native context and write fence, then compares exact readback bytes.
+Only the original [reserve call](../../desktop/fleet-core/src/windows_creation/writer.rs#L139)
+can bootstrap the absent evidence root, directory-record container and receipt, then
+record those two newly created directories. A partial namespace after a crash remains
+unproven; restart never adopts or deletes it. Explicit [publication preparation](../../desktop/fleet-core/src/windows_creation/writer.rs#L83)
+prepares the fixed publisher roots; [publisher directory preparation](../../desktop/fleet-core/src/windows_creation/platform.rs#L218)
+uses the writer only inside that prepared scope. These APIs still have no production
+caller, native route, IPC or public Apply entrypoint.
+
+逐層 writer 會先記錄保留目錄的建立證據，才允許建立子層；create-only 發布會重查
+native context 與 write fence，再比對完整讀回位元組。只有原始 reserve 呼叫能
+bootstrap 原先不存在的 evidence root、目錄記錄容器及 receipt，再記錄這兩個新目錄。
+中斷後留下的不完整 namespace 仍屬 unproven，重啟不會採用或刪除。明確的 publication
+preparation 會準備固定 publisher roots；publisher 只在該 prepared scope 使用 writer
+準備目錄。這些 API 仍無 production caller、native route、IPC 或公開 Apply 入口。
 
 ## Reference and identities
 
@@ -145,7 +167,7 @@ There is no same-account hostile-tamper or backup anti-rollback guarantee.
 
 ## Record bounds and public data types
 
-All authority documents have exactly `version = 1`, `minimum_reader_version = 1`,
+Existing authority documents retain `version = 1`, `minimum_reader_version = 1`,
 and a tagged `record` with `kind` and `body`. Parsers reject unknown fields,
 duplicate decoded keys, missing fields (including explicit nullable fields), and
 nesting deeper than eight containers. The native `EvidenceKey` selects the
@@ -157,6 +179,32 @@ lowercase hex unless explicitly UUIDs. Paths are absolute UTF-8, at most 4096 by
 and 4096 UTF-16 units; lexical validation does not replace native canonicalization.
 Opaque acceptance/creation references are nonempty, at most 256 bytes, without
 control characters. SID validation reuses the existing 184-byte bound.
+
+### Original connection association
+
+`fleet-connection-association` is a pure codec for original Apply-time evidence
+needed by detach. Its producer combines a validated accepted server target with
+`FrozenHistory::association_projection()`: original selected profile IDs, proven
+SSH association, reviewed route and schema-validated inventory/index keys with
+their source digests. Display names and hostnames never establish an association.
+The server's existing connection ID is retained; creation derives it from the
+accepted operation ID using the server rule, without minting another identity.
+
+This family alone uses document/minimum-reader versions `(2,2)`. A `(1,1)` reader
+refuses it; the current reader preserves existing `(1,1)` bytes and rejects unknown
+families or mixed version pairs. Every field is required, including explicit null
+Connector/Dashboard route keys when no such mapping was reviewed. Records exclude
+credentials, challenges, endpoint text and diagnostics. The bounds are 32 KiB,
+eight containers deep, 256 UTF-8 bytes per native key and 64 lowercase hexadecimal
+characters per digest; unknown/duplicate keys and over-bound values refuse.
+The fixed `association-<sha256>.json` leaf hashes the canonical JSON tuple
+`(server, principal, startup UUID, server installation, connection, operation)`;
+tuple strings are never path segments.
+
+There is no persistence or directory resolver for this family yet. Later writing
+must use the existing creation guards and original authority checks, bound the
+family to 1024 records within the 4096-entry namespace, and refuse without GC.
+Decoding alone grants no ownership, publication or detach authority.
 
 | Public type | Fields and enforced bounds |
 | --- | --- |
@@ -181,7 +229,7 @@ control characters. SID validation reuses the existing 184-byte bound.
 | `Record` | Closed union of the eight document kinds (provisioning boxed); auxiliary documents at most 32,768 bytes. Deserialization alone is not authority. |
 | `EvidenceKey` | Fixed provision/lineage/closure/directory/managed/migration namespaces; variable filename components are 64-hex hashes. |
 | `ObservedSlot` | Absent, bounded Bytes/External, or Unavailable. The publisher's shared artifact limit is passed to observe: Installation 16 KiB, each other slot 1 MiB. The adapter must bound allocation/read, not just truncate afterward. |
-| `EvidenceIo` | Trusted synchronous platform boundary; methods listed below. No production implementation is supplied. |
+| `EvidenceIo` | Trusted synchronous platform boundary; the [private reader](../../desktop/fleet-core/src/windows_creation.rs#L272) stays read-only; the explicit [writer](../../desktop/fleet-core/src/windows_creation/writer.rs#L316) implements effect checks and create-only writes, including bootstrap. No production caller, native route, IPC or public Apply entrypoint exists. 私有 reader 維持唯讀；明確 writer 已提供效果檢查、create-only 寫入與 bootstrap，尚無 production caller、native route、IPC 或公開 Apply 入口。 |
 | `WriteFence` | Opaque pre-write login, at most 4096 record hashes and four bounded observations. |
 | `CapturedEvidence` | Opaque guarded receipt/record/observation capture; no deserializer or public constructor. |
 | `Resolution` | Opaque replay result, at most two admissible versions per slot for active Intended recovery. |

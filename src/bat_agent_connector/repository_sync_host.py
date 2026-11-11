@@ -98,7 +98,19 @@ def carrier(req):
     return {"clone_path": clone, "worktree_path": path, "branch": branch, "head": head}
 
 
-def execute(req):
+def fetch_source(req):
+    clone = req["clone_path"]
+    remote = git(clone, "ls-remote", "--refs", req["remote_url"], req["source_ref"], network=True)
+    matches = [r.split("\t", 1)[0] for r in remote.splitlines() if r.endswith("\t" + req["source_ref"])]
+    if matches != [req["source_sha"]]:
+        raise ValueError("REPOSITORY_REF_CHANGED")
+    git(clone, "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules",
+        req["remote_url"], req["source_sha"], network=True)
+    if git(clone, "cat-file", "-t", req["source_sha"]) != "commit":
+        raise ValueError("REPOSITORY_COMMIT_UNPROVEN")
+
+
+def execute(req, *, observe=lambda stage, req, value: value, fetch_source=fetch_source):
     root, clone, phase = req["managed_root"], req["clone_path"], req["phase"]
     real(root)
     if (os.path.dirname(clone) != root or not re.fullmatch(r"batc-published-[0-9a-f]{32}", os.path.basename(clone))
@@ -117,6 +129,7 @@ def execute(req):
             raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
         # Cleanup locks this same clone inode. Root lock serializes its first creation.
         exists = os.path.lexists(clone)
+        observe("existing", req, exists)
         if exists:
             real(clone)
         if phase.startswith("read.") and not exists:
@@ -137,28 +150,21 @@ def execute(req):
             if os.stat(clone) != os.fstat(fd):
                 raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
             if phase.startswith("read."):
-                return {"exists": True, "pinned": pinned(req), "carrier": carrier(req) if phase == "read.carrier" else None}
+                return observe("result", req, {"exists": True, "pinned": pinned(req), "carrier": carrier(req) if phase == "read.carrier" else None})
             if exists:
                 print(json.dumps({"locked": True}), flush=True)
                 if json.loads(sys.stdin.readline() or "{}").get("proceed") is not True:
                     raise ValueError("REPOSITORY_GATE_REQUIRED")
             if phase == "fetch":
                 if not pinned(req):
-                    remote = git(clone, "ls-remote", "--refs", req["remote_url"], req["source_ref"], network=True)
-                    matches = [r.split("\t", 1)[0] for r in remote.splitlines() if r.endswith("\t" + req["source_ref"])]
-                    if matches != [req["source_sha"]]:
-                        raise ValueError("REPOSITORY_REF_CHANGED")
-                    git(clone, "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules",
-                        req["remote_url"], req["source_sha"], network=True)
-                    if git(clone, "cat-file", "-t", req["source_sha"]) != "commit":
-                        raise ValueError("REPOSITORY_COMMIT_UNPROVEN")
+                    fetch_source(req)
                     git(clone, "update-ref", "refs/batc/published/" + req["operation_id"][3:], req["source_sha"], "")
-                return {"clone_path": clone, "source_sha": req["source_sha"], "pinned": True}
+                return observe("result", req, {"clone_path": clone, "source_sha": req["source_sha"], "pinned": True})
             if phase != "prepare" or not pinned(req):
                 raise ValueError("REPOSITORY_PIN_MISMATCH")
             observed = carrier(req)
             if observed:
-                return observed
+                return observe("result", req, observed)
             parent = clone + "/.bat-worktrees"
             if os.path.lexists(parent):
                 real(parent)
@@ -168,7 +174,7 @@ def execute(req):
             if git(clone, "show-ref", "--verify", "refs/heads/" + req["branch"], optional=True):
                 raise ValueError("REPOSITORY_CARRIER_UNPROVEN")
             git(clone, "worktree", "add", "--quiet", "-b", req["branch"], req["worktree_path"], req["source_sha"])
-            return carrier(req)
+            return observe("result", req, carrier(req))
         finally:
             LOCK_FDS.remove(fd)
             os.close(fd)

@@ -149,7 +149,7 @@ pub(super) fn receipt(intent: &Intent, envelope: &Value, body: &Value) -> Result
     )?;
     Ok(())
 }
-fn evidence(mut body: Value) -> Result<Value> {
+pub(super) fn evidence(mut body: Value) -> Result<Value> {
     body.as_object_mut()
         .ok_or(Error::Invalid)?
         .remove("challenge");

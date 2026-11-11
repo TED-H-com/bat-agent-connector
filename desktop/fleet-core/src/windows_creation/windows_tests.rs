@@ -14,7 +14,7 @@ use windows_sys::Win32::{
 fn wide(path: &Path) -> Vec<u16> {
     path.as_os_str().encode_wide().chain(Some(0)).collect()
 }
-fn protected(path: &Path) -> bool {
+pub(super) fn protected(path: &Path) -> bool {
     let mut sd = ptr::null_mut();
     assert_eq!(
         unsafe {
@@ -85,7 +85,7 @@ fn unprotect(path: &Path) {
 fn fixture() -> Fixture {
     Fixture::with_sid(crate::windows::current_login().unwrap().owner_sid)
 }
-fn platform(f: &Fixture) -> WindowsCreationPlatform {
+pub(super) fn platform(f: &Fixture) -> WindowsCreationPlatform {
     let mut p = WindowsCreationPlatform::new(
         f.reader.expected.clone(),
         f.root.clone(),
@@ -112,7 +112,7 @@ fn windows_creation_adapter_refuses_junction_ancestor_without_following_target()
     f.reader.directories.borrow_mut().clear();
     std::fs::remove_dir_all(&client).unwrap();
     assert!(
-        std::process::Command::new("cmd.exe")
+        crate::hidden_process::hidden_command("cmd.exe")
             .args(["/C", "mklink", "/J"])
             .arg(&client)
             .arg(&target)

@@ -52,7 +52,8 @@ stale exit reports no-ops. The caller must prove the process exited; unknown own
 or uncertain stop results are not exit evidence.
 
 Recovery reuses the core's existing bounded schedule: wait five seconds after failure,
-then at most three recovery attempts with 15/45/45-second next-attempt spacing. A
+then at most three recovery attempts with 15/45/45-second next-attempt spacing. The Windows supervisor opts into continuous exponential recovery (5/10/20/40/60-second
+backoff, capped at 60 seconds) instead of exhausting after three attempts. A
 positively observed owned tunnel alive for at least 60 seconds resets recovery. This
 does not clear a ten-minute alias demotion early. Initial launch, explicit selection
 changes and configuration-generation changes remain supervisor decisions; this module

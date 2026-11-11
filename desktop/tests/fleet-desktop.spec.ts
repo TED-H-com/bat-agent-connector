@@ -10,9 +10,11 @@ async function setup(page:any,options:any={}) {
  await page.addInitScript(({doc,options}:any)=>{
  Object.assign(doc,{control_version:1,backend:'powershell',login:{show_picker:true,revision:'f'.repeat(64)},pending_migration:null,profiles:[{id:'default',label:'Local BAT',connection:null},{id:'profile-1',label:'Fixture 1',connection:'node-1'},{id:'profile-2',label:'Fixture 2',connection:'node-2'}]});Object.assign(doc.selection,{profiles:['profile-1'],dashboard:true});
  const env:any={doc,calls:[],receipt:null,migration:null,lose:null,wrongReceipt:false,hold:null,...options};
+ if(options.pendingMigration){env.doc.pending_migration='4'.repeat(32);env.migration={id:'4'.repeat(32),phase:'prepared'};}
  if(options.damaged)sessionStorage.setItem('batc.desktop.fleet.controls.'+doc.configuration.binding,JSON.stringify({launch:{preview_id:'1'.repeat(32),attempted:true}}));
  Object.assign(window,{__fleet:env,isTauri:true,__TAURI_INTERNALS__:{invoke:async(command:string,args:any)=>{
-  if(command==='native_status')return {endpoint:null,error:'Fixture central offline',credential_available:false};
+  if(command==='native_status')return {endpoint:null,error:options.startupFailure?'MANAGED_RUNTIME_START_FAILED':'Fixture central offline',credential_available:false,
+   ...(options.startupFailure?{configuration_source:'managed',configuration_setup:true,connected:false}:{})};
   if(command==='connector_connect')throw new Error('Fixture central offline');
   if(command==='fleet_availability')return {configured:true,platform_supported:true,native_controls:true};
   if(!['fleet_control','fleet_request'].includes(command))throw new Error('Unexpected '+command);
@@ -45,6 +47,21 @@ async function setup(page:any,options:any={}) {
 }
 const calls=(page:any,action:string)=>page.evaluate((a:string)=>(window as any).__fleet.calls.filter((c:any)=>c.action===a),action);
 const refresh=(page:any)=>page.getByRole('button',{name:'Read status',exact:true}).first().click();
+for(const locale of ['en-US','zh-TW'])test(`existing Fleet recovery survives failed Connector first setup ${locale}`,async({browser})=>{
+ const context=await browser.newContext({locale}),page=await context.newPage();
+ try {
+  await setup(page,{startupFailure:true,pendingMigration:true});
+  const resume=page.getByRole('button',{name:locale==='zh-TW'?'繼續原轉換':'Continue original transition',exact:true});
+  await expect(resume).toBeVisible();
+  for(const action of ['preview_migration','apply_migration','advance_migration','ensure_monitor','launch'])expect(await calls(page,action)).toEqual([]);
+  await page.reload();await expect(resume).toBeVisible();
+  expect(await calls(page,'advance_migration')).toEqual([]);
+  await resume.click();
+  await expect.poll(()=>calls(page,'advance_migration')).toEqual([{action:'advance_migration',migration_id:'4'.repeat(32)}]);
+  expect(await calls(page,'apply_migration')).toEqual([]);expect(await calls(page,'ensure_monitor')).toEqual([]);
+  await expect(page.getByRole('button',{name:locale==='zh-TW'?'還原原設定':'Restore original settings',exact:true})).toBeVisible();
+ }finally{await context.close();}
+});
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`native Fleet organization ${locale} ${width}`,async({browser},testInfo)=>{
  const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await setup(page);await expect(page.locator('[data-fleet-login="picker"]')).toBeChecked();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);await page.screenshot({path:testInfo.outputPath(`fleet-${locale}-${width}.png`),fullPage:true});await context.close();
 });

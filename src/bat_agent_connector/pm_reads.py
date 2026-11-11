@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import re
 
-from . import pm_discussions, pm_profiles, pm_workspace
+from . import pm_discussions, pm_external_history_links, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    **pm_external_history_links.READS,
     "pm_dependencies_get": ("workspace_id",),
     "pm_dependencies_revisions_list": ("workspace_id", "after", "limit"),
     "pm_dependencies_impact_get": ("workspace_id", "dependency"),
@@ -129,6 +130,8 @@ def read(ops, principal, method, params):
         raise OperationError("FORBIDDEN", "PM reads need observe", 403)
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
+    if method in pm_external_history_links.READS:
+        return pm_external_history_links.read(ops, principal, method, params)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
     if method in {"pm_overview_assessments_list", "pm_overview_assessment_get"}:
         from . import pm_overview_assessments as assessments

@@ -206,10 +206,16 @@ def main(argv=None):
     parser.add_argument("--source", type=Path)
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--adoption")
+    parser.add_argument("--repair-managed", action="store_true")
     parser.add_argument("--restore-adopted", action="store_true")
     args = parser.parse_args(argv)
     try:
-        result = (restore_adopted(args.root) if args.restore_adopted else
+        from .repair_managed import repair
+
+        require(not args.repair_managed or not (args.adoption or args.restore_adopted or args.verify_only),
+                "repair_options_conflict")
+        result = (repair(json.loads(args.release)) if args.repair_managed else
+                  restore_adopted(args.root) if args.restore_adopted else
                   finalize(args.root, json.loads(args.release), source=args.source,
                            verify_only=args.verify_only, adoption=json.loads(args.adoption) if args.adoption else None))
         print(json.dumps(result, sort_keys=True))

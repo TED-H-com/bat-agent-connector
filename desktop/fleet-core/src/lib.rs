@@ -8,15 +8,18 @@ pub mod connection_catalog;
 pub mod connection_contract;
 pub mod connection_participant;
 pub mod connection_publish;
+pub mod connection_reference;
 pub mod connection_setup;
 pub mod creation_evidence;
 pub mod credential;
 pub mod discovery;
+pub mod errlog;
 pub mod installation;
 pub mod inventory;
 pub mod migration;
 mod migration_io;
 pub mod monitor_launch;
+pub mod monitor_log;
 pub mod ownership;
 #[cfg(test)]
 #[path = "../tests/support/powershell.rs"]
@@ -45,7 +48,7 @@ pub mod unconfigured;
 pub mod windows;
 #[cfg(windows)]
 pub mod windows_bootstrap;
-#[cfg(any(windows, test))]
+#[cfg(any(windows, test, feature = "creation-test-support"))]
 pub mod windows_creation;
 #[cfg(any(windows, test))]
 pub mod windows_detach;
@@ -74,3 +77,7 @@ pub fn digest(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     format!("{:x}", Sha256::digest(bytes))
 }
+
+pub mod hidden_process;
+
+extern crate self as bat_fleet_core;

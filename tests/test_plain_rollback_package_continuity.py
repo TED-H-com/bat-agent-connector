@@ -178,7 +178,7 @@ from bat_agent_connector import build_identity, cli, pr_publication, task_daemon
 package = Path(task_journal.__file__).parent
 print(json.dumps({'identity': build_identity.build_identity(),
     'pid': os.getpid(), 'executable': sys.executable, 'prefix': sys.prefix,
-    'embedded_commit': json.loads((package / 'build-info.json').read_text())['commit'],
+    'embedded_commit': json.loads((package / 'skill/build-info.json').read_text())['commit'],
     'modules': {module.__name__: module.__file__ for module in (cli, task_daemon, task_journal, pr_publication)},
     'maximum_data_step': task_journal.LATEST_DATA_STEP}), flush=True)
 def audit(event, args):

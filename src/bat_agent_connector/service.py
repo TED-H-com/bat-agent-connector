@@ -17,6 +17,7 @@ from typing import Any
 
 from . import confinement, registry, resource_policy, task_control
 from .client import BatClient, event_session_id
+from .errlog import log_error
 from .errors import BatError, ConnectionLost, InvokeError, InvokeTimeout, TaskControlRefused, WriteRefused
 from .fleet import Fleet
 from .iso_time import parse_datetime
@@ -901,7 +902,11 @@ async def session_wait(
                 }
             if not c.connected:
                 # reconnect; events during the gap are lost, so re-check the live state
-                await c.connect()
+                try:
+                    await c.connect()
+                except (BatError, OSError, asyncio.TimeoutError) as exc:
+                    log_error("bat-session", "session.reconnect.failed", exc)
+                    raise
                 meta = await _meta(c, sid)
                 if until in ("attention", "turn-end") and not (meta or {}).get("isStreaming"):
                     return {
@@ -1122,6 +1127,7 @@ async def session_send(
                                **({"before_frame": resume_frame} if relay else {}),
                                frame_guard=lambda frame: confinement.guard_resume_frame(host, sid, kind or "claude", frame))
             except BatError as e:
+                log_error("bat-session", "session.resume.failed", e)
                 audit.record(
                     actor=fleet.actor,
                     tool=tool,

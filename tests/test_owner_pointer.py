@@ -11,7 +11,15 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from bat_agent_connector import api_auth, dashboard_sync, managed_runtime, registry, service, task_daemon
+from bat_agent_connector import (
+    api_auth,
+    dashboard_sync,
+    managed_runtime,
+    platform_files,
+    registry,
+    service,
+    task_daemon,
+)
 from bat_agent_connector.browser_sessions import BrowserSessions
 from bat_agent_connector.errors import OwnerConflict, TaskControlRefused
 from bat_agent_connector.fleet import Fleet
@@ -278,8 +286,8 @@ def test_packaged_upgrade_probe_waits_for_its_child_endpoint(tmp_path, monkeypat
     script = Path(__file__).resolve().parents[1] / 'desktop/tests/managed-upgrade-fixture.py'
     monkeypatch.syspath_prepend(str(script.parent))
     fixture = runpy.run_path(str(script))
-    (tmp_path / 'state').mkdir()
-    (tmp_path / 'state/task-service.json').write_text(json.dumps(state))
+    platform_files.ensure_private_directory(tmp_path / 'state')
+    platform_files.atomic_write(tmp_path / 'state/task-service.json', json.dumps(state).encode())
     with pytest.raises(ValueError, match='not listening yet'):
         fixture['owned_launch'](tmp_path, SimpleNamespace(pid=42), {})
 
@@ -288,9 +296,9 @@ def test_packaged_upgrade_probe_proves_identity_without_a_bearer(tmp_path, monke
     script = Path(__file__).resolve().parents[1] / 'desktop/tests/managed-upgrade-fixture.py'
     monkeypatch.syspath_prepend(str(script.parent))
     fixture = runpy.run_path(str(script))
-    (tmp_path / 'state').mkdir()
-    (tmp_path / 'state/task-service.json').write_text(json.dumps({
-        'pid': 42, 'endpoint': 'http://127.0.0.1:45123/rpc'}))
+    platform_files.ensure_private_directory(tmp_path / 'state')
+    platform_files.atomic_write(tmp_path / 'state/task-service.json', json.dumps({
+        'pid': 42, 'endpoint': 'http://127.0.0.1:45123/rpc'}).encode())
     (tmp_path / 'installation.key').write_bytes(b'fixture-key')
     requests = []
 
@@ -308,8 +316,8 @@ def test_packaged_upgrade_probe_never_contacts_the_default_port(tmp_path, monkey
     script = Path(__file__).resolve().parents[1] / 'desktop/tests/managed-upgrade-fixture.py'
     monkeypatch.syspath_prepend(str(script.parent))
     fixture = runpy.run_path(str(script))
-    (tmp_path / 'state').mkdir()
-    (tmp_path / 'state/task-service.json').write_text(json.dumps({
-        'pid': 42, 'endpoint': 'http://127.0.0.1:18796/rpc'}))
+    platform_files.ensure_private_directory(tmp_path / 'state')
+    platform_files.atomic_write(tmp_path / 'state/task-service.json', json.dumps({
+        'pid': 42, 'endpoint': 'http://127.0.0.1:18796/rpc'}).encode())
     with pytest.raises(ValueError, match='Invalid owned fixture endpoint'):
         fixture['owned_launch'](tmp_path, SimpleNamespace(pid=42), {})

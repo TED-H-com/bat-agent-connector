@@ -223,12 +223,12 @@ fn malformed_old_record_blocks_even_after_valid_new_owner() {
     }
 }
 #[test]
-fn unknown_incarnation_or_incomplete_scan_is_never_absent() {
+fn unknown_incarnation_is_skipped_but_incomplete_enumeration_is_retried() {
     let fixture = Fixture::new();
     fixture.record(false, &doc(&ps(), false));
     let mut fake = Fake::new(ps());
     fake.states.insert(42, ProcessState::Unknown);
-    refusal(discover(&fixture.config(), &fake), "OWNER_UNPROVEN");
+    assert!(discover(&fixture.config(), &fake).unwrap().is_none());
     fake.states.clear();
     fake.enumeration_error = true;
     refusal(discover(&fixture.config(), &fake), "OWNER_UNPROVEN");
@@ -537,4 +537,17 @@ fn consistent_but_different_inventory_pair_returns_explicit_mismatch() {
         discover(&fixture.config(), &Fake::new(process)),
         "MONITOR_INVENTORY_MISMATCH",
     );
+}
+
+#[test]
+fn access_denied_candidate_does_not_hide_a_proven_monitor() {
+    assert!(candidate(Err("OWNER_UNPROVEN")).is_none());
+    let fixture = Fixture::new();
+    let process = rust();
+    fixture.record(false, &doc(&process, true));
+    let mut fake = Fake::new(process);
+    if let Some(process) = candidate(Err("OWNER_UNPROVEN")) {
+        fake.candidates.push(process);
+    }
+    assert!(discover(&fixture.config(), &fake).unwrap().is_some());
 }

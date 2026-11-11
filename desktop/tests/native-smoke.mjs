@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import {testScratchRoot} from './test-scratch.mjs';
 import { join, resolve } from "node:path";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, execFileSync } from "../../scripts/hidden-child-process.mjs";
 import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
 

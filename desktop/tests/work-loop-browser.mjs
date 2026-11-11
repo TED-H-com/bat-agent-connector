@@ -216,7 +216,9 @@ async function refusedAccess(active, workUrl) {
     send({stage: 'refusal-refresh'});
     const {event} = await receive();
     await expect.poll(() => Boolean(paused)).toBe(true);
-    assert.ok(eventPages.some(page => page.events.some(row => row.seq === event.seq)));
+    // The response observer decodes JSON asynchronously in the test process.
+    // A browser debugger pause does not imply that observer has finished.
+    await expect.poll(() => eventPages.some(page => page.events.some(row => row.seq === event.seq))).toBe(true);
     refreshRace = {event, paused_at: Date.now(), frames: paused.callFrames.map(frame => ({
       name: frame.functionName, location: frame.location})), source_path: sourcePath};
     context.off('response', observePage);
@@ -601,19 +603,63 @@ try {
     await shot('00-unconfirmed-start');
     send({stage: 'unknown-shown'});
     assert.equal((await receive()).readback_restored, true);
+    // Leaving the landing correctly withdraws the original submission's tab
+    // intent. Returning to Resume is a new explicit request to follow this Work.
+    await eventWrites.pause();
+    const following = () => page.evaluate(() => Object.entries(sessionStorage)
+      .filter(([key]) => key.includes('.adopt-start-live.')));
+    const originalIntent = await following();
+    await page.evaluate(workspace => {location.hash = `#/pm/${workspace}/overview`;}, f.workspace);
+    await expect(page.locator('[data-pm-region="overview"]')).toBeVisible();
+    await eventWrites.pause();
+    const withdrawnIntent = await following();
+    assert.deepEqual(withdrawnIntent, []);
     for (const kind of ['parent']) {
       step = 'recover-' + kind;
+      eventWrites.resume();
       await page.goto(boardUrl);
       await expect(landing.getByRole('button', {name: 'Resume', exact: true})).toBeVisible();
+      // Hold the landing's post-Resume read as well as event delivery. The
+      // server handshake settles the real parent before either can observe it.
+      const receipt = deferred(), releaseReceipt = deferred();
+      const receiptRoute = async route => {
+        receipt.release(); await releaseReceipt.promise;
+        await route.fallback().catch(() => {});
+      };
+      await eventWrites.pause();
+      await page.route(`**/api/v1/operations/${recovery[kind]}`, receiptRoute);
       const [resumed] = await Promise.all([
         page.waitForResponse(response => response.request().method() === 'POST'
           && new URL(response.url()).pathname === `/api/v1/operations/${recovery[kind]}/resume`),
-        eventWrites.post(page.getByRole('button', {name: 'Resume', exact: true})),
+        eventWrites.post(page.getByRole('button', {name: 'Resume', exact: true}), {resume:false}),
       ]);
       assert.ok([200, 202].includes(resumed.status()), await resumed.text());
       assert.equal((await resumed.json()).operation.operation_id, recovery[kind]);
       send({stage: 'resumed-' + kind, operation_id: recovery[kind]});
       assert.equal((await receive()).settled, true);
+      await receipt.promise;
+      const read = async path => {
+        const response = await context.request.get(origin + '/api/v1' + path,
+          {headers:{Authorization:'Bearer ' + f.token}});
+        assert.equal(response.status(), 200); return response.json();
+      };
+      const parent = (await read('/operations/' + recovery.parent)).operation;
+      const child = (await read('/operations/' + recovery.start)).operation;
+      const work = (await read('/work-items/' + f.work)).work_item;
+      const {card} = await read(`/pm/workspaces/${f.workspace}/kanban/${f.work}`);
+      writeFileSync(resolve(f.shots, 'recovery-barrier.json'), JSON.stringify({
+        barrier:'parent-settled-before-reload-and-event-delivery', original_intent:originalIntent,
+        withdrawn_intent:withdrawnIntent, resumed_intent:await following(),
+        parent:{id:parent.operation_id,status:parent.status,stage:parent.result.stage},
+        child:{id:child.operation_id,status:child.status,stage:child.result.stage,attempt_id:child.result.attempt_id},
+        work:{id:work.work_item_id,state:work.state}, board:{column:card.column,work_state:card.work.state},
+      }, null, 2) + '\n');
+      // Reload with the settled receipt still unread: the new view must make
+      // its decision from state, without seeing a completion event transition.
+      await page.reload({waitUntil:'domcontentloaded'});
+      await page.unroute(`**/api/v1/operations/${recovery[kind]}`, receiptRoute);
+      releaseReceipt.release();
+      eventWrites.resume();
     }
     active = await receive();
   }
@@ -928,12 +974,15 @@ try {
   }
   }
 } catch (error) {
+  // Preserve the failing assertion even if the page cannot provide diagnostics.
+  console.error(error);
   console.error(JSON.stringify({step, url: page?.url(), errors, requests, responses, pending: [...pending.values()]}));
   if (page && !page.isClosed()) {
-    console.error(await page.locator('body').innerText());
+    await page.locator('body').innerText({timeout: 2000})
+      .then(text => console.error(text))
+      .catch(diagnostic => console.error('Body diagnostic unavailable:', diagnostic.message));
     await shot('failure').catch(() => {});
   }
-  console.error(error);
   process.exitCode = 1;
 } finally {
   writeFileSync(resolve(f.shots, 'browser-requests.json'), JSON.stringify(allRequests, null, 2) + '\n');

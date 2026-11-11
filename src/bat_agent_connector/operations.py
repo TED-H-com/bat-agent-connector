@@ -636,7 +636,13 @@ class OperationService:
         from . import controller_authority
         authority = controller_authority.binding(self.db, principal)
         from .pm_source_lineage import require_document
-        require_document(self.db, principal, {"target": _resolved_target or target, "params": admission_params})
+        try:
+            require_document(self.db, principal, {"target": _resolved_target or target, "params": admission_params})
+        except OperationError as exc:
+            if action in {"pm.history.link", "pm.history.unlink"} and exc.status == 404:
+                from .pm_external_history import unavailable
+                raise unavailable() from None
+            raise
         with controller_authority.use(authority, self.journal):
             binding = adef.admit(self, principal, _resolved_target or target,
                                 admission_params, preconditions) if adef.admit else None

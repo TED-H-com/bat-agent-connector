@@ -11,7 +11,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Stdio,
     sync::Mutex,
     time::Duration,
 };
@@ -19,6 +19,9 @@ use zeroize::Zeroizing;
 
 const MAX_RUNTIME: u64 = 512 * 1024 * 1024;
 const MAX_REPLY: u64 = 16384;
+
+#[allow(dead_code)]
+mod creation;
 
 fn runtime_executable_busy(error: &std::io::Error) -> bool {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -202,6 +205,7 @@ pub struct Status {
 
 #[derive(Clone, Default)]
 struct RuntimeFacts {
+    creation: Option<creation::ServiceIdentity>,
     bundled: Option<RuntimeIdentity>,
     running: Option<RuntimeIdentity>,
     difference: Option<RuntimeDifference>,
@@ -210,6 +214,10 @@ struct RuntimeFacts {
 impl RuntimeFacts {
     fn from_launch(launch: &Launch) -> Self {
         Self {
+            creation: Some(creation::ServiceIdentity {
+                actor: launch.actor.clone(),
+                identity: launch.identity(),
+            }),
             bundled: launch.bundled_runtime.clone(),
             running: launch.running_runtime.clone(),
             difference: Some(
@@ -539,7 +547,7 @@ impl Managed {
             .unwrap()
             .clone()
             .ok_or("MANAGED_RUNTIME_UNAVAILABLE")?;
-        let mut command = Command::new(&executable);
+        let mut command = bat_fleet_core::hidden_process::hidden_command(&executable);
         command
             .args([action, "--data-dir"])
             .arg(&self.data_dir)
@@ -549,7 +557,8 @@ impl Managed {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
-            command.creation_flags(0x08000000); // CREATE_NO_WINDOW; serve detaches itself.
+            command.creation_flags(bat_fleet_core::hidden_process::hidden_flags(0x08000000));
+            // CREATE_NO_WINDOW; serve detaches itself.
         }
         let mut child =
             spawn_runtime(|| command.spawn()).map_err(|_| "MANAGED_RUNTIME_START_FAILED")?;
@@ -1134,7 +1143,7 @@ printf '%s' '{"protocol":1,"endpoint":"http://127.0.0.1:41001/","actor":"fixture
         data: &Path,
         mut observed: impl FnMut(&std::io::Result<std::process::Child>),
     ) -> std::io::Result<std::process::Child> {
-        let mut command = Command::new(executable);
+        let mut command = bat_fleet_core::hidden_process::hidden_command(executable);
         command
             .args(["ensure", "--data-dir"])
             .arg(data)

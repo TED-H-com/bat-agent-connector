@@ -6,10 +6,33 @@ import ipaddress
 import json
 import re
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from urllib.parse import urlsplit
 
 ADAPTER_ID = re.compile(r'[a-z][a-z0-9_-]{0,63}')
 WORKSPACE_ID = re.compile(r'ws_[0-9a-f]{32}')
+
+
+@dataclass(frozen=True)
+class LocalAhpProfile:
+    """Private central binding, separate from TCP adapters; never carries a token."""
+
+    profile_id: str
+    user_data_root: str
+    installation_root: str  # Explicit resources/app directory, not an executable to launch.
+    entry_id: str
+    provider: str
+    session_uris: tuple[str, ...] = ()
+    wire_version: str = '0.10.0'
+
+    def __post_init__(self):
+        if (not ADAPTER_ID.fullmatch(self.profile_id) or not re.fullmatch('[0-9a-f]{64}', self.entry_id)
+                or self.wire_version != '0.10.0' or not ADAPTER_ID.fullmatch(self.provider)
+                or not isinstance(self.session_uris, tuple) or len(self.session_uris) > 8):
+            raise ValueError('Invalid local AHP profile')
+        for path in (self.user_data_root, self.installation_root):
+            if not path.startswith('/') or str(PurePosixPath(path)) != path or '..' in PurePosixPath(path).parts:
+                raise ValueError('Local AHP needs explicit absolute directories')
 
 
 @dataclass(frozen=True)

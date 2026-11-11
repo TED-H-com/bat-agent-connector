@@ -13,7 +13,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod observation;
+pub(crate) use observation::{classify_intent, stop_intent_bytes};
+pub use observation::{observe_tunnels, TunnelEntry, TunnelKind, TunnelObservation, TunnelState};
+
 pub(crate) const BOUND: usize = 262144;
+const ENTRY_BOUND: usize = 2000;
 pub(crate) fn directories(roaming: &Path) -> Result<[PathBuf; 2]> {
     crate::configuration::data_directories(roaming)
 }
@@ -183,13 +188,13 @@ impl MonitorLease {
             }
             Ok(())
         };
+        let status = read(&directory.join("fleet-desktop-status.json"))?;
         replace(
             &directory.join("fleet-monitor.json"),
             expected,
             &bytes,
             validate,
         )?;
-        let status = read(&directory.join("fleet-desktop-status.json"))?;
         Ok(Self {
             directory,
             record,
@@ -252,6 +257,20 @@ impl MonitorLease {
         self.status = Some(bytes);
         Ok(())
     }
+    /// Startup has not launched any children. Restore the exact prior parent evidence
+    /// so retrying preparation cannot discard legacy orphan lineage.
+    pub(crate) fn abandon_start(&self, verify: impl FnMut() -> Result<()>) -> Result<()> {
+        let path = self.directory.join("fleet-monitor.json");
+        let prior = self
+            .previous
+            .iter()
+            .find(|(dir, _)| dir == &self.directory)
+            .and_then(|(_, bytes)| bytes.as_deref());
+        match prior {
+            Some(bytes) => replace(&path, Some(&self.bytes), bytes, verify),
+            None => remove(&path, &self.bytes),
+        }
+    }
     pub(crate) fn finish(&self) -> Result<()> {
         remove(&self.directory.join("fleet-monitor.json"), &self.bytes)
     }
@@ -278,12 +297,19 @@ fn name(value: &str) -> bool {
 /// No process is touched here. An intent without an exact completed owner receipt
 /// stays blocked even when its parent is dead: its unknown child must never be replayed.
 pub(crate) fn scan(roaming: &Path, lease: &MonitorLease) -> Result<TunnelFiles> {
+    scan_with(roaming, |dir| lease.previous_pointer(dir), |_, _, _| {})
+}
+fn scan_with(
+    roaming: &Path,
+    mut pointer: impl FnMut(&Path) -> Result<Option<MonitorPointer>>,
+    mut candidate: impl FnMut(&Path, &str, Option<&str>),
+) -> Result<TunnelFiles> {
     let mut out = TunnelFiles {
         owners: Vec::new(),
         blocked: Vec::new(),
     };
     for dir in directories(roaming)? {
-        let pointer = lease.previous_pointer(&dir)?;
+        let pointer = pointer(&dir)?;
         for (child, intent) in [
             ("fleet-tunnel-owners", false),
             ("fleet-tunnel-intents", true),
@@ -303,21 +329,17 @@ pub(crate) fn scan(roaming: &Path, lease: &MonitorLease) -> Result<TunnelFiles> 
                 return Err("TUNNEL_RECORD_UNAVAILABLE");
             }
             for (count, entry) in entries.enumerate() {
-                if count >= 2000 {
+                if count >= ENTRY_BOUND {
                     return Err("TUNNEL_RECORD_UNAVAILABLE");
                 }
                 let path = entry.map_err(|_| "TUNNEL_RECORD_UNAVAILABLE")?.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                let id = path.file_stem().and_then(|s| s.to_str()).filter(|id| {
+                    name(id) && path.extension().and_then(|s| s.to_str()) == Some("json")
+                });
+                candidate(&path, child, id);
+                let Some(id) = id.map(str::to_owned) else {
                     continue;
-                }
-                let Some(id) = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .filter(|s| name(s))
-                    .map(str::to_owned)
-                else {
-                    continue;
-                }; // Unmapped files never authorize an effect.
+                };
                 if intent {
                     out.blocked.push(id);
                     continue;
@@ -436,3 +458,7 @@ mod tests {
         assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
     }
 }
+
+#[cfg(test)]
+#[path = "supervisor_io/observation_tests.rs"]
+mod observation_tests;

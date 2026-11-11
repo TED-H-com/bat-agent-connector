@@ -135,6 +135,8 @@
               "pm.execution.runtime.observe",
               "pm.github.observe",
               "pm.governance.adoption.link",
+              "pm.history.link",
+              "pm.history.unlink",
               "pm.input.record",
               "pm.maintenance.repair.evidence.record",
               "pm.maintenance.repair.runtime.observe",
@@ -505,7 +507,12 @@
               }
             },
             "wait_ms_max": 10000,
-            "reads_never_write": true
+            "reads_never_write": true,
+            "requirements": {
+              "version": 1,
+              "binding": "original_engineering_handoff",
+              "selection": "explicit_only"
+            }
           },
           "operation_loop": {
             "version": 1
@@ -1073,7 +1080,12 @@
           }
         },
         "wait_ms_max": 10000,
-        "reads_never_write": true
+        "reads_never_write": true,
+        "requirements": {
+          "version": 1,
+          "binding": "original_engineering_handoff",
+          "selection": "explicit_only"
+        }
       },
       "work_profiles": {
         "version": 1,
@@ -1324,6 +1336,8 @@
               "pm.execution.runtime.observe",
               "pm.github.observe",
               "pm.governance.adoption.link",
+              "pm.history.link",
+              "pm.history.unlink",
               "pm.input.record",
               "pm.maintenance.repair.evidence.record",
               "pm.maintenance.repair.runtime.observe",
@@ -1694,7 +1708,12 @@
               }
             },
             "wait_ms_max": 10000,
-            "reads_never_write": true
+            "reads_never_write": true,
+            "requirements": {
+              "version": 1,
+              "binding": "original_engineering_handoff",
+              "selection": "explicit_only"
+            }
           },
           "operation_loop": {
             "version": 1
@@ -2258,7 +2277,12 @@
           }
         },
         "wait_ms_max": 10000,
-        "reads_never_write": true
+        "reads_never_write": true,
+        "requirements": {
+          "version": 1,
+          "binding": "original_engineering_handoff",
+          "selection": "explicit_only"
+        }
       },
       "work_profiles": {
         "version": 1,
@@ -2509,6 +2533,8 @@
               "pm.execution.runtime.observe",
               "pm.github.observe",
               "pm.governance.adoption.link",
+              "pm.history.link",
+              "pm.history.unlink",
               "pm.input.record",
               "pm.maintenance.repair.evidence.record",
               "pm.maintenance.repair.runtime.observe",
@@ -2879,7 +2905,12 @@
               }
             },
             "wait_ms_max": 10000,
-            "reads_never_write": true
+            "reads_never_write": true,
+            "requirements": {
+              "version": 1,
+              "binding": "original_engineering_handoff",
+              "selection": "explicit_only"
+            }
           },
           "operation_loop": {
             "version": 1
@@ -3445,7 +3476,12 @@
           }
         },
         "wait_ms_max": 10000,
-        "reads_never_write": true
+        "reads_never_write": true,
+        "requirements": {
+          "version": 1,
+          "binding": "original_engineering_handoff",
+          "selection": "explicit_only"
+        }
       },
       "work_profiles": {
         "version": 1,
@@ -3693,6 +3729,8 @@
               "pm.execution.runtime.observe",
               "pm.github.observe",
               "pm.governance.adoption.link",
+              "pm.history.link",
+              "pm.history.unlink",
               "pm.input.record",
               "pm.maintenance.repair.evidence.record",
               "pm.maintenance.repair.runtime.observe",
@@ -4063,7 +4101,12 @@
               }
             },
             "wait_ms_max": 10000,
-            "reads_never_write": true
+            "reads_never_write": true,
+            "requirements": {
+              "version": 1,
+              "binding": "original_engineering_handoff",
+              "selection": "explicit_only"
+            }
           },
           "operation_loop": {
             "version": 1
@@ -4610,7 +4653,12 @@
           }
         },
         "wait_ms_max": 10000,
-        "reads_never_write": true
+        "reads_never_write": true,
+        "requirements": {
+          "version": 1,
+          "binding": "original_engineering_handoff",
+          "selection": "explicit_only"
+        }
       },
       "work_profiles": {
         "version": 1,

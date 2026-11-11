@@ -10,6 +10,12 @@ mod files;
 mod fleet;
 mod fleet_bootstrap;
 mod fleet_control;
+// Native composition awaits the participant; no commands expose this module.
+#[allow(dead_code)]
+mod fleet_creation;
+#[cfg(any(windows, test))]
+#[path = "fleet_native/guarded.rs"]
+mod fleet_guarded;
 mod fleet_lifecycle;
 #[cfg(windows)]
 mod fleet_native;
@@ -794,11 +800,20 @@ fn main() {
     if let Entry::Supervisor(path) = &entry {
         drop(token);
         #[cfg(windows)]
-        std::process::exit(if fleet_native::run_supervisor(path).is_ok() {
-            0
-        } else {
-            1
-        });
+        {
+            let code = match fleet_native::run_supervisor(path) {
+                Ok(()) => 0,
+                Err(error) => {
+                    if let Some(directory) = path.parent() {
+                        bat_fleet_core::monitor_log::initialize(directory);
+                    }
+                    bat_fleet_core::monitor_log::event(error);
+                    eprintln!("Fleet supervisor: {error}");
+                    1
+                }
+            };
+            std::process::exit(code);
+        }
         #[cfg(not(windows))]
         {
             let _ = path;

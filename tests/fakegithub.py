@@ -15,6 +15,19 @@ from urllib.parse import unquote
 TOKEN = "ghp_fake_" + "x" * 30  # gitleaks:allow (fake test token)
 
 
+def parse_compare_route(path: str) -> tuple[str, str] | None:
+    prefix = "/repos/o/r/compare/"
+    if not path.startswith(prefix):
+        return None
+    refs = path[len(prefix):]
+    if not refs or "\n" in refs:
+        return None
+    # The greedy match used the last separator leaving both groups nonempty.
+    # Reserve one head character before rpartition, including for trailing dots.
+    base, separator, head = refs[:-1].rpartition("...")
+    return (base, head + refs[-1]) if separator and base else None
+
+
 class LoopbackHTTPServer(ThreadingHTTPServer):
     def server_bind(self):
         # HTTPServer resolves getfqdn(host), which can stall on macOS runners.
@@ -239,9 +252,9 @@ class FakeGitHub:
                 m = re.fullmatch(r"/repos/o/r/stacks/(\d+)", path)
                 if m and method == "GET":
                     return self._send(200, fake.stacks[int(m.group(1))])
-                m = re.fullmatch(r"/repos/o/r/compare/(.+)\.\.\.(.+)", path)
-                if m and method == "GET":
-                    result = fake.comparison(unquote(m.group(1)), unquote(m.group(2)), int(query.get("page", 1)))
+                refs = parse_compare_route(path)
+                if refs and method == "GET":
+                    result = fake.comparison(unquote(refs[0]), unquote(refs[1]), int(query.get("page", 1)))
                     return self._send(200, result) if result else self._send(404, {"message": "unrelated commits"})
                 m = re.fullmatch(r"/repos/o/r/pulls/(\d+)", path)
                 if m and method == "PATCH":

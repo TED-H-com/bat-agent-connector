@@ -52,7 +52,15 @@ export function adoptStartLanding({t,api,alive,namespace,workspaceId,caps,errorB
     if(busy||!current)return;
     const own=serial;busy=true;
     try{
-      alive();for(const button of body.querySelectorAll('button'))button.disabled=true;
+      alive();
+      // Resume is this tab's fresh request to follow the original Work. Its
+      // submission hint may have been withdrawn on an earlier visit. Save the
+      // intent before the await so a reload can follow an already-ready receipt;
+      // render and withdraw still cancel it when the person leaves this landing.
+      if(verb==='resume'&&selectedWork()===current.work_item_ids[0]){
+        try{sessionStorage.setItem(navigationKey(operation.operation_id),current.work_item_ids[0]);}catch{/* the ordinary Work link remains available */}
+      }
+      for(const button of body.querySelectorAll('button'))button.disabled=true;
       const value=await api('POST',`/operations/${operation.operation_id}/${verb}`,{});
       if(!valid(own))return;
       checked(value.operation,current);await refresh();

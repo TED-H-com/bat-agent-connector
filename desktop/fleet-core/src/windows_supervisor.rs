@@ -19,12 +19,13 @@ use crate::{
 };
 use std::{
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 pub struct WindowsEffects<'a> {
-    mutex: MonitorMutex,
+    mutex: Rc<MonitorMutex>,
     kit: PathBuf,
     roaming: PathBuf,
     native: NativeIdentity,
@@ -34,7 +35,7 @@ impl<'a> WindowsEffects<'a> {
     /// kit is the reviewed script/configuration directory (normally kit_root/client),
     /// not its repository parent. Paths have already passed native installation validation.
     pub fn new(
-        mutex: MonitorMutex,
+        mutex: Rc<MonitorMutex>,
         kit: PathBuf,
         roaming: PathBuf,
         native: NativeIdentity,
@@ -85,8 +86,12 @@ impl Effects for WindowsEffects<'_> {
     fn prove_absence(&self, configuration: &Configuration) -> Result<()> {
         (self.verify_installation)().map_err(|_| "INSTALLATION_CHANGED")?;
         self.prove_exclusive()?;
-        if discovery::discover(&self.discovery(configuration)?, self)?.is_some() {
-            return Err("MONITOR_ALREADY_RUNNING");
+        if let Some(owner) = discovery::discover(&self.discovery(configuration)?, self)? {
+            return Err(if owner.process.pid == std::process::id() {
+                "OWNER_UNPROVEN"
+            } else {
+                "MONITOR_ALREADY_RUNNING"
+            });
         }
         Ok(())
     }
@@ -143,6 +148,32 @@ impl Effects for WindowsEffects<'_> {
         }
         Ok(())
     }
+    fn listening(&self, configuration: &Configuration, name: &str) -> Result<bool> {
+        let row = if name == "connector" {
+            configuration.inventory.connector()
+        } else {
+            configuration
+                .inventory
+                .hosts()
+                .iter()
+                .find(|row| row["name"] == name)
+                .ok_or("CONNECTION_NOT_CONFIGURED")?
+        };
+        let endpoint =
+            crate::inventory::endpoint(row["local"].as_str().ok_or("INVENTORY_INVALID")?, true)?;
+        let address = std::net::SocketAddr::new(
+            endpoint.address.parse().map_err(|_| "INVENTORY_INVALID")?,
+            endpoint.port,
+        );
+        match std::net::TcpStream::connect_timeout(&address, Duration::from_secs(3)) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => Ok(false),
+            Err(_) => {
+                crate::monitor_log::event("LISTENER_UNPROVEN");
+                Err("LISTENER_UNPROVEN")
+            }
+        }
+    }
     fn launch(
         &mut self,
         context: &tunnel::Context<'_>,
@@ -177,15 +208,9 @@ pub fn run(
     tailscale: Option<&Path>,
     verify_installation: impl Fn() -> Result<()>,
 ) -> Result<()> {
+    crate::monitor_log::initialize(&options.roaming);
     verify_installation().map_err(|_| "INSTALLATION_CHANGED")?;
-    let mutex = MonitorMutex::try_acquire()?.ok_or("MONITOR_ALREADY_RUNNING")?;
-    let effects = WindowsEffects::new(
-        mutex,
-        kit_client_directory,
-        options.roaming.clone(),
-        native,
-        &verify_installation,
-    )?;
+    let mutex = Rc::new(MonitorMutex::try_acquire()?.ok_or("MONITOR_ALREADY_RUNNING")?);
     let routes = Arc::new(NativeRouteProbe::new(tailscale)?);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -193,17 +218,34 @@ pub fn run(
         .map_err(|_| "SUPERVISOR_UNAVAILABLE")?;
     runtime.block_on(async {
         verify_installation().map_err(|_| "INSTALLATION_CHANGED")?;
-        let mut supervisor = Supervisor::start(options, effects, NativeProbes, routes)?;
-        loop {
-            match supervisor
-                .tick_guarded(now_ms()?, &verify_installation)
-                .await
-            {
-                Ok(_) if supervisor.stopped() => return Ok(()),
-                Err("OWNER_UNPROVEN" | "OTHER_LOGIN_OWNER" | "MONITOR_EPOCH_CHANGED") => {
-                    return Err("OWNER_UNPROVEN")
+        let mut supervisor = loop {
+            verify_installation().map_err(|_| "INSTALLATION_CHANGED")?;
+            let effects = WindowsEffects::new(
+                mutex.clone(),
+                kit_client_directory.clone(),
+                options.roaming.clone(),
+                native.clone(),
+                &verify_installation,
+            )?;
+            match Supervisor::start(options.clone(), effects, NativeProbes, routes.clone()) {
+                Ok(supervisor) => break supervisor,
+                Err(error) => {
+                    crate::monitor_log::iteration(Err(error))?;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
-                _ => (), // Fixed local evidence remains; drift/read failures are retried, never forced.
+            }
+        };
+        loop {
+            let result = match now_ms() {
+                Ok(now) => supervisor
+                    .tick_guarded(now, &verify_installation)
+                    .await
+                    .map(|_| ()),
+                Err(error) => Err(error),
+            };
+            crate::monitor_log::iteration(result)?;
+            if supervisor.stopped() {
+                return Ok(());
             }
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(1)) => (),

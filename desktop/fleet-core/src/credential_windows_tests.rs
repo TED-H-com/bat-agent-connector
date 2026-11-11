@@ -100,7 +100,25 @@ fn exact_powershell_set_format_is_readable_and_native_blob_remains_ps_compatible
     let reference = CredentialRef::for_connector(&inventory()).unwrap();
     let path = temp.write("fleet-credentials/connector-observe.dpapi", b"");
     // Same API/UTF8-no-BOM output as Kit Set-FleetCredential; no real Kit file is sourced.
-    powershell("$ErrorActionPreference='Stop';$s=ConvertTo-SecureString -AsPlainText -Force 'fixture-繁體-🔐';try{[IO.File]::WriteAllText($env:BAT_FLEET_FIXTURE_DPAPI,(ConvertFrom-SecureString -SecureString $s),(New-Object Text.UTF8Encoding($false)))}finally{$s.Dispose()}",&path);
+    powershell(
+        r#"$ErrorActionPreference='Stop';
+[Console]::Error.Write("BATC_PHASE first-cmdlet-ConvertTo-before`n");[Console]::Error.Flush()
+$s=ConvertTo-SecureString -AsPlainText -Force 'fixture-繁體-🔐';
+[Console]::Error.Write("BATC_PHASE first-cmdlet-ConvertTo-after`n");[Console]::Error.Flush()
+try {
+  [Console]::Error.Write("BATC_PHASE dpapi-protect-before`n");[Console]::Error.Flush()
+  $blob=ConvertFrom-SecureString -SecureString $s;
+  [Console]::Error.Write("BATC_PHASE dpapi-protect-after`n");[Console]::Error.Flush()
+  [Console]::Error.Write("BATC_PHASE encoding-New-Object-before`n");[Console]::Error.Flush()
+  $encoding=New-Object Text.UTF8Encoding($false);
+  [Console]::Error.Write("BATC_PHASE encoding-New-Object-after`n");[Console]::Error.Flush()
+  [Console]::Error.Write("BATC_PHASE file-write-before`n");[Console]::Error.Flush()
+  [IO.File]::WriteAllText($env:BAT_FLEET_FIXTURE_DPAPI,$blob,$encoding);
+  [Console]::Error.Write("BATC_PHASE file-write-after`n");[Console]::Error.Flush()
+} finally { $s.Dispose() }
+[Console]::Error.Write("BATC_PHASE script-end`n");[Console]::Error.Flush()"#,
+        &path,
+    );
     let before = std::fs::read(&path).unwrap();
     assert_eq!(
         resolve(&temp.0, &reference).unwrap().fixture_value(),
@@ -108,5 +126,20 @@ fn exact_powershell_set_format_is_readable_and_native_blob_remains_ps_compatible
     );
     assert_eq!(std::fs::read(&path).unwrap(), before);
     std::fs::write(&path, hex(&protect("fixture-native", None))).unwrap();
-    powershell("$ErrorActionPreference='Stop';$s=ConvertTo-SecureString ([IO.File]::ReadAllText($env:BAT_FLEET_FIXTURE_DPAPI));$p=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($s);try{if([Runtime.InteropServices.Marshal]::PtrToStringBSTR($p) -cne 'fixture-native'){exit 3}}finally{[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($p);$s.Dispose()}",&path);
+    powershell(
+        r#"$ErrorActionPreference='Stop';
+[Console]::Error.Write("BATC_PHASE file-read-before`n");[Console]::Error.Flush()
+$blob=[IO.File]::ReadAllText($env:BAT_FLEET_FIXTURE_DPAPI);
+[Console]::Error.Write("BATC_PHASE file-read-after`n");[Console]::Error.Flush()
+[Console]::Error.Write("BATC_PHASE first-cmdlet-and-dpapi-unprotect-before`n");[Console]::Error.Flush()
+$s=ConvertTo-SecureString $blob;
+[Console]::Error.Write("BATC_PHASE first-cmdlet-and-dpapi-unprotect-after`n");[Console]::Error.Flush()
+[Console]::Error.Write("BATC_PHASE bstr-before`n");[Console]::Error.Flush()
+$p=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($s);
+try { if([Runtime.InteropServices.Marshal]::PtrToStringBSTR($p) -cne 'fixture-native'){exit 3} }
+finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($p);$s.Dispose() }
+[Console]::Error.Write("BATC_PHASE bstr-after`n");[Console]::Error.Flush()
+[Console]::Error.Write("BATC_PHASE script-end`n");[Console]::Error.Flush()"#,
+        &path,
+    );
 }

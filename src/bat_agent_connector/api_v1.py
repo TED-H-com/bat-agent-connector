@@ -196,6 +196,8 @@ class ApiV1:
         from . import pm_workspace_adapter
         pm_workspace_adapter.install(daemon.ops)
         pm_evidence.install(daemon.ops)
+        from . import pm_external_history_links
+        pm_external_history_links.install(daemon.ops)
         from . import board_github
         board_github.install(daemon.ops)
         pm_snapshots.install(daemon.ops)
@@ -244,6 +246,11 @@ class ApiV1:
         self.routes = [
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/overview", self.pm_overview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/resources", self.pm_resources, "observe"),
+            ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-excerpt-preview", self.pm_history_excerpt_preview, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-excerpts/(?P<excerpt_id>hxe_[0-9a-f]{64})", self.pm_history_excerpt_get, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/external-links", self.pm_history_links_list, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/external-links/(?P<link_id>hxl_[0-9a-f]{32})", self.pm_history_link_get, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history/(?P<source_id>[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})/associations", self.pm_history_associations_list, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history", self.pm_history_sources, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history/(?P<source_id>[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})", self.pm_history, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/schedule", self.pm_schedule, "observe"),
@@ -390,6 +397,7 @@ class ApiV1:
             ("GET", r"/api/v1/artifacts", self.artifacts, "observe"),
             ("GET", r"/api/v1/artifacts/(?P<aid>art_[0-9a-f]{32})/revisions/(?P<revision>[1-9][0-9]*)", self.artifact, "observe"),
             ("GET", r"/api/v1/bootstrap", self.bootstrap, "observe"),
+            ("GET", r"/api/v1/hosts/deploy-status", self.host_deploy_status, "observe"),
             ("GET", r"/api/v1/hosts", self.hosts, "observe"),
             ("GET", r"/api/v1/hosts/(?P<host>[^/]+)/preferences", self.host_preferences, "observe"),
             ("GET", r"/api/v1/sessions", self.sessions, "observe"),
@@ -589,7 +597,7 @@ class ApiV1:
                 query = parse_qs(parts.query, keep_blank_values=True)
                 kwargs.update(reader=reader, writer=writer,
                               check_authorization=authorizer(self.daemon, token, principal, browser_session=browser_session))
-            if fn in {self.connections, self.operation, self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
+            if fn in {self.host_deploy_status, self.connections, self.operation, self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
                       self.host_preferences, self.project_skills, self.work_item_results,
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
@@ -609,7 +617,8 @@ class ApiV1:
                       self.pm_maintenance_checks, self.pm_maintenance_check_current, self.pm_maintenance_check, self.pm_maintenance_schedule,
                       self.pm_ahp_adapters, self.pm_ahp_observations, self.pm_ahp_observation_current, self.pm_ahp_observation,
                       self.pm_overview, self.pm_dependencies, self.pm_dependency_revisions, self.pm_dependency_impact,
-                      self.pm_history_sources, self.pm_history, self.pm_resources, self.pm_register, self.pm_register_row, self.pm_schedule, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
+                      self.pm_history_excerpt_preview, self.pm_history_excerpt_get, self.pm_history_links_list,
+                      self.pm_history_link_get, self.pm_history_associations_list, self.pm_history_sources, self.pm_history, self.pm_resources, self.pm_register, self.pm_register_row, self.pm_schedule, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
                       self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
@@ -801,7 +810,7 @@ class ApiV1:
             integer_fields.add("cursor")
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_history_get", "pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_history_get", "pm_history_links_list", "pm_history_associations_list", "pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_ahp_observations_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -1076,6 +1085,25 @@ class ApiV1:
     async def pm_dependency_impact(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_dependencies_impact_get", query, workspace_id=workspace_id)
 
+    async def pm_history_excerpt_preview(self, principal, query, body, workspace_id, **_):
+        self._exact_query(query, set())
+        from .pm_external_history_links import READS
+        if not isinstance(body, dict) or set(body) != set(READS['pm_history_excerpt_preview']) - {'workspace_id'}:
+            raise OperationError('INVALID_PARAMS', 'Supply a fixed history selection', 422)
+        return self._pm_read(principal, 'pm_history_excerpt_preview', {}, workspace_id=workspace_id, **body)
+
+    async def pm_history_excerpt_get(self, principal, query, workspace_id, excerpt_id, **_):
+        return self._pm_read(principal, 'pm_history_excerpt_get', query, workspace_id=workspace_id, excerpt_id=excerpt_id)
+
+    async def pm_history_links_list(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, 'pm_history_links_list', query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_history_link_get(self, principal, query, workspace_id, link_id, **_):
+        return self._pm_read(principal, 'pm_history_link_get', query, workspace_id=workspace_id, link_id=link_id)
+
+    async def pm_history_associations_list(self, principal, query, workspace_id, source_id, **_):
+        return self._pm_read(principal, 'pm_history_associations_list', query, workspace_id=workspace_id, source_id=source_id)
+
     async def pm_history_sources(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_history_sources_list", query, workspace_id=workspace_id)
 
@@ -1242,6 +1270,7 @@ class ApiV1:
         from . import (
             pm_ahp_observations,
             pm_dependencies,
+            pm_external_history_links,
             pm_github_observation,
             pm_lifecycle,
             pm_overview,
@@ -1328,7 +1357,7 @@ class ApiV1:
                                       "unproven_legacy": "read_only", "admin_takeover": False},
                                   "pm_overview": pm_overview.capabilities(),
                                   "pm_resources": pm_resources.capabilities(),
-                                  "external_history": session_history.capabilities(),
+                                  "external_history": {**session_history.capabilities(), "relationships": pm_external_history_links.capabilities()},
                                   "pm_schedule": pm_schedule.capabilities(),
                                   "pm_register": pm_register.capabilities(),
                                   "pm_dependencies": pm_dependencies.capabilities(),
@@ -1394,7 +1423,7 @@ class ApiV1:
                                   "session_instructions": {"version": 1, "live_queue": False, "per_message_cancel": False},
                                   "repository_sync": repository_sync.capabilities(self.daemon.ops),
                                   "worktree_merge": worktree_merge_operations.capabilities(self.daemon.ops),
-                                  "cleanup": True, "cleanup_task": True, "inventory": True, "session_history": True, "session_observation": {"read": True, "wait": True, "max_wait_s": 1800}, "resource_relations": True, "discovery_scope": True,
+                                  "cleanup": True, "cleanup_task": True, "inventory": True, "session_history": True, "session_archive": {"version": 1, "background": True, "summary": "extractive", "pm_continuation": True}, "session_observation": {"read": True, "wait": True, "max_wait_s": 1800}, "resource_relations": True, "discovery_scope": True,
                                   "worktree_history": {"known_bindings_only": True}, "history": {"source": "journal", "legacy_transitions": "may_be_incomplete", "optional_adapters": ["delivery_part_a", "delivery_part_b"],
                                       "observed_event_kinds": [r[0] for r in self.daemon.journal.db.execute("SELECT DISTINCT kind FROM api_events ORDER BY kind")]}, "events_stream": True, "operations": True, "work_items": True,
                                   "board_github_sync": {"version": 1, "interval_s": 300},
@@ -1483,6 +1512,14 @@ class ApiV1:
         fleet = self.daemon.fleet
         return bool(runner and runner.available(host) and fleet.writes_enabled(host)
                     and fleet.orchestrate_enabled(host) and fleet.config.host(host).managed_roots)
+
+    async def host_deploy_status(self, query, **_):
+        from .errors import ConfigError
+        self._exact_query(query, {"host"})
+        try:
+            return 200, await self.daemon.deploy_status.document(self._q(query, "host"))
+        except ConfigError:
+            raise ApiError(422, "INVALID_REQUEST", "Host deployment status is not configured") from None
 
     async def hosts(self, query, **_):
         return 200, self.daemon.inventory.hosts_document(host=self._q(query, "host"), discovery=bool(self._bool(query, "discovery")), after=self._int(query, "after", 0), limit=self._int(query, "limit", 20))

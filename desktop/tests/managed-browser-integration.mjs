@@ -1,7 +1,7 @@
 // Real central + file POST navigation, HttpOnly/CSRF and restart continuity.
 import {testScratchRoot} from './test-scratch.mjs';
 import assert from "node:assert/strict";
-import {spawnSync} from "node:child_process";
+import {spawnSync} from "../../scripts/hidden-child-process.mjs";
 import {mkdtemp, rm, cp, appendFile, readFile} from "node:fs/promises";
 import {resolve, join, delimiter} from "node:path";
 import {pathToFileURL, fileURLToPath} from "node:url";

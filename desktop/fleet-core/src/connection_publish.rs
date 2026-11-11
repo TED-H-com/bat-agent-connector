@@ -66,6 +66,15 @@ pub trait Platform: migration::Platform {
     /// An absent journal/directory must be authorized by its protected parent and
     /// creation authority. This is mandatory, not a path-based default adapter.
     fn verify_private_state(&self, path: &Path, owner: &OwnerEvidence) -> crate::Result<()>;
+    /// Native writers prepare and record private roots before publisher calls.
+    /// Synthetic callers retain their existing directory behavior.
+    fn prepare_private_directory(
+        &mut self,
+        path: &Path,
+        _owner: &OwnerEvidence,
+    ) -> crate::Result<()> {
+        crate::publication_state::create_directory(path)
+    }
     /// Prepare artifact parents under the original effect authorization. Native
     /// adapters must check authorization before each individual directory effect.
     /// The default preserves the synthetic adapter's existing directory behavior.
@@ -395,7 +404,7 @@ impl Publisher {
             });
         }
         self.private(p, &self.directory, &step.owner)?;
-        crate::publication_state::create_directory(&self.directory)?;
+        p.prepare_private_directory(&self.directory, &step.owner)?;
         self.private(p, &self.directory, &step.owner)?;
         let path = self.directory.join(format!("{}.json", plan.review_digest));
         self.private(p, &path, &step.owner)?;

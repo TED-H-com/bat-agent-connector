@@ -1,6 +1,101 @@
 # Changelog
 
-## Next release (unreleased)
+## Unreleased
+
+- Explicitly save a readable Work-side relationship ID into the existing cleanup
+  index for later withdrawal after source revocation. Recheck current authority
+  and relationship identity; preserve original operation recovery, the 500-record
+  limit and English/zh-TW parity without saving conversation text.
+
+## 0.2.17 / Desktop 0.1.13 (2026-11-09)
+
+- Replace a readable external-history relationship from another entry or source
+  by explicitly looking up its ID in the same workspace. Review its original
+  Work, source and version, preserve the original operation key and ID-only draft,
+  and keep English/zh-TW browser and desktop controls aligned.
+
+- Reuse the fixed external-conversation reader in Requirements Work inspectors
+  and standalone or linked-session Work details. Revalidate workspace choices
+  and exact Work bindings, clear stale excerpts during safety reads, and preserve
+  unrelated edit drafts in English and zh-TW.
+
+- Replace an existing external-history relationship through the shared Work form,
+  preserving central atomic replacement and original request recovery. Withdraw
+  previously read relationships after source access is lost using a bounded
+  local index of identifiers, with no saved transcript or inferred authority.
+  English and zh-TW use the same browser/desktop controls.
+- Optionally associate a fixed external-conversation excerpt with an explicitly
+  selected existing Work attempt. Revalidate paginated choices and the selected
+  detail, preserve opaque-ID drafts and original operation recovery, and keep
+  Work-only association as the default in English and zh-TW.
+- Select fixed text ranges from external conversations before linking to Work,
+  with Unicode and original-newline offsets, read-only keyboard controls and
+  English/zh-TW previews. Restore range metadata without saving plaintext and
+  preserve original requests, including older whole-entry intents.
+- Admit existing external-conversation excerpt previews and Work relationship
+  reads through the restricted desktop bridge, using exact source identities,
+  bounded text selections and pagination. Authorization and relationship writes
+  remain in the central service.
+- Add shared English/zh-TW controls to preview a fixed external-history entry,
+  link it to an existing Work and withdraw a relationship. Preserve original
+  operation keys across lost replies, including withdrawals no longer present
+  in the active list. Sources stay read-only; relationships do not imply approval
+  or completion.
+- Read fixed external-conversation excerpts from the shared Board Work inspector,
+  with current relationship/source checks, bounded pagination and explicit partial
+  history. Hide withdrawn or unavailable content and fence responses after Work
+  selection changes. Reading preserves the original sessions and creates no operation.
+
+## 0.2.16 / Desktop 0.1.12 (2026-11-05)
+
+- Fix hourly `installed_source_mismatch` on v0.2.12-managed hosts by moving
+  wheel provenance to `bat_agent_connector/skill/build-info.json` (#502).
+  Hosts on v0.2.12 auto-update on the next hourly timer.
+- Add `install_connector.py --repair-managed [--dry-run]` for update-managed
+  installs refused with `already_update_managed` (#502).
+- Advance both package versions and validate the actual stable 0.2.15 core upgrade,
+  retaining the earlier 0.2.12 baseline and existing identities, workspaces and history.
+
+## 0.2.15 / Desktop 0.1.11 (2026-11-05)
+
+- Retain observed BAT user/assistant conversations in the Connector SQLite journal,
+  independently of open Dashboard pages. Bounded background backfill preserves
+  immutable message revisions, fixed snapshots and source-linked excerpts.
+- Read saved conversation versions in the shared Web/Desktop UI and the existing
+  HTTP/MCP session-read path, including after the BAT session becomes unavailable.
+  Coverage and missing-source limits remain visible; never-read deleted text cannot
+  be reconstructed, and retained history does not establish execution completion.
+- Let the existing PM continuation action summarize an explicitly selected saved
+  version through the configured PM adapter. Source citations, immutable receipts,
+  current access checks and original operation-key recovery remain intact.
+- Include opt-in read-only host deployment observations (#495) and preserve the
+  existing connection recovery fixes. This release does not enable new live writes.
+- Advance both package versions and validate upgrades of cores built from pinned
+  published 0.2.12 and 0.2.14 sources,
+  without replacing retained identities, workspaces or original operation history.
+- Correct a Unix fixture cleanup assertion to observe child PIDs in the parent,
+  without relying on Python initialization before its unchanged startup deadline.
+
+## 0.2.14 / Desktop 0.1.10 (2026-11-04)
+
+- Ship the accumulated managed-service recovery and Windows background-process fixes,
+  including retained installation identity across interrupted startup, private pointer
+  replacement, and Fleet monitor supervision. The packaged upgrade fixture now starts
+  from the actual stable Connector 0.2.12 / Desktop 0.1.8 source.
+- Keep configured Fleet recovery accessible when local Connector setup is incomplete.
+  Reopening Settings reads the original transition; continuing it remains explicit.
+- Export native startup status without adding a synthetic capabilities 401 while
+  disconnected. Correct database and service-log paths to `managed-central` in the
+  diagnostic bundle and both setup guides.
+- Use distinct Connector and Desktop versions so the bundled core can take the
+  existing identity-preserving upgrade path. Package/CI evidence remains separate
+  from installation on a user's Windows machine and real BAT acceptance.
+
+## Development history
+
+- Add opt-in read-only host deployment observations over pinned SSH using each
+  querying machine's optional local configuration, with container, compose, systemd
+  and configured Git deployment metadata in the API, CLI and Dashboard.
 
 - Review an existing BAT connection before applying it. A read-only preview shows the configuration
   changes and source boundary without saving configuration, creating an operation or probing

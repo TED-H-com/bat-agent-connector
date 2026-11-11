@@ -136,6 +136,10 @@ pub struct FleetBridge {
 }
 
 impl FleetBridge {
+    #[cfg(windows)]
+    pub(crate) fn creation_pointer(&self) -> PathBuf {
+        self.config.clone()
+    }
     #[cfg(all(test, windows))]
     pub fn load(config_dir: &Path) -> Self {
         Self::load_path(config_dir.join("fleet.json"))
@@ -343,11 +347,13 @@ async fn call(
 }
 
 fn adapter_command(executable: &Path, script: &Path, contract: bool) -> Result<Command, String> {
-    let mut command = Command::new(executable);
+    let mut command = bat_fleet_core::hidden_process::hidden_tokio_command(executable);
     command.args([
         "-NoLogo",
         "-NoProfile",
         "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
         "-ExecutionPolicy",
         "Bypass",
     ]);
@@ -412,7 +418,7 @@ fn adapter_command(executable: &Path, script: &Path, contract: bool) -> Result<C
         }
     }
     #[cfg(windows)]
-    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW; monitor bootstrap owns its own lifecycle.
+    command.creation_flags(bat_fleet_core::hidden_process::hidden_flags(0x0800_0000)); // CREATE_NO_WINDOW; monitor bootstrap owns its own lifecycle.
     Ok(command)
 }
 
@@ -1406,7 +1412,7 @@ mod tests {
                     format!("{waited:?}")
                 } else {
                     if probe == "console" {
-                        command.creation_flags(0);
+                        command.creation_flags(bat_fleet_core::hidden_process::hidden_flags(0));
                     } else if probe == "windows-environment" {
                         for name in [
                             "PSModulePath",
@@ -1453,7 +1459,7 @@ mod tests {
     }
     #[cfg(unix)]
     fn python(code: &str) -> Command {
-        let mut c = Command::new("python3");
+        let mut c = bat_fleet_core::hidden_process::hidden_tokio_command("python3");
         c.args(["-c", code]);
         c
     }

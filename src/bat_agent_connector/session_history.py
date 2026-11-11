@@ -4,10 +4,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import uuid
 from datetime import datetime, timezone
 
 from .operations import OperationError
-from .pm_workspace import require_member, server_id
+from .pm_external_history import current_grants, grant_schema
+from .pm_workspace import server_id
+from .session_history_config import HistoryConfig
 from .session_history_decoder import decode
 from .usage_adapters import UsageInvalid
 from .usage_collector import now, read_page
@@ -38,12 +41,35 @@ def _json(value):
 
 class HistoryCollector:
     def __init__(self, journal, config):
-        self.journal, self.config = journal, config
+        self.journal, self._config, self._generation = journal, HistoryConfig(), None
         self._lock = asyncio.Lock()
         schema(journal)
+        # The callback is local to this SQLite connection, not a durable grant.
+        journal.db.create_function('history_active_generation', 0, lambda: self._generation)
+        self.config = config
+
+    @property
+    def config(self):
+        return self._config
+
+    @config.setter
+    def config(self, value):
+        generation = uuid.uuid4().hex
+        with self.journal.tx():
+            db = self.journal.db
+            grant_schema(db)
+            db.execute('DELETE FROM temp.session_history_current_grants')
+            db.executemany('INSERT INTO temp.session_history_current_grants VALUES(?,?,?,?,?,?,?,?)',
+                [(s.source_id, s.workspace_id, s.binding, actor, s.adapter, value.interval_s, position, generation)
+                 for position, s in enumerate(value.sources) for actor in s.readers])
+            db.execute('INSERT OR REPLACE INTO temp.session_history_grant_state VALUES(1,?)', (generation,))
+        # Failed writes retain the previous config. An outer rollback leaves a
+        # generation mismatch and refuses reads until a new activation succeeds.
+        self._config, self._generation = value, generation
 
     async def collect_once(self):
         async with self._lock:
+            generation = self._generation
             for source in self.config.sources:
                 if not self.journal.owner_valid():
                     return
@@ -81,7 +107,7 @@ class HistoryCollector:
                 except OSError:
                     error = "source_unavailable"
                 # Source revocation during the file worker prevents every commit.
-                if not self.journal.owner_valid() or source not in self.config.sources:
+                if not self.journal.owner_valid() or generation != self._generation or source not in self.config.sources:
                     return
                 with self.journal.tx():
                     db.execute("INSERT OR IGNORE INTO session_history_sources VALUES(?,?,?,?,?,?,?)",
@@ -114,25 +140,18 @@ def capabilities():
         "read_results": False, "cross_adapter_alias": False}
 
 
-def _visible(ops, principal, wid):
-    require_member(ops.db, principal, wid)
-    collector = ops.context["history_collector"]
-    # Admin is not a substitute for the explicit transcript reader grant.
-    return collector, [s for s in collector.config.sources if s.workspace_id == wid and principal.actor in s.readers]
-
-
-def _row(ops, collector, source):
-    stored = ops.db.execute("SELECT * FROM session_history_sources WHERE source_id=?", (source.source_id,)).fetchone()
-    same = stored is not None and stored["binding"] == source.binding
+def _row(db, source):
+    stored = db.execute("SELECT * FROM session_history_sources WHERE source_id=?", (source['source_id'],)).fetchone()
+    same = stored is not None and stored["binding"] == source['binding']
     state = stored["status"] if same else "binding_changed" if stored else "pending"
     parser = json.loads(stored["parser"]) if same and state in READABLE else {}
     readable = same and state in READABLE and parser.get("identified") is True
     cursor = json.loads(stored["cursor"]) if readable else {}
     successful = stored["successful_at"] if same else None
     stale = bool(successful and (datetime.now(timezone.utc) - datetime.fromisoformat(successful)).total_seconds()
-        > max(180, collector.config.interval_s * 3))
-    count = ops.db.execute("SELECT COUNT(*) FROM session_history_entries WHERE source_id=?", (source.source_id,)).fetchone()[0] if readable else None
-    return {"source_id": source.source_id, "adapter": source.adapter, "host_id": server_id(ops.db),
+        > max(180, source['interval_s'] * 3))
+    count = db.execute("SELECT COUNT(*) FROM session_history_entries WHERE source_id=?", (source['source_id'],)).fetchone()[0] if readable else None
+    return {"source_id": source['source_id'], "adapter": source['adapter'], "host_id": server_id(db),
         "status": state, "stale": stale, "readable": readable, "entries": count,
         "checked_at": stored["checked_at"] if same else None, "collected_at": successful,
         "coverage": {"as_of": cursor.get("coverage_at"), "file_at_eof": state == "current",
@@ -144,32 +163,32 @@ def _row(ops, collector, source):
 
 
 def list_sources(ops, principal, workspace_id):
-    collector, sources = _visible(ops, principal, workspace_id)
-    return {"workspace_id": workspace_id, "rows": [_row(ops, collector, s) for s in sources], "partial": False}
+    with current_grants(ops.db, principal, workspace_id) as sources:
+        return {"workspace_id": workspace_id, "rows": [_row(ops.db, s) for s in sources], "partial": False}
 
 
 def read(ops, principal, workspace_id, source_id, *, after=0, limit=50):
-    collector, sources = _visible(ops, principal, workspace_id)
-    source = next((s for s in sources if s.source_id == source_id), None)
-    if source is None:
-        raise OperationError("NOT_FOUND", "History source is unavailable", 404)
-    if type(after) is not int or not 0 <= after <= 2**53 - 1 or type(limit) is not int or not 1 <= limit <= 100:
-        raise OperationError("INVALID_PARAMS", "History page requires an offset and limit of 1–100", 422)
-    row = _row(ops, collector, source)
-    entries = ops.db.execute("SELECT sequence,content FROM session_history_entries WHERE source_id=? AND sequence>? ORDER BY sequence LIMIT ?",
-        (source_id, after, limit + 1)).fetchall() if row["readable"] else []
-    selected, size = [], 0
-    for saved in entries[:limit]:
-        entry = {"sequence": saved["sequence"], **json.loads(saved["content"])}
-        # Bound even transports that escape every non-ASCII character. A single
-        # clipped record fits; pagination never loses the first omitted row.
-        cost = len(json.dumps(entry, ensure_ascii=True).encode())
-        if selected and size + cost > MAX_PAGE_BYTES:
-            break
-        selected.append(entry)
-        size += cost
-    more = len(entries) > len(selected)
-    return {"workspace_id": workspace_id, "source": row,
-        "entries": selected,
-        "next_after": selected[-1]["sequence"] if more and selected else None,
-        "partial": not row["readable"] or more}
+    with current_grants(ops.db, principal, workspace_id) as sources:
+        source = next((s for s in sources if s['source_id'] == source_id), None)
+        if source is None:
+            raise OperationError("NOT_FOUND", "History source is unavailable", 404)
+        if type(after) is not int or not 0 <= after <= 2**53 - 1 or type(limit) is not int or not 1 <= limit <= 100:
+            raise OperationError("INVALID_PARAMS", "History page requires an offset and limit of 1–100", 422)
+        row = _row(ops.db, source)
+        entries = ops.db.execute("SELECT sequence,content,content_digest FROM session_history_entries WHERE source_id=? AND sequence>? ORDER BY sequence LIMIT ?",
+            (source_id, after, limit + 1)).fetchall() if row["readable"] else []
+        selected, size = [], 0
+        for saved in entries[:limit]:
+            entry = {"sequence": saved["sequence"], **json.loads(saved["content"]), "content_digest": saved["content_digest"]}
+            # Bound even transports that escape every non-ASCII character. A single
+            # clipped record fits; pagination never loses the first omitted row.
+            cost = len(json.dumps(entry, ensure_ascii=True).encode())
+            if selected and size + cost > MAX_PAGE_BYTES:
+                break
+            selected.append(entry)
+            size += cost
+        more = len(entries) > len(selected)
+        return {"workspace_id": workspace_id, "source": row,
+            "entries": selected,
+            "next_after": selected[-1]["sequence"] if more and selected else None,
+            "partial": not row["readable"] or more}

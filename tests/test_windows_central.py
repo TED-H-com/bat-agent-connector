@@ -12,6 +12,8 @@ import os
 import subprocess
 import sys
 import threading
+import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -24,6 +26,74 @@ from tests.conftest import make_config
 from tests.operation_helpers import settle_operations
 
 PERSON = api_auth.Principal("local-person", frozenset({"observe", "manage"}))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="real Windows published DELETE handle")
+@pytest.mark.parametrize("release", [True, False], ids=["released", "deadline"])
+def test_windows_reader_during_publication(tmp_path, monkeypatch, release):
+    native = platform_files.native
+    root = tmp_path / "owned"
+    platform_files.ensure_private_directory(root)
+    source, target = root / "pointer.tmp", root / "task-service.json"
+    platform_files.atomic_write(source, b'{"pid":42}')
+    parent = native.open_dir(root)
+    handle, refusals = None, []
+    opening = native._open
+
+    def observed(name, **kwargs):
+        nonlocal handle
+        try:
+            return opening(name, **kwargs)
+        except OSError as error:
+            refusals.append(error.winerror)
+            assert error.winerror == 32
+            if release:
+                native._close(handle)
+                handle = None
+            raise
+
+    try:
+        handle = opening(source.name, parent=parent.handle, writable=True, delete=True)
+        native._atomic_replace(handle, parent, target.name)
+        # Exactly the writer's published handle: access 0x00130197, share 3.
+        with pytest.raises(PermissionError) as raw:
+            target.read_text()
+        assert raw.value.errno == 13  # CRT loses the underlying winerror.
+        monkeypatch.setattr(native, "_open", observed)
+        started = time.monotonic()
+        if release:
+            assert platform_files.read_private(target) == b'{"pid":42}'
+            assert refusals == [32]
+        else:
+            with pytest.raises(PermissionError) as caught:
+                platform_files.read_private(target)
+            assert caught.value.winerror == 32 and len(refusals) > 1
+            assert time.monotonic() - started >= native.PRIVATE_READ_DEADLINE_S
+    finally:
+        if handle is not None:
+            native._close(handle)
+        parent.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="real Windows ACL access denial")
+def test_windows_reader_does_not_retry_acl_denial(tmp_path, monkeypatch):
+    native = platform_files.native
+    root = tmp_path / "owned"
+    platform_files.ensure_private_directory(root)
+    path = root / "task-service.json"
+    platform_files.atomic_write(path, b"private")
+    sid = "*" + native.current_sid()
+    subprocess.run(["icacls.exe", str(path), "/deny", sid + ":(RD)"],
+                   check=True, capture_output=True, timeout=10)  # noqa: S603,S607
+    monkeypatch.setattr(native, "time", SimpleNamespace(monotonic=time.monotonic,
+        sleep=lambda _: pytest.fail("ACL access denial was retried")))
+    try:
+        with pytest.raises(PermissionError) as caught:
+            platform_files.read_private(path)
+        assert caught.value.winerror == 5
+    finally:
+        subprocess.run(["icacls.exe", str(path), "/remove:d", sid],
+                       check=True, capture_output=True, timeout=10)  # noqa: S603,S607
 
 
 async def _close(daemon):

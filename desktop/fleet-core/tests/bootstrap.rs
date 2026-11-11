@@ -309,11 +309,15 @@ fn optional_recipe_is_strict_and_ssh_command_has_no_service_paths_or_shell_optio
     assert!(Recipe::load(&f.0.join("kit"), &c).unwrap().is_none());
 }
 
-#[tokio::test]
-async fn controlled_pending_transport_obeys_real_total_deadline_without_ensure() {
+// Use paused Tokio time so synchronous admission and durable receipt I/O
+// cannot spend the watchdog margin. The unchanged 25-second guard is below
+// two 20-second deadlines and also catches an exchange with no timeout at all.
+#[tokio::test(start_paused = true)]
+async fn controlled_pending_transport_obeys_total_deadline_without_ensure() {
     let (f, c, r, g) = setup();
-    let mut m = Mock::new(&f, &c, [Reply::Crash]);
-    let start = std::time::Instant::now();
+    // A regressed second query must remain pending for the watchdog to catch it.
+    let mut m = Mock::new(&f, &c, [Reply::Crash; 2]);
+    let start = Instant::now();
     let status = tokio::time::timeout(
         Duration::from_secs(25),
         Store::new(&f.0).unwrap().advance(&r, &g, ID, &mut m),

@@ -7,6 +7,16 @@ dispatch coding work, operate Git, or supply a second operation queue. The
 workspace command service remains responsible for authorization, frozen context,
 writer admission, durable receipts, reply import and recovery.
 
+The process primitives live in `src/bat_agent_connector/native_process.py`:
+`BoundedNativeProcess` owns bounded stream IO, fsynced spool receipts, close
+escalation and evidence retention; `inspect_process` supplies read-only Linux
+death proofs. The PM adapter inherits these primitives and retains its launch
+policy, sandbox, environment, tools refusal, single-turn protocol and assessment
+in `pm_native_runtime.py`. Existing receipt bytes and `PM_NATIVE_*` errors remain
+unchanged. A stored PID is only an inspection input; signalling requires the
+owned subprocess object retained by the launching adapter. This extraction adds
+no route, credentials, permissions or API surface.
+
 ## Discussion composer
 
 An explicit [continuation brief](pm-continuation-brief.md) preserves a versioned

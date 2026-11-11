@@ -187,7 +187,7 @@ impl TunnelRecord {
         )?;
         Ok(doc)
     }
-    fn matches(&self, observed: &ProcessSnapshot) -> bool {
+    pub(crate) fn matches(&self, observed: &ProcessSnapshot) -> bool {
         observed
             .tunnel_evidence()
             .is_ok_and(|p| self.process.matches(&p))

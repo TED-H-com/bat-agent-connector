@@ -366,6 +366,30 @@ pub fn append(
     Ok(digest(&bytes))
 }
 
+/// Shared directory namespace policy for replay and guarded preparation.
+/// Review names come from parsed linkage; this is not an ownership decision.
+pub(crate) fn directory_reserved(
+    receipt: &ProvisioningReceipt,
+    path: &Path,
+    reviews: &[&str],
+) -> bool {
+    let creation = receipt.scope.state_root.join("fleet-creation");
+    let internal = ["lineage", "closures", "directories", "migrations"]
+        .iter()
+        .any(|name| path == creation.join(name));
+    let decisions = receipt.scope.state_root.join("fleet-publication-decisions");
+    let decision_child = path.parent() == Some(decisions.as_path())
+        && path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|review| records::hex(review, 64) && reviews.contains(&review));
+    let reserved = receipt.directories.iter().any(|d| {
+        matches!(d,
+        DirectoryReservation::ReservedAbsent { canonical_path } if canonical_path == path)
+    });
+    internal || decision_child || reserved
+}
+
 /// Produce the exact 115-byte native receipt identifier; not a path or authority.
 pub fn format_reference(fleet_creation_id: &str, receipt_sha256: &str) -> Result<String> {
     ensure(records::hex(fleet_creation_id, 32) && records::hex(receipt_sha256, 64))?;

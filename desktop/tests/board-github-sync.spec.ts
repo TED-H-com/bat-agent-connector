@@ -261,7 +261,7 @@ for (const locale of ['en', 'zh-TW']) test(`GitHub source lane evidence ${locale
   await page.goto(`/dashboard/#/pm/${ids.workspaceId}/board`);
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(4);
   await expect(page.locator('[data-pm-kanban-column]').first()).toHaveAttribute('data-pm-kanban-column', 'backlog');
-  await expect(page.locator('[data-pm-kanban-column]').first().locator('.pm-board-lane-name')).toHaveText(locale === 'en' ? 'Not started' : '未開始');
+  await expect(page.locator('[data-pm-kanban-column]').first().locator('.pm-board-lane-name')).toHaveText(locale === 'en' ? 'To do' : '待辦');
   const labels = locale === 'en' ? ['Done · GitHub', 'Completed · GitHub', 'Closed (not completed)']
     : ['完成 · GitHub', '完成議題 · GitHub', '已關閉（未完成）'];
   for (const [index, lane] of ['github_done', 'github_completed', 'github_closed'].entries()) {

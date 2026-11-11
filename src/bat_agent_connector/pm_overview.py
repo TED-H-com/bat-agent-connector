@@ -322,6 +322,8 @@ class Projection:
                     revoked[rid] = row
             if row['qualified'] and assessment:
                 deliveries.append({'work_item_id': row['work_item_id'], 'title': work[row['work_item_id']]['work']['title'],
+                    'assessment_ref': {'review_id': row['review_id'], 'candidate_commit': context['native_result']['candidate_commit'],
+                        **{key: assessment[key] for key in ('operation_id', 'version', 'document_digest')}},
                     'state': 'accepted', 'at': assessment['created_at']})
         for rid, row in revoked.items():
             if rid not in accepted:

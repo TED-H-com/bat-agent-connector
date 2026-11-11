@@ -3,9 +3,8 @@
 pub(crate) mod bootstrap;
 #[path = "fleet_native/controls.rs"]
 mod controls;
-#[path = "fleet_native/guarded.rs"]
-mod guarded;
 use crate::fleet::{sanitize_result, FleetRequest};
+use crate::fleet_guarded::Guarded;
 use crate::fleet_lifecycle::Ticket;
 use bat_fleet_core::{
     configuration::{Configuration, Paths},
@@ -21,7 +20,6 @@ use bat_fleet_core::{
     Result,
 };
 pub use controls::Controller;
-use guarded::Guarded;
 use serde_json::{json, Value};
 use std::{
     path::{Path, PathBuf},

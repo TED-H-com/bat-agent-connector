@@ -12,21 +12,16 @@ impl Temp {
         Self(path)
     }
     fn command(&self, code: &str) -> Command {
-        let mut command = Command::new("python3");
-        command.args([
-            "-c",
-            &format!(
-                "import os,sys,time\nwith open(sys.argv[1],'a') as f: f.write(str(os.getpid())+'\\n')\n{code}"
-            ),
-        ]);
-        command.arg(self.0.join("launches"));
+        let mut command = bat_fleet_core::hidden_process::hidden_command("python3");
+        command.args(["-c", &format!("import os,sys,time\n{code}")]);
         command
     }
+}
+impl Fixture {
     fn assert_reaped(&self) {
-        let launches = std::fs::read_to_string(self.0.join("launches")).unwrap();
-        let pids: Vec<_> = launches.lines().collect();
+        let pids = self.spawned_pids.borrow();
         assert_eq!(pids.len(), 1, "fixture must never retry a launch");
-        let pid = pids[0].parse::<i32>().unwrap();
+        let pid = i32::try_from(pids[0]).unwrap();
         let mut status = 0;
         assert_eq!(
             unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) },
@@ -73,14 +68,14 @@ fn cold_start_has_its_own_budget_and_marker_is_removed_from_output() {
         Ok(b"original-output\n".to_vec())
     );
     assert!(began.elapsed() >= Duration::from_millis(700));
-    temp.assert_reaped();
+    fixture.assert_reaped();
 }
 
 #[test]
 fn startup_and_work_timeouts_are_distinct_and_kill_only_the_one_owned_child() {
     let fixture = Fixture::new();
     let mut unrelated = Owned {
-        child: Command::new("python3")
+        child: bat_fleet_core::hidden_process::hidden_command("python3")
             .args(["-c", "import time;time.sleep(30)"])
             .spawn()
             .unwrap(),
@@ -120,7 +115,7 @@ fn startup_and_work_timeouts_are_distinct_and_kill_only_the_one_owned_child() {
             began.elapsed() < Duration::from_secs(3),
             "one phase borrowed the other's budget"
         );
-        temp.assert_reaped();
+        fixture.assert_reaped();
         assert!(unrelated.child.try_wait().unwrap().is_none());
     }
 }
@@ -162,12 +157,12 @@ fn invalid_missing_or_partial_markers_nonzero_exit_and_output_overflow_fail_and_
             ),
             Err(expected)
         );
-        temp.assert_reaped();
+        fixture.assert_reaped();
     }
     let temp = Temp::new();
     assert_eq!(
         fixture.run_with_deadlines(
-            &mut Command::new(temp.0.join("missing")),
+            &mut bat_fleet_core::hidden_process::hidden_command(temp.0.join("missing")),
             Duration::from_secs(5),
             Duration::from_secs(5)
         ),
@@ -188,7 +183,7 @@ fn closed_stdout_does_not_make_a_live_child_successful() {
         ),
         Err("PowerShell fixture exceeded its work deadline")
     );
-    temp.assert_reaped();
+    fixture.assert_reaped();
 }
 
 #[test]
@@ -201,14 +196,18 @@ fn fixture_mutex_excludes_other_threads_before_spawn() {
         let _fixture = Fixture::new();
         acquired_tx.send(()).unwrap();
     });
-    attempt_rx.recv().unwrap();
-    assert_eq!(
-        acquired_rx.recv_timeout(Duration::from_millis(100)),
-        Err(mpsc::RecvTimeoutError::Timeout)
-    );
+    let attempted = attempt_rx.recv_timeout(Duration::from_secs(5));
+    let while_held = acquired_rx.recv_timeout(Duration::from_millis(100));
     drop(fixture);
-    acquired_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-    worker.join().unwrap();
+    // Other fixtures may acquire this shared gate before the waiter. Admission
+    // has its own bounded queue budget; this test must not replace it with a
+    // five-second deadline that also includes unrelated fixtures' child work.
+    // Always release and join before asserting so a failure leaves no waiter.
+    let joined = worker.join();
+    assert!(attempted.is_ok());
+    assert_eq!(while_held, Err(mpsc::RecvTimeoutError::Timeout));
+    joined.unwrap();
+    acquired_rx.try_recv().unwrap();
 }
 
 fn panic_message(run: impl FnOnce()) -> String {
@@ -234,7 +233,7 @@ fn deadline_diagnostics_distinguish_running_child_and_closed_stdout() {
         let report = panic_message(|| {
             fixture.run(&mut temp.command(&code), Duration::from_millis(300));
         });
-        temp.assert_reaped();
+        fixture.assert_reaped();
         assert!(report.contains("PowerShell fixture exceeded its work deadline"));
         assert!(report.contains("READY=Some("), "{report}");
         assert!(
@@ -260,7 +259,7 @@ fn deadline_diagnostics_report_exit_without_stdout_eof_and_stop_the_reader() {
     // Transfer a duplicate stdout writer to another owned synthetic process.
     // This models an inherited pipe without leaving an orphaned grandchild.
     let mut holder = Owned {
-        child: Command::new("python3")
+        child: bat_fleet_core::hidden_process::hidden_command("python3")
             .args(["-c", "import array,os,select,socket,sys\ns=socket.socket(socket.AF_UNIX)\ns.bind('s');s.listen(1);s.settimeout(5)\nopen('holder-ready','w').close()\nc,_=s.accept()\n_,ancillary,_,_=c.recvmsg(1,socket.CMSG_SPACE(array.array('i').itemsize))\nfds=array.array('i');fds.frombytes(ancillary[0][2][:fds.itemsize])\nc.sendall(b'k')\nselect.select([sys.stdin],[],[],10)\nos.close(fds[0])"])
             .current_dir(&temp.0)
             .stdin(std::process::Stdio::piped())
@@ -285,7 +284,7 @@ fn deadline_diagnostics_report_exit_without_stdout_eof_and_stop_the_reader() {
     });
     let holder_still_live = holder.child.try_wait().unwrap().is_none();
     drop(holder); // Always kill/reap the writer holder before assertions.
-    temp.assert_reaped();
+    fixture.assert_reaped();
     assert!(report.contains("READY=Some("), "{report}");
     assert!(report.contains("process_exit=Some("), "{report}");
     assert!(report.contains("stdout_EOF=None"), "{report}");
@@ -311,11 +310,11 @@ fn startup_breach_is_captured_before_cleanup_and_cleared_before_the_next_run() {
     for point in ["READY=None", "stdout_EOF=None", "process_exit=None"] {
         assert!(report.contains(point), "{report}");
     }
-    temp.assert_reaped();
+    fixture.assert_reaped();
     let next = Temp::new();
     let error = fixture
         .run_with_deadlines(
-            &mut Command::new(next.0.join("missing")),
+            &mut bat_fleet_core::hidden_process::hidden_command(next.0.join("missing")),
             Duration::from_secs(5),
             Duration::from_secs(5),
         )
@@ -324,6 +323,7 @@ fn startup_breach_is_captured_before_cleanup_and_cleared_before_the_next_run() {
         fixture.failure_message(error),
         "PowerShell fixture spawn failed"
     );
+    assert!(fixture.spawned_pids.borrow().is_empty());
 }
 
 #[test]
@@ -339,5 +339,68 @@ fn lifecycle_observation_preserves_binary_output_exactly() {
         fixture.run(&mut temp.command(&code), Duration::from_secs(5)),
         expected
     );
-    temp.assert_reaped();
+    fixture.assert_reaped();
+}
+
+#[test]
+fn stderr_phases_arrive_without_changing_ready_or_stdout() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    let code = format!(
+        "{}sys.stderr.write('BATC_PHASE hash-before\\n');sys.stderr.flush()\ntime.sleep(0.05)\nsys.stderr.write('BATC_PHASE hash-after\\n');sys.stderr.flush()\nprint('unchanged')",
+        ready()
+    );
+    assert_eq!(
+        fixture.run(&mut temp.command(&code), Duration::from_secs(5)),
+        b"unchanged\n"
+    );
+    fixture.assert_reaped();
+    let report = fixture.failure_message("successful fixture");
+    assert!(report.contains("hash-before@"), "{report}");
+    assert!(report.contains("hash-after@"), "{report}");
+    assert!(report.find("hash-before@").unwrap() < report.find("hash-after@").unwrap());
+}
+
+#[test]
+fn stderr_flood_is_drained_with_bounded_tail_and_retained_markers() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    let code = format!(
+        "{}sys.stderr.write('BATC_PHASE before-flood\\n');sys.stderr.flush()\nsys.stderr.write('x'*1048576+'\\nerror-tail\\nBATC_PHASE script-end\\n');sys.stderr.flush()\nprint('finished')",
+        ready()
+    );
+    assert_eq!(
+        fixture.run(&mut temp.command(&code), Duration::from_secs(5)),
+        b"finished\n"
+    );
+    fixture.assert_reaped();
+    let report = fixture.failure_message("successful fixture");
+    assert!(report.contains("before-flood@"), "{report}");
+    assert!(report.contains("script-end@"), "{report}");
+    assert!(report.contains("error-tail"), "{report}");
+    assert!(report.contains("stderr_dropped="), "{report}");
+    assert!(
+        report.len() < 4096,
+        "stderr retention must be bounded: {}",
+        report.len()
+    );
+}
+
+#[test]
+fn stderr_last_phase_identifies_shutdown_stall_before_cleanup() {
+    let fixture = Fixture::new();
+    let temp = Temp::new();
+    let code = format!(
+        "{}sys.stderr.write('BATC_PHASE output-after\\nBATC_PHASE script-end\\n');sys.stderr.flush()\ntime.sleep(30)", ready()
+    );
+    let report = panic_message(|| {
+        fixture.run(&mut temp.command(&code), Duration::from_millis(300));
+    });
+    fixture.assert_reaped();
+    assert!(report.contains("script-end@"), "{report}");
+    assert!(
+        report.contains("stall=shutdown (script-end reached, process exit not observed)"),
+        "{report}"
+    );
+    assert!(report.contains("process_exit=None"), "{report}");
 }

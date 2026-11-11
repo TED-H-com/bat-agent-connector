@@ -19,9 +19,12 @@ on:
       - "README.md"
       - "THIRD_PARTY_NOTICES.md"
       - "hatch_build.py"
+      - "scripts/check-hidden-spawns.py"
       - "scripts/ci_scope.py"
       - "scripts/desktop_fixture_inputs.py"
       - "scripts/desktop_fixture_paths.py"
+      - "scripts/hidden-child-process.mjs"
+      - "scripts/hidden-spawns-allowlist.json"
       - "scripts/validate_connector_update.py"
       - "site/images/manifest.json"
       - "skills/bat-agent-connector/SKILL.md"
@@ -32,8 +35,10 @@ on:
       - "tests/fixtures/browser-credential-responses.json"
       - "tests/fixtures/checkpoint-refusal-destination.json"
       - "tests/fixtures/checkpoint-refusal-staging.json"
+      - "tests/fixtures/connection-association-targets.json"
       - "tests/fixtures/connector-update-facts.json"
       - "tests/fixtures/desktop-update-candidate.json"
+      - "tests/fixtures/errlog.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-discovery.json"
@@ -54,16 +59,19 @@ on:
       - "tests/mockbat.py"
       - "tests/operation_helpers.py"
       - "tests/package_build.py"
+      - "tests/source_policy_inputs.py"
       - "tests/test_api_v1.py"
       - "tests/test_api_v1_bootstrap_golden.py"
       - "tests/test_artifact_capture.py"
       - "tests/test_artifact_managed.py"
       - "tests/test_artifacts.py"
       - "tests/test_browser_credentials_browser.py"
+      - "tests/test_browser_sessions.py"
       - "tests/test_checkpoints.py"
       - "tests/test_cleanup.py"
       - "tests/test_confinement.py"
       - "tests/test_confinement_recovery.py"
+      - "tests/test_connection_sources.py"
       - "tests/test_connector_updates.py"
       - "tests/test_delivery.py"
       - "tests/test_deployment_rollback.py"
@@ -73,6 +81,8 @@ on:
       - "tests/test_lifecycle.py"
       - "tests/test_managed_setup.py"
       - "tests/test_managed_setup_browser.py"
+      - "tests/test_managed_setup_discovery.py"
+      - "tests/test_managed_setup_preview.py"
       - "tests/test_mcp_principal.py"
       - "tests/test_operations_unification.py"
       - "tests/test_platform_files.py"
@@ -106,6 +116,7 @@ on:
       - "tests/test_pm_workspace.py"
       - "tests/test_pm_worktree.py"
       - "tests/test_repository_sync.py"
+      - "tests/test_setup_connections.py"
       - "tests/test_task_cleanup.py"
       - "tests/test_task_service.py"
       - "tests/test_windows_central.py"
@@ -131,9 +142,12 @@ on:
       - "README.md"
       - "THIRD_PARTY_NOTICES.md"
       - "hatch_build.py"
+      - "scripts/check-hidden-spawns.py"
       - "scripts/ci_scope.py"
       - "scripts/desktop_fixture_inputs.py"
       - "scripts/desktop_fixture_paths.py"
+      - "scripts/hidden-child-process.mjs"
+      - "scripts/hidden-spawns-allowlist.json"
       - "scripts/validate_connector_update.py"
       - "site/images/manifest.json"
       - "skills/bat-agent-connector/SKILL.md"
@@ -144,8 +158,10 @@ on:
       - "tests/fixtures/browser-credential-responses.json"
       - "tests/fixtures/checkpoint-refusal-destination.json"
       - "tests/fixtures/checkpoint-refusal-staging.json"
+      - "tests/fixtures/connection-association-targets.json"
       - "tests/fixtures/connector-update-facts.json"
       - "tests/fixtures/desktop-update-candidate.json"
+      - "tests/fixtures/errlog.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-discovery.json"
@@ -166,16 +182,19 @@ on:
       - "tests/mockbat.py"
       - "tests/operation_helpers.py"
       - "tests/package_build.py"
+      - "tests/source_policy_inputs.py"
       - "tests/test_api_v1.py"
       - "tests/test_api_v1_bootstrap_golden.py"
       - "tests/test_artifact_capture.py"
       - "tests/test_artifact_managed.py"
       - "tests/test_artifacts.py"
       - "tests/test_browser_credentials_browser.py"
+      - "tests/test_browser_sessions.py"
       - "tests/test_checkpoints.py"
       - "tests/test_cleanup.py"
       - "tests/test_confinement.py"
       - "tests/test_confinement_recovery.py"
+      - "tests/test_connection_sources.py"
       - "tests/test_connector_updates.py"
       - "tests/test_delivery.py"
       - "tests/test_deployment_rollback.py"
@@ -185,6 +204,8 @@ on:
       - "tests/test_lifecycle.py"
       - "tests/test_managed_setup.py"
       - "tests/test_managed_setup_browser.py"
+      - "tests/test_managed_setup_discovery.py"
+      - "tests/test_managed_setup_preview.py"
       - "tests/test_mcp_principal.py"
       - "tests/test_operations_unification.py"
       - "tests/test_platform_files.py"
@@ -218,6 +239,7 @@ on:
       - "tests/test_pm_workspace.py"
       - "tests/test_pm_worktree.py"
       - "tests/test_repository_sync.py"
+      - "tests/test_setup_connections.py"
       - "tests/test_task_cleanup.py"
       - "tests/test_task_service.py"
       - "tests/test_windows_central.py"
@@ -249,6 +271,8 @@ jobs:
           # The PR checkout is refs/pull/N/merge; its first parent is the target branch tip.
           fetch-depth: 2
           persist-credentials: false
+      - name: Hidden process policy
+        run: python3 scripts/check-hidden-spawns.py
       - name: Select native builds from the PR merge diff
         id: select
         shell: bash
@@ -602,20 +626,38 @@ jobs:
         working-directory: .
         timeout-minutes: 8
         run: uv run --locked --extra desktop-build python desktop/tests/managed-runtime-fixture.py
-      - name: Check out the fixed earlier core upgrade baseline (0.2.6)
+      - name: Check out the earlier stable core upgrade baseline (0.2.12)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: f31e7964c627e4b6d3af2e2370e7a38c64a20e25
+          ref: 14c62830240148b14a4d28a9c428f7f8b5ba8bf3
           path: .upgrade-baseline
           persist-credentials: false
       - name: Build the original earlier core from its own locked environment
         working-directory: .upgrade-baseline
         timeout-minutes: 8
+        env:
+          BATC_BUILD_COMMIT: 14c62830240148b14a4d28a9c428f7f8b5ba8bf3
         run: uv run --python 3.13 --locked --extra desktop-build python desktop/scripts/build-managed-runtime.py
       - name: Distinct packaged core upgrade retains identity, workspace and original intents
         working-directory: .
         timeout-minutes: 8
         run: uv run --locked --extra dev --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --previous-source .upgrade-baseline --receipt desktop/test-results/packaged-core-upgrade.json
+      - name: Check out the latest stable core upgrade baseline (0.2.16)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 2f9386df38c71974144e58a77496f9f52b687f40
+          path: .upgrade-current-stable
+          persist-credentials: false
+      - name: Build the latest stable core from its own locked environment
+        working-directory: .upgrade-current-stable
+        timeout-minutes: 8
+        env:
+          BATC_BUILD_COMMIT: 2f9386df38c71974144e58a77496f9f52b687f40
+        run: uv run --python 3.13 --locked --extra desktop-build python desktop/scripts/build-managed-runtime.py
+      - name: Latest stable packaged core upgrade retains identity, workspace and original intents
+        working-directory: .
+        timeout-minutes: 8
+        run: uv run --locked --extra dev --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-current-stable/desktop/managed-runtime --current-resources desktop/managed-runtime --previous-source .upgrade-current-stable --receipt desktop/test-results/packaged-core-upgrade-current-stable.json
       - name: Preserve packaged core upgrade evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -624,6 +666,8 @@ jobs:
           path: |
             desktop/test-results/packaged-core-upgrade.json
             desktop/test-results/packaged-core-upgrade/
+            desktop/test-results/packaged-core-upgrade-current-stable.json
+            desktop/test-results/packaged-core-upgrade-current-stable/
           if-no-files-found: ignore
           retention-days: 7
       - name: Packaged managed setup with real browser and MockBAT
@@ -664,6 +708,19 @@ jobs:
           cargo fmt --manifest-path fleet-core/Cargo.toml --check
           cargo clippy --locked --manifest-path fleet-core/Cargo.toml --all-targets -- -D warnings
           cargo test --locked --manifest-path fleet-core/Cargo.toml --no-fail-fast
+      - name: Rust request oracle and unchanged Python handoff requests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cargo build --locked --manifest-path fleet-core/Cargo.toml --example participant_request_oracle
+          export BATC_PARTICIPANT_REQUEST_ORACLE="$PWD/fleet-core/target/debug/examples/participant_request_oracle"
+          cd ..
+          mkdir -p "$HOME/agent-work/tmp/pytest"
+          request_temp=$(mktemp -d "$HOME/agent-work/tmp/pytest/participant-XXXXXX")
+          trap 'rm -rf -- "$request_temp"' EXIT
+          for version in 3.13 3.10; do
+            uv run --isolated --python "$version" --extra dev pytest -q desktop/tests/test_participant_delivery.py --basetemp="$request_temp/$version"
+          done
       - name: Native file adapter with actual central service
         if: runner.os == 'Linux'
         timeout-minutes: 10

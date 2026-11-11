@@ -96,7 +96,7 @@ impl Backend for Disk {
         let path = self.root.join(namespace.relative_path());
         match fs::read_dir(path) {
             Ok(entries) => entries
-                .take(13)
+                .take(31)
                 .map(|e| {
                     Part::from_filename(
                         e.map_err(|_| Error::Unavailable)?
@@ -304,10 +304,7 @@ fn restart_loads_the_original_intent_and_frozen_reference_without_a_new_plan() {
         .unwrap()
         .unwrap();
     assert_eq!(record.intent().bytes().unwrap(), f.intent.bytes().unwrap());
-    assert_eq!(
-        record.recover(NOW).unwrap(),
-        Next::Executor { read_only: false }
-    );
+    assert_eq!(record.recover(NOW).unwrap(), Next::Readback);
     let mut wrong = f.intent.accepted().scope.clone();
     wrong.principal_id = "2".repeat(64);
     assert!(f
@@ -325,7 +322,7 @@ fn stored_future_variants_are_unsupported_without_writes_at_every_entry_point() 
         ("/accepted/kind", json!("reference_detach")),
         ("/accepted/action", json!("connection.reference.apply")),
         ("/accepted/contract_version", json!(2)),
-        ("/format_version", json!(2)),
+        ("/format_version", json!(3)),
     ] {
         for extra_field in [false, true] {
             let f = Fixture::new();
@@ -384,7 +381,7 @@ fn beginning_a_different_intent_conflicts_without_changing_stored_bytes() {
     assert_eq!(disk.snapshot(&namespace), original);
     assert_eq!(
         store.begin(&f.intent).unwrap().recover(NOW),
-        Ok(Next::Claim)
+        Ok(Next::Readback)
     );
     assert_eq!(disk.snapshot(&namespace), original);
 
@@ -469,41 +466,26 @@ fn recovery_never_delivers_an_unpersisted_receipt_or_renews_a_sent_claim() {
     let mut store = f.store();
     assert_eq!(
         store.begin(&f.intent).unwrap().recover(NOW).unwrap(),
-        Next::Claim
+        Next::Readback
     );
     let claimed = f.save(&mut store, Part::Claim, &json!({"requested_at_ms":NOW}));
-    assert_eq!(claimed.recover(NOW + 1).unwrap(), Next::ReplayClaim);
+    assert_eq!(claimed.recover(NOW + 1).unwrap(), Next::Readback);
     assert_eq!(claimed.recover(NOW + 300000).unwrap(), Next::Readback);
     let record = f.save(&mut store, Part::Envelope, &f.wire["applied"]["claim"]);
-    assert_eq!(
-        record.recover(NOW).unwrap(),
-        Next::Executor { read_only: false }
-    );
-    assert_eq!(
-        record.recover(NOW + 300000).unwrap(),
-        Next::Executor { read_only: true }
-    );
+    assert_eq!(record.recover(NOW).unwrap(), Next::Readback);
+    assert_eq!(record.recover(NOW + 300000).unwrap(), Next::Readback);
     let bytes = serde_json::to_vec_pretty(&f.wire["applied"]["wire"]).unwrap();
     assert!(store.append(&f.intent, Part::Receipt(0), &bytes).is_err());
     f.effects(&mut store);
     let record = store.append(&f.intent, Part::Receipt(0), &bytes).unwrap();
-    assert_eq!(
-        record.recover(NOW).unwrap(),
-        Next::Redeliver {
-            index: 0,
-            body: bytes.clone()
-        }
-    );
+    assert_eq!(record.recover(NOW).unwrap(), Next::Readback);
     assert_eq!(
         store
             .load(&f.intent)
             .unwrap()
             .recover(NOW + 900000)
             .unwrap(),
-        Next::Redeliver {
-            index: 0,
-            body: bytes
-        }
+        Next::Readback
     );
     let record = f.save(
         &mut store,
@@ -579,10 +561,7 @@ fn readback_authority_never_creates_an_effect_fence() {
     store.begin(&f.intent).unwrap();
     f.save(&mut store, Part::Claim, &json!({"requested_at_ms":NOW}));
     let record = f.save(&mut store, Part::Envelope, &f.wire["applied"]["readback"]);
-    assert_eq!(
-        record.recover(NOW).unwrap(),
-        Next::Executor { read_only: true }
-    );
+    assert_eq!(record.recover(NOW).unwrap(), Next::Readback);
     assert!(store
         .append(
             &f.intent,
@@ -717,10 +696,7 @@ fn foreign_or_malformed_envelopes_receipts_and_acknowledgements_refuse_without_w
     assert!(store.append(&f.intent, Part::Envelope, b"{}").is_err());
     assert_eq!(
         store.load(&f.intent).unwrap().recover(NOW).unwrap(),
-        Next::Redeliver {
-            index: 0,
-            body: serde_json::to_vec(&f.wire["applied"]["wire"]).unwrap()
-        }
+        Next::Readback
     );
 }
 
@@ -764,10 +740,7 @@ fn a_crash_after_the_real_publisher_decision_keeps_the_original_decision() {
         .unwrap();
     let before = fs::read(&sidecar).unwrap();
     let recovered = store.load(&f.intent).unwrap();
-    assert_eq!(
-        recovered.recover(NOW + 900000).unwrap(),
-        Next::Executor { read_only: true }
-    );
+    assert_eq!(recovered.recover(NOW + 900000).unwrap(), Next::Readback);
     let replay = publisher
         .abandon_remaining(
             f.frozen.plan(),
@@ -863,27 +836,17 @@ fn every_create_boundary_recovers_only_durable_parts_and_leaves_business_files_a
             let record = f.store().begin(&f.intent).unwrap();
             let durable = target + usize::from(after);
             let next = record.recover(NOW).unwrap();
-            match durable {
-                0 | 1 => assert_eq!(next, Next::Claim),
-                2 => assert_eq!(next, Next::ReplayClaim),
-                3 => assert_eq!(next, Next::Executor { read_only: false }),
-                4..=7 => assert_eq!(next, Next::Executor { read_only: true }),
-                8 => assert_eq!(
+            if durable == 9 || durable == 10 || durable == 12 {
+                assert_eq!(
                     next,
-                    Next::Redeliver {
-                        index: 0,
-                        body: steps[7].1.clone()
+                    if uncertain && durable < 12 {
+                        Next::Executor { read_only: true }
+                    } else {
+                        Next::Done
                     }
-                ),
-                9 | 10 if uncertain => assert_eq!(next, Next::Executor { read_only: true }),
-                11 if uncertain => assert_eq!(
-                    next,
-                    Next::Redeliver {
-                        index: 1,
-                        body: steps[10].1.clone()
-                    }
-                ),
-                _ => assert_eq!(next, Next::Done),
+                );
+            } else {
+                assert_eq!(next, Next::Readback);
             }
             for name in sentinels {
                 assert_eq!(
@@ -973,3 +936,6 @@ fn corrupt_foreign_oversized_or_linked_parts_fail_closed() {
         assert!(store.load(&f.intent).is_err());
     }
 }
+
+#[path = "support/participant_posts.rs"]
+mod posts;

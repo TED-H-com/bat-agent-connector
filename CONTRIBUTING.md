@@ -13,6 +13,27 @@ Thanks for helping! This is an unofficial companion to Better Agent Terminal; pl
   scan; please also run `gitleaks detect` locally.
 * Protocol behaviour should cite the BAT source file/version it was read from.
 
+For local Linux runs, use `scripts/pytest-disktmp uv run pytest -q` (or add
+`--python 3.10` after `uv run`). The wrapper creates and removes its own directory
+under `~/agent-work/tmp/pytest/`; `PYTEST_DISK_ROOT` may select another disk fixture
+root where local repository guidance permits. RAM-backed roots and a caller-supplied
+`--basetemp` are rejected. Do not put test databases or Git fixtures in tmpfs.
+
+Fleet bootstrap fixtures exercise real path ownership and permissions, including
+all ancestors. If the host fixture root has a group-writable ancestor, run
+`scripts/pytest-disktmp --private-tmp uv run pytest -q`. This requires Linux
+bubblewrap and user namespaces. It provides a user-owned root and `/tmp` inside the
+test process's mount namespace, both backed by the wrapper's new disk directory.
+Host permissions and the host `/tmp` are unchanged. This is fixture path isolation,
+not a security sandbox: accessible host paths and the network remain available
+for the normal test tools and mock servers. Do not
+weaken the guard or chmod shared ancestors to make these tests pass. A missing or
+blocked bubblewrap fails the run rather than silently changing the test setup.
+Check the wrapper itself outside a private namespace:
+`scripts/pytest-disktmp uv run pytest -q tests/test_pytest_disktmp.py`. Its optional namespace
+cases skip when bubblewrap is unavailable or the kernel disallows nesting; the
+ordinary argument/cleanup cases still run. Fleet checks are never skipped by the wrapper.
+
 Use `tests.operation_helpers.settle_operations` to wait for durable test outcomes.
 Its 60-second deadline covers scheduling, persisted status and worker completion;
 it is not a per-handler runtime measurement. On timeout it reports each worker's

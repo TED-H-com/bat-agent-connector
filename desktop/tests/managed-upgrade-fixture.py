@@ -36,6 +36,9 @@ from managed_runtime_assertions import (
     stable_launch,
 )
 
+from bat_agent_connector import platform_files
+from bat_agent_connector.managed_runtime import _locked, _running
+
 continuity = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'tests/upgrade_continuity_helpers.py'))
 snapshot_rows = continuity['snapshot_rows']
 assert_rows_preserved = continuity['assert_rows_preserved']
@@ -173,9 +176,11 @@ def owned_pid(child, pid):
 
 def owned_launch(data, child, original):
     try:
-        pointer = json.loads((data / 'state/task-service.json').read_text())
+        pointer = json.loads(platform_files.read_private(data / 'state/task-service.json'))
     except FileNotFoundError:
         raise OwnerNotReady('Owned fixture service is not listening yet') from None
+    except OSError as error:
+        raise OSError(f"Owned fixture pointer read failed (winerror={getattr(error, 'winerror', None)})") from error
     endpoint = pointer.get('endpoint')
     if not owned_pid(child, pointer.get('pid')) or not endpoint:
         raise OwnerNotReady('Owned fixture service is not listening yet')
@@ -312,10 +317,24 @@ def terminate_owned(child):
         child.wait(timeout=10)
 
 
+def quiesce_fixture_owner(data, launch, *, timeout=30):
+    # Setup hands an idle installation to our explicit serve child. Use the
+    # upgrader's authenticated shutdown, not the user's durable Stop command:
+    # versions with lifecycle holds correctly refuse serve after that command.
+    with _locked(data / 'launcher.lock'):
+        assert not (data / 'state/lifecycle.json').exists(), 'Fixture setup must not clear a stop hold'
+        assert request(launch, '/api/v1/managed/stop', body={}) == {'protocol': 1, 'stopped': True}
+        until = time.monotonic() + timeout
+        while _running(data):
+            assert time.monotonic() < until, 'Fixture owner did not release its lease'
+            time.sleep(0.1)
+        assert not (data / 'state/lifecycle.json').exists(), 'Upgrade shutdown must not create a stop hold'
+
+
 def busy_refusal(previous, current, old_manifest, root, env):
     data = root / 'busy-installation'
     original = command(previous, data, env)
-    assert command(previous, data, env, action='stop')['stopped'] is True
+    quiesce_fixture_owner(data, original)
     options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {'start_new_session': True}
     child = subprocess.Popen(  # noqa: S603 - explicit hash-verified task-owned fault fixture
         [str(previous), 'serve', '--data-dir', str(data)], env=env, stdin=subprocess.DEVNULL,
@@ -348,8 +367,9 @@ def busy_refusal(previous, current, old_manifest, root, env):
 fixture_log_text = runpy.run_path(str(Path(__file__).with_name('managed_upgrade_observer.py')))['fixture_log_text']
 
 
-def preserve_publication_logs(root):
-    directory = Path(__file__).resolve().parents[1] / 'test-results/packaged-core-upgrade'
+def preserve_publication_logs(root, directory=None):
+    if directory is None:
+        directory = Path(__file__).resolve().parents[1] / 'test-results/packaged-core-upgrade'
     directory.mkdir(parents=True, exist_ok=True)
     seed = 'Seed log was not written; failure occurred before producer output.'
     for name in ('publication-seed.log', 'publication-core.log'):
@@ -367,14 +387,14 @@ def preserve_publication_logs(root):
     return seed
 
 
-def publication_upgrade(previous, current, previous_source, root, env, *, pytest_prefix=None):
+def publication_upgrade(previous, current, previous_source, root, env, *, pytest_prefix=None, diagnostics_dir=None):
     try:
         result = _publication_upgrade(previous, current, previous_source, root, env, pytest_prefix=pytest_prefix)
     except Exception as error:
-        tail = preserve_publication_logs(root)
+        tail = preserve_publication_logs(root, diagnostics_dir)
         message = fixture_log_text(f'{type(error).__name__}: {error}', root)
         raise AssertionError(f'{message}\nPublication seed log (last 300 lines):\n{tail}') from None
-    preserve_publication_logs(root)
+    preserve_publication_logs(root, diagnostics_dir)
     return result
 
 
@@ -435,7 +455,7 @@ existing packaged workspace/identity checks; its publication path remains open.
         handlers[name] = hashlib.sha256(old.read_bytes()).hexdigest()
     data = root / 'publication-installation'
     original = command(previous, data, env)
-    assert command(previous, data, env, action='stop')['stopped'] is True
+    quiesce_fixture_owner(data, original)
     output = root / 'publication-seed.json'
     # Controller Python has dev dependencies; frozen children still have no
     # Python on PATH. The seeder writes through the real action/receipt code.
@@ -602,7 +622,8 @@ def main():
         idle_upgrade(previous, current, old, new, root, env)
         busy_refusal(previous, current, old, root, env)
         publication = publication_upgrade(previous, current,
-            args.previous_source or args.previous_resources.resolve().parents[1], root, env)
+            args.previous_source or args.previous_resources.resolve().parents[1], root, env,
+            diagnostics_dir=args.receipt.with_suffix('') if args.receipt else None)
         receipt = {'status': 'passed', 'evidence_level': 'packaged-core-upgrade-fixture', 'live_accepted': False,
             'previous': {key: old[key] for key in ('runtime_version', 'sha256')},
             'current': {key: new[key] for key in ('runtime_version', 'sha256')},

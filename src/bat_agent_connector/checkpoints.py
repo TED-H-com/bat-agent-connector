@@ -25,6 +25,8 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 
+from bat_agent_connector import hidden_process
+
 from . import artifacts, confinement, orchestrate, registry, resource_policy, service
 from ._bounded import capture
 from .api_auth import Principal
@@ -96,7 +98,7 @@ async def _run(argv: tuple[str, ...], timeout_s: float | None = None) -> str:
             return await _run_locked(argv, check, timeout_s)
         finally:
             _LOCKED_CHECK.reset(token)
-    proc = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    proc = await hidden_process.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     try:
         out, err = await asyncio.wait_for(capture(proc), timeout_s or GIT_TIMEOUT_S)
     except asyncio.TimeoutError:
@@ -112,7 +114,7 @@ async def _run(argv: tuple[str, ...], timeout_s: float | None = None) -> str:
 
 async def _run_locked(argv, check, timeout_s):
     """Keep the host's directory flock while the connector checks BAT; permit only on an explicit reply."""
-    proc = await asyncio.create_subprocess_exec(*argv, stdin=asyncio.subprocess.PIPE,
+    proc = await hidden_process.create_subprocess_exec(*argv, stdin=asyncio.subprocess.PIPE,
                                                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     async def exchange():
         first = await proc.stdout.readline()

@@ -33,6 +33,8 @@ struct State {
     stops: Vec<u32>,
     next_pid: u32,
     unknown_stop: bool,
+    listener_down: HashSet<String>,
+    iteration_error: bool,
     unknown_processes: HashSet<u32>,
     unknown_launch: HashSet<String>,
     installation_changed_on_launch: bool,
@@ -135,7 +137,13 @@ impl Effects for FakeEffects {
         })
     }
     fn verify_owner(&self, _: &Configuration, lease: &MonitorLease) -> Result<()> {
+        if self.0.lock().unwrap().iteration_error {
+            return Err("OWNER_UNPROVEN");
+        }
         lease.verify(self)
+    }
+    fn listening(&self, _: &Configuration, name: &str) -> Result<bool> {
+        Ok(!self.0.lock().unwrap().listener_down.contains(name))
     }
     fn launch(
         &mut self,
@@ -464,10 +472,22 @@ async fn equivalent_roaming_paths_preserve_owned_children_and_restart_receipts()
             .count(),
         5
     );
+    assert_eq!(shared.lock().unwrap().stops.len(), 0);
+    assert_eq!(shared.lock().unwrap().launches.len(), 5);
+    // Adopted receipts retain their original epoch and still supervise process death.
+    let receipt_path =
+        f.0.join("BetterAgentTerminal/fleet-tunnel-owners/node-1.json");
+    let receipt = std::fs::read(&receipt_path).unwrap();
+    let record = TunnelRecord::parse(&receipt, None).unwrap();
+    assert_ne!(record.process.monitor_instance, runtime.epoch());
+    shared.lock().unwrap().processes.remove(&record.process.pid);
+    advance(&mut runtime, 2100).await;
+    advance(&mut runtime, 7000).await;
+    assert_eq!(shared.lock().unwrap().launches.len(), 5);
+    advance(&mut runtime, 7200).await;
+    assert_eq!(shared.lock().unwrap().launches.len(), 6);
+    assert_eq!(runtime.shutdown(8000).await.unwrap().lifecycle, "stopped");
     assert_eq!(shared.lock().unwrap().stops.len(), 5);
-    assert_eq!(shared.lock().unwrap().launches.len(), 10);
-    assert_eq!(runtime.shutdown(3000).await.unwrap().lifecycle, "stopped");
-    assert_eq!(shared.lock().unwrap().stops.len(), 10);
     assert!(!f.0.join("BetterAgentTerminal/fleet-monitor.json").exists());
 }
 #[tokio::test]
@@ -1131,51 +1151,66 @@ async fn private_legacy_selection_edit_invalidates_workers_with_identical_public
     );
 }
 #[tokio::test]
-async fn unrelated_selection_change_does_not_reset_exhausted_host_recovery() {
-    let (f, s, mut r) = fixture();
-    advance(&mut r, 1000).await;
-    for (death, next_start) in [(2000, 7000), (8000, 23000), (24000, 69000), (70000, 115000)] {
-        let bytes =
-            std::fs::read(f.0.join("BetterAgentTerminal/fleet-tunnel-owners/node-1.json")).unwrap();
-        let record = TunnelRecord::parse(&bytes, None).unwrap();
-        s.lock().unwrap().processes.remove(&record.process.pid);
-        advance(&mut r, death).await;
-        advance(&mut r, next_start).await;
+async fn dead_and_listenerless_tunnels_retry_with_capped_backoff() {
+    for dead in [true, false] {
+        let (f, s, mut r) = fixture();
+        advance(&mut r, 1000).await;
+        let mut death = 20000;
+        // More than three failures must keep recovering; a preference edit cannot reset timing.
+        for (index, delay) in [5000, 10000, 20000, 40000, 60000, 60000]
+            .into_iter()
+            .enumerate()
+        {
+            let path =
+                f.0.join("BetterAgentTerminal/fleet-tunnel-owners/node-1.json");
+            let record = TunnelRecord::parse(&std::fs::read(path).unwrap(), None).unwrap();
+            if dead {
+                s.lock().unwrap().processes.remove(&record.process.pid);
+            } else {
+                s.lock().unwrap().listener_down.insert("node-1".into());
+            }
+            advance(&mut r, death).await;
+            s.lock().unwrap().listener_down.clear();
+            if index == 3 {
+                let selection = f.0.join("BetterAgentTerminal/fleet-client.json");
+                let mut doc: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(&selection).unwrap()).unwrap();
+                doc["connections"] = json!(["connector", "node-1", "node-2", "node-3", "node-4"]);
+                std::fs::write(selection, serde_json::to_vec(&doc).unwrap()).unwrap();
+                advance(&mut r, death + 100).await;
+            }
+            let launches = || {
+                s.lock()
+                    .unwrap()
+                    .launches
+                    .iter()
+                    .filter(|n| *n == "node-1")
+                    .count()
+            };
+            assert_eq!(launches(), index + 1);
+            advance(&mut r, death + delay - 20).await;
+            assert_eq!(launches(), index + 1);
+            advance(&mut r, death + delay + 20).await;
+            assert_eq!(launches(), index + 2);
+            death += delay + 20000;
+        }
+        r.shutdown(death + 1000).await.unwrap();
     }
-    assert_eq!(
-        s.lock()
-            .unwrap()
-            .launches
-            .iter()
-            .filter(|n| *n == "node-1")
-            .count(),
-        4
-    );
-    let path = f.0.join("BetterAgentTerminal/fleet-client.json");
-    let mut doc: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    doc["connections"] = json!(["connector", "node-1", "node-2", "node-3", "node-4"]);
-    std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
-    let status = advance(&mut r, 200000).await;
-    assert_eq!(
-        status
-            .entries
-            .iter()
-            .find(|e| e.name == "node-1")
-            .unwrap()
-            .code
-            .as_deref(),
-        Some("RECOVERY_EXHAUSTED")
-    );
-    assert_eq!(
-        s.lock()
-            .unwrap()
-            .launches
-            .iter()
-            .filter(|n| *n == "node-1")
-            .count(),
-        4
-    );
+}
+#[tokio::test]
+async fn ownership_read_error_leaves_children_and_next_iteration_recovers() {
+    let (_f, s, mut r) = fixture();
+    advance(&mut r, 1000).await;
+    s.lock().unwrap().iteration_error = true;
+    let result = r.tick(2000).await.map(|_| ());
+    assert_eq!(result, Err("OWNER_UNPROVEN"));
+    assert_eq!(bat_fleet_core::monitor_log::iteration(result), Ok(()));
+    assert!(!r.stopped());
+    s.lock().unwrap().iteration_error = false;
+    advance(&mut r, 3000).await;
+    assert_eq!(s.lock().unwrap().launches.len(), 5);
+    assert!(s.lock().unwrap().stops.is_empty());
+    r.shutdown(4000).await.unwrap();
 }
 
 #[tokio::test]
@@ -2306,4 +2341,76 @@ async fn pending_requirement_rows_match_native_fixture() {
     let expected: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/fixtures/fleet-pending.json")).unwrap();
     assert_eq!(pending_requirement_fixture().await, expected);
+}
+
+#[tokio::test]
+async fn failed_start_restores_previous_monitor_evidence_before_retry() {
+    let (f, shared, mut runtime) = fixture();
+    advance(&mut runtime, 1000).await;
+    let path = f.0.join("BetterAgentTerminal/fleet-monitor.json");
+    let previous = std::fs::read(&path).unwrap();
+    drop(runtime);
+    {
+        let mut state = shared.lock().unwrap();
+        state.processes.get_mut(&SELF).unwrap().created_filetime += 100000;
+        state.iteration_error = true;
+    }
+    let start = || {
+        Supervisor::start(
+            Options {
+                configuration: f.paths(),
+                roaming: f.0.clone(),
+                quit_file: f.0.join("quit.json"),
+            },
+            FakeEffects(shared.clone()),
+            FakeProbes(shared.clone()),
+            Arc::new(FakeRoutes),
+        )
+    };
+    assert_eq!(start().err(), Some("OWNER_UNPROVEN"));
+    assert_eq!(std::fs::read(path).unwrap(), previous);
+    shared.lock().unwrap().iteration_error = false;
+    let mut runtime = start().unwrap();
+    advance(&mut runtime, 2000).await;
+    assert_eq!(shared.lock().unwrap().launches.len(), 5);
+    assert!(shared.lock().unwrap().stops.is_empty());
+    runtime.shutdown(3000).await.unwrap();
+}
+
+#[tokio::test]
+async fn listener_loss_with_uncertain_stop_never_resends_or_blocks_other_hosts() {
+    let (_f, shared, mut runtime) = fixture();
+    advance(&mut runtime, 1000).await;
+    {
+        let mut state = shared.lock().unwrap();
+        state.listener_down.insert("node-1".into());
+        state.unknown_stop = true;
+    }
+    advance(&mut runtime, 20000).await;
+    let stops = shared.lock().unwrap().stops.len();
+    assert_eq!(stops, 1);
+    advance(&mut runtime, 90000).await;
+    assert_eq!(shared.lock().unwrap().stops.len(), stops);
+    assert_eq!(shared.lock().unwrap().launches.len(), 5);
+    // Even if the listener comes back, the original stop intent fences recovery.
+    shared.lock().unwrap().listener_down.clear();
+    let status = advance(&mut runtime, 91000).await;
+    assert_eq!(
+        status
+            .entries
+            .iter()
+            .find(|e| e.name == "connector")
+            .unwrap()
+            .level,
+        "ready"
+    );
+    assert_eq!(shared.lock().unwrap().stops.len(), stops);
+    // Resolve only the fixture-owned uncertain child, then allow ordinary cleanup.
+    {
+        let mut state = shared.lock().unwrap();
+        state.unknown_stop = false;
+        let pid = *state.stops.last().unwrap();
+        state.processes.remove(&pid);
+    }
+    runtime.shutdown(92000).await.unwrap();
 }

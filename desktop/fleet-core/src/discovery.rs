@@ -499,6 +499,18 @@ fn combine(found: &mut Option<MonitorIdentity>, next: MonitorIdentity) -> Result
     }
     Ok(())
 }
+/// Enumeration cannot establish ownership of an inaccessible process.
+/// Only complete positive observations participate in discovery.
+pub fn candidate(result: Result<Option<ProcessSnapshot>>) -> Option<ProcessSnapshot> {
+    match result {
+        Ok(Some(process)) if process.valid() => Some(process),
+        Ok(None) => None,
+        _ => {
+            crate::monitor_log::event("CANDIDATE_SKIPPED_OWNER_UNPROVEN");
+            None
+        }
+    }
+}
 pub fn discover(
     config: &DiscoveryConfig,
     observations: &impl Observation,
@@ -516,9 +528,11 @@ pub fn discover(
             let record = MonitorRecord::parse(bytes)?;
             match origin_state(record.pid, &record.created, &observations.state(record.pid)) {
                 ProcessState::Dead => (),
-                ProcessState::Unknown => return Err("OWNER_UNPROVEN"),
+                ProcessState::Unknown => {
+                    crate::monitor_log::event("CANDIDATE_SKIPPED_STATE_UNKNOWN");
+                }
                 ProcessState::Live { .. } => {
-                    if let Some(process) = observations.observe(record.pid)? {
+                    if let Some(process) = candidate(observations.observe(record.pid)) {
                         if record.birth_matches(&process) {
                             validate_record(config, &record, &process, &login)?;
                             let ownership = if process.login.session_id == login.session_id {
@@ -550,9 +564,9 @@ pub fn discover(
         return Err("OWNER_UNPROVEN");
     }
     for process in candidates {
-        if !process.valid() {
-            return Err("OWNER_UNPROVEN");
-        }
+        let Some(process) = candidate(Ok(Some(process))) else {
+            continue;
+        };
         if process.login.owner_sid != login.owner_sid {
             continue;
         }

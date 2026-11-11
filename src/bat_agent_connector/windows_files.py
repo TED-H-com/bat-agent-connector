@@ -33,6 +33,8 @@ ULONG_PTR = c.c_size_t
 ATOMIC_REPLACE_MAX_ATTEMPTS = 6
 ATOMIC_REPLACE_DEADLINE_S = 0.5
 ATOMIC_REPLACE_RETRY_S = 0.02
+PRIVATE_READ_DEADLINE_S = 0.5
+PRIVATE_READ_RETRY_S = 0.02
 
 
 class UnicodeString(c.Structure):
@@ -256,8 +258,26 @@ def open_dir(path: Path, *, create=False):
 
 def open_file(name, flags, mode=0o600, *, parent):
     writable = bool(flags & (os.O_WRONLY | os.O_RDWR))
-    handle = _open(name, parent=parent.handle, create=bool(flags & os.O_CREAT),
-                   exclusive=bool(flags & os.O_EXCL), writable=writable)
+    deadline = time.monotonic() + PRIVATE_READ_DEADLINE_S
+    original_error = None
+    while True:
+        try:
+            handle = _open(name, parent=parent.handle, create=bool(flags & os.O_CREAT),
+                           exclusive=bool(flags & os.O_EXCL), writable=writable)
+            break
+        except OSError as error:
+            # A published writer retains DELETE access until flush/close. Keep
+            # the pinned parent and all leaf checks; never retry ACL denial (5).
+            if flags != os.O_RDONLY or getattr(error, "winerror", None) != 32:
+                raise
+            if original_error is None:
+                original_error = error
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise original_error from None
+            time.sleep(min(PRIVATE_READ_RETRY_S, remaining))
+            if time.monotonic() >= deadline:
+                raise original_error from None
     try:
         fd = msvcrt.open_osfhandle(handle, (os.O_RDWR if flags & os.O_RDWR else os.O_WRONLY if writable else os.O_RDONLY)
                                   | os.O_BINARY | os.O_NOINHERIT)

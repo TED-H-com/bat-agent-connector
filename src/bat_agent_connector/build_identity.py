@@ -28,7 +28,9 @@ def _read_build_identity() -> dict:
             raw = distribution.read_text("direct_url.json")
             doc = json.loads(raw) if raw else {}
             vcs = doc.get("vcs_info", {})
-            embedded = Path(__file__).with_name("build-info.json")
+            embedded = Path(__file__).with_name("skill") / "build-info.json"
+            if not embedded.exists():
+                embedded = Path(__file__).with_name("build-info.json")  # 0.2.14-0.2.15 layout
             if vcs.get("vcs") == "git":
                 result.update(source="vcs", commit=_commit(vcs.get("commit_id")))
                 if embedded.exists():

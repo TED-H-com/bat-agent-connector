@@ -20,6 +20,9 @@ def operation_source_visible(db, principal, operation_id):
     if not pm_source_lineage.visible(db, principal, "operation", operation_id):
         return False
     row = db.execute("SELECT action FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
+    if row and row[0] in {"pm.history.link", "pm.history.unlink"}:
+        from .pm_external_history_links import operation_visible
+        return operation_visible(db, principal, {"operation_id": operation_id})
     if row and row[0] in {"pm.conversation.propose", "pm.conversation.adopt"}:
         from .pm_conversation_proposals import operation_visible
         return operation_visible(db, principal, {"operation_id": operation_id})

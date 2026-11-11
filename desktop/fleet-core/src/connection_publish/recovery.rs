@@ -1,6 +1,6 @@
 //! Native evidence only. No operation authority, renewal, transport or UI export.
 use super::*;
-use crate::{connection_setup::frozen, publication_state};
+use crate::connection_setup::frozen;
 pub use frozen::FROZEN_PLAN_LIMIT;
 
 const DECISION_LIMIT: usize = 32768;
@@ -318,15 +318,15 @@ impl Publisher {
     }
     fn private_directory(
         &self,
-        p: &impl Platform,
+        p: &mut impl Platform,
         path: &Path,
         owner: &OwnerEvidence,
     ) -> Result<()> {
         self.private(p, path, owner)?;
-        publication_state::create_directory(path)?;
+        p.prepare_private_directory(path, owner)?;
         self.private(p, path, owner)
     }
-    fn decision_directory(&self, review: &str) -> PathBuf {
+    pub(crate) fn decision_directory(&self, review: &str) -> PathBuf {
         self.sibling("fleet-publication-decisions").join(review)
     }
     fn observations_valid(record: &DecisionRecord, journal: &Journal) -> bool {

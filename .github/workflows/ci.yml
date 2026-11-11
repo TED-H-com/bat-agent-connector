@@ -54,6 +54,8 @@ jobs:
           python-version: "3.13"
       - name: Sync (locked)
         run: uv sync --locked --extra dev
+      - name: Hidden process policy
+        run: uv run python scripts/check-hidden-spawns.py
       - name: Lint
         run: uv run ruff check .
       - name: Generated agent skills
@@ -106,12 +108,23 @@ jobs:
       - name: Sync (locked)
         run: uv sync --locked --extra dev
       - name: Tests (mock server only; existing live-test policy unchanged)
-        run: >-
-          uv run pytest -q -p tests.ci_shard_plugin
-          --ci-shard-index=${{ matrix.shard }} --ci-shard-count=5
-          --ci-shard-manifest=ci-results/manifest.json
-          --junitxml=ci-results/junit.xml -o junit_family=xunit1 --durations=15
-      - name: Preserve collection proof and JUnit results
+        # Run 39922072602: max completed Tests 1705s * 1.5 = 42m37.5s < 43m.
+        # Max setup 11s + Tests 43m + upload/cleanup reserve 1m < job 45m (post-test max 6s).
+        # A step deadline can preserve uploads only while the runner remains healthy.
+        timeout-minutes: 43
+        shell: bash
+        run: |
+          mkdir -p ci-results
+          # Slowest phase 163.23s * 3 = 489.69s < 600s. One plugin-owned timer spans
+          # setup/call/teardown, including failed-call cleanup. Disable the built-in
+          # timer: its exception hook cancels dumps before a failed test's teardown.
+          uv run pytest -q -p tests.ci_shard_plugin -p no:faulthandler \
+            --ci-shard-index=${{ matrix.shard }} --ci-shard-count=5 \
+            --ci-shard-manifest=ci-results/manifest.json \
+            --junitxml=ci-results/junit.xml -o junit_family=xunit1 --durations=15 \
+            --ci-watchdog-seconds=600 \
+            2> >(tee ci-results/tracebacks.log >&2) | tee ci-results/pytest.log
+      - name: Preserve collection proof, progress, tracebacks and JUnit results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -121,7 +134,7 @@ jobs:
           if-no-files-found: error
 
   pytest-complete:
-    needs: [scope, pytest]
+    needs: [scope, pytest, native-isolation]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -136,6 +149,10 @@ jobs:
         with:
           pattern: pytest-*
           path: ci-results
+      - name: Require the real coding isolation canary
+        env:
+          CANARY_RESULT: ${{ needs.native-isolation.result }}
+        run: test "$CANARY_RESULT" = success
       - name: Require successful shards and an exact partition on every Python version
         env:
           SHARDS_RESULT: ${{ needs.pytest.result }}
@@ -160,3 +177,30 @@ jobs:
           echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
           tar -xzf gitleaks.tgz gitleaks
           ./gitleaks git --redact --verbose .
+
+  native-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked --extra dev
+      - uses: ./.github/actions/bounded-apt
+        with:
+          package-set: native-isolation
+          package-set-hash: ${{ hashFiles('.github/workflows/ci.yml') }}
+      - name: Install bubblewrap and enable user namespaces on this disposable runner only
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap e2fsprogs
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Require the real filesystem and process canary on a bounded disk volume
+        env:
+          BAC_REQUIRE_BWRAP: "1"
+        run: bash scripts/check_native_isolation.sh

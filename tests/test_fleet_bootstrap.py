@@ -95,6 +95,27 @@ def test_ensure_rechecks_unit_then_releases_original_owner_lock_before_one_start
     assert service.starts == [recipe.data["unit"]]
 
 
+@pytest.mark.parametrize("target", ["ancestor", "state", "journal", "lock", "unit"])
+@pytest.mark.parametrize("writable", [0o020, 0o002])
+def test_unsafe_path_permissions_refuse_before_service_start(fixture, target, writable):
+    recipe, request, service = fixture
+    state = Path(recipe.data["state_directory"])
+    path = {"ancestor": state.parent, "state": state, "journal": Path(recipe.data["journal_path"]),
+            "lock": state / "task-daemon.lock", "unit": Path(recipe.data["unit_path"])}[target]
+    # Establish the safe control first, so an unrelated unsafe host ancestor cannot
+    # make a refusal test pass without reaching the intended fixture boundary.
+    assert b.handle(recipe, request, service)["state"] == "stopped"
+    request["action"] = "ensure"
+    original = path.stat().st_mode & 0o777
+    try:
+        path.chmod(original | writable)
+        with pytest.raises(b.Refused, match="BOOTSTRAP_STATE_UNPROVEN"):
+            b.handle(recipe, request, service)
+        assert not service.starts
+    finally:
+        path.chmod(original)
+
+
 @pytest.mark.parametrize("field,value", [("action", {}), ("action", "restart"), ("attempt", True), ("attempt", 6),
                                          ("protocol", True), ("request_id", "other"), ("generation", []),
                                          ("owner_uid", -1), ("service_id", "other"), ("journal_path", "/other"),

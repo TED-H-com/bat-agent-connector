@@ -73,6 +73,8 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "checkpoint_get": "observe", "checkpoint_preview": "observe", "integration_candidates": "observe",
            "integration_preview_get": "observe", "integration_get": "observe", "integrations_list": "observe",
            "pm_overview_get": "observe", "pm_dependencies_get": "observe", "pm_dependencies_revisions_list": "observe", "pm_dependencies_impact_get": "observe",
+           "pm_history_excerpt_preview": "observe", "pm_history_excerpt_get": "observe",
+           "pm_history_links_list": "observe", "pm_history_link_get": "observe", "pm_history_associations_list": "observe",
            "pm_resources_get": "observe", "pm_history_sources_list": "observe", "pm_history_get": "observe", "pm_register_list": "observe", "pm_register_get": "observe", "pm_schedule_get": "observe", "pm_workspaces_list": "observe", "pm_workspace_get": "observe", "pm_threads_list": "observe",
            "pm_thread_get": "observe", "pm_context_get": "observe", "pm_context_bundle_preview": "observe", "pm_profiles_get": "observe",
            "pm_runs_list": "observe", "pm_run_get": "observe", "pm_capabilities_get": "observe",
@@ -165,7 +167,7 @@ class TaskDaemon:
         self._initialized = False
         self._endpoint: str | None = None
 
-    _lazy_attributes = {"journal", "fleet", "adapter", "coordinator", "ops", "api", "inventory",
+    _lazy_attributes = {"deploy_status", "journal", "fleet", "adapter", "coordinator", "ops", "api", "inventory",
                         "result_collector",
                         "goose", "jev", "router", "_admin_token", "admin_token_path", "pusher",
                         "minimal_router", "minimal_review_gate", "default_task_path", "_submit_lock",
@@ -267,12 +269,16 @@ class TaskDaemon:
         self.result_collector = AttemptResultCollector(self.ops)
         self.inventory.after_refresh.append(self.result_collector.after_refresh)
         self.ops.context["attempt_result_collector"] = self.result_collector
+        from .deploy_status import DeployStatus
         from .usage_collector import UsageCollector
+        self.deploy_status = DeployStatus(config.deploy_status)
         self.usage_collector = UsageCollector(self.journal, config.usage)
         self.ops.context["usage_collector"] = self.usage_collector
         from .session_history import HistoryCollector
         self.history_collector = HistoryCollector(self.journal, config.session_history)
         self.ops.context["history_collector"] = self.history_collector
+        from .session_archive import SessionArchive
+        self.session_archive = SessionArchive(self)
         self.api = ApiV1(self, allowed_origins=config.api.allowed_origins)
         from . import task_cleanup
         task_cleanup.backfill(self.ops)
@@ -1248,7 +1254,7 @@ class TaskDaemon:
             requests[task] = writer
             task.add_done_callback(lambda done: requests.pop(done, None))
 
-        worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = history_reads = board_reads = None
+        worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = history_reads = board_reads = archive_reads = None
         try:
             server = await asyncio.start_server(connected, host, port)
             bound_host = server.sockets[0].getsockname()[0]
@@ -1266,6 +1272,7 @@ class TaskDaemon:
             inventory = asyncio.create_task(self.inventory.loop())
             usage_reads = asyncio.create_task(self.usage_collector.loop())
             history_reads = asyncio.create_task(self.history_collector.loop())
+            archive_reads = asyncio.create_task(self.session_archive.loop())
             serving = asyncio.create_task(server.serve_forever())
             # Withdraw discovery before cancellation closes the listening socket.
             await asyncio.shield(serving)
@@ -1289,7 +1296,7 @@ class TaskDaemon:
                 if serving is not None:
                     serving.cancel()
                     await asyncio.gather(serving, return_exceptions=True)
-                for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads, history_reads, board_reads):
+                for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads, history_reads, board_reads, archive_reads):
                     if background is not None:
                         background.cancel()
                         await asyncio.gather(background, return_exceptions=True)

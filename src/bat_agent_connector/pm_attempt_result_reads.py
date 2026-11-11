@@ -28,6 +28,7 @@ from . import (
     pm_execution_verification,
     pm_lifecycle_gates,
     pm_quality_reviews,
+    pm_result_requirements,
     pm_source_lineage,
     pm_work_start,
     pm_workspace,
@@ -92,6 +93,7 @@ def capabilities(ops=None) -> dict[str, Any]:
         "adapters": {"bat": {"read_results": True}},
         "wait_ms_max": WAIT_MS_MAX,
         "reads_never_write": True,
+        "requirements": {"version": 1, "binding": "original_engineering_handoff", "selection": "explicit_only"},
     }
 
 
@@ -2058,6 +2060,9 @@ async def _read_result(
         "execution": execution_block,
         "changes": changes_block,
         "verification": verification_block,
+        "requirements": pm_result_requirements.read(ops, principal, workspace_id, execution_op_id,
+            (receipt_fixed_commit or fixed_result_commit or {}).get("commit_sha"), verification_block["status"],
+            verification_evidence=verification_block["runs"]),
         "delivery": delivery_block,
         "usage": usage_block,
         "completeness": completeness_block,

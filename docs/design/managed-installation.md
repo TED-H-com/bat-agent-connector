@@ -221,6 +221,12 @@ temporary file. Persistent contention preserves the original error and target;
 cleanup cannot hide the original failure. ACL, reparse and hard-link checks,
 handle sharing and immutable artifact publication keep their existing rules.
 
+The inverse collision occurs after publication, while the writer retains DELETE
+access through flush and close. Native read-only opens retry only sharing violation
+32 for at most 500 ms, pausing up to 20 ms between attempts. Access denial (5) and
+validation failures propagate immediately. The packaged upgrade observer uses this
+same private reader and reports the final winerror without its own storage retry.
+
 ## Background recovery and upgrades
 
 Network recovery retries connections and reads, not a possibly accepted start, prompt, integration, merge or deployment. Original operation IDs, request keys, reservations and receipts remain authoritative. Manual and unknown resources remain read-only unless existing creation evidence proves the managed identity.

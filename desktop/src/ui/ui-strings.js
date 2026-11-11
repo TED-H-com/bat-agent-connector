@@ -1,5 +1,6 @@
 // One vocabulary for evidence states; callers choose a key, never translate an enum ad hoc.
 export const statusVocabulary = Object.freeze({
+  todo: {en: 'To do', 'zh-TW': '待辦', tone: 'neutral'},
   not_started: {en: 'Not started', 'zh-TW': '未開始', tone: 'neutral'},
   in_progress: {en: 'In progress', 'zh-TW': '進行中', tone: 'info'},
   waiting: {en: 'Waiting', 'zh-TW': '等待中', tone: 'warn'},

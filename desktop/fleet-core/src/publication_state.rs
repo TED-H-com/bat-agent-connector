@@ -3,6 +3,8 @@
 //! never repaired. Native creation authority/ancestor checks remain mandatory.
 use crate::Result;
 use std::path::Path;
+#[cfg(windows)]
+use windows_sys::Win32::Storage::FileSystem::{FILE_SHARE_READ, FILE_SHARE_WRITE};
 const UNPROVEN: &str = "PUBLICATION_STATE_UNPROVEN";
 
 pub(crate) fn verify(path: &Path) -> Result<()> {
@@ -55,7 +57,7 @@ pub(crate) fn create_directory(path: &Path) -> Result<()> {
 mod windows {
     mod protected;
     use super::*;
-    pub(super) use protected::{acl_file, new_directory, new_file, open_no_follow};
+    pub(super) use protected::{acl_file, new_directory, new_file, open_no_follow, role_acl_file};
     use std::{os::windows::ffi::OsStrExt, ptr};
     use windows_sys::Win32::{
         Foundation::{GetLastError, LocalFree, ERROR_ALREADY_EXISTS},
@@ -226,13 +228,25 @@ pub(crate) fn create_file(path: &Path) -> Result<std::fs::File> {
 
 /// Open without reparse traversal, verify the handle ACL, and retain exclusion
 /// against directory replacement. This proves security, never creation authority.
+/// Directories share writes for child publication, but never deletion; files
+/// retain read-only sharing throughout their reads.
 #[cfg(windows)]
 pub(crate) fn checked_handle(
     path: &Path,
     private: bool,
     child_absent: bool,
 ) -> Result<std::fs::File> {
-    let file = windows::open_no_follow(path, true).map_err(|_| UNPROVEN)?;
+    let directory = path.symlink_metadata().map_err(|_| UNPROVEN)?.is_dir();
+    let share = if directory {
+        FILE_SHARE_READ | FILE_SHARE_WRITE
+    } else {
+        FILE_SHARE_READ
+    };
+    let file = windows::open_no_follow(path, true, share).map_err(|_| UNPROVEN)?;
+    // Never return a write-sharing file handle if the kind changed before open.
+    if file.metadata().map_err(|_| UNPROVEN)?.is_dir() != directory {
+        return Err(UNPROVEN);
+    }
     windows::acl_file(&file, private, child_absent)?;
     Ok(file)
 }
@@ -240,6 +254,102 @@ pub(crate) fn checked_handle(
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION};
+    struct Temp(std::path::PathBuf);
+    impl Temp {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "publication-sharing-{:032x}",
+                rand::random::<u128>()
+            ));
+            create_new_directory(&path).unwrap();
+            Self(path)
+        }
+    }
+    impl Drop for Temp {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    #[test]
+    fn windows_held_directory_allows_publication_but_denies_rename_and_delete() {
+        let temp = Temp::new();
+        let directory = temp.0.join("held");
+        create_new_directory(&directory).unwrap();
+        let held = checked_handle(&directory, true, false).unwrap();
+        let path = directory.join("record.json");
+        let publish = |expected: Option<&[u8]>, next: &[u8]| {
+            crate::compare_replace::replace(
+                &path,
+                expected,
+                Some(next),
+                crate::compare_replace::Policy {
+                    limit: 64,
+                    too_large: "TOO_LARGE",
+                    invalid_path: "INVALID_PATH",
+                    changed: "CHANGED",
+                    unavailable: "UNAVAILABLE",
+                    prefix: ".publication-sharing",
+                    create_only: true,
+                    skip_equal: false,
+                    sync_directory: true,
+                    private: true,
+                },
+                || read_private(&path, 64),
+                None,
+            )
+        };
+        publish(None, b"first").unwrap();
+        assert_eq!(read_private(&path, 64).unwrap().unwrap(), b"first");
+        publish(Some(b"first"), b"second").unwrap();
+        assert_eq!(read_private(&path, 64).unwrap().unwrap(), b"second");
+        std::fs::remove_file(&path).unwrap();
+        let moved = temp.0.join("moved");
+        let rename_error = std::fs::rename(&directory, &moved)
+            .unwrap_err()
+            .raw_os_error();
+        assert!(
+            [
+                Some(ERROR_ACCESS_DENIED as i32),
+                Some(ERROR_SHARING_VIOLATION as i32),
+            ]
+            .contains(&rename_error),
+            "unexpected held-directory rename error: {rename_error:?}"
+        );
+        assert!(!moved.try_exists().unwrap());
+        assert!(held.metadata().unwrap().is_dir());
+        let delete_error = std::fs::remove_dir(&directory).unwrap_err().raw_os_error();
+        // Deletion may report ERROR_ACCESS_DENIED or ERROR_SHARING_VIOLATION.
+        assert!(
+            [
+                Some(ERROR_ACCESS_DENIED as i32),
+                Some(ERROR_SHARING_VIOLATION as i32),
+            ]
+            .contains(&delete_error),
+            "unexpected held-directory delete error: {delete_error:?}"
+        );
+        assert!(held.metadata().unwrap().is_dir());
+        drop(held);
+        std::fs::rename(&directory, &moved).unwrap();
+        std::fs::remove_dir(&moved).unwrap();
+    }
+    #[test]
+    fn windows_checked_file_still_denies_write_sharing() {
+        let temp = Temp::new();
+        let path = temp.0.join("record.json");
+        drop(create_new_file(&path).unwrap());
+        let held = checked_handle(&path, true, false).unwrap();
+        assert_eq!(
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap_err()
+                .raw_os_error(),
+            Some(ERROR_SHARING_VIOLATION as i32)
+        );
+        drop(held);
+        drop(std::fs::OpenOptions::new().write(true).open(&path).unwrap());
+    }
     #[test]
     fn windows_owned_receipts_have_private_dacl_and_create_new_semantics() {
         let root =
@@ -310,7 +420,7 @@ pub fn verify_protected(path: &Path) -> Result<()> {
 }
 fn open_metadata(path: &Path) -> Result<std::fs::File> {
     #[cfg(windows)]
-    let file = windows::open_no_follow(path, false).map_err(|_| UNPROVEN)?;
+    let file = windows::open_no_follow(path, false, FILE_SHARE_READ).map_err(|_| UNPROVEN)?;
     #[cfg(unix)]
     let file = {
         use std::os::unix::fs::OpenOptionsExt;
@@ -553,7 +663,7 @@ pub fn read_private(path: &Path, limit: usize) -> Result<Option<Vec<u8>>> {
     read_limit(limit)?;
     no_links(path)?;
     #[cfg(windows)]
-    let opened = windows::open_no_follow(path, true);
+    let opened = windows::open_no_follow(path, true, FILE_SHARE_READ);
     #[cfg(unix)]
     let opened = {
         use std::os::unix::fs::OpenOptionsExt;
@@ -597,4 +707,73 @@ pub(crate) fn read_bounded(file: &std::fs::File, limit: usize) -> Result<Vec<u8>
         return Err(UNPROVEN);
     }
     Ok(bytes)
+}
+
+#[cfg(windows)]
+#[doc(hidden)]
+pub fn file_identity(file: &std::fs::File) -> Result<crate::creation_evidence::ObjectIdentity> {
+    use crate::creation_evidence::ObjectIdentity;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FileIdInfo, GetFileInformationByHandleEx, FILE_ID_INFO,
+    };
+    let mut info = FILE_ID_INFO::default();
+    if unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FileIdInfo,
+            (&mut info as *mut FILE_ID_INFO).cast(),
+            std::mem::size_of::<FILE_ID_INFO>() as u32,
+        )
+    } == 0
+    {
+        return Err(UNPROVEN);
+    }
+    Ok(ObjectIdentity {
+        volume: info.VolumeSerialNumber,
+        file_id: info
+            .FileId
+            .Identifier
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+    })
+}
+
+/// Existing startup identity: protected parent plus effective inherited leaf ACL.
+/// Holds the checked ancestor handles throughout the supplied synchronous read.
+#[cfg(windows)]
+pub fn with_startup_role_file<T>(
+    path: &Path,
+    read: impl FnOnce(&std::fs::File) -> Result<T>,
+) -> Result<T> {
+    let parent = path.parent().ok_or(UNPROVEN)?;
+    let mut retained = Default::default();
+    let leaf = walk_checked(path, &mut retained, UNPROVEN, |p, _| {
+        let m = metadata(p)?.ok_or(UNPROVEN)?;
+        let file = if p == path {
+            let file = windows::open_no_follow(p, true, FILE_SHARE_READ).map_err(|_| UNPROVEN)?;
+            if !file.metadata().map_err(|_| UNPROVEN)?.is_file() {
+                return Err(UNPROVEN);
+            }
+            windows::role_acl_file(&file)?;
+            file
+        } else {
+            checked_handle(p, p == parent, false)?
+        };
+        let identity = file_identity(&file)?;
+        Ok(Some(WalkObject::new(m, std::rc::Rc::new(file), identity)))
+    })?
+    .ok_or(UNPROVEN)?;
+    let result = read(&leaf.handle)?;
+    if file_identity(&checked_handle(parent, true, false)?)?
+        != retained.get(parent).ok_or(UNPROVEN)?.1
+    {
+        return Err(UNPROVEN);
+    }
+    Ok(result)
+}
+#[cfg(windows)]
+pub fn read_startup_role(path: &Path, limit: usize) -> Result<Vec<u8>> {
+    with_startup_role_file(path, |file| read_bounded(file, limit))
 }

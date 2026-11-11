@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import time
+from contextvars import ContextVar
 
 from . import (
     api_auth,
@@ -39,6 +40,7 @@ REQUIRED_SCOPES = frozenset({"observe", "manage", "start"})
 SLOTS = ("bind", "package", "handoff")
 SLOT_ORDINAL = {"bind": 0, "package": 1, "handoff": 2}
 LINK = "work_start_parent"
+_HANDOFF_ADMISSION = ContextVar("work_handoff_admission", default=None)
 CHILD_STOPPED = frozenset({"succeeded", "failed", "cancelled", "needs_attention"})
 PRECONDITIONS = frozenset({
     "expected_work_item_fingerprint",
@@ -76,6 +78,54 @@ def _json(value) -> str:
 
 def _digest(value) -> str:
     return hashlib.sha256(_json(value).encode("utf-8")).hexdigest()
+
+
+def _route_registry(ops):
+    context = getattr(ops, "context", None)
+    if context is None:
+        return {"bat_work_start": (_bat_handoff_request, None)}
+    registry = context.setdefault("work_start_routes", {})
+    registry.setdefault("bat_work_start", (_bat_handoff_request, None))
+    return registry
+
+
+def register_handoff_route(ops, route, builder, readiness):
+    """Keep each builder and its readiness in the same service-local registry."""
+    registry = _route_registry(ops)
+    if route in registry and registry[route][0] is not builder:
+        raise _bad("PM_WORK_ROUTE_CONFLICT", "Work route already has a different builder")
+    registry[route] = (builder, readiness)
+
+
+def route_readiness(ops, document):
+    route = document.get("adapter", "bat") + "_work_start"
+    entry = _route_registry(ops).get(route)
+    if entry is None or entry[1] is None:
+        return {"available": False, "reason": "PM_WORK_ROUTE_UNAVAILABLE"}
+    return entry[1](ops, document)
+
+
+def profile_route(ops, document, *, require_ready=False):
+    route = document.get("adapter", "bat") + "_work_start"
+    if route != "bat_work_start":
+        if route not in _route_registry(ops):
+            raise _bad("PM_WORK_ROUTE_UNAVAILABLE", "The selected Work adapter is not installed")
+        if require_ready:
+            state = route_readiness(ops, document)
+            if state["available"] is not True:
+                raise _bad(state["reason"], "The selected Work adapter cannot create an owned session")
+    return route
+
+
+def handoff_parent(ops, target, params, preconditions):
+    """Only the synchronous handoff slot holds this admission capability."""
+    active = _HANDOFF_ADMISSION.get()
+    if active is None or active[0] is not ops:
+        return None
+    _, parent, request = active
+    if (target, params, preconditions) != (request["target"], request["params"], request["preconditions"]):
+        raise _bad("PM_WORK_START_CHILD_CHANGED", "Handoff admission differs from its original request")
+    return parent
 
 
 def installed(db) -> bool:
@@ -820,6 +870,7 @@ def check_work_preconditions(ops, principal: Principal, wid: str, wi_id: str,
         raise _bad("PM_PACKAGE_VERSION_CONFLICT", "Read the latest work package before starting", 409)
     require_expected_latest_attempt(ops.db, wid, wi_id, pre["expected_latest_attempt_id"])
 
+    route_pin = {}
     if "profile_id" in params:
         from .pm_work_profiles import pinned_revision
         pinned = pinned_revision(
@@ -827,6 +878,11 @@ def check_work_preconditions(ops, principal: Principal, wid: str, wi_id: str,
             digest=pre["expected_profile_digest"], admission=True,
         )
         _profile_admission_target(params, code_target, delivery_goal, pinned)
+        route = profile_route(ops, pinned["document"], require_ready=True)
+        if route != "bat_work_start":
+            route_pin = {"route": route, "profile": {
+                key: pinned[key] for key in ("profile_id", "revision", "digest")
+            }}
     if code_target["repository"].lower() not in {r.lower() for r in project["repositories"]}:
         raise _bad("PROJECT_REPOSITORY_CHANGED", "Selected repository does not belong to this work item's project", 409)
     target_3 = {k: code_target[k] for k in ("repository", "host", "workspace_id")}
@@ -847,6 +903,7 @@ def check_work_preconditions(ops, principal: Principal, wid: str, wi_id: str,
         "actual_binding_id": actual_binding_id, "latest_package_id": latest_package_id,
         "config": config, "code_source": code_source, "instruction": instruction,
         "agent": agent, "model": model, "delivery": delivery_goal,
+        **route_pin,
     }
 
 
@@ -920,6 +977,7 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
         "delivery": delivery_goal,
         "agent": agent,
         "model": model,
+        **({"route": local["route"], "profile": local["profile"]} if "route" in local else {}),
         "instruction": instruction,
         "title": work["title"][:256],
         "package_plan": {
@@ -1097,7 +1155,7 @@ def _package_request(parent_id: str, intent: dict, binding_id: str) -> dict:
     }
 
 
-def _handoff_request(parent_id: str, intent: dict, package_ref: dict) -> dict:
+def _bat_handoff_request(parent_id: str, intent: dict, package_ref: dict) -> dict:
     code_source = intent["code_source"]
     params = {
         "source_ref": code_source["source_ref"],
@@ -1133,6 +1191,13 @@ def _handoff_request(parent_id: str, intent: dict, package_ref: dict) -> dict:
     }
 
 
+def _handoff_request(ops, parent_id: str, intent: dict, package_ref: dict) -> dict:
+    entry = _route_registry(ops).get(intent.get("route", "bat_work_start"))
+    if entry is None:
+        raise _bad("PM_WORK_ROUTE_UNAVAILABLE", "The original handoff route is not installed")
+    return entry[0](parent_id, intent, package_ref)
+
+
 def _expected_child_request(ops, parent: dict, slot: str) -> dict:
     intent = _intent(parent)
     parent_id = parent["operation_id"]
@@ -1164,7 +1229,7 @@ def _expected_child_request(ops, parent: dict, slot: str) -> dict:
                 "package_id": pkg_res["package_id"],
                 "document_digest": pkg_res["document_digest"],
             }
-        return _handoff_request(parent_id, intent, pkg_ref)
+        return _handoff_request(ops, parent_id, intent, pkg_ref)
     raise _bad("PM_WORK_START_CHILD_CHANGED", "Unknown work.start child slot", 409)
 
 
@@ -1278,6 +1343,14 @@ def _guard(ops, parent: dict, *, allow_cancelled_parent: bool = False) -> Princi
     pm_lifecycle_gates._require(current_lc, intent["execution_epoch"])
     principal = _current_principal(ops, parent)
     _access_intent(ops, principal, parent)
+    if "route" in intent:
+        from .pm_work_profiles import pinned_revision
+        pin = intent["profile"]
+        current = pinned_revision(ops.db, principal, wid, pin["profile_id"], pin["revision"],
+                                  digest=pin["digest"], admission=True)
+        if current["document"].get("adapter", "bat") + "_work_start" != intent["route"]:
+            raise _bad("PM_WORK_ROUTE_CHANGED", "The admitted profile no longer names the original route")
+        profile_route(ops, current["document"], require_ready=True)
 
     work = work_items._get_item(ops.db, wi_id, active=True)
     project = work_items._get_project(ops.db, intent["project_id"], active=True)
@@ -1418,7 +1491,11 @@ def _admit_child(ctx, slot: str, request: dict) -> dict:
     def admit():
         parent = _op(ctx.service.db, ctx.operation_id)
         principal = _guard(ctx.service, parent)
-        child, fresh = ctx.service.create(principal, **request, entry="work-start")
+        token = _HANDOFF_ADMISSION.set((ctx.service, parent, request) if slot == "handoff" else None)
+        try:
+            child, fresh = ctx.service.create(principal, **request, entry="work-start")
+        finally:
+            _HANDOFF_ADMISSION.reset(token)
         if not fresh:
             raise _bad(
                 "PM_WORK_START_CHILD_CHANGED",
@@ -1751,7 +1828,7 @@ async def _run(ctx):
         ctx.check_cancel()
         try:
             _guard(ctx.service, _op(ctx.service.db, ctx.operation_id))
-            _admit_child(ctx, "handoff", _handoff_request(ctx.operation_id, intent, package_ref))
+            _admit_child(ctx, "handoff", _handoff_request(ctx.service, ctx.operation_id, intent, package_ref))
         except OperationError as exc:
             _stop_before_child(
                 ctx,

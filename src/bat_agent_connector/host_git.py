@@ -212,6 +212,7 @@ HOST_EFFECT_ACTIONS = frozenset({
 })
 
 JOURNAL_ONLY_ACTIONS = frozenset({
+    "pm.history.link", "pm.history.unlink",
     "connection.reference.apply",
     "connection.reference.detach",
     "artifact.upload",

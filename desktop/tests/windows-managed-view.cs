@@ -9,29 +9,69 @@ using System.Windows.Automation;
 
 internal static class ManagedViewProbe
 {
+    private static long elapsedOrigin = Stopwatch.GetTimestamp();
+
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
 
     private static void Phase(string phase)
     {
-        Console.Error.WriteLine(phase);
+        Diagnostic(phase);
+        Diagnostic(FormatPhase(phase, ElapsedMilliseconds(elapsedOrigin, Stopwatch.GetTimestamp(), Stopwatch.Frequency)));
+    }
+
+    internal static long ElapsedMilliseconds(long origin, long now, long frequency)
+    {
+        return (long)Math.Max(0, Math.Min(60000, (now - origin) * 1000.0 / frequency));
+    }
+
+    internal static long ParseElapsedOrigin(string value, long now)
+    {
+        long origin;
+        if (!long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out origin) || origin <= 0 || origin > now)
+            throw new ArgumentException();
+        return origin;
+    }
+
+    internal static string FormatPhase(string phase, long elapsed)
+    {
+        switch (phase)
+        {
+            case "started": case "owner_verified": case "assemblies_loaded": case "window_resolved":
+            case "query_started": case "query_completed": case "completed": case "failed":
+                return "phase_elapsed_ms:" + phase + ":" + Math.Max(0, Math.Min(60000, elapsed)).ToString(CultureInfo.InvariantCulture);
+            default: throw new ArgumentException();
+        }
+    }
+
+    private static void Diagnostic(string line)
+    {
+        Console.Error.WriteLine(line);
         Console.Error.Flush();
     }
 
     [MTAThread]
     private static int Main(string[] args)
     {
-        Phase("started");
         try
         {
-            if (args.Length != 2 && (args.Length != 3 || args[2] != "select-provider")) throw new ArgumentException();
+            bool read = args.Length == 2;
+            if (args.Length == 4 && args[2] == "--elapsed-origin")
+            {
+                // Same-machine QPC origin from the parent, before Process.Start:
+                // includes CLR/JIT/assembly startup in the first phase timestamp.
+                elapsedOrigin = ParseElapsedOrigin(args[3], Stopwatch.GetTimestamp());
+                read = true;
+            }
+            Phase("started");
+            if (!read && (args.Length != 3 || args[2] != "select-provider")) throw new ArgumentException();
             IntPtr window = new IntPtr(long.Parse(args[0], CultureInfo.InvariantCulture));
             uint expected = uint.Parse(args[1], CultureInfo.InvariantCulture);
             uint owner;
             if (GetWindowThreadProcessId(window, out owner) == 0 || owner != expected) throw new InvalidOperationException();
             Phase("owner_verified");
-            if (args.Length == 3) PressProvider(window);
-            else ReadView(window);
+            if (read) ReadView(window);
+            else PressProvider(window);
             return 0;
         }
         catch (Exception error)
@@ -45,10 +85,10 @@ internal static class ManagedViewProbe
     internal static void ReportError(Exception error)
     {
         // Type and numeric HRESULT only: never messages, stacks, UI names or values.
-        Phase("error_type:" + error.GetType().FullName);
+        Diagnostic("error_type:" + error.GetType().FullName);
         ExternalException external = error as ExternalException;
         if (external != null)
-            Phase("error_hresult:0x" + unchecked((uint)external.ErrorCode).ToString("X8", CultureInfo.InvariantCulture));
+            Diagnostic("error_hresult:0x" + unchecked((uint)external.ErrorCode).ToString("X8", CultureInfo.InvariantCulture));
     }
 
     internal static bool IsUnavailable(Exception error)
@@ -152,7 +192,7 @@ internal static class ManagedViewProbe
             catch (Exception error)
             {
                 if (!IsUnavailable(error)) throw;
-                Phase("node_unavailable");
+                Diagnostic("node_unavailable");
                 ReportError(error);
                 return;
             }

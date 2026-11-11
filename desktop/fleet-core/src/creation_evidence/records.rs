@@ -1,5 +1,8 @@
 use super::*;
 use serde::{Deserialize, Serialize};
+#[path = "association.rs"]
+mod association;
+pub use association::*;
 fn required_option<'de, D, T>(deserializer: D) -> std::result::Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -233,6 +236,8 @@ pub struct MigrationTermination {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "body", deny_unknown_fields)]
 pub enum Record {
+    #[serde(rename = "fleet-connection-association")]
+    ConnectionAssociation(Box<ConnectionAssociation>),
     #[serde(rename = "fleet-slot-provisioning")]
     Provisioning(Box<ProvisioningReceipt>),
     #[serde(rename = "fleet-publication-link")]
@@ -261,6 +266,7 @@ struct Document {
 /// Fixed native namespaces. Hash components are validated before path derivation.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EvidenceKey {
+    ConnectionAssociation(String),
     Provisioning,
     Lineage(String),
     Closure(String),
@@ -271,6 +277,10 @@ pub enum EvidenceKey {
 impl EvidenceKey {
     pub fn relative_path(&self) -> Result<PathBuf> {
         let (directory, hash) = match self {
+            Self::ConnectionAssociation(hash) => {
+                ensure(hex(hash, 64))?;
+                return Ok(format!("association-{hash}.json").into());
+            }
             Self::Provisioning => return Ok("provision.json".into()),
             Self::Managed => return Ok("managed.json".into()),
             Self::Lineage(h) => ("lineage", h),
@@ -283,11 +293,18 @@ impl EvidenceKey {
     }
 }
 impl Record {
+    fn version(&self) -> u32 {
+        if matches!(self, Self::ConnectionAssociation(_)) {
+            2
+        } else {
+            1
+        }
+    }
     pub fn encode(&self) -> Result<Vec<u8>> {
         self.validate()?;
         let bytes = serde_json::to_vec(&Document {
-            version: 1,
-            minimum_reader_version: 1,
+            version: self.version(),
+            minimum_reader_version: self.version(),
             record: self.clone(),
         })
         .map_err(|_| INVALID)?;
@@ -297,6 +314,10 @@ impl Record {
     /// The native storage key selects the byte bound before JSON parsing. The
     /// decoded kind and derived key must then agree with that exact location.
     pub fn decode(key: &EvidenceKey, bytes: &[u8]) -> Result<Self> {
+        Self::decode_for_reader(key, bytes, 2)
+    }
+    /// A bounded compatibility reader never silently skips a newer family.
+    pub fn decode_for_reader(key: &EvidenceKey, bytes: &[u8], reader_version: u32) -> Result<Self> {
         key.relative_path()?;
         let bound = if *key == EvidenceKey::Provisioning {
             RECEIPT_LIMIT
@@ -313,13 +334,18 @@ impl Record {
         }
         ensure(depth(&value) <= 8)?;
         let doc: Document = serde_json::from_value(value).map_err(|_| INVALID)?;
-        ensure(doc.version == 1 && doc.minimum_reader_version == 1)?;
+        ensure(
+            doc.version == doc.record.version()
+                && doc.minimum_reader_version == doc.version
+                && doc.minimum_reader_version <= reader_version,
+        )?;
         ensure(doc.record.key() == *key)?;
         doc.record.validate()?;
         Ok(doc.record)
     }
     pub fn key(&self) -> EvidenceKey {
         match self {
+            Self::ConnectionAssociation(r) => r.key(),
             Self::Provisioning(_) => EvidenceKey::Provisioning,
             Self::Publication(r) => EvidenceKey::Lineage(r.predecessor_sha256.clone()),
             Self::Closure(r) => EvidenceKey::Closure(r.link_sha256.clone()),
@@ -343,6 +369,7 @@ impl Record {
     }
     pub(super) fn binding(&self) -> Option<&Binding> {
         match self {
+            Self::ConnectionAssociation(r) => Some(&r.binding),
             Self::Provisioning(_) => None,
             Self::Publication(r) => Some(&r.binding),
             Self::Closure(r) => Some(&r.binding),
@@ -360,6 +387,7 @@ impl Record {
         }
         match self {
             Self::Provisioning(r) => r.validate(),
+            Self::ConnectionAssociation(r) => r.validate(),
             Self::Publication(r) => {
                 ensure(
                     hex(&r.predecessor_sha256, 64)
@@ -511,7 +539,7 @@ impl ProvisioningReceipt {
     pub fn path(&self, artifact: Artifact) -> &Path {
         &self.slots[index(artifact)].canonical_path
     }
-    pub(super) fn allowed_directories(&self) -> Vec<PathBuf> {
+    pub(crate) fn allowed_directories(&self) -> Vec<PathBuf> {
         let root = &self.scope.kit_root;
         let state = &self.scope.state_root;
         vec![

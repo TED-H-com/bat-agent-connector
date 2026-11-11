@@ -68,6 +68,12 @@ def schema(journal):
             previous_package_id TEXT UNIQUE, document_digest TEXT NOT NULL, document TEXT NOT NULL,
             actor TEXT NOT NULL, created_at REAL NOT NULL, operation_id TEXT NOT NULL UNIQUE)""")
         journal.db.execute("CREATE INDEX IF NOT EXISTS pm_package_work ON pm_work_packages(workspace_id,work_item_id,sequence)")
+        # Direct handoffs can be admitted before a Work link exists. Index their
+        # frozen package identity; reads must not scan every operation's JSON.
+        journal.db.execute("""CREATE INDEX IF NOT EXISTS pm_handoff_package ON operations(
+            json_extract(external_refs,'$.admission_binding.pm_handoff.contract.package_ref.workspace_id'),
+            json_extract(external_refs,'$.admission_binding.pm_handoff.contract.package_ref.package_id'), operation_id)
+            WHERE json_extract(external_refs,'$.admission_binding.pm_handoff.contract.package_ref.package_id') IS NOT NULL""")
         for verb in ("UPDATE", "DELETE"):
             journal.db.execute(f"CREATE TRIGGER IF NOT EXISTS pm_work_packages_{verb.lower()}_immutable BEFORE {verb} ON pm_work_packages "
                                "BEGIN SELECT RAISE(ABORT, 'PM work package history is immutable'); END")
