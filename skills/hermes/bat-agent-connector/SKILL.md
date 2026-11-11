@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "49797482b06605b825b2eb0733daa564ac02bd5b40ca3f35383e471dd1d882da"
+  canonical_sha256: "41c0ae2e37bad8e605b85face7652afe279616f8ed1188878c254dcd60af348c"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -66,6 +66,39 @@ may still expose direct Fleet tools that do not enforce API principal scopes.
    a Task Service recipe uses the discovered `work_submit` schema and the person's exact `original_words`.
    Reconnecting does not create another task or re-split an existing one. Apply only the workflows whose tools and
    capabilities this server actually exposes; an older bundle is not evidence of installed functionality.
+
+## Discover relationships eligible for cleanup
+
+First call `capabilities_get()` and check
+`features.external_history.relationships.cleanup_discovery.version == 1`. If it
+is absent, do not probe the new read. Use
+`pm_history_cleanup_list(workspace_id, work_item_id, after?, limit?)` only for a
+selected visible, bound Work, with the caller's own observe **and** manage token.
+This is a per-Work read; there is no workspace-wide sweep.
+
+It lists all active relationships the caller may withdraw now, including those
+whose source conversation remains readable. Owners may discover other/former
+members' relationships on that Work; other members see only their own. It returns
+exactly `link_id`, `work_item_id`, `version` in `links`, plus `next_after`. It never
+returns conversation or source details, creator identity, text, titles, digests,
+source/entry/Attempt IDs or paths, and grants no source access or execution.
+
+Use limit 1–50 (default 50). Omit `after` or pass JSON null initially; subsequent
+cursors are opaque `hxl_` IDs, not numbers or JSON encoded in a string. Unknown
+arguments and strings such as `"null"`, `"[]"` or `"{}"` are refused. Follow
+non-null `next_after` even on an empty page; a withdrawn anchor may continue.
+Recheck the current scope after refusal. Results are point-in-time observations,
+not reservations or permission to change an existing request.
+
+For an explicitly requested withdrawal, use existing `pm.history.unlink` with
+target `{workspace_id, work_item_id, link_id}`, empty params and precondition
+`{expected_link_version: version}` through `operation_submit`. Keep its original
+request, idempotency key and operation ID after lost replies, even if the link no
+longer appears in discovery. Recover that original operation; never turn a new
+list version into an automatic resend. A conflict requires an explicit reread and
+review. Ordinary link, association and excerpt reads still require source grants.
+HTTP uses its existing status/error envelope; RPC and MCP retain their existing
+error wrappers. Administrator status is not a workspace membership override.
 
 ## Workspace PM: Idea and Planning
 
@@ -747,6 +780,14 @@ management approval, passing tests alone or an unrelated newer candidate is
 not semantic acceptance. Revoked, superseded or context-mismatched conclusions
 do not qualify new delivery, while original history remains immutable and
 subject to every original source's current read permissions.
+
+Before reopening an exact assessment reference, check
+`quality_reviews.exact_assessment_read` in `capabilities_get()`. Call
+`pm_quality_assessment_get(workspace_id, review_id, operation_id, version, document_digest)`
+with all five original selectors. This returns the immutable original assessment
+document under the existing review/source permissions, with
+`current_applicability: not_evaluated`. It is never a "latest" lookup: a mismatched
+version or digest is not-found, and the read does not assess the current candidate.
 
 ### Prepare and discuss a fixed maintenance report
 

@@ -14,6 +14,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from contextlib import nullcontext
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -75,6 +76,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_overview_get": "observe", "pm_dependencies_get": "observe", "pm_dependencies_revisions_list": "observe", "pm_dependencies_impact_get": "observe",
            "pm_history_excerpt_preview": "observe", "pm_history_excerpt_get": "observe",
            "pm_history_links_list": "observe", "pm_history_link_get": "observe", "pm_history_associations_list": "observe",
+           "pm_history_cleanup_list": "observe",
            "pm_resources_get": "observe", "pm_history_sources_list": "observe", "pm_history_get": "observe", "pm_register_list": "observe", "pm_register_get": "observe", "pm_schedule_get": "observe", "pm_workspaces_list": "observe", "pm_workspace_get": "observe", "pm_threads_list": "observe",
            "pm_thread_get": "observe", "pm_context_get": "observe", "pm_context_bundle_preview": "observe", "pm_profiles_get": "observe",
            "pm_runs_list": "observe", "pm_run_get": "observe", "pm_capabilities_get": "observe",
@@ -85,7 +87,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_governance_list": "observe", "pm_governance_get": "observe", "pm_governance_history_list": "observe",
            "pm_work_deliveries_list": "observe",
            "pm_execution_verification_configuration": "observe", "pm_execution_verification_get": "observe",
-           "pm_maintenance_repairs_list": "observe", "pm_maintenance_repair_current_get": "observe", "pm_maintenance_repair_get": "observe", "pm_quality_reviews_list": "observe", "pm_quality_review_get": "observe", "pm_work_quality_get": "observe", "pm_pr_publication_get": "observe",
+           "pm_maintenance_repairs_list": "observe", "pm_maintenance_repair_current_get": "observe", "pm_maintenance_repair_get": "observe", "pm_quality_reviews_list": "observe", "pm_quality_review_get": "observe", "pm_quality_assessment_get": "observe", "pm_work_quality_get": "observe", "pm_pr_publication_get": "observe",
            "pm_work_batches_list": "observe", "pm_work_batch_get": "observe", "pm_maintenance_findings_current_get": "observe",
            "pm_spec_materializations_list": "observe", "pm_spec_materialization_get": "observe",
            "pm_maintenance_reviews_list": "observe", "pm_maintenance_review_current_get": "observe",
@@ -337,13 +339,19 @@ class TaskDaemon:
     async def call_api(self, method: str, params: dict, principal: api_auth.Principal,
                        *, _observation_transport: dict | None = None) -> dict:
         from . import controller_authority
-        with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal):
+        from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard, cleanup_read_scopes
+        cleanup_guard = nullcontext()
+        if method == CLEANUP_READ:
+            cleanup_read_scopes(principal)
+            cleanup_guard = cleanup_read_guard(self.ops, principal, {k: v for k, v in params.items() if k != 'entry'})
+        with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal), cleanup_guard as cleanup_finalize:
             from .pm_source_lineage import read_request, read_response
             if API_RPC.get(method) == "observe":
                 read_request(self.journal.db, principal, params)
             result = await self._call_api_bound(method, params, principal,
                                                 _observation_transport=_observation_transport)
-            return read_response(self.journal.db, principal, result)
+            result = read_response(self.journal.db, principal, result)
+            return cleanup_finalize(result) if cleanup_finalize is not None else result
 
     async def _call_api_bound(self, method: str, params: dict, principal: api_auth.Principal,
                              *, _observation_transport: dict | None = None) -> dict:

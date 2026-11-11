@@ -296,6 +296,7 @@
               "pm.quality.review.revoke"
             ],
             "version": 1,
+            "exact_assessment_read": true,
             "verification_profiles": [
               "github_reported_checks_v1",
               "observed_runner_v1"
@@ -1497,6 +1498,7 @@
               "pm.quality.review.revoke"
             ],
             "version": 1,
+            "exact_assessment_read": true,
             "verification_profiles": [
               "github_reported_checks_v1",
               "observed_runner_v1"
@@ -2694,6 +2696,7 @@
               "pm.quality.review.revoke"
             ],
             "version": 1,
+            "exact_assessment_read": true,
             "verification_profiles": [
               "github_reported_checks_v1",
               "observed_runner_v1"
@@ -3890,6 +3893,7 @@
               "pm.quality.review.revoke"
             ],
             "version": 1,
+            "exact_assessment_read": true,
             "verification_profiles": [
               "github_reported_checks_v1",
               "observed_runner_v1"

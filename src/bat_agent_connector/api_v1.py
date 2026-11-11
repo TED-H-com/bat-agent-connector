@@ -252,6 +252,7 @@ class ApiV1:
             ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-excerpt-preview", self.pm_history_excerpt_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-excerpts/(?P<excerpt_id>hxe_[0-9a-f]{64})", self.pm_history_excerpt_get, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/external-links", self.pm_history_links_list, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/external-links/cleanup", self.pm_history_cleanup_list, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/external-links/(?P<link_id>hxl_[0-9a-f]{32})", self.pm_history_link_get, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history/(?P<source_id>[A-Za-z0-9][A-Za-z0-9_.:-]{0,127})/associations", self.pm_history_associations_list, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history", self.pm_history_sources, "observe"),
@@ -344,6 +345,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/pr-publications/(?P<publication_operation_id>op_[0-9a-f]{32})", self.pm_pr_publication, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews", self.pm_quality_reviews, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews/(?P<review_id>pmqr_[0-9a-f]{32})", self.pm_quality_review, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews/(?P<review_id>pmqr_[0-9a-f]{32})/assessments/(?P<operation_id>op_[0-9a-f]{32})", self.pm_quality_assessment, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/quality", self.pm_work_quality, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches", self.pm_work_batches, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches/(?P<batch_id>pmbt_[0-9a-f]{32})", self.pm_work_batch, "observe"),
@@ -600,6 +602,9 @@ class ApiV1:
             if fn != self.version:
                 if principal is None:
                     raise ApiError(401, "UNAUTHORIZED", "a valid bearer token is required")
+                if fn == self.pm_history_cleanup_list:
+                    from .pm_external_history_links import cleanup_read_scopes
+                    cleanup_read_scopes(principal)
                 if scope and not principal.allows(scope):
                     raise ApiError(403, "FORBIDDEN", f"this route needs the {scope!r} scope")
             if fn in {self.messages, self.session_wait}:
@@ -618,7 +623,7 @@ class ApiV1:
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_execution_verification_configuration, self.pm_execution_verification_get,
-                      self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_work_quality, self.pm_pr_publication,
+                      self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_quality_assessment, self.pm_work_quality, self.pm_pr_publication,
                       self.pm_work_batches, self.pm_work_batch, self.pm_maintenance_findings_current,
                       self.pm_spec_materializations, self.pm_spec_materialization,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
@@ -627,7 +632,7 @@ class ApiV1:
                       self.pm_maintenance_checks, self.pm_maintenance_check_current, self.pm_maintenance_check, self.pm_maintenance_schedule,
                       self.pm_ahp_adapters, self.pm_ahp_observations, self.pm_ahp_observation_current, self.pm_ahp_observation,
                       self.pm_overview, self.pm_dependencies, self.pm_dependency_revisions, self.pm_dependency_impact,
-                      self.pm_history_excerpt_preview, self.pm_history_excerpt_get, self.pm_history_links_list,
+                      self.pm_history_excerpt_preview, self.pm_history_excerpt_get, self.pm_history_links_list, self.pm_history_cleanup_list,
                       self.pm_history_link_get, self.pm_history_associations_list, self.pm_history_sources, self.pm_history, self.pm_resources, self.pm_register, self.pm_register_row, self.pm_schedule, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
                       self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
@@ -639,9 +644,16 @@ class ApiV1:
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
+            cleanup_guard = contextlib.nullcontext()
+            if fn == self.pm_history_cleanup_list:
+                from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard
+                if 'transfer-encoding' in headers or not re.fullmatch(r'0+', headers.get('content-length', '0').strip()):
+                    raise ApiError(422, 'INVALID_REQUEST', 'This read does not accept a request body')
+                params = self._pm_read_params(CLEANUP_READ, query, **kwargs)
+                cleanup_guard = cleanup_read_guard(self.daemon.ops, principal, params)
             from . import controller_authority
             authority = controller_authority.binding(self.daemon.journal.db, principal) if principal else None
-            with controller_authority.use(authority, self.daemon.journal):
+            with controller_authority.use(authority, self.daemon.journal), cleanup_guard as cleanup_finalize:
                 from .pm_source_lineage import http_selection, read_request, read_response
                 # Commands retain their durable admission/replay classification.
                 # Read selectors and final responses always use current sources.
@@ -649,6 +661,8 @@ class ApiV1:
                     read_request(self.daemon.journal.db, principal, http_selection(fn.__name__, kwargs, query, body))
                 status, payload = await fn(principal=principal, query=query, body=body, headers=headers, **kwargs)
                 payload = read_response(self.daemon.journal.db, principal, payload)
+                if cleanup_finalize is not None:
+                    payload = cleanup_finalize(payload)
         except dashboard_sync.ResetRequired as e:
             status, payload = 409, e.document()
         except ApiError as e:
@@ -802,7 +816,11 @@ class ApiV1:
         return 200, await session_start_operations.workspaces(self.daemon.ops, principal, request)
 
     def _pm_read(self, principal, method, query, **ids):
-        from .pm_reads import FIELDS, read
+        from .pm_reads import read
+        return 200, read(self.daemon.ops, principal, method, self._pm_read_params(method, query, **ids))
+
+    def _pm_read_params(self, method, query, **ids):
+        from .pm_reads import FIELDS
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
         if method == 'pm_work_package_readiness_get' and 'quality_refs' in params:
@@ -818,6 +836,8 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method == "pm_work_profiles_list":
             integer_fields.add("cursor")
+        if method == "pm_quality_assessment_get":
+            integer_fields.add("version")
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
         wide_cursor = method in {"pm_history_get", "pm_history_links_list", "pm_history_associations_list", "pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
@@ -832,7 +852,7 @@ class ApiV1:
             params[key] = int(value)
         if method == "pm_plan_compare" and "binding_ids" in params:
             params["binding_ids"] = params["binding_ids"].split(",") if params["binding_ids"] else []
-        return 200, read(self.daemon.ops, principal, method, {**params, **ids})
+        return {**params, **ids}
 
     async def pm_workspaces(self, principal, query, **_):
         return self._pm_read(principal, "pm_workspaces_list", query)
@@ -1038,6 +1058,10 @@ class ApiV1:
     async def pm_quality_review(self, principal, query, workspace_id, review_id, **_):
         return self._pm_read(principal, "pm_quality_review_get", query, workspace_id=workspace_id, review_id=review_id)
 
+    async def pm_quality_assessment(self, principal, query, workspace_id, review_id, operation_id, **_):
+        return self._pm_read(principal, "pm_quality_assessment_get", query,
+                             workspace_id=workspace_id, review_id=review_id, operation_id=operation_id)
+
     async def pm_work_quality(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_work_quality_get", query, workspace_id=workspace_id, work_item_id=work_item_id)
 
@@ -1107,6 +1131,9 @@ class ApiV1:
 
     async def pm_history_links_list(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, 'pm_history_links_list', query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_history_cleanup_list(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, 'pm_history_cleanup_list', query, workspace_id=workspace_id, work_item_id=work_item_id)
 
     async def pm_history_link_get(self, principal, query, workspace_id, link_id, **_):
         return self._pm_read(principal, 'pm_history_link_get', query, workspace_id=workspace_id, link_id=link_id)

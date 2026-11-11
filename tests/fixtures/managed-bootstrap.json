@@ -1053,7 +1053,10 @@
             "pm.history.link",
             "pm.history.unlink"
           ],
-          "derive_ready": false
+          "derive_ready": false,
+          "cleanup_discovery": {
+            "version": 1
+          }
         }
       },
       "pm_schedule": {
@@ -1498,6 +1501,7 @@
             "pm.quality.review.revoke"
           ],
           "version": 1,
+          "exact_assessment_read": true,
           "verification_profiles": [
             "github_reported_checks_v1",
             "observed_runner_v1"
