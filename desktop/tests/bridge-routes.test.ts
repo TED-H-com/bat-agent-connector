@@ -14,6 +14,7 @@ test('shared frontend central routes are on the desktop bridge allow-list', () =
   assert.deepEqual(found.unresolved, [], 'an api() or central forwarder did not resolve to a path');
   const discovered = found.calls.map(call => `${call.method} ${call.path} ${call.file}`);
   for (const needle of [
+    'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/quality-reviews/pmqr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/assessments/op_dddddddddddddddddddddddddddddddd?version=2&document_digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pm-original-assessment.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/attempts?limit=100 pm-work-start.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work/wi_bbbbbbbbbbbbbbbbbbbb/attempts?after=1&limit=20 pm-history-attempt-picker.js',
     'GET /pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/work-attempts/att_cccccccccccccccccccccccccccccccc pm-history-attempt-picker.js',

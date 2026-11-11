@@ -1,9 +1,12 @@
+import {assessmentPresentations, assessmentSourceRefused} from './pm-assessment-source-fence.js';
+import {originalAssessmentReader} from './pm-original-assessment.js';
+import {selectionFromResult, parseAssessmentSelection, matchesResult} from './pm-assessment-selection.js';
 import {button, disclosure, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {sessionHref} from './session-navigation.js';
 import {createWorkPublish, publicationDeliveryLine, publicationPrLine} from './pm-work-publish.js';
 import {createWorkQuality} from './pm-work-quality.js';
-import {resultRequirements} from './pm-work-result-requirements.js';
+import {resultRequirements, exclusiveOriginalAssessments} from './pm-work-result-requirements.js';
 
 const KNOWN_STATES = new Set([
   'accepted',
@@ -53,7 +56,7 @@ function normalizeForComparison(envelope) {
   return clone;
 }
 
-export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}, form = null, namespace = ''}) {
+export function workResultPanel({h, t, api, alive, workspaceId, serverId, caps, errorBox, onVisibility = () => {}, form = null, namespace = ''}) {
   let activeAttempt = null;
   let readSerial = 0;
   let lastEnvelope = null;
@@ -84,9 +87,27 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   const canDiff = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.diff);
 
   const panelElement = h('div', {class: 'pm-work-result-panel', 'data-work-result': ''});
+  exclusiveOriginalAssessments(panelElement);
   panelElement.hidden = true;
   const publish = createWorkPublish({h, t, form, namespace, caps, errorBox});
+  const qualityHost = h('div');
   const quality = createWorkQuality({h,t,api,alive,workspaceId,caps,form,errorBox,namespace,refreshResult:readResult});
+
+  const sources = assessmentPresentations({partition: namespace, workspace_id: workspaceId}, () => {
+    readSerial++; lastEnvelope = lastNormalized = null; lastStale = true;
+    panelElement.querySelector('[data-result-requirements]')?.remove(); quality.dispose();
+  });
+  const original = originalAssessmentReader({h, t, api, alive, workspaceId, serverId, caps, namespace, form, errorBox,
+    refreshOrigin: readResult, onSelectionChange: selected => {
+      if (selected) for (const node of panelElement.querySelectorAll('[data-result-requirements] details[open]')) node.open = false;
+      quality.dispose();
+      const node = !selected && !lastStale && lastEnvelope && activeAttempt ? quality.render(lastEnvelope, activeAttempt) : null;
+      qualityHost.replaceChildren(...(node ? [node] : []));
+    }, returnFocus: () => {
+      const pin = original.selected();
+      return [...panelElement.querySelectorAll('[data-assessment-open]')].find(node => node.dataset.assessmentOpen === (pin?.return_operation_id || pin?.operation_id)
+        && node.dataset.assessmentRequirement === (pin?.requirement_id || '')) || panelElement.querySelector('h3, h4');
+    }});
 
   function updateVisibility(visible) {
     panelElement.hidden = !visible;
@@ -98,6 +119,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     changesSerial++;
     diffGeneration++;
     diffKeySerials.clear();
+    sources.dispose();
     lastEnvelope = null;
     lastNormalized = null;
     lastStale = false;
@@ -115,6 +137,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     filesOpen = false;
     publish.dispose();
     quality.dispose();
+    original.close();
     panelElement.replaceChildren();
     updateVisibility(false);
   }
@@ -154,6 +177,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   }
 
   async function readResult() {
+    original.suspend();
     if (!activeAttempt) return;
     const ticket = ++readSerial;
     const attemptId = activeAttempt.attempt_id;
@@ -166,6 +190,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         return; // Drop late reply
       }
 
+      if (original.supported() && (!serverId || data?.identity?.server_id !== serverId)) throw Error(t('pmq_invalid'));
       // Validate envelope contract and matching IDs
       const isValid =
         data &&
@@ -185,6 +210,15 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         return;
       }
 
+      sources.replace((data.requirements?.items || []).flatMap(item => (item.assessments || []).map(row => row.reference)));
+      const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split('?')[1] || ''), namespace) : null;
+      if (requested?.origin === 'result' && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id
+        && requested.attempt_id === attemptId && !matchesResult(requested, data, serverId)) {
+        lastStale = true;
+        publish.dispose(); quality.dispose(); panelElement.replaceChildren(h('h3', {tabindex: -1}, t('wres_heading')), original.element); updateVisibility(true);
+        if (original.selected()) void original.refresh(); else original.restore('result');
+        return;
+      }
       const normalized = normalizeForComparison(data);
       const isUnchanged = lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized);
 
@@ -201,6 +235,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         publish.recheck();
         quality.recheck();
       }
+      if (original.selected()) void original.refresh();
     } catch (err) {
       try { alive?.(); } catch { return; }
       if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) {
@@ -208,12 +243,19 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       }
 
       const status = err?.status;
-      if (status === 401 || status === 403 || status === 404) {
+      if (assessmentSourceRefused(err)) {
+        sources.withdraw(err);
         // Withdraw content and hide section
+        original.sourceWithdrawn(err);
         withdraw();
         return;
       }
 
+      if (original.selected()) {
+        lastStale = true;
+        publish.dispose(); quality.dispose(); original.fail(err);
+        panelElement.replaceChildren(h('h3', {tabindex: -1}, t('wres_heading')), original.element); updateVisibility(true); return;
+      }
       // Other errors: keep last good content under stale pill, show errorBox with Try again
       lastStale = true;
       lastError = err;
@@ -224,6 +266,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   function renderInvalid() {
     publish.dispose();
     quality.dispose();
+    original.close();
     panelElement.replaceChildren(
       h('h3', {}, t('wres_heading')),
       h('p', {class: 'pm-work-result-invalid'}, t('wres_invalid_envelope')),
@@ -233,6 +276,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
   function renderError(err, attempt) {
     quality.dispose();
+    original.close();
     const heading = h('h3', {}, t('wres_heading'));
     const retryBtn = button({
       label: t('wres_try_again'),
@@ -611,7 +655,14 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     dl.append(h('dt', {}, t('wres_check_delivery_goal')), h('dd', {'data-check': 'delivery-goal'}, goalText));
 
     sections.push(dl);
-    const requirements = resultRequirements({h, t, section: envelope.requirements, open: requirementOpen});
+    const requirements = resultRequirements({h, t, section: envelope.requirements, open: requirementOpen,
+      assessmentShortcut: original.supported() ? (reference, requirement_id) => {
+        const selection = selectionFromResult({partition: namespace, envelope, reference, requirement_id});
+        return selection ? h('button', {type: 'button', class: 'ui-button secondary',
+          'data-assessment-open': reference.operation_id, 'data-assessment-requirement': requirement_id,
+          'data-work-result-focus': `assessment:${requirement_id}:${reference.operation_id}`,
+          onclick: () => void original.open(selection)}, t('pmq_open_original')) : null;
+      } : null});
     if (requirements) sections.push(requirements);
 
     // 4. Changes
@@ -791,12 +842,13 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
     const publishNode = publish.render(envelope);
     if (publishNode) sections.push(publishNode);
-    if (!lastStale) {
-      const qualityNode = quality.render(envelope, attempt);
-      if (qualityNode) sections.push(qualityNode);
-    }
+    const qualityNode = !lastStale && !original.selected() ? quality.render(envelope, attempt) : null;
+    qualityHost.replaceChildren(...(qualityNode ? [qualityNode] : []));
+    sections.push(qualityHost);
 
     // 6. Recorded turns disclosure
+    sections.push(original.element);
+    if (!original.selected()) original.restore('result', pin => pin.work_item_id === attempt.work_item_id && pin.attempt_id === attempt.attempt_id);
     const results = envelope.results || [];
     if (results.length > 0) {
       const turnsBody = h('div', {class: 'pm-work-result-turns-body'});

@@ -1,3 +1,6 @@
+import {exclusiveOriginalAssessments} from './pm-work-result-requirements.js';
+import {assessmentPresentations, assessmentSourceRefused} from './pm-assessment-source-fence.js';
+import {originalAssessmentReader} from './pm-original-assessment.js';
 import {overviewAssessment} from './pm-overview-assessment.js';
 import {relativeAge} from './relative-age.js';
 import {proof} from './pm-brief.js';
@@ -29,6 +32,18 @@ export function workspaceOverview(options) {
   const meta = h('span', {'data-overview-meta': ''});
   const content = h('div', {class: 'pm-overview-content', 'data-overview-content': ''}), status = h('div', {role: 'status'}), savedBar = h('div', {class: 'pm-overview-saved', hidden: true});
   const box = h('section', {class: 'pm-overview', 'data-pm-overview': ''}, savedBar, status, content);
+  exclusiveOriginalAssessments(box);
+  const sources = assessmentPresentations({partition: namespace, workspace_id: workspaceId}, () => {
+    serial++; projection = saved = null; signature = ''; content.replaceChildren();
+  });
+  const original = originalAssessmentReader({...options, refreshOrigin: () => refreshLive(), onSelectionChange: selected => {
+    if (selected) for (const node of content.querySelectorAll('[data-overview-delivery-assessment]')) node.open = false;
+  }, returnFocus: () => {
+    const selected = original.selected();
+    return [...box.querySelectorAll('[data-assessment-open]')].find(node => node.dataset.assessmentOpen === (selected?.return_operation_id || selected?.operation_id))
+      || options.returnHeading?.() || box.querySelector('h2, h3');
+  }});
+  box.append(original.element);
   const reportTools = h('div', {class: 'pm-report-tools', 'data-pm-report-tools': ''});
   const historyHint = h('span', {class: 'ui-meta', hidden: true, 'data-overview-history-partial': ''}, t('ov_partial_history'));
   const reportPartial = statusPill('partial'); reportPartial.hidden = true;
@@ -234,11 +249,18 @@ export function workspaceOverview(options) {
     const node = disclosure({label: t('ov_original_assessment'), key: `${namespace}:${workspaceId}:${key}`,
       body: h('div', {}, h('p', {class: 'ui-meta'}, t('ov_assessment_source')), controls,
         h('pre', {class: 'pm-brief-proof'}, JSON.stringify(reference, null, 2)))});
+    if (mode === 'live' && original.supported() && isContextRef(ref) && Number.isSafeInteger(reference.version)) {
+      controls?.append(h('button', {type: 'button', class: 'ui-button secondary',
+        'data-assessment-open': reference.operation_id, 'data-overview-link': `${key}:review`,
+        onclick: () => void original.open({partition: namespace, workspace_id: workspaceId, work_item_id: row.work_item_id,
+          review_id: reference.review_id, operation_id: reference.operation_id, version: reference.version,
+          document_digest: reference.document_digest, origin: 'overview'})}, t('pmq_open_original')));
+    }
     node.dataset.overviewDeliveryAssessment = reference.operation_id || '';
     node.querySelector('summary').dataset.overviewLink = `${key}:source`;
     return node;
   }
-  function closeReader() {reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}
+  function closeReader() {original.close();reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}
   function openRelated(row, host, returnFocus) {
     closeReader(); relatedSelection = row;
     reader = inspector({title: attentionTitle(row), returnFocus, onClose: () => {reader = null; relatedSelection = null;}});
@@ -416,6 +438,7 @@ export function workspaceOverview(options) {
     if (focused && !focused.isConnected && focusId && focusPart) parts.get(focusPart)?.node.querySelector(`[data-overview-link="${CSS.escape(focusId)}"]`)?.focus({preventScroll: true});
   }
   async function refreshLive() {
+    original.suspend();
     const ticket = ++serial; loading = true;
     if (!projection && mode === 'live') render();
     try {
@@ -428,10 +451,20 @@ export function workspaceOverview(options) {
         adopted = value.plan;
       }
       const anchor = mode === 'live' ? readingAnchor() : null;
+      sources.replace(data.recent_deliveries.map(row => row.assessment_ref));
       projection = data; plan = adopted; loading = false; status.replaceChildren(); render(anchor);
-      if (mode === 'live') await assessment?.refresh();
+      if (mode === 'live') {
+        await assessment?.refresh();
+        alive(); if (ticket !== serial || mode !== 'live') return;
+        const hasOrigin = pin => data.recent_deliveries.some(row => row.state === 'accepted' && row.work_item_id === pin.work_item_id
+          && row.assessment_ref?.review_id === (pin.return_review_id || pin.review_id) && row.assessment_ref.operation_id === (pin.return_operation_id || pin.operation_id)
+          && row.assessment_ref.document_digest === (pin.return_document_digest || pin.document_digest));
+        if(original.selected() && hasOrigin(original.selected())) await original.refresh();
+        else {original.close(); original.restore('overview', hasOrigin);}
+      }
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
+      if (assessmentSourceRefused(error)) {sources.withdraw(error); original.sourceWithdrawn(error);}
       projection = null; plan = null; loading = false; signature = ''; assessment?.withdraw(); closeReader(); render(); status.replaceChildren(options.errorBox(error, {within:status}));
     }
   }
@@ -457,6 +490,6 @@ export function workspaceOverview(options) {
         if (preference.scroll) requestAnimationFrame(() => {if (active) window.scrollTo(0, preference.scroll);});
       }
       header();},
-    dispose() {active = false; serial++; assessment?.dispose(); closeReader();},
+    dispose() {sources.dispose(); active = false; serial++; original.close(); assessment?.dispose(); closeReader();},
   };
 }

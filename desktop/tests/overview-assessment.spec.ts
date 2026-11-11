@@ -10,6 +10,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) {
       await f.mount(page, 'overview');
       await expect(page.locator('[data-overview-content] [data-charter-section="definition"]')).toContainText(f.copy.goal);
       expect(f.writes).toEqual([]);
+      await expect(page.locator('[data-assessment-open]')).toHaveCount(0);
+      expect(f.reads.some(path=>path.includes('/quality-reviews/')&&path.includes('/assessments/'))).toBe(false);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (process.env.BATC_ASSESSMENT_BASELINE_SHOTS) {
         const dir = process.env.BATC_ASSESSMENT_BASELINE_SHOTS;

@@ -4012,6 +4012,18 @@ var pmQualityReviewsStrings;
 var init_pm_quality_reviews_strings = __esmMin((() => {
 	pmQualityReviewsStrings = {
 		en: {
+			pmq_requirement_mismatch: "This requirement does not belong to the selected original assessment and Result.",
+			pmq_open_original: "Open original assessment",
+			pmq_original_assessment: "Original assessment",
+			pmq_applicability_not_evaluated: "Current applicability: not evaluated",
+			pmq_return_origin: "Return to source",
+			pmq_return_changed: "The original control is no longer available. Returned to its section.",
+			pmq_result_changed: "The Result context has changed. This original assessment remains readable; reviewing the fixed Result is unavailable.",
+			pmq_result_unresolved: "No unique current Result matches this original assessment. Select a Work Result to review.",
+			pmq_open_current_result: "Open current Result",
+			pmq_view_recorded: "View recorded assessment",
+			pmq_pinned_version: "Original assessment pinned at version {version}.",
+			pmq_newer_version: "The review now has version {version}. Adopt the current version explicitly before recording.",
 			pmq_verify_result_heading: "Verify this result",
 			pmq_verify_result_help: "Run the project’s configured checks against this fixed result.",
 			pmq_verify_result_effect: "A passing check adds evidence for review. Requirement acceptance still needs a separate assessment.",
@@ -4126,6 +4138,18 @@ var init_pm_quality_reviews_strings = __esmMin((() => {
 			pmq_reason_candidate_commit_changed: "The selected candidate differs from this original review."
 		},
 		"zh-TW": {
+			pmq_requirement_mismatch: "此需求不屬於所選原始評估與成果。",
+			pmq_open_original: "開啟原始評估",
+			pmq_original_assessment: "原始評估",
+			pmq_applicability_not_evaluated: "目前適用性：未評估",
+			pmq_return_origin: "返回來源",
+			pmq_return_changed: "原控制項已無法使用，已返回其所在區段。",
+			pmq_result_changed: "成果脈絡已變更。仍可閱讀這份原始評估，但無法審閱原固定成果。",
+			pmq_result_unresolved: "沒有唯一的目前成果符合這份原始評估。請選取工作成果後再審閱。",
+			pmq_open_current_result: "開啟目前成果",
+			pmq_view_recorded: "檢視已記錄的評估",
+			pmq_pinned_version: "已固定原始評估版本 {version}。",
+			pmq_newer_version: "審查目前為版本 {version}。記錄前請明確採用目前版本。",
 			pmq_verify_result_heading: "驗證這份成果",
 			pmq_verify_result_help: "使用專案已設定的檢查，驗證這份固定成果。",
 			pmq_verify_result_effect: "檢查通過會增加可供審閱的證據，需求是否驗收仍需另行評估。",
@@ -16089,6 +16113,120 @@ function decideLayout({ search = "", policy } = {}) {
 }
 var layoutDecision = decideLayout({ search: globalThis.location?.search || "" });
 //#endregion
+//#region src/pm-assessment-selection.js
+var digest$14 = /^[0-9a-f]{64}$/;
+var fields$3 = {
+	partition: /^[^\u0000-\u001f\u007f]{1,2048}$/,
+	workspace_id: /^ws_[0-9a-f]{32}$/,
+	work_item_id: /^wi_[0-9a-f]{20}$/,
+	review_id: /^pmqr_[0-9a-f]{32}$/,
+	operation_id: /^op_[0-9a-f]{32}$/,
+	return_operation_id: /^op_[0-9a-f]{32}$/,
+	return_review_id: /^pmqr_[0-9a-f]{32}$/,
+	return_document_digest: digest$14,
+	document_digest: digest$14,
+	origin: /^(result|overview)$/,
+	attempt_id: /^att_[0-9a-f]{32}$/,
+	result_id: /^res_[0-9a-f]{32}$/,
+	result_digest: /^sha256:[0-9a-f]{64}$/,
+	package_id: /^pmwp_[0-9a-f]{32}$/,
+	package_digest: digest$14,
+	execution_operation_id: /^op_[0-9a-f]{32}$/,
+	candidate_commit: /^[0-9a-f]{40}$/,
+	requirement_id: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/
+};
+var optional = new Set([
+	"return_operation_id",
+	"return_review_id",
+	"return_document_digest",
+	"attempt_id",
+	"result_id",
+	"result_digest",
+	"package_id",
+	"package_digest",
+	"execution_operation_id",
+	"candidate_commit",
+	"requirement_id"
+]);
+var assessmentQueryKeys = [...Object.keys(fields$3), "version"].map((key) => "qa_" + key);
+function assessmentSelection(value, partition, { complete = false } = {}) {
+	if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some((key) => !(key in fields$3) && key !== "version")) return null;
+	const result = {};
+	for (const [key, pattern] of Object.entries(fields$3)) {
+		if (value[key] == null && optional.has(key) && (!complete || key === "requirement_id" || key.startsWith("return_"))) continue;
+		if (typeof value[key] !== "string" || !pattern.test(value[key])) return null;
+		result[key] = value[key];
+	}
+	if (result.partition !== partition || !Number.isSafeInteger(value.version) || value.version < 2 || value.version > 33) return null;
+	result.version = value.version;
+	return result;
+}
+function parseAssessmentSelection(params, partition) {
+	const value = {};
+	for (const key of params.keys()) if (key.startsWith("qa_")) {
+		if (!assessmentQueryKeys.includes(key) || params.getAll(key).length !== 1) return null;
+		value[key.slice(3)] = params.get(key);
+	}
+	if (!/^(?:[2-9]|[12][0-9]|3[0-3])$/.test(value.version || "")) return null;
+	value.version = Number(value.version);
+	return assessmentSelection(value, partition);
+}
+function assessmentQuery(value, partition) {
+	const selected = assessmentSelection(value, partition);
+	if (!selected) throw Error("ASSESSMENT_SELECTION_MISMATCH");
+	return new URLSearchParams(Object.entries(selected).map(([key, item]) => ["qa_" + key, String(item)]));
+}
+function assessmentRequirementKnown(value, data) {
+	return !value.requirement_id || Array.isArray(data?.context?.requirement_ids) && data.context.requirement_ids.includes(value.requirement_id) && data.assessment?.document?.requirements?.some((row) => row.requirement_id === value.requirement_id && [
+		"accepted",
+		"rejected",
+		"unassessed"
+	].includes(row.status));
+}
+function resultRequirementKnown(value, data) {
+	return !value.requirement_id || data?.requirements?.relation === "explicit" && data.requirements.items?.some((row) => row.requirement_id === value.requirement_id);
+}
+function matchesAssessment(value, data) {
+	const context = data?.context, record = data?.assessment;
+	return data?.workspace_id === value.workspace_id && data.review_id === value.review_id && data.semantics === "immutable_original_assessment" && data.current_applicability === "not_evaluated" && digest$14.test(data.context_digest || "") && record?.kind === "assessment" && record.operation_id === value.operation_id && record.version === value.version && record.document_digest === value.document_digest && assessmentRequirementKnown(value, data) && Array.isArray(record.document?.criteria) && context?.work_ref?.work_item_id === value.work_item_id && context.package_ref?.workspace_id === value.workspace_id && (!value.package_id || context.package_ref.package_id === value.package_id && context.package_ref.document_digest === value.package_digest) && (!value.execution_operation_id || context.execution_operation_id === value.execution_operation_id) && (!value.candidate_commit || context.native_result?.candidate_commit === value.candidate_commit);
+}
+function matchesAttempt(value, data) {
+	const a = data?.attempt;
+	return data?.workspace_id === value.workspace_id && a?.workspace_id === value.workspace_id && a.work_item_id === value.work_item_id && a.attempt_id === value.attempt_id && a.package_id === value.package_id && a.execution_operation_id === value.execution_operation_id;
+}
+function matchesResult(value, data, serverId) {
+	const id = data?.identity;
+	return typeof serverId === "string" && serverId.length > 0 && id?.server_id === serverId && data?.contract === "pm-work-attempt-result/v1" && data.workspace_id === value.workspace_id && data.attempt_id === value.attempt_id && id?.workspace_id === value.workspace_id && id.work_item_id === value.work_item_id && id.attempt_id === value.attempt_id && id.package_id === value.package_id && id.execution_operation_id === value.execution_operation_id && data.sources?.result_id === value.result_id && data.sources.digest === value.result_digest && data.changes?.fixed_result_commit?.commit_sha === value.candidate_commit && data.requirements?.package_ref?.workspace_id === value.workspace_id && data.requirements.package_ref.package_id === value.package_id && data.requirements.package_ref.document_digest === value.package_digest;
+}
+function selectionFromResult({ partition, envelope, reference, origin = "result", requirement_id }) {
+	return assessmentSelection({
+		partition,
+		origin,
+		workspace_id: envelope.workspace_id,
+		work_item_id: envelope.identity?.work_item_id,
+		attempt_id: envelope.attempt_id,
+		result_id: envelope.sources?.result_id,
+		result_digest: envelope.sources?.digest,
+		package_id: envelope.identity?.package_id,
+		package_digest: envelope.requirements?.package_ref?.document_digest,
+		execution_operation_id: envelope.identity?.execution_operation_id,
+		candidate_commit: envelope.changes?.fixed_result_commit?.commit_sha,
+		review_id: reference.review_id,
+		operation_id: reference.operation_id,
+		version: reference.version,
+		document_digest: reference.document_digest,
+		...Object.fromEntries(Object.entries(reference).filter(([key]) => key.startsWith("return_"))),
+		...requirement_id ? { requirement_id } : {}
+	}, partition, { complete: true });
+}
+function contextualAssessment(value, envelope, serverId) {
+	if (!matchesResult(value, envelope, serverId)) return null;
+	return (envelope.requirements.items || []).filter((item) => !value.requirement_id || item.requirement_id === value.requirement_id).flatMap((item) => item.assessments || []).find((item) => {
+		const ref = item.reference;
+		return ref?.review_id === value.review_id && ref.operation_id === value.operation_id && ref.version === value.version && ref.document_digest === value.document_digest;
+	}) || null;
+}
+//#endregion
 //#region src/session-navigation.js
 var projectViews$2 = new Set([
 	"overview",
@@ -16140,7 +16278,8 @@ function sessionOrigin(value) {
 			"from",
 			"workspace",
 			"work",
-			"attempt"
+			"attempt",
+			...assessmentQueryKeys
 		].includes(key)) || query.getAll("from").length > 1) return "";
 		const from = query.get("from") || "";
 		if (from && !projectViews$2.has(from)) return "";
@@ -16150,15 +16289,31 @@ function sessionOrigin(value) {
 			"work",
 			"attempt"
 		].some((key) => query.has(key)) && !context) return "";
-		return sessionHref$1({
+		const base = sessionHref$1({
 			host,
 			sessionId,
 			from,
 			...context
 		});
+		if (![...query.keys()].some((key) => key.startsWith("qa_"))) return base;
+		const pin = parseAssessmentSelection(query, query.get("qa_partition"));
+		if (!pin || !context || pin.workspace_id !== context.workspaceId || pin.work_item_id !== context.workItemId || pin.attempt_id !== context.attemptId) return "";
+		return base + (base.includes("?") ? "&" : "?") + assessmentQuery(pin, pin.partition);
 	} catch {
 		return "";
 	}
+}
+function persistedSessionOrigin(value) {
+	if (typeof value !== "string") return "";
+	const [route, raw] = value.split("?"), query = new URLSearchParams(raw || "");
+	for (const key of [...query.keys()]) if (key.startsWith("qa_")) query.delete(key);
+	return sessionOrigin(route + (query.size ? "?" + query : ""));
+}
+function persistedDiscussionOrigin(value) {
+	return {
+		...value,
+		from: value.from?.startsWith("#/session/") ? persistedSessionOrigin(value.from) : value.from
+	};
 }
 var contextFields = {
 	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
@@ -21045,637 +21200,233 @@ function workItemHistory({ h, t, api, alive, caps, workId, namespace = null, wor
 	};
 }
 //#endregion
-//#region src/pm-work-publish.js
-var ACTION$6 = "github.pr.publish";
-var SHA40 = /^[0-9a-f]{40}$/;
-var OP_ID = /^op_[0-9a-f]{32}$/;
-var TARGET_KEYS = [
-	"workspace_id",
-	"repository",
-	"host",
-	"source_operation_id"
-];
-var PARAM_NAMES = [
-	"candidate_sha",
-	"base_ref",
-	"public_title",
-	"public_body",
-	"draft"
-];
-var BLOCKED_KEYS = {
-	not_controller: "wpub_blocked_not_controller",
-	not_writer_member: "wpub_blocked_not_writer",
-	missing_scope: "wpub_blocked_scope",
-	WAIT_ORIGINAL_OPERATION_RECONCILE: "wpub_blocked_reconcile",
-	pull_request_exists: "wpub_blocked_pr_exists",
-	lifecycle_stopped: "wpub_blocked_lifecycle",
-	github_not_configured: "wpub_blocked_github",
-	publication_source_incomplete: "wpub_blocked_source"
-};
-var HOST_CODES = {
-	PR_SOURCE_MOVED: "wpub_source_moved",
-	PR_BASE_MOVED: "wpub_base_moved",
-	PR_SOURCE_HISTORY_CHANGED: "wpub_history_changed",
-	PR_BASE_NOT_ANCESTOR: "wpub_base_not_ancestor",
-	PR_EMPTY_CHANGE: "wpub_empty_change",
-	PR_PIN_CHANGED: "wpub_pin_changed",
-	PR_RECEIPT_EXISTS: "wpub_receipt_exists",
-	PR_BRANCH_EXISTS: "wpub_branch_exists",
-	PR_BRANCH_CREATE_REFUSED: "wpub_branch_refused",
-	PR_CHANGE_LIMIT: "wpub_change_limit",
-	PR_CREATE_REFUSED: "pm_terminal",
-	PR_PATH_UNREADABLE: "pm_terminal",
-	PR_PUBLISHED_HEAD_CHANGED: "pm_terminal",
-	PR_RECEIPT_UNAVAILABLE: "pm_terminal",
-	PR_PROVIDER_TARGET_CHANGED: "wpub_source_changed",
-	PR_CREATED_TARGET_CHANGED: "wpub_created_target_changed",
-	PR_FOREIGN_CONTROLLER: "wpub_blocked_not_controller",
-	INTERNAL: "error_generic",
-	PR_AUTHORITY_UNAVAILABLE: "wpub_authority"
-};
-var SETUP_CODES = new Set([
-	"GITHUB_NOT_CONFIGURED",
-	"REPO_NOT_CONFIGURED",
-	"INTEGRATION_DISABLED",
-	"UNKNOWN_HOST",
-	"TIER_DISABLED",
-	"NO_MANAGED_ROOT",
-	"GIT_RUNNER_UNAVAILABLE"
-]);
-var QUIET_CODES = new Set([
-	"TIMEOUT",
-	"NETWORK_ERROR",
-	"CENTRAL_OFFLINE",
-	"CONNECTION_CHANGED"
-]);
-var radioSerial = 0;
-var text$6 = (value) => typeof value === "string" && value.length > 0;
-var sha$6 = (value) => typeof value === "string" && SHA40.test(value);
-var bytes = (value) => new TextEncoder().encode(value).length;
-function exactTarget$1(target) {
-	if (!target || typeof target !== "object" || Array.isArray(target)) return null;
-	if (Object.keys(target).length !== TARGET_KEYS.length) return null;
-	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$6(target[key]))) return null;
-	if (!/^ws_[0-9a-f]{32}$/.test(target.workspace_id) || !OP_ID.test(target.source_operation_id)) return null;
+//#region src/pm-assessment-source-fence.js
+var sources = new Map();
+function assessmentSourceFence(selection, onWithdraw) {
+	const key = JSON.stringify([
+		selection.partition,
+		selection.workspace_id,
+		selection.review_id
+	]);
+	const entry = sources.get(key) || {
+		epoch: 0,
+		readers: new Set()
+	};
+	sources.set(key, entry);
+	entry.readers.add(onWithdraw);
+	let mounted = true;
 	return {
-		workspace_id: target.workspace_id,
-		repository: target.repository,
-		host: target.host,
-		source_operation_id: target.source_operation_id
-	};
-}
-function exactPreconditions(value) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-	const keys = Object.keys(value).sort();
-	if (keys.length !== 2 || keys[0] !== "expected_base_sha" || keys[1] !== "repository_id") return null;
-	const id = value.repository_id;
-	if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) return null;
-	if (!sha$6(value.expected_base_sha)) return null;
-	return {
-		repository_id: id,
-		expected_base_sha: value.expected_base_sha
-	};
-}
-function actionRows(list) {
-	if (!Array.isArray(list)) return [];
-	return list.filter((row) => row && row.action === ACTION$6);
-}
-function paramsReady(entry) {
-	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
-}
-function classifyPublicationEntry(envelope) {
-	const blocked = actionRows(envelope?.blocked_actions);
-	const allowed = actionRows(envelope?.next_allowed_actions);
-	if (blocked.length) {
-		const reasons = blocked.map((row) => typeof row.reason === "string" ? row.reason : "");
-		return {
-			mode: "blocked",
-			gap: "",
-			reason: new Set(reasons).size === 1 ? reasons[0] : "",
-			entry: null
-		};
-	}
-	if (!allowed.length) return {
-		mode: "absent",
-		gap: "",
-		reason: "",
-		entry: null
-	};
-	if (allowed.length > 1) return {
-		mode: "incomplete",
-		gap: "target",
-		reason: "",
-		entry: null
-	};
-	const row = allowed[0];
-	if (row.allowed === false || row.kind != null && row.kind !== "action") return {
-		mode: "incomplete",
-		gap: "target",
-		reason: "",
-		entry: null
-	};
-	const target = exactTarget$1(row.target);
-	const prefilled = row.prefilled_params && typeof row.prefilled_params === "object" && !Array.isArray(row.prefilled_params) ? row.prefilled_params : {};
-	const candidate = sha$6(prefilled.candidate_sha) ? prefilled.candidate_sha : "";
-	const baseRef = text$6(prefilled.base_ref) ? prefilled.base_ref : "";
-	const preconditions = exactPreconditions(row.preconditions);
-	const scopes = Array.isArray(row.required_scopes) ? row.required_scopes.filter((item) => typeof item === "string") : [];
-	if (!target || envelope?.workspace_id && target.workspace_id !== envelope.workspace_id || envelope?.identity?.execution_operation_id && target.source_operation_id !== envelope.identity.execution_operation_id) return {
-		mode: "incomplete",
-		gap: "target",
-		reason: "",
-		entry: null
-	};
-	const entry = {
-		target,
-		candidate,
-		baseRef,
-		preconditions,
-		scopes
-	};
-	if (!candidate) return {
-		mode: "incomplete",
-		gap: "commit",
-		reason: "",
-		entry
-	};
-	if (!baseRef || !preconditions || !paramsReady(row)) return {
-		mode: "incomplete",
-		gap: "preconditions",
-		reason: "",
-		entry
-	};
-	return {
-		mode: "ready",
-		gap: "",
-		reason: "",
-		entry
-	};
-}
-function identityOf(entry) {
-	if (!entry?.target) return "";
-	return JSON.stringify({
-		target: entry.target,
-		candidate_sha: entry.candidate || ""
-	});
-}
-function readCaps(caps) {
-	return typeof caps === "function" ? caps() : caps;
-}
-function catalogAllows(caps, entry) {
-	const current = readCaps(caps);
-	const scopes = Array.isArray(current?.scopes) ? current.scopes : [];
-	if (!(entry?.scopes?.length ? entry.scopes : [
-		"observe",
-		"manage",
-		"integrate"
-	]).every((scope) => scopes.includes(scope))) return false;
-	if (!scopes.includes("integrate")) return false;
-	return Boolean(current?.actions?.some((row) => row.action === ACTION$6 && row.allowed === true));
-}
-function receiptSha(envelope) {
-	const rows = envelope?.delivery?.pull_requests;
-	if (!Array.isArray(rows) || !rows.length) return "";
-	const last = rows[rows.length - 1];
-	return sha$6(last?.candidate_sha) ? last.candidate_sha : "";
-}
-function sourceSentence(t, envelope, candidate) {
-	const fixed = envelope?.changes?.fixed_result_commit;
-	if (fixed?.commit_sha === candidate) {
-		if (fixed.source_kind === "turn_end_observation") return t("wres_source_turn_end_observation");
-		if (fixed.source_kind === "execution_verification" || fixed.source_kind === "session_verification") return t("wres_source_verified_commit");
-		if (fixed.source_kind === "integration") return t("wres_source_integration_commit");
-	}
-	const receipt = receiptSha(envelope);
-	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
-	return t("wpub_commit_from_result");
-}
-function operationId$5(value) {
-	return typeof value === "string" && OP_ID.test(value) ? value : "";
-}
-function publicationPrLine(h, t, pr) {
-	if (!pr || typeof pr !== "object") return null;
-	const opId = operationId$5(pr.publication_operation_id);
-	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
-	const repo = text$6(pr.repository) ? pr.repository : "";
-	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
-	const item = h("li", {});
-	if (opId) {
-		item.append(h("a", {
-			href: `#/op/${encodeURIComponent(opId)}`,
-			"data-work-publish-pr": opId
-		}, label || t("pm_operation")));
-		if (pr.target_verified !== true) item.append(" ", h("span", { "data-work-publish-unverified": "" }, t("wpub_pr_unverified")));
-	} else if (label) item.append(h("span", {}, label));
-	else return null;
-	if (pr.requirement_acceptance === "not_evaluated_by_publication") item.append(" ", h("span", { "data-work-publish-not-accepted": "" }, t("wpub_pr_not_accepted")));
-	return item;
-}
-function publicationDeliveryLine(h, t, pr, envelope, attempt) {
-	if (!operationId$5(pr?.publication_operation_id)) return null;
-	const host = text$6(attempt?.session?.host) ? attempt.session.host : text$6(attempt?.native_session?.host) ? attempt.native_session.host : "";
-	const source = text$6(pr.child_operation_id) ? pr.child_operation_id : text$6(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
-	const repo = text$6(pr.repository) ? pr.repository : "";
-	if (!host || !source || !repo) return null;
-	return h("p", { "data-work-publish-delivery": "" }, h("a", { href: `#/delivery/${encodeURIComponent(host)}/execution/${encodeURIComponent(source)}/${encodeURIComponent(repo)}` }, t("nav_delivery")), " ", t("wpub_delivery_link"));
-}
-function gapSentence(t, gap) {
-	if (gap === "commit") return t("wpub_commit_missing");
-	if (gap === "preconditions") return t("wpub_gap_preconditions");
-	return t("wpub_gap_target");
-}
-function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
-	let editor = null;
-	let root = null;
-	let mode = "absent";
-	let bound = null;
-	let pinned = null;
-	let identity = "";
-	let heldNode = null;
-	let gapNode = null;
-	let radios = null;
-	let facts = null;
-	let shownEnvelope = null;
-	const displayEntry = () => editor?.locked() ? pinned || bound : bound;
-	function dispose() {
-		dropEditor();
-		root = null;
-	}
-	function dropEditor() {
-		editor?.dispose();
-		editor = null;
-		identity = "";
-		bound = null;
-		pinned = null;
-		mode = "absent";
-		radios = null;
-		facts = null;
-		heldNode = null;
-		gapNode = null;
-	}
-	function sync() {
-		editor?.update();
-	}
-	function recheck() {
-		sync();
-		if (editor?.locked()) editor.recheck();
-	}
-	function sentenceFor(error) {
-		const code = error?.code || "";
-		const status = editor?.operation()?.status || "";
-		if (status === "uncertain" || code === "UNCERTAIN") return t("wpub_uncertain");
-		if (code === "PR_CREATED_TARGET_CHANGED") return t("wpub_created_target_changed");
-		if (status === "needs_attention" || code === "UNCERTAIN_UNRESOLVED") return t("wpub_needs_attention");
-		if (HOST_CODES[code]) return t(HOST_CODES[code]);
-		if (SETUP_CODES.has(code)) return t(readCaps(caps)?.managed_installation ? "wpub_blocked_github_managed" : "wpub_blocked_github_plain");
-		if (!code || clientActionReason(code) || QUIET_CODES.has(code)) return "";
-		if (status === "failed" || status === "cancelled" || error?.admissionRefused === true || error?.status) return t("error_generic");
-		return "";
-	}
-	function paintFacts() {
-		if (!facts) return;
-		const entry = displayEntry();
-		const candidate = entry?.candidate || "";
-		facts.commit.hidden = !candidate;
-		if (candidate) {
-			facts.commitSha.textContent = candidate.slice(0, 12);
-			facts.commitSha.title = candidate;
-			facts.commitSha.setAttribute("aria-label", `${t("wpub_commit")} ${candidate}`);
-			facts.commitSource.textContent = sourceSentence(t, shownEnvelope, candidate);
-			facts.detailCommit.textContent = candidate;
-		}
-		const showBase = Boolean(entry?.baseRef && entry?.preconditions);
-		facts.base.hidden = !showBase;
-		facts.baseSha.hidden = !showBase;
-		facts.origin.hidden = !showBase;
-		if (showBase) {
-			facts.baseValue.textContent = entry.baseRef;
-			const full = entry.preconditions.expected_base_sha;
-			facts.baseShaValue.textContent = full.slice(0, 12);
-			facts.baseShaValue.title = full;
-			facts.baseShaValue.setAttribute("aria-label", `${t("wpub_base_sha")} ${full}`);
-			facts.detailBase.textContent = full;
-		}
-	}
-	function applyChrome() {
-		if (!editor) return;
-		const submit = editor.box.querySelector("button[type=\"submit\"]");
-		const reset = editor.box.querySelector(".actions > button[type=\"button\"]");
-		if (submit) submit.setAttribute("data-work-publish-submit", "");
-		if (reset) reset.setAttribute("data-work-publish-new-request", "");
-		const locked = Boolean(editor.locked());
-		if (submit && !locked && mode !== "ready") submit.hidden = true;
-		const code = editor.operation()?.error_code || editor.operation()?.error?.code;
-		if (reset && code === "PR_RECEIPT_EXISTS") reset.hidden = true;
-		if (radios) {
-			radios.yes.disabled = locked;
-			radios.no.disabled = locked;
-			const value = radios.mirror.value;
-			radios.yes.checked = value === "true";
-			radios.no.checked = value === "false";
-		}
-		if (gapNode) gapNode.hidden = mode === "ready" || locked;
-		const statusBox = editor.box.querySelector(":scope > [role=\"status\"]");
-		const op = editor.operation();
-		if (statusBox) {
-			let note = statusBox.querySelector("[data-work-publish-admitted]");
-			if (op?.status === "accepted") {
-				if (!note) statusBox.append(h("p", { "data-work-publish-admitted": "" }, t("wpub_admitted_note")));
-			} else if (note) note.remove();
-		}
-		if (locked) pinned = pinned || bound;
-		else pinned = null;
-		paintFacts();
-	}
-	function noteHeld(decision) {
-		if (!heldNode) return;
-		const next = identityOf(decision.entry);
-		const current = displayEntry();
-		const baseMoved = Boolean(decision.entry && current && (decision.entry.baseRef !== current.baseRef || decision.entry.preconditions?.expected_base_sha !== current.preconditions?.expected_base_sha || decision.entry.preconditions?.repository_id !== current.preconditions?.repository_id || decision.entry.target?.repository !== current.target?.repository));
-		heldNode.hidden = Boolean(next && next === identity && !baseMoved);
-	}
-	function chooseDraft(value) {
-		if (!radios || editor?.locked()) return;
-		radios.mirror.value = value;
-		radios.mirror.dispatchEvent(new Event("input", { bubbles: true }));
-		radios.mirror.dispatchEvent(new Event("change", { bubbles: true }));
-	}
-	function mountEditor(decision, envelope) {
-		const entry = decision.entry;
-		bound = entry;
-		mode = decision.mode;
-		shownEnvelope = envelope;
-		identity = identityOf(entry);
-		const candidateKey = entry.candidate || "no-commit";
-		const groupId = `wpub-draft-${++radioSerial}`;
-		const titleInput = h("input", {
-			type: "text",
-			"data-work-publish-title": "",
-			"aria-label": t("wpub_title")
-		});
-		const bodyInput = h("textarea", {
-			"data-work-publish-body": "",
-			"aria-label": t("wpub_body")
-		});
-		const mirror = h("input", {
-			type: "hidden",
-			"data-work-publish-draft-value": ""
-		});
-		titleInput.dataset.pmDefault = "";
-		bodyInput.dataset.pmDefault = "";
-		mirror.dataset.pmDefault = "";
-		const yes = h("input", {
-			type: "radio",
-			name: `work-publish-draft-${radioSerial}`,
-			value: "true",
-			"data-work-publish-draft": "true"
-		});
-		const no = h("input", {
-			type: "radio",
-			name: `work-publish-draft-${radioSerial}`,
-			value: "false",
-			"data-work-publish-draft": "false"
-		});
-		yes.addEventListener("change", () => {
-			if (yes.checked) chooseDraft("true");
-		});
-		no.addEventListener("change", () => {
-			if (no.checked) chooseDraft("false");
-		});
-		radios = {
-			yes,
-			no,
-			mirror,
-			titleInput,
-			bodyInput
-		};
-		const commitSha = h("span", {
-			class: "mono",
-			"data-work-publish-commit": ""
-		}, "");
-		const commitSource = h("span", { "data-work-publish-commit-source": "" }, "");
-		const baseValue = h("span", { "data-work-publish-base": "" }, "");
-		const baseShaValue = h("span", {
-			class: "mono",
-			"data-work-publish-base-sha": ""
-		}, "");
-		const detailCommit = h("span", { class: "mono" }, "");
-		const detailBase = h("span", { class: "mono" }, "");
-		facts = {
-			commit: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_commit")}: `), commitSha, " · ", commitSource),
-			commitSha,
-			commitSource,
-			base: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base")}: `), baseValue),
-			baseValue,
-			baseSha: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base_sha")}: `), baseShaValue),
-			baseShaValue,
-			origin: h("p", { class: "muted pm-work-publish-fact" }, t("wpub_base_from_start")),
-			detailCommit,
-			detailBase
-		};
-		heldNode = h("p", {
-			"data-work-publish-held": "",
-			hidden: true
-		}, t("wpub_result_held"));
-		gapNode = h("p", { "data-work-publish-gap": decision.gap || "none" }, gapSentence(t, decision.gap));
-		const extra = h("div", { class: "pm-work-publish-fields" }, h("p", { class: "pm-work-publish-public" }, t("wpub_public")), facts.commit, facts.base, facts.baseSha, facts.origin, h("details", { "data-work-publish-sha-details": "" }, h("summary", {}, t("wres_details")), h("p", {}, t("wpub_commit"), " ", detailCommit), h("p", {}, t("wpub_base_sha"), " ", detailBase)), h("label", {}, t("wpub_title"), titleInput), h("label", {}, t("wpub_body"), bodyInput), h("div", {
-			role: "radiogroup",
-			"aria-labelledby": groupId,
-			class: "pm-work-publish-draft"
-		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
-		editor = form({
-			namespace: `${namespace}.work-publish.${candidateKey}`,
-			action: ACTION$6,
-			target: {
-				workspace_id: entry.target.workspace_id,
-				repository: entry.target.repository,
-				host: entry.target.host,
-				source_operation_id: entry.target.source_operation_id
-			},
-			requiredScope: "integrate",
-			savedText: "wpub_success",
-			pendingText: "wpub_pending",
-			label: "action_github_pr_publish",
-			fields: {
-				public_title: titleInput,
-				public_body: bodyInput,
-				draft: mirror
-			},
-			params: (values) => {
-				const current = bound;
-				const title = values.public_title ?? "";
-				const body = values.public_body ?? "";
-				if (!current || mode !== "ready" || !current.candidate || !current.baseRef || !current.preconditions) throw Error(t("wpub_gap_target"));
-				if (title.trim() === "") {
-					titleInput.focus();
-					throw Error(t("wpub_title_required"));
-				}
-				if (title.includes("\n") || title.includes("\r") || bytes(title) > 256) {
-					titleInput.focus();
-					throw Error(t("wpub_title_bounds"));
-				}
-				if (bytes(body) > 32e3) {
-					bodyInput.focus();
-					throw Error(t("wpub_body_bounds"));
-				}
-				if (values.draft !== "true" && values.draft !== "false") {
-					yes.focus();
-					throw Error(t("wpub_draft_required"));
-				}
-				pinned = {
-					target: current.target,
-					candidate: current.candidate,
-					baseRef: current.baseRef,
-					preconditions: current.preconditions,
-					scopes: current.scopes
-				};
-				return {
-					candidate_sha: current.candidate,
-					base_ref: current.baseRef,
-					public_title: title,
-					public_body: body,
-					draft: values.draft === "true"
-				};
-			},
-			preconditions: () => {
-				const current = editor?.locked() ? pinned || bound : bound;
-				if (!current?.preconditions) return {};
-				return {
-					repository_id: current.preconditions.repository_id,
-					expected_base_sha: current.preconditions.expected_base_sha
-				};
-			},
-			permitted: () => mode === "incomplete" || mode === "ready" && catalogAllows(caps, bound),
-			recoverPermitted: () => true,
-			onSaved: () => {
-				if (!radios) return;
-				radios.yes.checked = false;
-				radios.no.checked = false;
-				radios.mirror.value = "";
-			},
-			onError: (error) => {
-				const operation = editor?.operation();
-				error = {
-					...error,
-					code: error?.code || operation?.error_code,
-					message: error?.message || operation?.status_reason
-				};
-				const sentence = sentenceFor(error);
-				if (!sentence) return false;
-				const statusBox = editor?.box.querySelector(":scope > [role=\"status\"]");
-				if (!statusBox) return false;
-				statusBox.hidden = false;
-				const presented = errorBox ? errorBox(error, {
-					sourceRefresh: false,
-					summary: sentence,
-					within: statusBox
-				}) : h("p", {}, sentence);
-				statusBox.replaceChildren(presented);
-				if (error?.code === "PR_AUTHORITY_UNAVAILABLE" || SETUP_CODES.has(error?.code) && readCaps(caps)?.managed_installation) statusBox.append(h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup"))));
-				return true;
-			},
-			extra
-		});
-		const originalUpdate = editor.update;
-		editor.update = () => {
-			originalUpdate();
-			applyChrome();
-		};
-		editor.box.addEventListener("submit", (event) => {
-			if (!editor.locked() && mode !== "ready") {
-				event.preventDefault();
-				event.stopImmediatePropagation();
+		token: () => entry.epoch,
+		current: (token) => mounted && token === entry.epoch,
+		withdraw: (error) => {
+			if (mounted) {
+				entry.epoch++;
+				for (const notify of [...entry.readers]) notify(error);
 			}
-		}, true);
-		editor.box.addEventListener("click", (event) => {
-			const reset = editor.box.querySelector("[data-work-publish-new-request]");
-			if (!reset || event.target !== reset && !reset.contains(event.target)) return;
-			if ((editor.operation()?.error_code || editor.operation()?.error?.code) === "PR_RECEIPT_EXISTS") {
-				event.preventDefault();
-				event.stopImmediatePropagation();
-			}
-		}, true);
-		editor.box.classList.add("pm-work-publish-form");
-		editor.update();
-		root = h("section", {
-			class: "pm-work-publish",
-			"data-work-publish": ""
-		}, h("h4", {}, t("action_github_pr_publish")), heldNode, editor.box);
-		paintFacts();
-		return root;
-	}
-	function staticSection(decision, envelope) {
-		dropEditor();
-		mode = decision.mode;
-		shownEnvelope = envelope;
-		if (decision.mode === "absent") {
-			root = null;
-			return null;
+		},
+		release: () => {
+			mounted = false;
+			entry.readers.delete(onWithdraw);
+			if (!entry.readers.size) sources.delete(key);
 		}
-		if (decision.mode === "blocked") {
-			const known = BLOCKED_KEYS[decision.reason];
-			const copy = known ? t(known) : t("wres_unknown");
-			const next = decision.reason === "github_not_configured" ? readCaps(caps)?.managed_installation ? h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup")), " ", t("wpub_blocked_github_managed")) : h("p", {}, t("wpub_blocked_github_plain")) : null;
-			root = h("section", {
-				class: "pm-work-publish",
-				"data-work-publish": "",
-				"data-work-publish-blocked": decision.reason || "unknown"
-			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-blocked-reason": "" }, copy), next, decision.reason && !known ? h("details", {}, h("summary", {}, t("wres_details")), h("p", {}, decision.reason)) : null);
-			return root;
-		}
-		const entry = decision.entry;
-		if (!form || !entry?.target) {
-			root = h("section", {
-				class: "pm-work-publish",
-				"data-work-publish": ""
-			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-gap": decision.gap || "target" }, decision.mode === "ready" ? t("wpub_no_submit") : gapSentence(t, decision.gap || "target")));
-			return root;
-		}
-		return mountEditor(decision, envelope);
-	}
-	function render(envelope) {
-		const decision = classifyPublicationEntry(envelope);
-		if (decision.mode === "blocked" && [
-			"not_controller",
-			"not_writer_member",
-			"missing_scope"
-		].includes(decision.reason)) return staticSection(decision, envelope);
-		if (editor?.locked() && root) {
-			noteHeld(decision);
-			return root;
-		}
-		shownEnvelope = envelope;
-		if (decision.mode === "absent") return staticSection(decision, envelope);
-		if (decision.mode === "blocked") return staticSection(decision, envelope);
-		if (!form || !decision.entry?.target) return staticSection(decision, envelope);
-		const nextIdentity = identityOf(decision.entry);
-		if (editor && root && identity === nextIdentity) {
-			if (!editor.locked()) {
-				bound = decision.entry;
-				mode = decision.mode;
-				if (gapNode) {
-					gapNode.setAttribute("data-work-publish-gap", decision.gap || "none");
-					gapNode.textContent = gapSentence(t, decision.gap);
-				}
-				applyChrome();
-			}
-			return root;
-		}
-		dropEditor();
-		return mountEditor(decision, envelope);
-	}
+	};
+}
+var assessmentSourceRefused = (error) => [
+	401,
+	403,
+	404
+].includes(error?.status) || /(?:^|_)SOURCES?_UNAVAILABLE$/.test(error?.code || "");
+function assessmentPresentations(scope, onWithdraw) {
+	const mounted = new Map();
 	return {
-		render,
-		dispose,
-		recheck,
-		sync,
-		element: () => root
+		replace(references) {
+			const ids = new Set(references.map((ref) => ref?.review_id).filter(Boolean));
+			for (const [id, fence] of mounted) if (!ids.has(id)) {
+				fence.withdraw({ code: "SOURCE_UNAVAILABLE" });
+				fence.release();
+				mounted.delete(id);
+			}
+			for (const review_id of ids) if (!mounted.has(review_id)) mounted.set(review_id, assessmentSourceFence({
+				...scope,
+				review_id
+			}, onWithdraw));
+		},
+		withdraw(error) {
+			for (const fence of mounted.values()) fence.withdraw(error);
+		},
+		dispose() {
+			for (const fence of mounted.values()) fence.release();
+			mounted.clear();
+		}
 	};
 }
 //#endregion
+//#region src/pm-work-result-requirements.js
+function exclusiveOriginalAssessments(root) {
+	const selector = "details[data-original-assessment-body], details[data-overview-delivery-assessment]";
+	root.addEventListener("toggle", (event) => {
+		const opened = event.target;
+		if (!opened.matches?.(selector) || !opened.open) return;
+		const active = root.ownerDocument.activeElement;
+		let displaced = false;
+		for (const other of root.querySelectorAll(selector)) if (other !== opened && other.open) {
+			displaced ||= other.contains(active);
+			other.open = false;
+		}
+		if (displaced) opened.querySelector(":scope > summary")?.focus({ preventScroll: true });
+	}, true);
+}
+function originalAssessment({ h, t, assessment, requirementId = null, key = "original", open = new Set(), shortcut = null }) {
+	const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t("wres_unknown");
+	const verdict = (value) => label(value, [
+		"accepted",
+		"rejected",
+		"unassessed",
+		"not_defined"
+	]);
+	const text = (value) => typeof value === "string" ? value : "";
+	const note = (value) => h("p", { class: "pm-note-text" }, text(value));
+	const line = (key, value) => h("p", {}, t(key), ": ", value);
+	const details = (key, title, ...body) => h("details", {
+		"data-result-requirement-details": key,
+		...open.has(key) ? { open: true } : {}
+	}, h("summary", { "data-work-result-focus": `requirement:${key}` }, title), ...body);
+	const record = (key, value) => details(key, t("wres_req_sources"), h("pre", { class: "pm-note-text" }, JSON.stringify(value, null, 2)));
+	const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || "") ? h("a", {
+		href: `#/op/${id}`,
+		"data-work-result-focus": `requirement:operation:${key}`
+	}, t("wres_view_operation")) : null;
+	const ref = assessment.reference || {}, original = assessment.original || {};
+	const assessmentKey = JSON.stringify([
+		key,
+		ref.review_id,
+		ref.operation_id,
+		ref.version,
+		ref.document_digest
+	]);
+	const summary = `${verdict(assessment.conclusion)} · ${t(assessment.applicable === true ? "wres_req_applicable" : assessment.applicable === false ? "wres_req_no_longer_applies" : "pmq_applicability_not_evaluated")}`;
+	const reasons = (assessment.applicability_reasons || []).map((reason) => {
+		const translated = t(`pmq_reason_${reason}`);
+		return note(translated === `pmq_reason_${reason}` ? t("wres_req_applicability_changed") : translated);
+	});
+	const criteria = (original.criteria || []).filter((entry) => !requirementId || entry.criterion?.kind === "dod" || entry.criterion?.requirement_id === requirementId).map((entry, index) => {
+		const criterion = entry.criterion || {};
+		return details(`${assessmentKey}:criterion:${index}`, `${t(criterion.kind === "dod" ? "wres_req_dod" : "wres_req_criterion")}: ${text(criterion.input_id || criterion.criterion_id)} · ${verdict(entry.status)}`, note(entry.rationale), line("wres_check_verification", label(entry.verification?.status, [
+			"passed",
+			"failed",
+			"unavailable",
+			"unknown"
+		])), record(`${assessmentKey}:proof:${index}`, {
+			criterion,
+			reference: entry.reference,
+			verification: entry.verification
+		}));
+	});
+	const body = details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), typeof assessment.qualified === "boolean" ? note(t(assessment.qualified ? "wres_req_qualified" : "wres_req_not_qualified")) : null, ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment), shortcut);
+	body.dataset.originalAssessmentBody = "";
+	return body;
+}
+function resultRequirements({ h, t, section, open = new Set(), assessmentShortcut = null }) {
+	if (!section) return null;
+	const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t("wres_unknown");
+	const text = (value) => typeof value === "string" ? value : "";
+	const note = (value) => h("p", { class: "pm-note-text" }, text(value));
+	const source = (value) => h("code", { class: "pm-source" }, text(value));
+	const line = (key, value) => h("p", {}, t(key), ": ", value);
+	const details = (key, title, ...body) => h("details", {
+		"data-result-requirement-details": key,
+		...open.has(key) ? { open: true } : {}
+	}, h("summary", { "data-work-result-focus": `requirement:${key}` }, title), ...body);
+	const record = (key, value) => details(key, t("wres_req_sources"), h("pre", { class: "pm-note-text" }, JSON.stringify(value, null, 2)));
+	const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || "") ? h("a", {
+		href: `#/op/${id}`,
+		"data-work-result-focus": `requirement:operation:${key}`
+	}, t("wres_view_operation")) : null;
+	const element = h("section", {
+		"data-result-requirements": "",
+		class: "pm-work-result-requirements"
+	}, h("h4", {}, t("wres_req_heading")));
+	if (section.relation !== "explicit") {
+		element.append(note(t(section.relation === "none" ? "wres_req_none" : "wres_req_unavailable")));
+		return element;
+	}
+	element.append(note(t("wres_req_selection")), line("wres_check_verification", [
+		"unverified",
+		"running",
+		"verified",
+		"failed",
+		"stale",
+		"unknown"
+	].includes(section.verification) ? t(`wres_verification_${section.verification}`) : t("wres_unknown")));
+	if (section.coverage?.reviews_partial) element.append(note(t("wres_req_reviews_partial")));
+	if (section.coverage?.packages_partial) element.append(note(t("wres_req_packages_partial")));
+	element.append(record("binding", {
+		package_ref: section.package_ref,
+		plan_ref: section.plan_ref,
+		dod_ref: section.dod_ref,
+		candidate_commit: section.candidate_commit,
+		verification_evidence: section.verification_evidence
+	}));
+	for (const item of section.items || []) {
+		const key = JSON.stringify(["requirement", item.requirement_id]);
+		const row = h("article", { "data-result-requirement": item.requirement_id }, h("h5", {}, text(item.text)), source(item.requirement_id), note(label(item.state, [
+			"no_conclusion",
+			"verified_no_conclusion",
+			"assessments_recorded",
+			"unavailable"
+		])), record(`${key}:inputs`, {
+			source_input_id: item.source_input_id,
+			acceptance_input_ids: item.acceptance_input_ids,
+			link: item.link
+		}));
+		for (const assessment of item.assessments || []) row.append(originalAssessment({
+			h,
+			t,
+			assessment,
+			requirementId: item.requirement_id,
+			key,
+			open,
+			shortcut: assessmentShortcut?.(assessment.reference, item.requirement_id)
+		}));
+		element.append(row);
+	}
+	if (section.dependent_work?.length) {
+		const dependencies = details("dependencies", t("wres_req_dependencies"));
+		for (const work of section.dependent_work) {
+			const key = JSON.stringify([
+				"dependent",
+				work.work_item_id,
+				work.package_id,
+				work.document_digest
+			]);
+			const readiness = (value) => label(value?.status, [
+				"ready",
+				"blocked",
+				"unavailable",
+				"unknown"
+			]);
+			const body = h("article", { "data-result-dependent": work.package_id }, h("h5", {}, text(work.title)), line("wres_req_without_selection", readiness(work.readiness)));
+			if (!work.selections_complete) body.append(note(t("wres_req_selections_partial")));
+			for (const selected of work.selections || []) body.append(details(`${key}:${selected.execution_operation_id}`, `${t("wres_req_original_selection")}: ${readiness(selected.readiness)}`, operation(selected.execution_operation_id, `${key}:${selected.execution_operation_id}`), record(`${key}:${selected.execution_operation_id}:source`, selected)));
+			body.append(record(`${key}:source`, {
+				work_item_id: work.work_item_id,
+				package_id: work.package_id,
+				document_digest: work.document_digest,
+				prerequisite_ids: work.prerequisite_ids,
+				readiness: work.readiness,
+				link: work.link
+			}));
+			dependencies.append(body);
+		}
+		element.append(dependencies);
+	}
+	if (section.related?.length) element.append(record("related", section.related));
+	return element;
+}
+//#endregion
 //#region src/pm-execution-verification.js
-var ACTION$5 = "pm.execution.verify";
-var sha$5 = /^[0-9a-f]{40}$/;
+var ACTION$6 = "pm.execution.verify";
+var sha$6 = /^[0-9a-f]{40}$/;
 var digest$11 = /^[0-9a-f]{64}$/;
 var operation$2 = /^op_[0-9a-f]{32}$/;
 function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {}, fixedResult = null, allowedAction = () => true }) {
@@ -21720,7 +21471,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		execution_operation_id: selected
 	});
 	const fixedMatches = (value) => !fixedResult || value?.execution_operation_id === fixedResult.execution_operation_id && value?.candidate_commit === fixedResult.candidate_commit;
-	const canWrite = () => writer() && allowedAction(ACTION$5, target());
+	const canWrite = () => writer() && allowedAction(ACTION$6, target());
 	const enabled = () => caps()?.features?.pm_workspaces?.execution_verification?.version === 1;
 	const line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), value);
 	function clear() {
@@ -21769,7 +21520,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		try {
 			const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/executions/${selected}/verification-config`);
 			if (!valid(ticket)) return;
-			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$11.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$11.test(value.command_digest) || value.candidate_commit !== null && !sha$5.test(value.candidate_commit) || value.tree_hash !== null && !sha$5.test(value.tree_hash)) throw Error(t("pmq_invalid"));
+			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$11.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$11.test(value.command_digest) || value.candidate_commit !== null && !sha$6.test(value.candidate_commit) || value.tree_hash !== null && !sha$6.test(value.tree_hash)) throw Error(t("pmq_invalid"));
 			configuration = value;
 			ready = true;
 			status.replaceChildren();
@@ -21795,7 +21546,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				value: value[key] || ""
 			})]));
 			const matches = () => configuration && Object.entries(fields).every(([key, field]) => field.value === configuration[key]);
-			const admissible = () => canWrite() && fixedMatches(configuration) && configuration?.available && sha$5.test(configuration.candidate_commit) && sha$5.test(configuration.tree_hash) && matches();
+			const admissible = () => canWrite() && fixedMatches(configuration) && configuration?.available && sha$6.test(configuration.candidate_commit) && sha$6.test(configuration.tree_hash) && matches();
 			const rebase = button({
 				variant: "secondary",
 				label: t("pmq_verify_use_config"),
@@ -21810,7 +21561,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				namespace: `${namespace}.verification`,
 				api,
 				requiredScope: "operate",
-				action: ACTION$5,
+				action: ACTION$6,
 				target: target(),
 				fields,
 				params: (values) => {
@@ -22082,7 +21833,7 @@ function discussionResultSources({ h, t, api, alive, workspaceId, labelled, avai
 var CREATE = "pm.quality.review.create";
 var RECORD$2 = "pm.quality.review.record";
 var REVOKE = "pm.quality.review.revoke";
-var sha$4 = /^[0-9a-f]{40}$/;
+var sha$5 = /^[0-9a-f]{40}$/;
 var digest$10 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
@@ -22093,7 +21844,7 @@ var github = {
 	kind: "fixed_revision_verification",
 	profile: "github_reported_checks_v1"
 };
-function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSelectionChange = () => {}, fixedResult = null, allowedAction = () => true, onSaved = () => {} }) {
+function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSelectionChange = () => {}, fixedResult = null, allowedAction = () => true, onSaved = () => {}, assessmentSelection = null, originalContextDigest = null, onRecorded = () => {}, onSourceUnavailable = () => {} }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let workId = null, serial = 0, ready = false, filtered = false, model = null, selected = "", chosen = null, create = null, record = null, revoke = null, formKey = "", matrixKey = "", verifier = null;
 	const navigation = `batc.pm.quality-navigation.${namespace}.${workspaceId}`;
@@ -22205,6 +21956,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			summary: t("pmq_unavailable"),
 			within: status
 		}));
+		if (options.sourceRefresh !== false && assessmentSourceRefused(err)) onSourceUnavailable(err);
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -22240,7 +21992,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		throw Error(t("pmq_history_bound"));
 	}
 	function checkReview(row) {
-		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$10.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$4.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$10.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
+		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation$1.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$10.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$5.test(row.context?.native_result?.candidate_commit) || !operation$1.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation$1.test(row.assessment.operation_id) || !digest$10.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
 		return row;
 	}
 	function packageFor(id) {
@@ -22324,7 +22076,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					return [];
 				}
 			};
-			const permittedCreate = () => canCreate() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$4.test(candidate.value) && (!fixedResult || pkg.value === fixedResult.package_id && child.value === fixedResult.execution_operation_id && candidate.value === fixedResult.candidate_commit) && reviewer.value && chosenCriteria().length > 0 && same$11(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
+			const permittedCreate = () => canCreate() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$5.test(candidate.value) && (!fixedResult || pkg.value === fixedResult.package_id && child.value === fixedResult.execution_operation_id && candidate.value === fixedResult.candidate_commit) && reviewer.value && chosenCriteria().length > 0 && same$11(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
 				try {
 					return same$11(row.condition, policy(row.choice));
 				} catch {
@@ -22478,6 +22230,14 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 	}
 	function renderReview() {
 		comparison.invalidate();
+		if (assessmentSelection) {
+			const row = current();
+			facts.replaceChildren();
+			if (!row) throw error();
+			facts.append(h("h3", { tabindex: -1 }, t("pmq_original_assessment")), h("p", {}, t(row.version === assessmentSelection.version ? "pmq_pinned_version" : "pmq_newer_version", { version: row.version })), ...row.applicability_reasons.filter((reason) => ["review_revoked", "review_superseded"].includes(reason)).map((reason) => text("pmq_reason_" + reason)));
+			buildAssessment(row);
+			return;
+		}
 		const row = current();
 		facts.replaceChildren();
 		if (!row) {
@@ -22556,7 +22316,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			record?.dispose();
 			revoke?.dispose();
 			formKey = key;
-			const version = hidden(row.version), rationale = input("pmq_assessment_reason", {
+			const version = hidden(assessmentSelection?.version ?? row.version), rationale = input("pmq_assessment_reason", {
 				multiline: true,
 				max: 4e3
 			}), fields = {
@@ -22677,6 +22437,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		update();
 	}
 	function remember() {
+		if (assessmentSelection) return;
 		try {
 			localStorage.setItem(navigation, JSON.stringify({
 				workId,
@@ -22684,7 +22445,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			}));
 		} catch {}
 	}
-	async function refreshAfterSave() {
+	async function refreshAfterSave(result) {
 		const doc = element.ownerDocument, owner = doc.activeElement, work = workId, review = selected;
 		let restore = element.contains(owner);
 		const moved = (event) => {
@@ -22692,8 +22453,17 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		};
 		doc.addEventListener("focusin", moved);
 		try {
-			await onSaved();
+			await onSaved(result);
 			await refresh();
+			if (assessmentSelection && result?.kind === "assessment" && result.review_id === assessmentSelection.review_id) {
+				const receipt = current()?.history.find((row) => row.kind === "assessment" && row.version === result.version && row.document_digest === result.document_digest);
+				if (receipt) onRecorded({
+					review_id: result.review_id,
+					operation_id: receipt.operation_id,
+					version: receipt.version,
+					document_digest: receipt.document_digest
+				});
+			}
 			if (restore && ready && workId === work && selected === review && element.isConnected) facts.querySelector("h3")?.focus();
 		} finally {
 			doc.removeEventListener("focusin", moved);
@@ -22747,7 +22517,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const receipt = saved.verification;
 				if (saved.workspace_id !== workspaceId) throw error();
 				if (!receipt) continue;
-				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$10.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$4.test(receipt.reference.candidate_commit) || !sha$4.test(receipt.reference.tree_hash) || !digest$10.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
+				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$10.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$5.test(receipt.reference.candidate_commit) || !sha$5.test(receipt.reference.tree_hash) || !digest$10.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
 				proofs.push({
 					key: op.operation_id,
 					label: `${t("pmq_runner")} · ${receipt.reference.candidate_commit.slice(0, 12)} · ${op.operation_id}`,
@@ -22764,7 +22534,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const data = await request("GET", `${base}/evidence/${entry.evidence_id}`);
 				if (!valid(ticket)) return;
 				const e = data.evidence, f = e?.document?.facts;
-				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$4.test(f.candidate_commit) || !sha$4.test(f.tree_hash) || !digest$10.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
+				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$5.test(f.candidate_commit) || !sha$5.test(f.tree_hash) || !digest$10.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
 				proofs.push({
 					key: entry.evidence_id,
 					label: `${t("pmq_runner")} · #${f.verification_id} · ${f.candidate_commit.slice(0, 12)}`,
@@ -22781,7 +22551,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				});
 			}
 			for (const delivery of deliveries) for (const source of delivery.integration?.sources || []) {
-				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$4.test(source.delivered_sha) || !operation$1.test(source.source_id)) continue;
+				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$5.test(source.delivered_sha) || !operation$1.test(source.source_id)) continue;
 				for (const observation of observations) {
 					if (!digest$10.test(observation.document_digest)) throw error();
 					proofs.push({
@@ -22814,12 +22584,17 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				model.operations = operations.filter((row) => row.operation_id === fixedResult.execution_operation_id);
 				model.reviews = model.reviews.filter((row) => row.context.package_ref.package_id === fixedResult.package_id && row.context.execution_operation_id === fixedResult.execution_operation_id && row.context.native_result.candidate_commit === fixedResult.candidate_commit);
 			}
+			if (assessmentSelection) {
+				const row = model.reviews.find((row) => row.review_id === assessmentSelection.review_id);
+				if (!row || row.context_digest !== originalContextDigest || packageFor(assessmentSelection.package_id)?.document_digest !== assessmentSelection.package_digest || row.context.package_ref.document_digest !== assessmentSelection.package_digest || !row.history.some((ref) => ref.kind === "assessment" && ref.operation_id === assessmentSelection.operation_id && ref.version === assessmentSelection.version && ref.document_digest === assessmentSelection.document_digest)) throw error();
+				selected = assessmentSelection.review_id;
+			}
 			ready = true;
 			options(history, model.reviews.map((row) => [row.review_id, `${row.context.native_result.candidate_commit.slice(0, 12)} · ${row.context.reviewer_actor} · ${row.review_id}`]));
 			if (selected && !model.reviews.some((row) => row.review_id === selected)) selected = "";
 			if (fixedResult && !selected && model.reviews.length === 1) selected = model.reviews[0].review_id;
 			history.value = selected;
-			buildCreate();
+			if (!assessmentSelection) buildCreate();
 			renderReview();
 			await verifier.setSources(model.operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
@@ -22835,9 +22610,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		if (id === workId) return;
 		withdraw();
 		workId = /^wi_[0-9a-f]{20}$/.test(id || "") ? id : null;
-		selected = "";
+		selected = assessmentSelection?.review_id || "";
 		try {
-			const saved = JSON.parse(localStorage.getItem(navigation));
+			const saved = assessmentSelection ? {} : JSON.parse(localStorage.getItem(navigation));
 			if (saved.workId === workId) selected = saved.review_id || "";
 		} catch {}
 		refresh();
@@ -22871,6 +22646,10 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		}
 	});
 	element.insertBefore(verifier.element, draft.parentElement);
+	if (assessmentSelection) {
+		history.closest("label").hidden = true;
+		draft.parentElement.hidden = true;
+	}
 	if (fixedResult) {
 		workChoice.closest("label").hidden = true;
 		element.classList.remove("panel");
@@ -22898,7 +22677,7 @@ function workQualityContext(envelope, workspaceId, attempt) {
 		candidate_commit: commit
 	};
 }
-function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox, namespace, refreshResult }) {
+function createWorkQuality({ h, t, api, alive, workspaceId, serverId, caps, form, errorBox, namespace, refreshResult, assessmentSelection = null, originalAssessment = null, onRecorded = () => {}, onSourceUnavailable = () => {} }) {
 	let context = null, envelope = null, editor = null, workspace = null, serial = 0, sourceSignature = null, saving = 0;
 	const body = h("div"), status = h("div", { role: "status" });
 	const open = button({
@@ -22963,6 +22742,10 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 				errorBox,
 				namespace: `${namespace}.result.${envelope.attempt_id}.${selected.candidate_commit}`,
 				fixedResult: selected,
+				assessmentSelection,
+				originalContextDigest: originalAssessment?.context_digest,
+				onRecorded,
+				onSourceUnavailable,
 				allowedAction: offered,
 				onSaved: async () => {
 					saving++;
@@ -22985,10 +22768,15 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 			if (!valid()) return;
 			open.disabled = false;
 			status.replaceChildren(errorBox(err, { within: status }));
+			if (assessmentSourceRefused(err)) onSourceUnavailable(err);
 		}
 	}
 	function render(value, attempt) {
 		const next = workQualityContext(value, workspaceId, attempt);
+		if (assessmentSelection && (!matchesAssessment(assessmentSelection, originalAssessment) || !matchesResult(assessmentSelection, value, serverId) || !resultRequirementKnown(assessmentSelection, value))) {
+			dispose();
+			return null;
+		}
 		if (!form || getCaps()?.features?.pm_workspaces?.quality_reviews?.version !== 1 || !next) {
 			dispose();
 			return null;
@@ -23021,129 +22809,930 @@ function createWorkQuality({ h, t, api, alive, workspaceId, caps, form, errorBox
 	};
 }
 //#endregion
-//#region src/pm-work-result-requirements.js
-function resultRequirements({ h, t, section, open = new Set() }) {
-	if (!section) return null;
-	const label = (value, allowed) => allowed.includes(value) ? t(`wres_req_${value}`) : t("wres_unknown");
-	const verdict = (value) => label(value, [
-		"accepted",
-		"rejected",
-		"unassessed",
-		"not_defined"
-	]);
-	const text = (value) => typeof value === "string" ? value : "";
-	const note = (value) => h("p", { class: "pm-note-text" }, text(value));
-	const source = (value) => h("code", { class: "pm-source" }, text(value));
-	const line = (key, value) => h("p", {}, t(key), ": ", value);
-	const details = (key, title, ...body) => h("details", {
-		"data-result-requirement-details": key,
-		...open.has(key) ? { open: true } : {}
-	}, h("summary", { "data-work-result-focus": `requirement:${key}` }, title), ...body);
-	const record = (key, value) => details(key, t("wres_req_sources"), h("pre", { class: "pm-note-text" }, JSON.stringify(value, null, 2)));
-	const operation = (id, key) => /^op_[0-9a-f]{32}$/.test(id || "") ? h("a", {
-		href: `#/op/${id}`,
-		"data-work-result-focus": `requirement:operation:${key}`
-	}, t("wres_view_operation")) : null;
+//#region src/pm-original-assessment.js
+function originalAssessmentReader({ h, t, api, alive, workspaceId, serverId, caps, namespace, form, errorBox, refreshOrigin = async () => {}, onSelectionChange = () => {}, returnFocus = () => null }) {
+	let reading = null, fence = null, sourceToken = null;
+	let pin = null, epoch = 0, quality = null, currentResult = null, currentAttempt = null, recorded = null;
+	const body = h("div"), editor = h("div"), status = h("div", { role: "status" });
+	const heading = h("h4", { tabindex: -1 }, t("pmq_original_assessment"));
 	const element = h("section", {
-		"data-result-requirements": "",
-		class: "pm-work-result-requirements"
-	}, h("h4", {}, t("wres_req_heading")));
-	if (section.relation !== "explicit") {
-		element.append(note(t(section.relation === "none" ? "wres_req_none" : "wres_req_unavailable")));
-		return element;
+		"data-original-assessment": "",
+		hidden: true
+	}, heading, status, body, editor);
+	const getCaps = () => typeof caps === "function" ? caps() : caps;
+	const supported = () => getCaps()?.features?.pm_workspaces?.quality_reviews?.exact_assessment_read === true;
+	const guard = (ticket) => {
+		alive?.();
+		if (ticket !== epoch || fence && !fence.current(sourceToken)) throw Error("VIEW_CHANGED");
+	};
+	function captureReading() {
+		const active = element.ownerDocument.activeElement;
+		if (body.contains(active) || editor.contains(active)) reading = {
+			node: editor.contains(active) ? active : null,
+			key: active.dataset.workResultFocus,
+			start: active.selectionStart,
+			end: active.selectionEnd,
+			open: new Set([...body.querySelectorAll("details[open]")].map((node) => node.dataset.resultRequirementDetails))
+		};
 	}
-	element.append(note(t("wres_req_selection")), line("wres_check_verification", [
-		"unverified",
-		"running",
-		"verified",
-		"failed",
-		"stale",
-		"unknown"
-	].includes(section.verification) ? t(`wres_verification_${section.verification}`) : t("wres_unknown")));
-	if (section.coverage?.reviews_partial) element.append(note(t("wres_req_reviews_partial")));
-	if (section.coverage?.packages_partial) element.append(note(t("wres_req_packages_partial")));
-	element.append(record("binding", {
-		package_ref: section.package_ref,
-		plan_ref: section.plan_ref,
-		dod_ref: section.dod_ref,
-		candidate_commit: section.candidate_commit,
-		verification_evidence: section.verification_evidence
-	}));
-	for (const item of section.items || []) {
-		const key = JSON.stringify(["requirement", item.requirement_id]);
-		const row = h("article", { "data-result-requirement": item.requirement_id }, h("h5", {}, text(item.text)), source(item.requirement_id), note(label(item.state, [
-			"no_conclusion",
-			"verified_no_conclusion",
-			"assessments_recorded",
-			"unavailable"
-		])), record(`${key}:inputs`, {
-			source_input_id: item.source_input_id,
-			acceptance_input_ids: item.acceptance_input_ids,
-			link: item.link
-		}));
-		for (const assessment of item.assessments || []) {
-			const ref = assessment.reference || {}, original = assessment.original || {};
-			const assessmentKey = JSON.stringify([
-				key,
-				ref.review_id,
-				ref.operation_id,
-				ref.version,
-				ref.document_digest
-			]);
-			const summary = `${verdict(assessment.conclusion)} · ${t(assessment.applicable === true ? "wres_req_applicable" : "wres_req_no_longer_applies")}`;
-			const reasons = (assessment.applicability_reasons || []).map((reason) => {
-				const translated = t(`pmq_reason_${reason}`);
-				return note(translated === `pmq_reason_${reason}` ? t("wres_req_applicability_changed") : translated);
-			});
-			const criteria = (original.criteria || []).filter((entry) => entry.criterion?.kind === "dod" || entry.criterion?.requirement_id === item.requirement_id).map((entry, index) => {
-				const criterion = entry.criterion || {};
-				return details(`${assessmentKey}:criterion:${index}`, `${t(criterion.kind === "dod" ? "wres_req_dod" : "wres_req_criterion")}: ${text(criterion.input_id || criterion.criterion_id)} · ${verdict(entry.status)}`, note(entry.rationale), line("wres_check_verification", label(entry.verification?.status, [
-					"passed",
-					"failed",
-					"unavailable",
-					"unknown"
-				])), record(`${assessmentKey}:proof:${index}`, {
-					criterion,
-					reference: entry.reference,
-					verification: entry.verification
-				}));
-			});
-			row.append(details(assessmentKey, summary, line("wres_req_assessed_by", text(assessment.assessed_by)), line("wres_req_dod", verdict(original.dod)), note(t(assessment.qualified === true ? "wres_req_qualified" : "wres_req_not_qualified")), ...reasons, note(original.rationale), ...criteria, assessment.revocation ? note(t("wres_req_revoked")) : null, operation(ref.operation_id, assessmentKey), record(`${assessmentKey}:source`, assessment)));
+	function restoreReading() {
+		if (!reading || element.ownerDocument.activeElement !== element.ownerDocument.body) return;
+		const target = reading.node?.isConnected ? reading.node : [...body.querySelectorAll("[data-work-result-focus]")].find((node) => node.dataset.workResultFocus === reading.key);
+		target?.focus({ preventScroll: true });
+		if (target?.setSelectionRange && reading.start != null) try {
+			target.setSelectionRange(reading.start, reading.end);
+		} catch {}
+	}
+	function remember(value) {
+		const [route, raw] = location.hash.split("?"), query = new URLSearchParams(raw || "");
+		for (const key of assessmentQueryKeys) query.delete(key);
+		if (value) for (const [key, item] of assessmentQuery(value, namespace)) query.set(key, item);
+		history.replaceState(history.state, "", route + (query.size ? "?" + query : ""));
+	}
+	function close({ focus = false, forget = false } = {}) {
+		const focusTarget = focus ? returnFocus() : null;
+		epoch++;
+		fence?.release();
+		fence = null;
+		sourceToken = null;
+		reading = null;
+		pin = null;
+		recorded = null;
+		quality?.dispose();
+		quality = null;
+		body.replaceChildren();
+		editor.replaceChildren();
+		status.replaceChildren();
+		element.hidden = true;
+		onSelectionChange(null);
+		if (forget) remember(null);
+		if (focus) {
+			const target = focusTarget;
+			if (target && !target.hasAttribute("data-assessment-open")) {
+				target.parentElement.querySelector("[data-assessment-return-note]")?.remove();
+				target.after(h("p", {
+					role: "status",
+					"data-assessment-return-note": ""
+				}, t("pmq_return_changed")));
+			}
+			if (target) {
+				for (let ancestor = target.parentElement; ancestor; ancestor = ancestor.parentElement) if (ancestor.tagName === "DETAILS") ancestor.open = true;
+				if (!target.matches("button,a,input,select,textarea")) target.tabIndex = -1;
+				target.focus({ preventScroll: true });
+			}
 		}
-		element.append(row);
 	}
-	if (section.dependent_work?.length) {
-		const dependencies = details("dependencies", t("wres_req_dependencies"));
-		for (const work of section.dependent_work) {
-			const key = JSON.stringify([
-				"dependent",
-				work.work_item_id,
-				work.package_id,
-				work.document_digest
-			]);
-			const readiness = (value) => label(value?.status, [
-				"ready",
-				"blocked",
-				"unavailable",
-				"unknown"
-			]);
-			const body = h("article", { "data-result-dependent": work.package_id }, h("h5", {}, text(work.title)), line("wres_req_without_selection", readiness(work.readiness)));
-			if (!work.selections_complete) body.append(note(t("wres_req_selections_partial")));
-			for (const selected of work.selections || []) body.append(details(`${key}:${selected.execution_operation_id}`, `${t("wres_req_original_selection")}: ${readiness(selected.readiness)}`, operation(selected.execution_operation_id, `${key}:${selected.execution_operation_id}`), record(`${key}:${selected.execution_operation_id}:source`, selected)));
-			body.append(record(`${key}:source`, {
-				work_item_id: work.work_item_id,
-				package_id: work.package_id,
-				document_digest: work.document_digest,
-				prerequisite_ids: work.prerequisite_ids,
-				readiness: work.readiness,
-				link: work.link
-			}));
-			dependencies.append(body);
+	const back = h("button", {
+		type: "button",
+		class: "ui-button secondary",
+		onclick: () => close({
+			focus: true,
+			forget: true
+		})
+	}, t("pmq_return_origin"));
+	element.append(back);
+	async function readContext(selected, original, ticket) {
+		let requested = { ...selected };
+		if (!requested.attempt_id) {
+			const context = original.context;
+			requested = {
+				...requested,
+				package_id: context.package_ref.package_id,
+				package_digest: context.package_ref.document_digest,
+				execution_operation_id: context.execution_operation_id,
+				candidate_commit: context.native_result.candidate_commit
+			};
+			const data = await api("GET", `/pm/workspaces/${workspaceId}/work/${requested.work_item_id}/attempts?after=0&limit=50`);
+			guard(ticket);
+			if (data.workspace_id !== workspaceId || data.work_item_id !== requested.work_item_id || !Array.isArray(data.attempts)) throw Error(t("pmq_invalid"));
+			const matches = data.attempts.filter((row) => row.workspace_id === workspaceId && row.work_item_id === requested.work_item_id && row.package_id === requested.package_id && row.execution_operation_id === requested.execution_operation_id);
+			if (data.next_cursor !== null || data.visibility_filtered || matches.length !== 1) return null;
+			requested.attempt_id = matches[0].attempt_id;
 		}
-		element.append(dependencies);
+		const [work, attempt, result] = await Promise.all([
+			api("GET", `/work-items/${requested.work_item_id}`),
+			api("GET", `/pm/workspaces/${workspaceId}/work-attempts/${requested.attempt_id}`),
+			api("GET", `/pm/workspaces/${workspaceId}/work-attempts/${requested.attempt_id}/result`)
+		]);
+		guard(ticket);
+		if (!serverId || result?.identity?.server_id !== serverId) throw Error(t("pmq_invalid"));
+		if (work?.work_item?.work_item_id !== requested.work_item_id || !matchesAttempt(requested, attempt)) throw Error(t("pmq_invalid"));
+		if (!requested.result_id) requested = selectionFromResult({
+			partition: namespace,
+			envelope: result,
+			reference: requested,
+			origin: requested.origin
+		});
+		if (!requested || !matchesAssessment(requested, original)) return null;
+		return {
+			selection: requested,
+			attempt: attempt.attempt,
+			envelope: result,
+			matches: matchesResult(requested, result, serverId)
+		};
 	}
-	if (section.related?.length) element.append(record("related", section.related));
-	return element;
+	async function refresh({ focus = false } = {}) {
+		if (!pin || !supported()) {
+			close();
+			return;
+		}
+		const selected = pin, ticket = ++epoch;
+		sourceToken = fence?.token();
+		captureReading();
+		status.textContent = t("pmq_loading");
+		body.replaceChildren();
+		editor.hidden = true;
+		const valid = () => {
+			try {
+				guard(ticket);
+				return pin === selected;
+			} catch {
+				return false;
+			}
+		};
+		try {
+			const original = await api("GET", `/pm/workspaces/${selected.workspace_id}/quality-reviews/${selected.review_id}/assessments/${selected.operation_id}?version=${selected.version}&document_digest=${selected.document_digest}`);
+			guard(ticket);
+			if (!assessmentRequirementKnown(selected, original)) throw Error(t("pmq_requirement_mismatch"));
+			if (!matchesAssessment(selected, original)) throw Error(t("pmq_invalid"));
+			const context = await readContext(selected, original, ticket);
+			guard(ticket);
+			if (context && !selected.result_id) {
+				pin = context.selection;
+				remember(pin);
+			}
+			currentResult = context?.envelope;
+			currentAttempt = context?.attempt;
+			if (context?.matches && !resultRequirementKnown(pin, currentResult)) throw Error(t("pmq_requirement_mismatch"));
+			const contextual = context?.matches ? contextualAssessment(pin, currentResult, serverId) : null;
+			const document = original.assessment.document;
+			const content = originalAssessment({
+				h,
+				t,
+				assessment: {
+					reference: {
+						review_id: pin.review_id,
+						operation_id: pin.operation_id,
+						version: pin.version,
+						document_digest: pin.document_digest
+					},
+					original: document,
+					assessed_by: original.assessment.actor,
+					conclusion: pin.requirement_id ? document.requirements?.find((row) => row.requirement_id === pin.requirement_id)?.status : document.acceptance,
+					...contextual ? {
+						applicable: contextual.applicable,
+						qualified: contextual.qualified,
+						applicability_reasons: contextual.applicability_reasons,
+						revocation: contextual.revocation
+					} : {}
+				},
+				requirementId: pin.requirement_id,
+				open: reading?.open
+			});
+			content.open = true;
+			body.replaceChildren(content);
+			status.replaceChildren();
+			element.hidden = false;
+			if (!context?.matches) {
+				quality?.dispose();
+				quality = null;
+				editor.replaceChildren();
+				status.append(h("p", {}, t(context ? "pmq_result_changed" : "pmq_result_unresolved")), h("a", {
+					class: "ui-button secondary",
+					href: `#/pm/${workspaceId}/board?select=${pin.work_item_id}`,
+					onclick: (event) => {
+						event.preventDefault();
+						const destination = event.currentTarget.getAttribute("href");
+						close({ forget: true });
+						if (location.hash === destination) refreshOrigin();
+						else location.hash = destination;
+					}
+				}, t("pmq_open_current_result")));
+			} else {
+				if (!quality) quality = createWorkQuality({
+					h,
+					t,
+					api,
+					alive,
+					workspaceId,
+					serverId,
+					caps,
+					namespace,
+					form,
+					errorBox,
+					assessmentSelection: pin,
+					originalAssessment: original,
+					onSourceUnavailable: (error) => fence?.withdraw(error),
+					refreshResult: async () => {
+						await refreshOrigin();
+						await refresh();
+					},
+					onRecorded: (reference) => {
+						recorded = assessmentSelection({
+							...pin,
+							...reference
+						}, namespace, { complete: true });
+						if (recorded) status.append(h("button", {
+							type: "button",
+							class: "ui-button secondary",
+							onclick: () => {
+								if (recorded) open(recorded);
+							}
+						}, t("pmq_view_recorded")));
+					}
+				});
+				const node = quality.render(currentResult, currentAttempt);
+				if (node && !editor.contains(node)) editor.replaceChildren(node);
+				editor.hidden = false;
+			}
+			if (focus) heading.focus({ preventScroll: true });
+			else restoreReading();
+		} catch (error) {
+			if (!valid() && ticket !== epoch) return;
+			try {
+				guard(ticket);
+			} catch {
+				return;
+			}
+			if (assessmentSourceRefused(error)) fence?.withdraw(error);
+			else fail(error);
+		}
+	}
+	async function open(value) {
+		const selected = assessmentSelection({
+			return_operation_id: value.operation_id,
+			return_review_id: value.review_id,
+			return_document_digest: value.document_digest,
+			...value
+		}, namespace);
+		if (!supported() || !selected || selected.workspace_id !== workspaceId) return;
+		close();
+		pin = selected;
+		onSelectionChange(pin);
+		fence = assessmentSourceFence(pin, fail);
+		sourceToken = fence.token();
+		element.hidden = false;
+		remember(pin);
+		await refresh({ focus: true });
+	}
+	function restore(origin, accepts = () => true) {
+		const value = parseAssessmentSelection(new URLSearchParams(location.hash.split("?")[1] || ""), namespace);
+		if (!pin && value?.origin === origin && value.workspace_id === workspaceId && accepts(value)) open(value);
+	}
+	function fail(error) {
+		epoch++;
+		quality?.dispose();
+		quality = null;
+		body.replaceChildren();
+		editor.replaceChildren();
+		status.replaceChildren(errorBox(error, { within: status }));
+		element.hidden = false;
+	}
+	return {
+		element,
+		open,
+		refresh,
+		close,
+		restore,
+		supported,
+		selected: () => pin,
+		sourceWithdrawn: (error) => fence?.withdraw(error),
+		suspend: () => {
+			captureReading();
+			epoch++;
+			body.replaceChildren();
+			editor.hidden = true;
+		},
+		fail
+	};
+}
+//#endregion
+//#region src/pm-work-publish.js
+var ACTION$5 = "github.pr.publish";
+var SHA40 = /^[0-9a-f]{40}$/;
+var OP_ID = /^op_[0-9a-f]{32}$/;
+var TARGET_KEYS = [
+	"workspace_id",
+	"repository",
+	"host",
+	"source_operation_id"
+];
+var PARAM_NAMES = [
+	"candidate_sha",
+	"base_ref",
+	"public_title",
+	"public_body",
+	"draft"
+];
+var BLOCKED_KEYS = {
+	not_controller: "wpub_blocked_not_controller",
+	not_writer_member: "wpub_blocked_not_writer",
+	missing_scope: "wpub_blocked_scope",
+	WAIT_ORIGINAL_OPERATION_RECONCILE: "wpub_blocked_reconcile",
+	pull_request_exists: "wpub_blocked_pr_exists",
+	lifecycle_stopped: "wpub_blocked_lifecycle",
+	github_not_configured: "wpub_blocked_github",
+	publication_source_incomplete: "wpub_blocked_source"
+};
+var HOST_CODES = {
+	PR_SOURCE_MOVED: "wpub_source_moved",
+	PR_BASE_MOVED: "wpub_base_moved",
+	PR_SOURCE_HISTORY_CHANGED: "wpub_history_changed",
+	PR_BASE_NOT_ANCESTOR: "wpub_base_not_ancestor",
+	PR_EMPTY_CHANGE: "wpub_empty_change",
+	PR_PIN_CHANGED: "wpub_pin_changed",
+	PR_RECEIPT_EXISTS: "wpub_receipt_exists",
+	PR_BRANCH_EXISTS: "wpub_branch_exists",
+	PR_BRANCH_CREATE_REFUSED: "wpub_branch_refused",
+	PR_CHANGE_LIMIT: "wpub_change_limit",
+	PR_CREATE_REFUSED: "pm_terminal",
+	PR_PATH_UNREADABLE: "pm_terminal",
+	PR_PUBLISHED_HEAD_CHANGED: "pm_terminal",
+	PR_RECEIPT_UNAVAILABLE: "pm_terminal",
+	PR_PROVIDER_TARGET_CHANGED: "wpub_source_changed",
+	PR_CREATED_TARGET_CHANGED: "wpub_created_target_changed",
+	PR_FOREIGN_CONTROLLER: "wpub_blocked_not_controller",
+	INTERNAL: "error_generic",
+	PR_AUTHORITY_UNAVAILABLE: "wpub_authority"
+};
+var SETUP_CODES = new Set([
+	"GITHUB_NOT_CONFIGURED",
+	"REPO_NOT_CONFIGURED",
+	"INTEGRATION_DISABLED",
+	"UNKNOWN_HOST",
+	"TIER_DISABLED",
+	"NO_MANAGED_ROOT",
+	"GIT_RUNNER_UNAVAILABLE"
+]);
+var QUIET_CODES = new Set([
+	"TIMEOUT",
+	"NETWORK_ERROR",
+	"CENTRAL_OFFLINE",
+	"CONNECTION_CHANGED"
+]);
+var radioSerial = 0;
+var text$6 = (value) => typeof value === "string" && value.length > 0;
+var sha$4 = (value) => typeof value === "string" && SHA40.test(value);
+var bytes = (value) => new TextEncoder().encode(value).length;
+function exactTarget$1(target) {
+	if (!target || typeof target !== "object" || Array.isArray(target)) return null;
+	if (Object.keys(target).length !== TARGET_KEYS.length) return null;
+	if (!TARGET_KEYS.every((key) => Object.hasOwn(target, key) && text$6(target[key]))) return null;
+	if (!/^ws_[0-9a-f]{32}$/.test(target.workspace_id) || !OP_ID.test(target.source_operation_id)) return null;
+	return {
+		workspace_id: target.workspace_id,
+		repository: target.repository,
+		host: target.host,
+		source_operation_id: target.source_operation_id
+	};
+}
+function exactPreconditions(value) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const keys = Object.keys(value).sort();
+	if (keys.length !== 2 || keys[0] !== "expected_base_sha" || keys[1] !== "repository_id") return null;
+	const id = value.repository_id;
+	if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) return null;
+	if (!sha$4(value.expected_base_sha)) return null;
+	return {
+		repository_id: id,
+		expected_base_sha: value.expected_base_sha
+	};
+}
+function actionRows(list) {
+	if (!Array.isArray(list)) return [];
+	return list.filter((row) => row && row.action === ACTION$5);
+}
+function paramsReady(entry) {
+	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
+}
+function classifyPublicationEntry(envelope) {
+	const blocked = actionRows(envelope?.blocked_actions);
+	const allowed = actionRows(envelope?.next_allowed_actions);
+	if (blocked.length) {
+		const reasons = blocked.map((row) => typeof row.reason === "string" ? row.reason : "");
+		return {
+			mode: "blocked",
+			gap: "",
+			reason: new Set(reasons).size === 1 ? reasons[0] : "",
+			entry: null
+		};
+	}
+	if (!allowed.length) return {
+		mode: "absent",
+		gap: "",
+		reason: "",
+		entry: null
+	};
+	if (allowed.length > 1) return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const row = allowed[0];
+	if (row.allowed === false || row.kind != null && row.kind !== "action") return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const target = exactTarget$1(row.target);
+	const prefilled = row.prefilled_params && typeof row.prefilled_params === "object" && !Array.isArray(row.prefilled_params) ? row.prefilled_params : {};
+	const candidate = sha$4(prefilled.candidate_sha) ? prefilled.candidate_sha : "";
+	const baseRef = text$6(prefilled.base_ref) ? prefilled.base_ref : "";
+	const preconditions = exactPreconditions(row.preconditions);
+	const scopes = Array.isArray(row.required_scopes) ? row.required_scopes.filter((item) => typeof item === "string") : [];
+	if (!target || envelope?.workspace_id && target.workspace_id !== envelope.workspace_id || envelope?.identity?.execution_operation_id && target.source_operation_id !== envelope.identity.execution_operation_id) return {
+		mode: "incomplete",
+		gap: "target",
+		reason: "",
+		entry: null
+	};
+	const entry = {
+		target,
+		candidate,
+		baseRef,
+		preconditions,
+		scopes
+	};
+	if (!candidate) return {
+		mode: "incomplete",
+		gap: "commit",
+		reason: "",
+		entry
+	};
+	if (!baseRef || !preconditions || !paramsReady(row)) return {
+		mode: "incomplete",
+		gap: "preconditions",
+		reason: "",
+		entry
+	};
+	return {
+		mode: "ready",
+		gap: "",
+		reason: "",
+		entry
+	};
+}
+function identityOf(entry) {
+	if (!entry?.target) return "";
+	return JSON.stringify({
+		target: entry.target,
+		candidate_sha: entry.candidate || ""
+	});
+}
+function readCaps(caps) {
+	return typeof caps === "function" ? caps() : caps;
+}
+function catalogAllows(caps, entry) {
+	const current = readCaps(caps);
+	const scopes = Array.isArray(current?.scopes) ? current.scopes : [];
+	if (!(entry?.scopes?.length ? entry.scopes : [
+		"observe",
+		"manage",
+		"integrate"
+	]).every((scope) => scopes.includes(scope))) return false;
+	if (!scopes.includes("integrate")) return false;
+	return Boolean(current?.actions?.some((row) => row.action === ACTION$5 && row.allowed === true));
+}
+function receiptSha(envelope) {
+	const rows = envelope?.delivery?.pull_requests;
+	if (!Array.isArray(rows) || !rows.length) return "";
+	const last = rows[rows.length - 1];
+	return sha$4(last?.candidate_sha) ? last.candidate_sha : "";
+}
+function sourceSentence(t, envelope, candidate) {
+	const fixed = envelope?.changes?.fixed_result_commit;
+	if (fixed?.commit_sha === candidate) {
+		if (fixed.source_kind === "turn_end_observation") return t("wres_source_turn_end_observation");
+		if (fixed.source_kind === "execution_verification" || fixed.source_kind === "session_verification") return t("wres_source_verified_commit");
+		if (fixed.source_kind === "integration") return t("wres_source_integration_commit");
+	}
+	const receipt = receiptSha(envelope);
+	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
+	return t("wpub_commit_from_result");
+}
+function operationId$5(value) {
+	return typeof value === "string" && OP_ID.test(value) ? value : "";
+}
+function publicationPrLine(h, t, pr) {
+	if (!pr || typeof pr !== "object") return null;
+	const opId = operationId$5(pr.publication_operation_id);
+	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
+	const repo = text$6(pr.repository) ? pr.repository : "";
+	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
+	const item = h("li", {});
+	if (opId) {
+		item.append(h("a", {
+			href: `#/op/${encodeURIComponent(opId)}`,
+			"data-work-publish-pr": opId
+		}, label || t("pm_operation")));
+		if (pr.target_verified !== true) item.append(" ", h("span", { "data-work-publish-unverified": "" }, t("wpub_pr_unverified")));
+	} else if (label) item.append(h("span", {}, label));
+	else return null;
+	if (pr.requirement_acceptance === "not_evaluated_by_publication") item.append(" ", h("span", { "data-work-publish-not-accepted": "" }, t("wpub_pr_not_accepted")));
+	return item;
+}
+function publicationDeliveryLine(h, t, pr, envelope, attempt) {
+	if (!operationId$5(pr?.publication_operation_id)) return null;
+	const host = text$6(attempt?.session?.host) ? attempt.session.host : text$6(attempt?.native_session?.host) ? attempt.native_session.host : "";
+	const source = text$6(pr.child_operation_id) ? pr.child_operation_id : text$6(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
+	const repo = text$6(pr.repository) ? pr.repository : "";
+	if (!host || !source || !repo) return null;
+	return h("p", { "data-work-publish-delivery": "" }, h("a", { href: `#/delivery/${encodeURIComponent(host)}/execution/${encodeURIComponent(source)}/${encodeURIComponent(repo)}` }, t("nav_delivery")), " ", t("wpub_delivery_link"));
+}
+function gapSentence(t, gap) {
+	if (gap === "commit") return t("wpub_commit_missing");
+	if (gap === "preconditions") return t("wpub_gap_preconditions");
+	return t("wpub_gap_target");
+}
+function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
+	let editor = null;
+	let root = null;
+	let mode = "absent";
+	let bound = null;
+	let pinned = null;
+	let identity = "";
+	let heldNode = null;
+	let gapNode = null;
+	let radios = null;
+	let facts = null;
+	let shownEnvelope = null;
+	const displayEntry = () => editor?.locked() ? pinned || bound : bound;
+	function dispose() {
+		dropEditor();
+		root = null;
+	}
+	function dropEditor() {
+		editor?.dispose();
+		editor = null;
+		identity = "";
+		bound = null;
+		pinned = null;
+		mode = "absent";
+		radios = null;
+		facts = null;
+		heldNode = null;
+		gapNode = null;
+	}
+	function sync() {
+		editor?.update();
+	}
+	function recheck() {
+		sync();
+		if (editor?.locked()) editor.recheck();
+	}
+	function sentenceFor(error) {
+		const code = error?.code || "";
+		const status = editor?.operation()?.status || "";
+		if (status === "uncertain" || code === "UNCERTAIN") return t("wpub_uncertain");
+		if (code === "PR_CREATED_TARGET_CHANGED") return t("wpub_created_target_changed");
+		if (status === "needs_attention" || code === "UNCERTAIN_UNRESOLVED") return t("wpub_needs_attention");
+		if (HOST_CODES[code]) return t(HOST_CODES[code]);
+		if (SETUP_CODES.has(code)) return t(readCaps(caps)?.managed_installation ? "wpub_blocked_github_managed" : "wpub_blocked_github_plain");
+		if (!code || clientActionReason(code) || QUIET_CODES.has(code)) return "";
+		if (status === "failed" || status === "cancelled" || error?.admissionRefused === true || error?.status) return t("error_generic");
+		return "";
+	}
+	function paintFacts() {
+		if (!facts) return;
+		const entry = displayEntry();
+		const candidate = entry?.candidate || "";
+		facts.commit.hidden = !candidate;
+		if (candidate) {
+			facts.commitSha.textContent = candidate.slice(0, 12);
+			facts.commitSha.title = candidate;
+			facts.commitSha.setAttribute("aria-label", `${t("wpub_commit")} ${candidate}`);
+			facts.commitSource.textContent = sourceSentence(t, shownEnvelope, candidate);
+			facts.detailCommit.textContent = candidate;
+		}
+		const showBase = Boolean(entry?.baseRef && entry?.preconditions);
+		facts.base.hidden = !showBase;
+		facts.baseSha.hidden = !showBase;
+		facts.origin.hidden = !showBase;
+		if (showBase) {
+			facts.baseValue.textContent = entry.baseRef;
+			const full = entry.preconditions.expected_base_sha;
+			facts.baseShaValue.textContent = full.slice(0, 12);
+			facts.baseShaValue.title = full;
+			facts.baseShaValue.setAttribute("aria-label", `${t("wpub_base_sha")} ${full}`);
+			facts.detailBase.textContent = full;
+		}
+	}
+	function applyChrome() {
+		if (!editor) return;
+		const submit = editor.box.querySelector("button[type=\"submit\"]");
+		const reset = editor.box.querySelector(".actions > button[type=\"button\"]");
+		if (submit) submit.setAttribute("data-work-publish-submit", "");
+		if (reset) reset.setAttribute("data-work-publish-new-request", "");
+		const locked = Boolean(editor.locked());
+		if (submit && !locked && mode !== "ready") submit.hidden = true;
+		const code = editor.operation()?.error_code || editor.operation()?.error?.code;
+		if (reset && code === "PR_RECEIPT_EXISTS") reset.hidden = true;
+		if (radios) {
+			radios.yes.disabled = locked;
+			radios.no.disabled = locked;
+			const value = radios.mirror.value;
+			radios.yes.checked = value === "true";
+			radios.no.checked = value === "false";
+		}
+		if (gapNode) gapNode.hidden = mode === "ready" || locked;
+		const statusBox = editor.box.querySelector(":scope > [role=\"status\"]");
+		const op = editor.operation();
+		if (statusBox) {
+			let note = statusBox.querySelector("[data-work-publish-admitted]");
+			if (op?.status === "accepted") {
+				if (!note) statusBox.append(h("p", { "data-work-publish-admitted": "" }, t("wpub_admitted_note")));
+			} else if (note) note.remove();
+		}
+		if (locked) pinned = pinned || bound;
+		else pinned = null;
+		paintFacts();
+	}
+	function noteHeld(decision) {
+		if (!heldNode) return;
+		const next = identityOf(decision.entry);
+		const current = displayEntry();
+		const baseMoved = Boolean(decision.entry && current && (decision.entry.baseRef !== current.baseRef || decision.entry.preconditions?.expected_base_sha !== current.preconditions?.expected_base_sha || decision.entry.preconditions?.repository_id !== current.preconditions?.repository_id || decision.entry.target?.repository !== current.target?.repository));
+		heldNode.hidden = Boolean(next && next === identity && !baseMoved);
+	}
+	function chooseDraft(value) {
+		if (!radios || editor?.locked()) return;
+		radios.mirror.value = value;
+		radios.mirror.dispatchEvent(new Event("input", { bubbles: true }));
+		radios.mirror.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	function mountEditor(decision, envelope) {
+		const entry = decision.entry;
+		bound = entry;
+		mode = decision.mode;
+		shownEnvelope = envelope;
+		identity = identityOf(entry);
+		const candidateKey = entry.candidate || "no-commit";
+		const groupId = `wpub-draft-${++radioSerial}`;
+		const titleInput = h("input", {
+			type: "text",
+			"data-work-publish-title": "",
+			"aria-label": t("wpub_title")
+		});
+		const bodyInput = h("textarea", {
+			"data-work-publish-body": "",
+			"aria-label": t("wpub_body")
+		});
+		const mirror = h("input", {
+			type: "hidden",
+			"data-work-publish-draft-value": ""
+		});
+		titleInput.dataset.pmDefault = "";
+		bodyInput.dataset.pmDefault = "";
+		mirror.dataset.pmDefault = "";
+		const yes = h("input", {
+			type: "radio",
+			name: `work-publish-draft-${radioSerial}`,
+			value: "true",
+			"data-work-publish-draft": "true"
+		});
+		const no = h("input", {
+			type: "radio",
+			name: `work-publish-draft-${radioSerial}`,
+			value: "false",
+			"data-work-publish-draft": "false"
+		});
+		yes.addEventListener("change", () => {
+			if (yes.checked) chooseDraft("true");
+		});
+		no.addEventListener("change", () => {
+			if (no.checked) chooseDraft("false");
+		});
+		radios = {
+			yes,
+			no,
+			mirror,
+			titleInput,
+			bodyInput
+		};
+		const commitSha = h("span", {
+			class: "mono",
+			"data-work-publish-commit": ""
+		}, "");
+		const commitSource = h("span", { "data-work-publish-commit-source": "" }, "");
+		const baseValue = h("span", { "data-work-publish-base": "" }, "");
+		const baseShaValue = h("span", {
+			class: "mono",
+			"data-work-publish-base-sha": ""
+		}, "");
+		const detailCommit = h("span", { class: "mono" }, "");
+		const detailBase = h("span", { class: "mono" }, "");
+		facts = {
+			commit: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_commit")}: `), commitSha, " · ", commitSource),
+			commitSha,
+			commitSource,
+			base: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base")}: `), baseValue),
+			baseValue,
+			baseSha: h("p", { class: "pm-work-publish-fact" }, h("strong", {}, `${t("wpub_base_sha")}: `), baseShaValue),
+			baseShaValue,
+			origin: h("p", { class: "muted pm-work-publish-fact" }, t("wpub_base_from_start")),
+			detailCommit,
+			detailBase
+		};
+		heldNode = h("p", {
+			"data-work-publish-held": "",
+			hidden: true
+		}, t("wpub_result_held"));
+		gapNode = h("p", { "data-work-publish-gap": decision.gap || "none" }, gapSentence(t, decision.gap));
+		const extra = h("div", { class: "pm-work-publish-fields" }, h("p", { class: "pm-work-publish-public" }, t("wpub_public")), facts.commit, facts.base, facts.baseSha, facts.origin, h("details", { "data-work-publish-sha-details": "" }, h("summary", {}, t("wres_details")), h("p", {}, t("wpub_commit"), " ", detailCommit), h("p", {}, t("wpub_base_sha"), " ", detailBase)), h("label", {}, t("wpub_title"), titleInput), h("label", {}, t("wpub_body"), bodyInput), h("div", {
+			role: "radiogroup",
+			"aria-labelledby": groupId,
+			class: "pm-work-publish-draft"
+		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
+		editor = form({
+			namespace: `${namespace}.work-publish.${candidateKey}`,
+			action: ACTION$5,
+			target: {
+				workspace_id: entry.target.workspace_id,
+				repository: entry.target.repository,
+				host: entry.target.host,
+				source_operation_id: entry.target.source_operation_id
+			},
+			requiredScope: "integrate",
+			savedText: "wpub_success",
+			pendingText: "wpub_pending",
+			label: "action_github_pr_publish",
+			fields: {
+				public_title: titleInput,
+				public_body: bodyInput,
+				draft: mirror
+			},
+			params: (values) => {
+				const current = bound;
+				const title = values.public_title ?? "";
+				const body = values.public_body ?? "";
+				if (!current || mode !== "ready" || !current.candidate || !current.baseRef || !current.preconditions) throw Error(t("wpub_gap_target"));
+				if (title.trim() === "") {
+					titleInput.focus();
+					throw Error(t("wpub_title_required"));
+				}
+				if (title.includes("\n") || title.includes("\r") || bytes(title) > 256) {
+					titleInput.focus();
+					throw Error(t("wpub_title_bounds"));
+				}
+				if (bytes(body) > 32e3) {
+					bodyInput.focus();
+					throw Error(t("wpub_body_bounds"));
+				}
+				if (values.draft !== "true" && values.draft !== "false") {
+					yes.focus();
+					throw Error(t("wpub_draft_required"));
+				}
+				pinned = {
+					target: current.target,
+					candidate: current.candidate,
+					baseRef: current.baseRef,
+					preconditions: current.preconditions,
+					scopes: current.scopes
+				};
+				return {
+					candidate_sha: current.candidate,
+					base_ref: current.baseRef,
+					public_title: title,
+					public_body: body,
+					draft: values.draft === "true"
+				};
+			},
+			preconditions: () => {
+				const current = editor?.locked() ? pinned || bound : bound;
+				if (!current?.preconditions) return {};
+				return {
+					repository_id: current.preconditions.repository_id,
+					expected_base_sha: current.preconditions.expected_base_sha
+				};
+			},
+			permitted: () => mode === "incomplete" || mode === "ready" && catalogAllows(caps, bound),
+			recoverPermitted: () => true,
+			onSaved: () => {
+				if (!radios) return;
+				radios.yes.checked = false;
+				radios.no.checked = false;
+				radios.mirror.value = "";
+			},
+			onError: (error) => {
+				const operation = editor?.operation();
+				error = {
+					...error,
+					code: error?.code || operation?.error_code,
+					message: error?.message || operation?.status_reason
+				};
+				const sentence = sentenceFor(error);
+				if (!sentence) return false;
+				const statusBox = editor?.box.querySelector(":scope > [role=\"status\"]");
+				if (!statusBox) return false;
+				statusBox.hidden = false;
+				const presented = errorBox ? errorBox(error, {
+					sourceRefresh: false,
+					summary: sentence,
+					within: statusBox
+				}) : h("p", {}, sentence);
+				statusBox.replaceChildren(presented);
+				if (error?.code === "PR_AUTHORITY_UNAVAILABLE" || SETUP_CODES.has(error?.code) && readCaps(caps)?.managed_installation) statusBox.append(h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup"))));
+				return true;
+			},
+			extra
+		});
+		const originalUpdate = editor.update;
+		editor.update = () => {
+			originalUpdate();
+			applyChrome();
+		};
+		editor.box.addEventListener("submit", (event) => {
+			if (!editor.locked() && mode !== "ready") {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+		editor.box.addEventListener("click", (event) => {
+			const reset = editor.box.querySelector("[data-work-publish-new-request]");
+			if (!reset || event.target !== reset && !reset.contains(event.target)) return;
+			if ((editor.operation()?.error_code || editor.operation()?.error?.code) === "PR_RECEIPT_EXISTS") {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+		editor.box.classList.add("pm-work-publish-form");
+		editor.update();
+		root = h("section", {
+			class: "pm-work-publish",
+			"data-work-publish": ""
+		}, h("h4", {}, t("action_github_pr_publish")), heldNode, editor.box);
+		paintFacts();
+		return root;
+	}
+	function staticSection(decision, envelope) {
+		dropEditor();
+		mode = decision.mode;
+		shownEnvelope = envelope;
+		if (decision.mode === "absent") {
+			root = null;
+			return null;
+		}
+		if (decision.mode === "blocked") {
+			const known = BLOCKED_KEYS[decision.reason];
+			const copy = known ? t(known) : t("wres_unknown");
+			const next = decision.reason === "github_not_configured" ? readCaps(caps)?.managed_installation ? h("p", {}, h("a", { href: "#/settings?section=connection" }, t("paths_setup")), " ", t("wpub_blocked_github_managed")) : h("p", {}, t("wpub_blocked_github_plain")) : null;
+			root = h("section", {
+				class: "pm-work-publish",
+				"data-work-publish": "",
+				"data-work-publish-blocked": decision.reason || "unknown"
+			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-blocked-reason": "" }, copy), next, decision.reason && !known ? h("details", {}, h("summary", {}, t("wres_details")), h("p", {}, decision.reason)) : null);
+			return root;
+		}
+		const entry = decision.entry;
+		if (!form || !entry?.target) {
+			root = h("section", {
+				class: "pm-work-publish",
+				"data-work-publish": ""
+			}, h("h4", {}, t("action_github_pr_publish")), h("p", { "data-work-publish-gap": decision.gap || "target" }, decision.mode === "ready" ? t("wpub_no_submit") : gapSentence(t, decision.gap || "target")));
+			return root;
+		}
+		return mountEditor(decision, envelope);
+	}
+	function render(envelope) {
+		const decision = classifyPublicationEntry(envelope);
+		if (decision.mode === "blocked" && [
+			"not_controller",
+			"not_writer_member",
+			"missing_scope"
+		].includes(decision.reason)) return staticSection(decision, envelope);
+		if (editor?.locked() && root) {
+			noteHeld(decision);
+			return root;
+		}
+		shownEnvelope = envelope;
+		if (decision.mode === "absent") return staticSection(decision, envelope);
+		if (decision.mode === "blocked") return staticSection(decision, envelope);
+		if (!form || !decision.entry?.target) return staticSection(decision, envelope);
+		const nextIdentity = identityOf(decision.entry);
+		if (editor && root && identity === nextIdentity) {
+			if (!editor.locked()) {
+				bound = decision.entry;
+				mode = decision.mode;
+				if (gapNode) {
+					gapNode.setAttribute("data-work-publish-gap", decision.gap || "none");
+					gapNode.textContent = gapSentence(t, decision.gap);
+				}
+				applyChrome();
+			}
+			return root;
+		}
+		dropEditor();
+		return mountEditor(decision, envelope);
+	}
+	return {
+		render,
+		dispose,
+		recheck,
+		sync,
+		element: () => root
+	};
 }
 //#endregion
 //#region src/pm-work-result.js
@@ -23190,7 +23779,7 @@ function normalizeForComparison(envelope) {
 	if (clone.collection) delete clone.collection.checked_at;
 	return clone;
 }
-function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {}, form = null, namespace = "" }) {
+function workResultPanel({ h, t, api, alive, workspaceId, serverId, caps, errorBox, onVisibility = () => {}, form = null, namespace = "" }) {
 	let activeAttempt = null;
 	let readSerial = 0;
 	let lastEnvelope = null;
@@ -23217,6 +23806,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		class: "pm-work-result-panel",
 		"data-work-result": ""
 	});
+	exclusiveOriginalAssessments(panelElement);
 	panelElement.hidden = true;
 	const publish = createWorkPublish({
 		h,
@@ -23226,6 +23816,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		caps,
 		errorBox
 	});
+	const qualityHost = h("div");
 	const quality = createWorkQuality({
 		h,
 		t,
@@ -23238,6 +23829,39 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		namespace,
 		refreshResult: readResult
 	});
+	const sources = assessmentPresentations({
+		partition: namespace,
+		workspace_id: workspaceId
+	}, () => {
+		readSerial++;
+		lastEnvelope = lastNormalized = null;
+		lastStale = true;
+		panelElement.querySelector("[data-result-requirements]")?.remove();
+		quality.dispose();
+	});
+	const original = originalAssessmentReader({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		serverId,
+		caps,
+		namespace,
+		form,
+		errorBox,
+		refreshOrigin: readResult,
+		onSelectionChange: (selected) => {
+			if (selected) for (const node of panelElement.querySelectorAll("[data-result-requirements] details[open]")) node.open = false;
+			quality.dispose();
+			const node = !selected && !lastStale && lastEnvelope && activeAttempt ? quality.render(lastEnvelope, activeAttempt) : null;
+			qualityHost.replaceChildren(...node ? [node] : []);
+		},
+		returnFocus: () => {
+			const pin = original.selected();
+			return [...panelElement.querySelectorAll("[data-assessment-open]")].find((node) => node.dataset.assessmentOpen === (pin?.return_operation_id || pin?.operation_id) && node.dataset.assessmentRequirement === (pin?.requirement_id || "")) || panelElement.querySelector("h3, h4");
+		}
+	});
 	function updateVisibility(visible) {
 		panelElement.hidden = !visible;
 		onVisibility(visible);
@@ -23247,6 +23871,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		changesSerial++;
 		diffGeneration++;
 		diffKeySerials.clear();
+		sources.dispose();
 		lastEnvelope = null;
 		lastNormalized = null;
 		lastStale = false;
@@ -23263,6 +23888,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		filesOpen = false;
 		publish.dispose();
 		quality.dispose();
+		original.close();
 		panelElement.replaceChildren();
 		updateVisibility(false);
 	}
@@ -23291,6 +23917,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		await readResult();
 	}
 	async function readResult() {
+		original.suspend();
 		if (!activeAttempt) return;
 		const ticket = ++readSerial;
 		const attemptId = activeAttempt.attempt_id;
@@ -23303,11 +23930,24 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				return;
 			}
 			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			if (original.supported() && (!serverId || data?.identity?.server_id !== serverId)) throw Error(t("pmq_invalid"));
 			if (!(data && typeof data === "object" && data.contract === "pm-work-attempt-result/v1" && data.workspace_id === workspaceId && data.attempt_id === attemptId && data.execution && KNOWN_STATES.has(data.execution.state))) {
 				lastEnvelope = null;
 				lastNormalized = null;
 				lastStale = false;
 				renderInvalid();
+				return;
+			}
+			sources.replace((data.requirements?.items || []).flatMap((item) => (item.assessments || []).map((row) => row.reference)));
+			const requested = original.supported() ? original.selected() || parseAssessmentSelection(new URLSearchParams(location.hash.split("?")[1] || ""), namespace) : null;
+			if (requested?.origin === "result" && requested.workspace_id === workspaceId && requested.work_item_id === currentAttempt.work_item_id && requested.attempt_id === attemptId && !matchesResult(requested, data, serverId)) {
+				lastStale = true;
+				publish.dispose();
+				quality.dispose();
+				panelElement.replaceChildren(h("h3", { tabindex: -1 }, t("wres_heading")), original.element);
+				updateVisibility(true);
+				if (original.selected()) original.refresh();
+				else original.restore("result");
 				return;
 			}
 			const normalized = normalizeForComparison(data);
@@ -23322,6 +23962,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				publish.recheck();
 				quality.recheck();
 			}
+			if (original.selected()) original.refresh();
 		} catch (err) {
 			try {
 				alive?.();
@@ -23329,9 +23970,20 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				return;
 			}
 			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
-			const status = err?.status;
-			if (status === 401 || status === 403 || status === 404) {
+			err?.status;
+			if (assessmentSourceRefused(err)) {
+				sources.withdraw(err);
+				original.sourceWithdrawn(err);
 				withdraw();
+				return;
+			}
+			if (original.selected()) {
+				lastStale = true;
+				publish.dispose();
+				quality.dispose();
+				original.fail(err);
+				panelElement.replaceChildren(h("h3", { tabindex: -1 }, t("wres_heading")), original.element);
+				updateVisibility(true);
 				return;
 			}
 			lastStale = true;
@@ -23341,11 +23993,13 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	function renderInvalid() {
 		publish.dispose();
 		quality.dispose();
+		original.close();
 		panelElement.replaceChildren(h("h3", {}, t("wres_heading")), h("p", { class: "pm-work-result-invalid" }, t("wres_invalid_envelope")));
 		updateVisibility(true);
 	}
 	function renderError(err, attempt) {
 		quality.dispose();
+		original.close();
 		const heading = h("h3", {}, t("wres_heading"));
 		const retryBtn = button({
 			label: t("wres_try_again"),
@@ -23664,7 +24318,23 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			h,
 			t,
 			section: envelope.requirements,
-			open: requirementOpen
+			open: requirementOpen,
+			assessmentShortcut: original.supported() ? (reference, requirement_id) => {
+				const selection = selectionFromResult({
+					partition: namespace,
+					envelope,
+					reference,
+					requirement_id
+				});
+				return selection ? h("button", {
+					type: "button",
+					class: "ui-button secondary",
+					"data-assessment-open": reference.operation_id,
+					"data-assessment-requirement": requirement_id,
+					"data-work-result-focus": `assessment:${requirement_id}:${reference.operation_id}`,
+					onclick: () => void original.open(selection)
+				}, t("pmq_open_original")) : null;
+			} : null
 		});
 		if (requirements) sections.push(requirements);
 		const changesBox = h("div", { class: "pm-work-result-changes" });
@@ -23782,10 +24452,11 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		}
 		const publishNode = publish.render(envelope);
 		if (publishNode) sections.push(publishNode);
-		if (!lastStale) {
-			const qualityNode = quality.render(envelope, attempt);
-			if (qualityNode) sections.push(qualityNode);
-		}
+		const qualityNode = !lastStale && !original.selected() ? quality.render(envelope, attempt) : null;
+		qualityHost.replaceChildren(...qualityNode ? [qualityNode] : []);
+		sections.push(qualityHost);
+		sections.push(original.element);
+		if (!original.selected()) original.restore("result", (pin) => pin.work_item_id === attempt.work_item_id && pin.attempt_id === attempt.attempt_id);
 		const results = envelope.results || [];
 		if (results.length > 0) {
 			const turnsBody = h("div", { class: "pm-work-result-turns-body" });
@@ -32280,6 +32951,28 @@ function workspaceOverview(options) {
 		class: "pm-overview",
 		"data-pm-overview": ""
 	}, savedBar, status, content);
+	exclusiveOriginalAssessments(box);
+	const sources = assessmentPresentations({
+		partition: namespace,
+		workspace_id: workspaceId
+	}, () => {
+		serial++;
+		projection = saved = null;
+		signature = "";
+		content.replaceChildren();
+	});
+	const original = originalAssessmentReader({
+		...options,
+		refreshOrigin: () => refreshLive(),
+		onSelectionChange: (selected) => {
+			if (selected) for (const node of content.querySelectorAll("[data-overview-delivery-assessment]")) node.open = false;
+		},
+		returnFocus: () => {
+			const selected = original.selected();
+			return [...box.querySelectorAll("[data-assessment-open]")].find((node) => node.dataset.assessmentOpen === (selected?.return_operation_id || selected?.operation_id)) || options.returnHeading?.() || box.querySelector("h2, h3");
+		}
+	});
+	box.append(original.element);
 	const reportTools = h("div", {
 		class: "pm-report-tools",
 		"data-pm-report-tools": ""
@@ -32670,11 +33363,28 @@ function workspaceOverview(options) {
 			key: `${namespace}:${workspaceId}:${key}`,
 			body: h("div", {}, h("p", { class: "ui-meta" }, t("ov_assessment_source")), controls, h("pre", { class: "pm-brief-proof" }, JSON.stringify(reference, null, 2)))
 		});
+		if (mode === "live" && original.supported() && isContextRef(ref) && Number.isSafeInteger(reference.version)) controls?.append(h("button", {
+			type: "button",
+			class: "ui-button secondary",
+			"data-assessment-open": reference.operation_id,
+			"data-overview-link": `${key}:review`,
+			onclick: () => void original.open({
+				partition: namespace,
+				workspace_id: workspaceId,
+				work_item_id: row.work_item_id,
+				review_id: reference.review_id,
+				operation_id: reference.operation_id,
+				version: reference.version,
+				document_digest: reference.document_digest,
+				origin: "overview"
+			})
+		}, t("pmq_open_original")));
 		node.dataset.overviewDeliveryAssessment = reference.operation_id || "";
 		node.querySelector("summary").dataset.overviewLink = `${key}:source`;
 		return node;
 	}
 	function closeReader() {
+		original.close();
 		reader?.close();
 		reader = null;
 		readerDocument = null;
@@ -33099,6 +33809,7 @@ function workspaceOverview(options) {
 		if (focused && !focused.isConnected && focusId && focusPart) parts.get(focusPart)?.node.querySelector(`[data-overview-link="${CSS.escape(focusId)}"]`)?.focus({ preventScroll: true });
 	}
 	async function refreshLive() {
+		original.suspend();
 		const ticket = ++serial;
 		loading = true;
 		if (!projection && mode === "live") render();
@@ -33116,18 +33827,33 @@ function workspaceOverview(options) {
 				adopted = value.plan;
 			}
 			const anchor = mode === "live" ? readingAnchor() : null;
+			sources.replace(data.recent_deliveries.map((row) => row.assessment_ref));
 			projection = data;
 			plan = adopted;
 			loading = false;
 			status.replaceChildren();
 			render(anchor);
-			if (mode === "live") await assessment?.refresh();
+			if (mode === "live") {
+				await assessment?.refresh();
+				alive();
+				if (ticket !== serial || mode !== "live") return;
+				const hasOrigin = (pin) => data.recent_deliveries.some((row) => row.state === "accepted" && row.work_item_id === pin.work_item_id && row.assessment_ref?.review_id === (pin.return_review_id || pin.review_id) && row.assessment_ref.operation_id === (pin.return_operation_id || pin.operation_id) && row.assessment_ref.document_digest === (pin.return_document_digest || pin.document_digest));
+				if (original.selected() && hasOrigin(original.selected())) await original.refresh();
+				else {
+					original.close();
+					original.restore("overview", hasOrigin);
+				}
+			}
 		} catch (error) {
 			try {
 				alive();
 				if (ticket !== serial) return;
 			} catch {
 				return;
+			}
+			if (assessmentSourceRefused(error)) {
+				sources.withdraw(error);
+				original.sourceWithdrawn(error);
 			}
 			projection = null;
 			plan = null;
@@ -33218,8 +33944,10 @@ function workspaceOverview(options) {
 			header();
 		},
 		dispose() {
+			sources.dispose();
 			active = false;
 			serial++;
+			original.close();
 			assessment?.dispose();
 			closeReader();
 		}
@@ -47747,7 +48475,7 @@ function adoptStartLanding({ t, api, alive, namespace, workspaceId, caps, errorB
 }
 //#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, workspace = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
+function workspaceKanban({ t, api, alive, serverId, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, workspace = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
@@ -47806,6 +48534,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					errorBox,
 					form,
 					namespace,
+					serverId,
 					onVisibility: (visible) => {
 						const attemptSection = detail.element?.body?.querySelector("[data-work-section=\"attempt-result\"]");
 						if (attemptSection) attemptSection.hidden = !visible;
@@ -47825,8 +48554,20 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					errorBox,
 					plan: () => plan,
 					onStartableChange: updateHeaderButton,
-					onLatestAttempt: (attempt) => {
-						resultPanel?.setAttempt(attempt);
+					onLatestAttempt: async (attempt) => {
+						const pin = parseAssessmentSelection(new URLSearchParams(location.hash.split("?")[1] || ""), namespace);
+						if (caps()?.features?.pm_workspaces?.quality_reviews?.exact_assessment_read === true && pin?.origin === "result" && pin.workspace_id === workspaceId && pin.work_item_id === selected) {
+							const ticket = detailSerial;
+							try {
+								const data = await api("GET", `${endpoint}/work-attempts/${pin.attempt_id}`);
+								alive();
+								if (ticket !== detailSerial || selected !== pin.work_item_id) return;
+								if (!matchesAttempt(pin, data)) throw Error(t("pmq_invalid"));
+								await resultPanel?.setAttempt(data.attempt);
+							} catch {
+								if (ticket === detailSerial) resultPanel?.withdraw();
+							}
+						} else resultPanel?.setAttempt(attempt);
 					}
 				});
 			}
@@ -56418,7 +57159,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		values: () => capture()
 	};
 }
-async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false }) {
+async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, clientGate = () => null, onOnline = () => () => {}, onContext = () => {}, openCreate = false }) {
 	if (!pmAvailable(caps())) {
 		main.append(renderPmAvailability(h("div"), {
 			h,
@@ -56623,13 +57364,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		index.push(id);
 		while (index.length > 40) localStorage.removeItem(originKey + index.shift());
 		for (const key of Object.keys(localStorage)) if (key.startsWith(originKey) && key !== indexKey && !index.includes(key.slice(originKey.length))) localStorage.removeItem(key);
-		localStorage.setItem(originKey + id, JSON.stringify(origin));
+		localStorage.setItem(originKey + id, JSON.stringify(persistedDiscussionOrigin(origin)));
 		localStorage.setItem(indexKey, JSON.stringify(index));
 	};
 	const backLink = () => {
 		let savedOrigin = {};
 		try {
-			savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};
+			const raw = localStorage.getItem(originKey + threadId);
+			savedOrigin = persistedDiscussionOrigin(JSON.parse(raw) || {});
+			if (raw && raw !== JSON.stringify(savedOrigin)) localStorage.setItem(originKey + threadId, JSON.stringify(savedOrigin));
 		} catch {}
 		const source = parseDiscussRefs(new URLSearchParams({
 			from: launch.from || savedOrigin.from || "",
@@ -56887,6 +57630,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		api,
 		alive,
 		namespace,
+		serverId,
 		workspaceId,
 		permitted,
 		form,
@@ -56895,6 +57639,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox,
 		caps,
 		canRead: () => loaded && Boolean(workspace),
+		returnHeading: () => heading.querySelector("h1"),
 		onCompare: () => {
 			openReport("compare");
 			brief.prepareReports().then(() => brief.reportActions.compare());
@@ -57064,6 +57809,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		api,
 		alive,
 		namespace,
+		serverId,
 		workspaceId,
 		workspace: () => workspace,
 		errorBox,
@@ -59110,7 +59856,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 							title: name,
 							content: text
 						},
-						namespace: threadId === "new" ? namespace + ".discussion." + JSON.stringify(launch) : namespace,
+						namespace: threadId === "new" ? namespace + ".discussion." + JSON.stringify(persistedDiscussionOrigin(launch)) : namespace,
 						params: (values) => ({
 							title: values.title.trim(),
 							...launch.refs.length ? { context: launch.refs } : {}
@@ -77060,6 +77806,7 @@ async function viewSession(main, host, sid, context = null) {
 		t,
 		api,
 		workspaceId: workContext.workspaceId,
+		serverId: state.scopeIdentity?.server_id,
 		onVisibility: showSupportingTools,
 		caps: () => state.caps,
 		errorBox,
@@ -82176,6 +82923,7 @@ async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
 		h,
 		t,
 		api,
+		serverId: state.scopeIdentity?.server_id,
 		caps: () => state.caps,
 		canSend: () => !state.nativeBusy && state.online && state.viewReady,
 		onOnline,

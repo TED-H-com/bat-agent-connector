@@ -2161,7 +2161,7 @@ async function viewSession(main, host, sid, context = null) {
     supporting.replaceChildren(target);
     focused?.focus({preventScroll: true});
   };
-  const fixedResult = workContext ? workResultPanel({h, t, api, workspaceId: workContext.workspaceId,
+  const fixedResult = workContext ? workResultPanel({h, t, api, workspaceId: workContext.workspaceId, serverId: state.scopeIdentity?.server_id,
     onVisibility: showSupportingTools,
     caps: () => state.caps, errorBox, form: resultForm, namespace: connection.namespace, alive: () => {
       assertView(connection);
@@ -5333,7 +5333,7 @@ async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
   const threadId = viewOrThread === 'discussions' ? thread : viewOrThread?.startsWith('pmt_') ? viewOrThread : null;
   const view = threadId ? 'discussions' : viewOrThread || lastProjectView(state.namespace, workspaceId);
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  return mountPmWorkspace({main, h, t, api, caps: () => state.caps,
+  return mountPmWorkspace({main, h, t, api, serverId: state.scopeIdentity?.server_id, caps: () => state.caps,
     canSend: () => !state.nativeBusy && state.online && state.viewReady, onOnline,
     clientGate: () => clientActionGate(state, {post: true}),
     guard: () => assertView(connection), namespace: connection.namespace,

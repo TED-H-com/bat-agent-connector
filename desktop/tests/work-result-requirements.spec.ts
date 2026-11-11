@@ -196,3 +196,335 @@ for (const locale of ['en', 'zh-TW'] as const) {
     } finally {await context.close();}
   });
 }
+
+import {assessmentRoundtrip} from './assessment-roundtrip-fixture.ts';
+for (const locale of ['en','zh-TW']) for (const native of [false,true]) for (const width of [390,1440]) test(`exact assessment returns to its requirement ${locale} ${native?'IPC':'HTTP'} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage();
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1)),zh=locale==='zh-TW';
+  try{
+    await open(page,{...base,dispatch:f.dispatch},native);
+    const source=page.locator('[data-result-requirement="recovery"]');
+    await source.locator('summary').filter({hasText:zh?'原結論':'Original conclusion'}).first().click();
+    const control=source.getByRole('button',{name:zh?'開啟原始評估':'Open original assessment',exact:true});
+    await control.click();
+    const reader=page.locator('[data-original-assessment]:visible');
+    await expect(reader.locator('h4').first()).toBeFocused();
+    await expect(source.locator('details[open]')).toHaveCount(0);
+    await expect(reader).toContainText(zh?'符合原品質要求':'Meets the original quality requirements');
+    await expect(reader.getByRole('button',{name:zh?'審閱這份成果':'Review this result',exact:true})).toBeVisible();
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();
+    await expect(control).toBeFocused();
+    await control.click(); await expect(reader).toBeVisible(); await page.reload();
+    await expect(reader).toContainText(zh?'符合原品質要求':'Meets the original quality requirements');
+    await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();
+    await expect(control).toBeFocused();
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+    expect(await page.evaluate(()=>Object.entries(localStorage).some(([key,value])=>key.includes('assessment-selection')||value.includes('qa_result_digest')))).toBe(false);
+  }finally{await context.close();}
+});
+
+test('Result rollover keeps its original assessment pin and refuses the fixed editor',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  const before=await page.evaluate(()=>location.hash);
+  f.state.envelope.sources.result_id='res_'+'2'.repeat(32);
+  base.emitResultRecorded(attemptId);
+  await expect(reader).toContainText('The Result context has changed');
+  await expect(reader.getByRole('button',{name:'Review this result',exact:true})).toHaveCount(0);
+  await expect(reader.getByRole('link',{name:'Open current Result',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>location.hash)).toBe(before);
+  const reads=f.state.requests.filter(input=>input.path.endsWith('/result')).length;
+  await reader.getByRole('link',{name:'Open current Result',exact:true}).click();
+  await expect(page.locator('[data-result-requirements]')).toBeVisible();
+  expect(f.state.requests.filter(input=>input.path.endsWith('/result')).length).toBeGreaterThan(reads);
+  expect(await page.evaluate(()=>location.hash)).not.toContain('qa_');
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+test('selecting B rejects a late exact response for A',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  const next=f.newer(),original=f.state.envelope.requirements.items[0].assessments[0];
+  f.state.envelope.requirements.items[0].assessments.push({...structuredClone(original),reference:next});
+  f.state.saved.get(f.ref.operation_id).assessment.document.rationale='Original A rationale';
+  f.state.saved.get(next.operation_id).assessment.document.rationale='Selected B rationale';
+  await installBodyCompletedCounter(page);await open(page,{...base,dispatch:f.dispatch});
+  const source=page.locator('[data-result-requirement="recovery"]');
+  await source.locator(':scope > details > summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path=`/quality-reviews/${f.ref.review_id}/assessments/${f.ref.operation_id}`;
+  try{
+    await source.locator(`[data-assessment-open="${f.ref.operation_id}"]`).click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    f.state.hold=null;await source.locator(':scope > details > summary').filter({hasText:'Original conclusion'}).last().click();await source.locator(`[data-assessment-open="${next.operation_id}"]`).click();
+    const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Selected B rationale');
+    const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
+    await expect(reader).not.toContainText('Original A rationale');await expect(reader).toContainText('Selected B rationale');
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});
+
+test('without exact-read capability the original Result panel has no new shortcut',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));f.state.enabled=false;
+  await open(page,{...base,dispatch:f.dispatch});
+  await expect(page.locator('[data-result-requirement="recovery"]')).toBeVisible();
+  await expect(page.locator('[data-assessment-open]')).toHaveCount(0);
+  expect(f.state.requests.some(input=>input.path.includes('/assessments/'))).toBe(false);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+test('a revoked assessment keeps its original verdict without allowing a new fixed review',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  f.row.revocation={document:{reason:'Withdraw the acceptance conclusion'},actor:'reviewer'};
+  f.row.applicability_reasons=['review_revoked'];f.row.applicable=false;f.row.qualified=false;
+  Object.assign(f.state.envelope.requirements.items[0].assessments[0],{applicable:false,qualified:false,revocation:f.row.revocation,applicability_reasons:['review_revoked']});
+  f.state.envelope.next_allowed_actions=[];base.emitResultRecorded(attemptId);
+  await expect(reader).toContainText('Original conclusion: accepted');await expect(reader).toContainText('This review was revoked. Its original conclusion remains in the history.');
+  await reader.getByRole('button',{name:'Review this result',exact:true}).click();
+  await reader.locator('[data-quality-assess]>summary').click();
+  await expect(reader.locator('[data-pm-action="pm.quality.review.record"] button[type=submit]')).toBeDisabled();
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+
+test('a removed exact-read capability ignores an older pin after Result rollover',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  await expect(page.locator('[data-original-assessment]:visible')).toContainText('Original conclusion: accepted');
+  f.state.enabled=false;f.state.envelope.sources.result_id='res_'+'2'.repeat(32);
+  const reads=f.state.requests.filter(input=>input.path.includes('/assessments/')).length;
+  await page.reload();
+  await expect(page.locator('[data-result-requirement="recovery"]')).toBeVisible();
+  await expect(page.locator('[data-assessment-open]')).toHaveCount(0);
+  await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.path.includes('/assessments/'))).toHaveLength(reads);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+test('a late exact Result read cannot restore content after source refusal',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await installBodyCompletedCounter(page);await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path=`/quality-reviews/${f.ref.review_id}/assessments/${f.ref.operation_id}`;
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    f.state.hold=null;f.state.denied=true;base.emitResultRecorded(attemptId);
+    const reader=page.locator('[data-original-assessment]');
+    await expect(reader.locator('[data-api-error]')).toBeVisible();
+    const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
+    await expect(reader).not.toContainText('Original conclusion: accepted');
+    await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});
+
+
+test('a successful reread restores Result context after a temporary failure while pinned',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));let unavailable=false;
+  const dispatch=async(input:any)=>unavailable&&input.path.endsWith('/result')
+    ?{status:503,data:{error:{code:'SERVICE_UNAVAILABLE',message:'Result temporarily unavailable'}}}:f.dispatch(input);
+  await open(page,{...base,dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  unavailable=true;base.emitResultRecorded(attemptId);
+  await expect(reader.locator('[data-api-error]')).toBeVisible();
+  await expect(page.locator('[data-result-requirement="recovery"]')).toHaveCount(0);
+  unavailable=false;base.emitResultRecorded(attemptId);
+  await expect(page.locator('[data-result-requirement="recovery"]')).toBeVisible();
+  await expect(reader).toContainText('Original conclusion: accepted');
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+for(const refusal of ['editor','exact','result'] as const)test(`source refusal withdraws every Result presentation: ${refusal}`,async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));let denied=false;
+  const dispatch=async(input:any)=>{
+    if(denied&&(refusal==='editor'&&input.path.includes('/quality')||refusal==='result'&&input.path.endsWith('/result')))
+      return {status:403,data:{error:{code:'FORBIDDEN',message:'Original source withdrawn'}}};
+    return f.dispatch(input);
+  };
+  await open(page,{...base,dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  if(refusal==='editor'){
+    await reader.getByRole('button',{name:'Review this result',exact:true}).click();
+    await expect(reader.locator('[data-pm-action="pm.quality.review.record"]')).toBeAttached();
+    denied=true;await reader.getByRole('button',{name:'Refresh quality sources',exact:true}).click();
+  }else{denied=true;f.state.denied=true;base.emitResultRecorded(attemptId);}
+  await expect.poll(()=>page.locator('main').innerHTML()).not.toContain(f.ref.operation_id);
+  await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+  await expect(page.locator('[data-assessment-open]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-action="pm.quality.review.record"]')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+for(const server of [undefined,'foreign-fixture-server'])test(`exact destination refuses Result server identity: ${server||'missing'}`,async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  f.state.envelope.identity.server_id=server;
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');
+  await expect(reader.locator('[data-api-error]')).toBeVisible();
+  await expect(reader).not.toContainText('Original conclusion: accepted');
+  await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+import {followUpFixture} from './work-next-turn-fixture.ts';
+test('Open current Result navigates from a pinned session and reads the Board Result',async({page})=>{
+  const base=workResultFixture(),session=followUpFixture('en',{workspaceId,workItemId:workId(1)});
+  const hybrid={...base,dispatch:async(input:any)=> /^\/(sessions|hosts|observations)(\/|\?|$)/.test(input.path)||input.path==='/work-items/'+workId(1)
+    ?session.dispatch(input):base.dispatch(input)};
+  const f=assessmentRoundtrip(hybrid,workspaceId,workId(1));f.state.attempt.session={host:'demo',session_id:'search-results'};
+  const dispatch=async(input:any)=>input.path==='/work-items/'+workId(1)?session.dispatch(input):f.dispatch(input);
+  await mountConversation(page,false,dispatch);
+  await page.goto('/dashboard/?workbench=1#/session/demo/search-results?workspace='+workspaceId+'&work='+workId(1)+'&attempt='+attemptId);
+  await page.getByRole('button',{name:'Results',exact:true}).click();
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  f.state.envelope.sources.result_id='res_'+'2'.repeat(32);
+  await page.reload();await page.getByRole('button',{name:'Results',exact:true}).click();
+  await reader.getByRole('link',{name:'Open current Result',exact:true}).click();
+  await expect(page.locator('[data-result-requirements]')).toBeVisible();
+  expect(await page.evaluate(()=>location.hash)).toBe('#/pm/'+workspaceId+'/board?select='+workId(1));
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+for(const mismatch of ['original','result','historical'] as const)test(`requirement selection validates original and Result membership: ${mismatch}`,async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await open(page,{...base,dispatch:f.dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original conclusion: accepted');
+  if(mismatch==='original')await page.evaluate(()=>{const [path,raw]=location.hash.split('?'),query=new URLSearchParams(raw);query.set('qa_requirement_id','not-in-original-context');history.replaceState(history.state,'',path+'?'+query);});
+  else f.state.envelope.requirements.items=[];
+  if(mismatch==='historical')f.state.envelope.sources.result_id='res_'+'2'.repeat(32);
+  await page.reload();
+  if(mismatch==='historical'){
+    await expect(reader).toContainText('Original conclusion: accepted');
+    await expect(reader).toContainText('Current applicability: not evaluated');
+  }else{
+    await expect(reader.locator('[data-api-error]')).toContainText('This requirement does not belong to the selected original assessment and Result.');
+    await expect(reader).not.toContainText('Original conclusion: unassessed');
+  }
+  await expect(reader.locator('[data-work-quality]')).toHaveCount(0);
+  expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+});
+
+test('Back retires a pending pinned assessment before its body arrives',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));
+  await installBodyCompletedCounter(page);await open(page,{...base,dispatch:f.dispatch});
+  await page.evaluate(()=>{location.hash='#/home';});await expect(page).toHaveURL(/#\/home$/);
+  await page.evaluate(hash=>{location.hash=hash;},'#/pm/'+workspaceId+'/board');
+  await page.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path='/assessments/'+f.ref.operation_id;
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    await page.goBack();await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+    const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
+    await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+    await expect(page.locator('[data-pm-action="pm.quality.review.record"]')).toHaveCount(0);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});
+
+test('a new account cannot restore a pending original assessment from the retired connection',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));let switched=false;
+  const dispatch=async(input:any)=>{
+    const reply=await f.dispatch(input);
+    if(switched&&['/bootstrap','/capabilities'].includes(input.path)){
+      const caps=input.path==='/bootstrap'?reply.data.capabilities:reply.data;caps.actor='second-reader';
+      if(input.path==='/bootstrap')reply.data.sync.principal_id='second-reader';
+    }
+    return reply;
+  };
+  await installBodyCompletedCounter(page);await open(page,{...base,dispatch});
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path='/assessments/'+f.ref.operation_id;
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    const pinnedRoute=await page.evaluate(()=>location.hash);
+    await page.evaluate(()=>{location.hash='#/settings';});
+    await page.getByRole('button',{name:'Disconnect',exact:true}).click();switched=true;
+    await page.locator('input[type=password]').fill('second-fixture-token');
+    await page.getByRole('button',{name:'Connect',exact:true}).click();await expect(page).toHaveURL(/#\/home$/);
+    const before=await countCompletedBodies(page,path);release();await syncHeldBodyCompletion(page,path,before);
+    await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+    f.state.hold=null;f.state.envelope.requirements.items=[];
+    await page.evaluate(hash=>{location.hash=hash;},pinnedRoute);
+    await expect(page.locator('[data-work-result]')).toBeVisible();
+    await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+    expect(f.state.requests.filter(input=>input.path.includes(path))).toHaveLength(1);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});
+
+test('a distinct IPC server retires the pending exact read without renewing the pin',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,workspaceId,workId(1));let switched=false;
+  const secondServer='second-fixture-server',seenServers:string[]=[];
+  const dispatch=async(input:any)=>{
+    const reply=await f.dispatch(input);
+    if(input.path==='/bootstrap'){
+      if(switched)reply.data.sync.server_id=secondServer;
+      seenServers.push(reply.data.sync.server_id);
+    }
+    return reply;
+  };
+  await open(page,{...base,dispatch},true);
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:'Original conclusion'}).first().click();
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  const path='/assessments/'+f.ref.operation_id;
+  // Observe the actual held IPC reply after its value has crossed the bridge.
+  await page.evaluate(path=>{
+    const host=(window as any).__TAURI_INTERNALS__,invoke=host.invoke;
+    (window as any).__heldExactIpc={started:false,completed:false};
+    host.invoke=async(command:string,args:any)=>{
+      const held=command==='connector_request'&&args.input.path.includes(path);
+      if(held)(window as any).__heldExactIpc.started=true;
+      const response=await invoke(command,args);
+      if(held)(window as any).__heldExactIpc.completed=true;
+      return response;
+    };
+  },path);
+  try{
+    await page.locator('[data-assessment-open]').click();
+    await expect.poll(()=>f.state.requests.filter(input=>input.path.includes(path)).length).toBe(1);
+    const pinnedRoute=await page.evaluate(()=>location.hash);
+    await page.evaluate(()=>{location.hash='#/settings';});
+    await page.getByRole('button',{name:'Disconnect',exact:true}).click();
+    switched=true;f.state.envelope.identity.server_id=secondServer;
+    await page.getByRole('button',{name:'Connect',exact:true}).click();await expect(page).toHaveURL(/#\/home$/);
+    expect(seenServers.at(-1)).toBe(secondServer);expect(seenServers[0]).not.toBe(secondServer);
+    expect(await page.evaluate(()=>(window as any).__heldExactIpc)).toEqual({started:true,completed:false});
+    release();await page.waitForFunction(()=>(window as any).__heldExactIpc.completed);
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(resolve)));
+    await expect(page.locator('main')).not.toContainText('Independent result and original behavior inspected');
+    f.state.hold=null;f.state.envelope.requirements.items=[];
+    await page.evaluate(hash=>{location.hash=hash;},pinnedRoute);
+    await expect(page.locator('[data-work-result]')).toBeVisible();
+    await expect(page.locator('[data-original-assessment]:visible')).toHaveCount(0);
+    await expect(page.locator('[data-pm-action="pm.quality.review.record"]')).toHaveCount(0);
+    expect(f.state.requests.filter(input=>input.path.includes(path))).toHaveLength(1);
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{release();}
+});

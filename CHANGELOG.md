@@ -4,7 +4,16 @@
 
 - Let API and MCP clients reopen the exact original PM assessment named by a
   Result reference under existing authorization. This read explicitly leaves
-  applicability to the current candidate unevaluated; no UI is added yet.
+  applicability to the current candidate unevaluated.
+
+- Let Dashboard users open that exact original assessment from a Work Result's
+  requirement section or from an Overview delivery, with its original conclusion
+  shown apart from whether it still applies to the current Result. Review this
+  result opens the existing review editor for that assessment and saves through
+  the existing action and its original operation key; Return to source restores
+  the entrance and keyboard focus. A refused or withdrawn source clears every view
+  of the assessment, reads stay bound to the verified Connector, and assessment
+  pins are not kept in persisted drafts.
 
 - Let API and MCP clients discover withdrawable external-conversation relationship
   IDs for a selected Work with observe/manage scope and current cleanup authority,
