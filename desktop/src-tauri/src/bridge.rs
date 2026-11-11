@@ -5809,7 +5809,17 @@ mod tests {
             let path = format!("{route}?{query}");
             assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
         }
-        for version in ["0", "1", "34", "-1", "true", "2.0", "%202", "%2B2", "9999999999"] {
+        for version in [
+            "0",
+            "1",
+            "34",
+            "-1",
+            "true",
+            "2.0",
+            "%202",
+            "%2B2",
+            "9999999999",
+        ] {
             let path = format!("{route}?version={version}&document_digest={digest}");
             assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
         }
@@ -5817,8 +5827,14 @@ mod tests {
             format!("/quality-reviews/{review}/assessments"),
             format!("/quality-reviews/{review}/assessments/latest"),
             format!("/quality-reviews/{review}/assessments/{operation}/extra"),
-            format!("/quality-reviews/{review}/assessments/op_{}", "A".repeat(32)),
-            format!("/quality-reviews/pmqr_{}/assessments/{operation}", "A".repeat(32)),
+            format!(
+                "/quality-reviews/{review}/assessments/op_{}",
+                "A".repeat(32)
+            ),
+            format!(
+                "/quality-reviews/pmqr_{}/assessments/{operation}",
+                "A".repeat(32)
+            ),
         ] {
             let path = format!("{root}{suffix}?version=2&document_digest={digest}");
             assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
