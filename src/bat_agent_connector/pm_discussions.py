@@ -134,6 +134,9 @@ def _authorize_existing(ops, principal, op, control):
 
 
 def _source(db, thread_id, value):
+    from . import pm_sprint_review_sources as review
+    if isinstance(value, dict) and value.get('kind') == review.KIND:
+        return review.validate(value)
     from . import pm_review_candidate_sources as candidates
     if isinstance(value, dict) and value.get('kind') == candidates.KIND:
         return candidates.validate(value)
@@ -212,6 +215,11 @@ def _check(ops, principal, action, target, params, pre):
             if (thread['mode'] != 'idea' or params['status'] != 'unresolved'
                     or params['value'] != event['document']['title'] or params.get('supersedes_input_id') is not None):
                 raise candidates.invalid()
+        from . import pm_sprint_review_sources as review
+        if params['source_ref']['kind'] == review.KIND:
+            review.require(ops, principal, target['workspace_id'], params['source_ref'])
+            if thread['mode'] != 'idea' or params['status'] != 'unresolved' or params.get('supersedes_input_id') is not None:
+                raise review.pm_sprint_review.mismatch()
         if params.get("status") == "repo_evidence" and params["source_ref"]["kind"] != "repository":
             raise _bad("repo_evidence needs an attributed repository reference")
         revision = params.get("applicable_revision")
@@ -254,6 +262,9 @@ def _derived_sources(db, action, thread, params):
         if previous:
             sources.append(_input(db, thread["thread_id"], previous)["operation_id"])
         source = params.get("source_ref", {})
+        if source.get('kind') == 'sprint_review_decision':
+            from .pm_sprint_review_sources import original
+            sources.append(original(db, thread['workspace_id'], source)['operation_id'])
         if source.get("kind") == "message":
             row = db.execute("SELECT operation_id FROM pm_messages WHERE thread_id=? AND message_id=?",
                 (thread["thread_id"], source["message_id"])).fetchone()
@@ -283,6 +294,11 @@ def _admitter(action):
             if not pm_source_lineage.installed(ops.db):
                 raise OperationError('PM_SOURCE_UNAVAILABLE', 'Original source lineage is unavailable', 409)
             binding.update(pm_review_candidate=params['source_ref'], pm_lineage={'workspace_id': target['workspace_id']})
+        from . import pm_sprint_review_sources as review
+        if action == 'pm.input.record' and params.get('source_ref', {}).get('kind') == review.KIND:
+            if not pm_source_lineage.installed(ops.db):
+                raise OperationError('PM_SOURCE_UNAVAILABLE', 'Original source lineage is unavailable', 409)
+            binding.update(pm_sprint_review_decision=params['source_ref'], pm_lineage={'workspace_id':target['workspace_id']})
         return binding
     return admit
 
@@ -394,6 +410,10 @@ def _input_out(row, *, db=None):
         if result['source_ref']['kind'] == candidates.KIND:
             result['source_candidate'] = candidates.projection(db, result['workspace_id'], result['source_ref'])
             result['evidence_verification'] = 'original_maintenance_review_candidate'
+        from . import pm_sprint_review_sources as review
+        if result['source_ref']['kind'] == review.KIND:
+            result['source_decision'] = review.projection(db, result['workspace_id'], result['source_ref'])
+            result['evidence_verification'] = 'original_sprint_review_decision'
         from .pm_conversation_adoption import input_disposition
         result = input_disposition(db, result)
     return result

@@ -481,14 +481,21 @@ def _admitter(action):
         meeting, document = _check(ops, principal, action, target, params, pre)
         binding = {'principal': pm_workspace.principal_binding(principal),
                    'meeting_context_revision_id': meeting['context_revision_id'] if meeting else None}
+        sources = []
         if 'review_basis' in params:
+            from .pm_sprint_review import source_operations
+            sources.extend(source_operations(document['guided_review']))
             binding['sprint_review'] = {'basis': params['review_basis'], 'context_revision_id': meeting['context_revision_id']}
         if meeting and meeting['draft_revision_id']:
             draft = _document(ops.db, 'pm_meeting_drafts', 'revision_id', meeting['draft_revision_id'])
             if 'guided_review' in draft['document']:
                 binding['sprint_review_draft_id'] = draft['revision_id']
+                sources.append(draft['operation_id'])
         if action == 'pm.meeting.complete' and document.get('guided_review'):
             binding['sprint_review_decisions'] = params.get('governance_decisions', [])
+        if 'sprint_review' in binding or 'sprint_review_draft_id' in binding:
+            binding['pm_lineage'] = {'workspace_id': target['workspace_id']}
+            binding['sprint_review_sources'] = {'operation_ids': sorted(set(sources))}
         return binding
     return admit
 
@@ -581,6 +588,10 @@ def _history_rows(ops, meeting, kind, after, limit):
 def _history_record(ops, principal, meeting, kind, sequence, checked_contexts):
     table, key = HISTORY[kind]
     row = ops.db.execute(f'SELECT * FROM {table} WHERE sequence=?', (sequence,)).fetchone()  # noqa: S608
+    original = ops.db.execute('SELECT external_refs FROM operations WHERE operation_id=?', (row['operation_id'],)).fetchone()
+    binding = (json.loads(original[0]).get('admission_binding') or {}) if original else {}
+    if any(binding.get(k) for k in ('sprint_review', 'sprint_review_draft_id')) and not operation_visible(ops.db, principal, {'operation_id':row['operation_id']}):
+        raise _bad('PM_MEETING_SOURCE_UNAVAILABLE', 'Original Review history sources are unavailable', 404)
     context_id = row['context_revision_id'] if 'context_revision_id' in row.keys() else meeting['context_revision_id']
     if context_id not in checked_contexts:
         context = _document(ops.db, 'pm_meeting_contexts', 'context_revision_id', context_id)

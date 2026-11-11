@@ -291,6 +291,10 @@ def read_fixed_receipt(ops, principal, workspace_id, attempt_id, result_id, dige
                                    (attempt_id, receipt['operation_id'])).fetchone() if _has_table(ops.db, 'work_inputs') else None
             if not linked:
                 raise _bad('PM_SPRINT_REVIEW_REFERENCE_MISMATCH', 'Result provenance differs from its original Attempt', 409)
+        if (receipt['source_key'] != f"bat:{ctx['sess_host']}:{ctx['sess_id']}"
+                or not receipt['source_generation']
+                or any(receipt['document'].get(key) != receipt[key] for key in ('turn_marker', 'last_message_id'))):
+            raise _bad('PM_SPRINT_REVIEW_REFERENCE_MISMATCH', 'Result source differs from its original managed session', 409)
         if receipt['digest'] != digest or receipt['document'].get('result_id') != result_id:
             raise _bad('PM_SPRINT_REVIEW_REFERENCE_MISMATCH', 'Select the original Result digest', 409)
         child = ops.get(ctx['execution_op_id'], steps=False) if ctx['execution_op_id'] else None

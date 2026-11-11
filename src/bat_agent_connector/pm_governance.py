@@ -266,11 +266,15 @@ def _check(ops, principal, action, target, params, pre):
             raise _bad('INVALID_PARAMS', 'Select risk, assumption, issue, dependency, drift or change')
         key = _text(params.get('root_cause_key'), 'root_cause_key', 120)
         snapshot = _snapshot(ops, principal, wid, params.get('snapshot_id'))
-        document = _document(ops, principal, wid, kind, snapshot, params)
         context = _context(snapshot)
+        authored = params
         if 'review_proposal_ref' in params:
             from .pm_sprint_review import mismatch, proposal
             fixed, proposed = proposal(ops, principal, wid, params['review_proposal_ref'])
+            # Typed callers can keep source-derived text out of durable requests.
+            authored = {'description': proposed['text'], **params}
+        document = _document(ops, principal, wid, kind, snapshot, authored)
+        if 'review_proposal_ref' in params:
             if (kind != 'change' or document['owner_actor'] != proposed['owner_actor']
                     or document['description'] != proposed['text']
                     or fixed['document']['guided_review']['coverage']['snapshot']['snapshot_id'] != snapshot['snapshot_id']):
@@ -296,7 +300,14 @@ def _check(ops, principal, action, target, params, pre):
         _only(params, FIELDS)
         if principal.actor != previous['owner_actor'] and pm_sprints._role(ops.db, wid, principal.actor) != 'owner':
             raise _bad('FORBIDDEN', 'The assigned writer or a workspace owner must revise this finding', 403)
-        document = _document(ops, principal, wid, record['kind'], snapshot, params)
+        authored = params
+        if record['context'].get('review_proposal_ref'):
+            from .pm_sprint_review import mismatch, proposal
+            _, proposed = proposal(ops, principal, wid, record['context']['review_proposal_ref'])
+            authored = {'description': proposed['text'], **params}
+        document = _document(ops, principal, wid, record['kind'], snapshot, authored)
+        if record['context'].get('review_proposal_ref') and (document['description'] != proposed['text'] or document['owner_actor'] != proposed['owner_actor']):
+            raise mismatch()
         if {s['identity'] for s in previous['sources']} - {s['identity'] for s in document['sources']}:
             raise _bad('INVALID_PARAMS', 'Original sources cannot be removed from a finding')
         overlaps = _overlaps(ops, principal, wid, record['kind'], document['sources'], exclude=record['record_id'])
@@ -344,8 +355,13 @@ def _admitter(action):
         if action == ACTIONS[0] and params['snapshot_id'] != record['context']['snapshot_ref']['snapshot_id']:
             snap = _snapshot(ops, principal, target['workspace_id'], params['snapshot_id'])
             refs.append(_context(snap)['snapshot_ref'])
-        return {'principal': pm_workspace.principal_binding(principal), 'governance_context': record['context'],
+        binding = {'principal': pm_workspace.principal_binding(principal), 'governance_context': record['context'],
                 'additional_snapshot_refs': refs, 'record_id': record.get('record_id')}
+        if record['context'].get('review_proposal_ref'):
+            from .pm_sprint_review import proposal
+            draft, _ = proposal(ops, principal, target['workspace_id'], record['context']['review_proposal_ref'])
+            binding['sprint_review_sources'] = {'operation_ids': [draft['operation_id']]}
+        return binding
     return admit
 
 

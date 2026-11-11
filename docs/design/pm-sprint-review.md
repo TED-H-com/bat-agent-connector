@@ -44,7 +44,10 @@ Each selected decision must reference a fixed governance decision revision at
 completion. `pm.governance.record` accepts optional `review_proposal_ref` selecting
 `{meeting_id,draft_revision_id,draft_digest,decision_id}`. It must be a `change`
 proposal for the same snapshot, decision and owner. Revisions retain this original
-source. The actual workspace owner records direction via `pm.governance.decide`.
+source. Typed records/revisions may omit `description`; the server derives the
+exact original proposal text without copying source text into a durable request.
+Replacing that text or owner requires a new explicit Review draft/proposal.
+The actual workspace owner records direction via `pm.governance.decide`.
 `pm.meeting.complete` accepts `governance_decisions`, one exact
 `{decision_id,revision_id,document_digest}` for every selected decision. The
 completion preserves the governance actor, responsible owner and follow-ups;
@@ -55,7 +58,8 @@ existing `pm.follow_up` intake path available for later review.
 Only an explicit request records a new Idea input with
 `source_ref.kind=sprint_review_decision`. Its exact reference selects
 `{kind,meeting_id,completion_id,completion_digest,decision_id}`. The input is
-unresolved, retains the original completed decision and sources, and propagates
+unresolved; `value` is the caller’s authored intent, while `source_decision` is
+resolved on the server from exact IDs/digests. It retains original sources and propagates
 lineage through the existing `pm.thread.plan` path. The output is a `pmd_`
 discussion draft. It neither adopts scope nor starts execution.
 
@@ -87,6 +91,9 @@ Repeat authoritative checks at effect time and before publication.
 `PM_SPRINT_REVIEW_SOURCE_LIMIT` is 413 for resolved-source overflow. Existing
 FORBIDDEN, source-unavailable, version-conflict, meeting completeness and
 lineage-limit codes keep their existing semantics and transport status mappings.
+HTTP uses `OperationError.status`; RPC retains its existing transport error wrapper
+and domain code, and MCP carries that code in `ToolError`. No new error registry
+or global status remapping is needed for these existing generic adapters.
 
 ## Bounds and storage
 
