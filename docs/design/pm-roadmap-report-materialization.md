@@ -28,6 +28,15 @@ The carrier kind is `pm-roadmap-report`. No caller can supply a path, ID or body
 The service and host validate the same typed paths, manifest and exact receipt.
 The summed file bound is 512,000 bytes. Both mutation and readback encodings must
 fit the existing 120,000-byte host-command limit. Neither bound is enlarged.
+The complete, unconditional carrier helper travels as plain normalized source in
+`python3 -c <source> <request>`; only request data is encoded. Assembly shortens
+indentation outside string literals and empties comment-only lines, preserving
+literal bytes, docstrings, syntax and line numbers. Its shell-quoted source has a
+fixed budget of 41,419 bytes (the original helper overhead): the current normalized
+source uses 39,579 UTF-8 bytes, 39,585 quoted bytes, leaving 1,834 bytes spare.
+Growth beyond that budget requires equal savings elsewhere in the helper or a
+separate transport decision. It must not consume previously valid request capacity,
+select code by revision kind, change frozen intent or enlarge the command limit.
 Existing report directories, accepted specs, `roadmap.yaml`, arbitrary paths and
 generic file writes remain refused. The commit changes neither adopted scope nor
 roadmap heads. No artifact upload or model execution occurs.

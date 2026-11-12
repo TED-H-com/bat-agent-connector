@@ -99,12 +99,12 @@ async def test_original_old_helper_readback_at_legacy_limit(fixed):
     assert recovered['receipt']['operation_id'] == OP
 
 
-def test_encoded_helper_overhead_never_consumes_legacy_capacity():
+def test_plain_helper_overhead_never_consumes_legacy_capacity():
     plan = {'config': {'managed_root': '/synthetic', 'remote_url': 'https://example.invalid/o/r'}}
     command = pm_worktree.host_script(OP, plan, 'read.pm-revision')
     argv = shlex.split(command)
     assert argv[:2] == ['python3', '-c'] and len(argv) == 4
-    # Shell quoting is part of overhead; bound rather than zlib-build-specific bytes.
+    # Plain source plus shell quoting must fit the historical overhead budget.
     assert len(shlex.quote(argv[2]).encode()) <= OLD_OVERHEAD
     assert len(shlex.quote(OLD.read_text()).encode()) == OLD_OVERHEAD
 

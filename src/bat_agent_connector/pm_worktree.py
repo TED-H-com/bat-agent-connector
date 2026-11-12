@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import re
 import shlex
+import tokenize
 import uuid
 import zlib
 from importlib import resources
@@ -115,6 +117,46 @@ def _host_source() -> str:
     return shared + "\n" + drafts + "\n" + paths + "\n" + (resources.files(__package__) / "pm_revision_host.py").read_text()
 
 
+def _normalize_host_source(source: str) -> str:
+    """Shrink only indentation and comment-only lines, preserving literal bytes/lines.
+
+    Python 3.10 tokenizes an f-string as one STRING; newer versions expose its
+    parts. Protect the entire outer f-string in either case. Irregular block
+    indentation is left alone rather than introducing ambiguous tab/space levels.
+    """
+    tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    protected = set()
+    comments = set()
+    fstrings = []
+    regular = True
+    for token in tokens:
+        name = tokenize.tok_name[token.type]
+        if name == "FSTRING_START":
+            fstrings.append(token.start[0])
+        elif name == "FSTRING_END":
+            start = fstrings.pop()
+            protected.update(range(start + 1, token.end[0] + 1))
+        elif token.type == tokenize.STRING:
+            protected.update(range(token.start[0] + 1, token.end[0] + 1))
+        elif token.type == tokenize.COMMENT and not fstrings:
+            if not token.line[:token.start[1]].strip(" \t"):
+                comments.add(token.start[0])
+        elif token.type == tokenize.INDENT and not fstrings:
+            regular = regular and not token.string.strip(" ") and len(token.string) % 4 == 0
+    lines = io.StringIO(source).readlines()
+    for number, line in enumerate(lines, 1):
+        if number in protected:
+            continue
+        if number in comments:
+            lines[number - 1] = line[len(line.rstrip("\r\n")):]
+        elif regular and line.strip():
+            prefix = line[:len(line) - len(line.lstrip(" \t\f"))]
+            if not prefix.strip(" "):
+                count = len(prefix)
+                lines[number - 1] = "\t" * (count // 4) + " " * (count % 4) + line[count:]
+    return "".join(lines)
+
+
 def host_script(operation_id, plan, phase, *, snapshot=None, revision=None):
     """The exact bounded wire encoding, also used by local report preflight."""
     request = {**plan, "phase": phase, "active_operation_id": operation_id, **{key: plan["config"][key] for key in ("managed_root", "remote_url")}}
@@ -124,10 +166,9 @@ def host_script(operation_id, plan, phase, *, snapshot=None, revision=None):
         request["revision"] = revision
     arg = base64.b64encode(zlib.compress(json.dumps(request).encode(), level=9)).decode()
     # One unconditional helper understands the entire plan/spec/report chain.
-    # Compress source too: helper growth must not consume legacy intent capacity.
-    source = base64.b64encode(zlib.compress(_host_source().encode(), level=9)).decode()
-    bootstrap = "import base64,zlib;exec(compile(zlib.decompress(base64.b64decode(" + repr(source) + ")), '<pm-carrier>', 'exec'))"
-    script = "python3 -c " + shlex.quote(bootstrap) + " " + shlex.quote(arg)
+    # Keep code readable on the host without consuming legacy intent capacity.
+    source = _normalize_host_source(_host_source())
+    script = "python3 -c " + shlex.quote(source) + " " + shlex.quote(arg)
     if len(script.encode()) > 120_000:
         raise OperationError("PM_SNAPSHOT_TOO_LARGE", "The bounded snapshot exceeds the host transport limit", 422)
     return script
