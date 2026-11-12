@@ -1,6 +1,6 @@
 # Guided Sprint Review
 
-Status: backend increment; Dashboard planned. `sprint_review` remains a contract-only
+Status: backend and shared Dashboard increment. `sprint_review` remains a contract-only
 PhaseProfile. Facilitation is deterministic and human-led; no model or quality
 runtime is enabled. Existing `review` meetings remain compatible without the
 optional fields below. Daily, Retrospective, reviewers and exports are out of scope.
@@ -134,7 +134,7 @@ The sole new DDL is idempotent:
 `CREATE INDEX IF NOT EXISTS pm_meeting_drafts_by_meeting ON pm_meeting_drafts(meeting_id, sequence)`.
 No new table, column, trigger, data step or `user_version` is introduced.
 
-## Transports and planned Dashboard
+## Transports and Dashboard
 
 Use HTTP POST `/api/v1/operations`, RPC `op_submit`, MCP `operation_submit`, and
 existing meeting/governance/thread reads. All adapters share central validation;
@@ -142,7 +142,7 @@ no new action name, route or native domain authority is introduced. Capability
 `features.pm_workspaces.guided_sprint_review` version 1 advertises the complete
 fixed-input, governance and Planning path only when its validators/gates exist.
 
-The later Dashboard increment reuses shared meeting, governance, Idea and Planning
+The Dashboard increment reuses shared meeting, governance, Idea and Planning
 components and English/zh-TW string tables. It shows fixed context, reported versus
 accepted outcomes, exact feedback, unresolved items, owner decisions, and finally
 an optional Planning action. It adds no alternate scheduler or automatic send.
@@ -159,4 +159,30 @@ missing-evidence gaps, actual-owner asymmetry, explicit Planning without adoptio
 source withdrawal at every derived stage, original-key restart replay, read-only
 paths, exact/+1 count and CJK-byte limits, and unchanged legacy request hashes,
 events and responses. Mock BAT/providers and temporary disk SQLite/Git only.
-Dashboard Playwright journeys remain planned for the separate UI increment.
+Dashboard journeys exercise HTTP and injected IPC, English and zh-TW, owner and
+contributor views, withdrawal, original-key recovery, and all localStorage entries.
+
+The selected Sprint offers “Guide Sprint Review” only with capability version 1.
+Discussions/Meetings resumes the same meeting using existing navigation. Six
+sections fix context, inspect outcomes, hear exact feedback, choose direction,
+record the Review, and optionally request Planning. The next available section is
+projected from context, frozen draft, governance revisions and completion; there
+is no persisted client progress. Three facilitation questions stay visible;
+remaining gaps have a count and full source disclosure. Saved narrative is read-only,
+never an editable default. Selection reads existing bounded catalogs; incomplete
+catalogs are disclosed and selections are never silently trimmed.
+
+Proposal links open the existing governance form with fixed IDs and digests,
+assigned actor and snapshot; the server supplies the original description. Actual
+owners decide and the designated Sprint owner completes. Contributors see an
+awaiting-owner state. Completed, governed decisions are explicit source options
+in existing Idea forms; their original proof remains visible in the pmd_ draft.
+“Draft only; scope not adopted; work not started” marks the Planning boundary.
+No adoption, execution, model invocation or extra confirmation is introduced.
+
+Source refusals clear the whole guided narrative and derived editor disclosures.
+Request generations and selected identities reject late responses. Reflow retains
+editor nodes and composition; original durable receipts remain the replay authority.
+Legacy meetings without this capability retain their current UI and request shapes.
+Older Result catalog paging, model facilitation and the other Scrum events remain
+outside this increment. Physical native and real-host acceptance are separate.

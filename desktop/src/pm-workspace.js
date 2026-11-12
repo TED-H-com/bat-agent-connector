@@ -1,3 +1,5 @@
+import {reviewDecisionProof} from './pm-sprint-review.js';
+import {hasSprintReview, reviewInputSource} from './pm-sprint-review-state.js';
 import {pmAvailability, renderPmAvailability} from './pm-availability.js';
 import {hasEffectivePmRoute,workspacePmReady,renderEffectivePmRoute} from './pm-effective-route.js';
 import {workspaceExternalHistory} from './pm-external-history.js';
@@ -468,10 +470,10 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     const text = value => typeof value === 'string' && value.trim() && !/(?:pm[a-z]*|wi|op)_[0-9a-f]{20,64}/.test(value.trim()) ? value.trim() : '';
     return Promise.all(refs.map(async (ref, position) => {
       if (ref.available === false) return {kind: ref.kind, position, available: false};
-      if (ref.available === true && !['governance','plan_revision'].includes(ref.kind) && text(ref.label))
+      if (ref.available === true && !['governance','plan_revision',...(hasSprintReview(caps())?['meeting']:[])].includes(ref.kind) && text(ref.label))
         return {...ref, label:text(ref.label), bound_label:text(ref.bound_label)};
       try {
-        let label = '', recordType = null, findingIdentity = null;
+        let label = '', recordType = null, findingIdentity = null, reviewDecisions = null;
         if (ref.kind === 'governance') {
           const value = await read(`/governance/${encodeURIComponent(ref.id)}`);
           scoped(value, workspaceId, 'workspace_id');
@@ -553,12 +555,14 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
           const value = scoped(await read(`/meetings/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
           if (value.meeting?.meeting_id !== ref.id) unavailable();
           label = text(value.meeting.title);
+          if(hasSprintReview(caps()) && value.completion?.document.guided_review) reviewDecisions=value.completion.document.decisions.map(row=>({label:row.text,reference:reviewInputSource(value,row.id)}));
         } else if (ref.kind === 'lifecycle_transition') {
           const value = scoped(await read(`/lifecycle/transitions/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
           if (value.transition?.transition_id !== ref.id) unavailable();
           label = text(value.transition.reason);
         } else unavailable();
         const result = {...ref, available:true, label: label || t('ui_reason_not_recorded'), record_type: recordType, bound_label: text(ref.bound_label)};
+        if (reviewDecisions) result.review_decisions=reviewDecisions;
         if (ref.kind === 'finding') {if (findingIdentity) result.finding = findingIdentity; else delete result.finding;}
         return result;
       } catch (error) {
@@ -749,14 +753,19 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     ? workspaceKanban({h,t,api,alive,namespace,serverId,workspaceId,workspace:()=>workspace,errorBox,caps,permitted,form,embedded:true,workspaceSettled}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
-    ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
+    ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection,onGuideReview:id=>{openRegisterForm('discussions','ui_meetings');void openVisibleSource(meetings,()=>meetings?.openSprint(id));}}) : null;
   if(sprints)body.insertBefore(sprints.box,content);
   let meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings
-    ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
+    ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onGovernance:openReviewGovernance}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
-  const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
-    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps, withRegister: caps()?.features?.pm_register?.version === 1, nameFor: (kind, id) => kind === 'requirement' ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ''}) : null;
+  let governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
+    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps, withRegister: caps()?.features?.pm_register?.version === 1, onReviewRecorded:()=>meetings?.refresh(), nameFor: (kind, id) => kind === 'requirement' ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ''}) : null;
   if(governance)body.insertBefore(governance.element,content);
+  async function openReviewGovernance({ref,entry,ownerActor,snapshotId}) {
+    if(!governance){governance=workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onReviewRecorded:()=>meetings?.refresh()});drawersHome.append(governance.element);}
+    openPanel(t('ui_governance'),governance.element,false);
+    await openVisibleSource(governance,()=>entry?governance.openRef({kind:'governance',id:entry.record.record_id},{form:'decide'}):governance.openReviewProposal(ref,ownerActor,snapshotId));
+  }
   let openRegisterForm = () => {};
   const routeRegisterAction = action => {
     const name = action?.action || '';
@@ -1262,6 +1271,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       const message = threadData?.messages?.find(row => row.message_id === source.message_id);
       return message ? timeLabel(t, 'pm_note_source', {author: message.actor, time: time(message.created_at)}) : t('pm_saved_note_source');
     }
+    if(source.kind==='sprint_review_decision')return t('pm_review_decision_source');
     if(source.kind==='maintenance_review_candidate')return t('pmrv_idea_original')+' · '+source.event_id;
     return [source.ref, source.revision, source.path].filter(Boolean).join(' · ');
   };
@@ -1369,13 +1379,15 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       sourceSelect.addEventListener('change', requireReference);
       factForm = form({action: 'pm.input.record', target, fields: {slot: slotSelect, value, status: statusSelect, source: sourceSelect, reference},
         params: values => {if (values.status === 'repo_evidence' && values.source !== 'repository') throw Error(t('pm_repository_source_required'));
-          return {slot: values.slot, value: values.value, status: values.status,
-          source_ref: values.source.startsWith('message:') ? {kind: 'message', message_id: values.source.slice(8)}
+          return {slot: values.slot, value: values.value, status: hasSprintReview(caps())&&values.source.startsWith('review:')?'unresolved':values.status,
+          source_ref: hasSprintReview(caps())&&values.source.startsWith('review:') ? JSON.parse(values.source.slice(7)) : values.source.startsWith('message:') ? {kind: 'message', message_id: values.source.slice(8)}
             : {kind: values.source, ref: values.reference.trim() || (values.source === 'statement' ? values.value.slice(0, 1000) : '')}};},
         preconditions, permitted: write, label: 'pm_record_input', onSaved: () => load(),
+        onStateChange:()=>{if(hasSprintReview(caps())&&sourceSelect.value.startsWith('review:'))statusSelect.disabled=true;},
         extra: h('div', {class: 'pm-fields'}, labelled('pm_input_slot', slotSelect), labelled('pm_input_value', value),
           labelled('pm_input_status', statusSelect), labelled('pm_input_source', sourceSelect), labelled('pm_source_ref', reference),
           h('p', {class: 'muted'}, t('pm_source_help')))});
+      sourceSelect.addEventListener('change',()=>{if(hasSprintReview(caps())&&sourceSelect.value.startsWith('review:')&&!factForm.locked()){factForm.set('status','unresolved');factForm.update();}});
       requireReference();
       const selected = h('input', {type: 'hidden'}); selected.value = '[]'; selected.dataset.pmDefault = '[]';
       const rationale = input('pm_plan_rationale', {multiline: true, max: 4000});
@@ -1409,7 +1421,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       for (const node of [...column.querySelectorAll(':scope > .pm-package-preparation, :scope > .pm-packages')]) contextPane.append(node);
       if (nativeAnalysis) contextPane.append(h('details', {}, h('summary', {}, t('pd_analysis')), nativeAnalysis.box));
       const meetingThread = ['sprint_planning', 'sprint_review', 'retrospective', 'maintenance_review'].includes(thread.mode);
-      if (meetingThread && caps()?.features?.pm_workspaces?.meetings) meetings = workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps});
+      if (meetingThread && caps()?.features?.pm_workspaces?.meetings) meetings = workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onGovernance:openReviewGovernance});
       if (thread.mode === 'follow_up' && caps()?.features?.pm_workspaces?.follow_up_prepare) contextPane.append(h('a', {class: 'ui-button secondary ui-sm', 'data-discussion-follow-up': '', href: `#/pm/${encodeURIComponent(workspaceId)}/issues`}, t('ui_follow_up')));
       if (specifications) contextPane.append(secondary('ui_specs', specifications.element));
       if (evidence) drawersHome.append(evidence.box);
@@ -1491,6 +1503,14 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     // Preserve saved values even if the current bounded read no longer contains their source.
     for (const message of data.messages || []) if (![...sourceSelect.options].some(option => option.value === 'message:' + message.message_id))
       sourceSelect.append(h('option', {value: 'message:' + message.message_id}, `${message.actor} · ${message.content.slice(0, 50)}`));
+    if(hasSprintReview(caps())) {
+      for(const option of [...sourceSelect.options])if(option.value.startsWith('review:'))option.remove();
+      for(const source of thread.context||[])for(const row of source.review_decisions||[])if(row.reference)sourceSelect.append(h('option',{value:'review:'+JSON.stringify(row.reference)},row.label));
+      const hasReview=(thread.context||[]).some(row=>row.review_decisions?.length)||(data.inputs||[]).some(row=>row.source_ref?.kind==='sprint_review_decision');
+      let boundary=draft.parentElement?.querySelector(':scope > [data-pm-review-planning-boundary]');
+      if(hasReview&&!boundary){boundary=h('p',{'data-pm-review-planning-boundary':'',class:'muted'},t('pm_review_draft_only'));draft.before(boundary);}
+      if(!hasReview)boundary?.remove();
+    }
     sourceSelect.value = oldSource || 'statement';
     const slots = data.profile?.input_slots || [];
     for (const slot of slots) {
@@ -1518,6 +1538,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
         h('p', {class: 'pm-note-text'}, item.value), h('p', {class: 'muted pm-source'}, sourceText(item)),
         disclosure({label: t('pd_details'), body: h('div', {}, h('code', {class: 'mono'}, item.input_id),
           item.status === 'user_confirmed' ? h('p', {}, t('pm_confirmed_by', {actor: item.confirmed_by || item.recorded_by})) : null)}));
+      if(hasSprintReview(caps())&&item.source_decision)row.append(reviewDecisionProof({h,t,source:item.source_decision,expected:item.source_ref}));
       if(item.source_candidate)row.append(reviewCandidateProof({h,t,source:item.source_candidate}));
       if (data.capabilities?.decide && item.status !== 'user_confirmed') {
         const rationale = input('pm_confirm_rationale', {max: 2000});
@@ -1550,7 +1571,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     if (data.draft) {
       const selected = data.draft.selected_inputs || [], candidates = data.draft.candidate_inputs || [];
       draft.append(h('h2', {}, t('pm_draft_title')), h('p', {}, data.draft.title), h('p', {class: 'pm-note-text'}, data.draft.rationale),
-        h('h3', {}, t('pm_selected')), h('ul', {}, ...selected.map(item => h('li', {}, item.value))),
+        h('h3', {}, t('pm_selected')), h('ul', {}, ...selected.map(item => h('li', {}, item.value,hasSprintReview(caps())&&item.source_decision?reviewDecisionProof({h,t,source:item.source_decision,expected:item.source_ref}):''))),
         h('h3', {}, t('pm_candidates')), h('ul', {}, ...candidates.map(item => h('li', {}, item.value))),
         h('h3', {}, t('pm_open_planning')), h('ul', {}, ...(data.draft.unknowns || []).map(item => h('li', {}, discussionLabel(t, 'pm_slot_', item.slot)))),
         data.draft.candidates_truncated ? h('p', {class: 'muted'}, t('pm_partial')) : '',

@@ -1,0 +1,172 @@
+import {test,expect} from '@playwright/test';
+import {mountConversation} from './conversation-fixture.ts';
+import {openPmSection,openThreadTab} from './pm-navigation.ts';
+import {guidedReviewFixture,workspaceId} from './pm-sprint-review-fixture.ts';
+import {pmGovernanceStrings} from '../src/pm-governance-strings.js';
+import {pmStrings} from '../src/pm-strings.js';
+import {pmMeetingStrings} from '../src/pm-meetings-strings.js';
+const route=`/dashboard/#/pm/${workspaceId}`;
+const prohibited=['SOURCE_FEEDBACK','SOURCE_RESULT','Members regain access without losing their account','Account recovery snapshot','Relevant tests and actual behavior are checked'];
+async function storageSafe(page:any){
+  const entries=await page.evaluate(()=>Object.entries(localStorage));
+  for(const [key,value]of entries)for(const text of prohibited)expect(key+' '+value).not.toContain(text);
+  expect(entries.map(([key]:any)=>key).filter((key:string)=>/review-progress|review-selection|sprint-review/.test(key))).toEqual([]);
+}
+async function expand(form:any){await form.evaluate((node:Element)=>{for(let p=node.parentElement;p;p=p.parentElement)if(p instanceof HTMLDetailsElement)p.open=true;});}
+for(const native of [false,true])for(const locale of ['en','zh-TW'] as const)test(`guided Review sources and replay ${native?'IPC':'HTTP'} ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:390,height:950}}),page=await context.newPage(),f=guidedReviewFixture(),w=pmMeetingStrings[locale],g=pmGovernanceStrings[locale],p=pmStrings[locale];
+  await mountConversation(page,native,f.dispatch);await page.goto(route);
+  await openPmSection(page,'schedule','ui_sprints');
+  await page.getByRole('button',{name:w.pm_review_guide,exact:true}).click();
+  const guide=page.locator('[data-pm-guided-review]');await expect(guide).toBeVisible();
+  expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual([]);expect(f.state.providerCalls).toBe(0);
+  await storageSafe(page);await expect(guide.locator('[data-pm-review-step]')).toHaveCount(6);
+  await page.goBack();await expect(page).toHaveURL(/schedule$/);await page.goForward();
+  await expect(page).toHaveURL(/discussions$/);await expect(guide).toBeVisible();
+  const draft=page.locator('[data-pm-action="pm.meeting.draft"]');await expand(draft);
+  await draft.getByLabel(w.pm_meeting_goal_review,{exact:true}).fill('My observation: the Goal needs more evidence');
+  await draft.getByLabel(w.pm_meeting_next_steps,{exact:true}).fill('Keep the direction and verify the gap');
+  await draft.getByLabel(w.pm_meeting_reason,{exact:true}).fill('Record our review');
+  await draft.locator('[data-pm-review-sources] details').evaluateAll((nodes:Element[])=>nodes.forEach(node=>(node as HTMLDetailsElement).open=true));
+  await draft.getByLabel(w.pm_review_work,{exact:true}).selectOption(f.meeting.binding.work_item_id);
+  await draft.getByText('SOURCE_RESULT: Reset behavior reported complete.',{exact:true}).click();
+  await draft.locator('[data-pm-review-sources]').getByText(f.note.content,{exact:true}).click();await storageSafe(page);
+  await draft.locator('details').evaluateAll((nodes:Element[])=>nodes.forEach(node=>(node as HTMLDetailsElement).open=true));
+  await draft.getByRole('button',{name:w.pm_meeting_add_followup,exact:true}).click();
+  await draft.getByLabel(w.pm_meeting_follow_text,{exact:true}).fill('Check the acceptance gap');
+  await draft.getByLabel(w.pm_meeting_owner,{exact:true}).selectOption('developer');
+  await draft.getByLabel(w.pm_meeting_expected_effect,{exact:true}).fill('Know whether the Goal holds');
+  await draft.getByLabel(w.pm_meeting_verification,{exact:true}).fill('Compare the recorded acceptance proof');
+  await draft.getByRole('button',{name:w.pm_meeting_add_decision,exact:true}).click();
+  await draft.getByLabel(w.pm_meeting_decision_text,{exact:true}).fill('Retain the present direction');
+  await draft.getByLabel(w.pm_meeting_decision_reason,{exact:true}).fill('Observe before changing scope');
+  await draft.getByLabel(w.pm_meeting_owner,{exact:true}).first().selectOption('developer');
+  await draft.getByLabel(w.pm_review_follow_ids,{exact:true}).selectOption({label:'Check the acceptance gap'});
+  f.state.lost=true;await draft.locator('button[type=submit]').click();await expect(draft).toContainText('Reply unavailable');await storageSafe(page);
+  const sent=f.meeting.state.writes[0];expect(sent.body.params.review_basis.results).toEqual([f.resultRef]);
+  expect(sent.body.params.output.feedback).toEqual([]);
+  await page.reload();await openPmSection(page,'discussions','ui_meetings');await expect(guide).toBeVisible();await storageSafe(page);
+  expect(f.meeting.state.writes).toHaveLength(1);
+  await expand(draft);await draft.locator('button[type=submit]').click();await expect.poll(()=>f.meeting.state.writes.length).toBe(2);
+  expect(f.meeting.state.writes[1]).toEqual(sent);expect(f.meeting.state.ops.size).toBe(1);
+  await expect(guide).toContainText(w.pm_review_claimed_done);await expect(guide).toContainText(w.pm_review_gap_acceptance_missing);
+  await storageSafe(page);
+  await guide.locator('[data-pm-review-step="4"]').getByRole('button',{name:g.pm_gov_new,exact:true}).click();
+  const finding=page.locator('[data-pm-action="pm.governance.record"]');await expect(finding).toBeVisible();
+  await finding.getByLabel(g.pm_gov_name,{exact:true}).fill('Review direction for account recovery');
+  await finding.getByLabel(g.pm_gov_root,{exact:true}).fill('review-direction');
+  await finding.getByLabel(g.pm_gov_reason,{exact:true}).fill('Keep an explicit responsible actor');
+  await finding.getByText('A member can recover a forgotten password',{exact:false}).first().click();
+  await storageSafe(page);await finding.locator('button[type=submit]').click();
+  const direction=page.locator('[data-pm-action="pm.governance.decide"]');await expand(direction);
+  expect(f.governance.state.writes[0].body.params.review_proposal_ref?.draft_revision_id).toBe(f.detail.draft.revision_id);
+  expect(f.governance.state.writes[0].body.params).not.toHaveProperty('description');
+  await direction.getByLabel(g.pm_gov_reason,{exact:true}).fill('Retain direction while the assigned owner verifies');
+  await direction.locator('button[type=submit]').click();await expect.poll(()=>f.governance.state.writes.length).toBe(2);
+  await openPmSection(page,'discussions','ui_meetings');await expect(guide).toBeVisible();
+  await expect(guide.locator('[data-pm-review-step="4"]')).toContainText('owner');
+  const complete=page.locator('[data-pm-action="pm.meeting.complete"]');await expand(complete);
+  await complete.getByLabel(w.pm_meeting_summary,{exact:true}).fill('We discussed the evidence and retained the direction');
+  await complete.getByLabel(w.pm_meeting_reason,{exact:true}).fill('Record the actual discussion');
+  await complete.getByText('Retain the present direction',{exact:true}).click();
+  await complete.locator('button[type=submit]').click();await expect(guide.locator('[data-pm-review-step="6"] a')).toBeVisible();
+  await expect(guide).toContainText(w.pm_review_draft_only);await storageSafe(page);
+  await guide.locator('[data-pm-review-step="6"] a').click();
+  const idea=page.locator('[data-pm-action="pm.thread.create"]');
+  await page.getByRole('button',{name:locale==='en'?'Rename':'重新命名',exact:true}).click();
+  await page.getByLabel(locale==='en'?'Discussion title':'討論標題',{exact:true}).fill('Consider the next focused improvement');
+  await page.getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();
+  await page.locator('[data-discussion-composer]').fill('My note requesting a next discussion');
+  await idea.locator('button[type=submit]').click();await openThreadTab(page,'inputs');
+  const input=page.locator('[data-pm-action="pm.input.record"]');await expand(input);
+  await input.getByLabel(p.pm_input_slot,{exact:true}).selectOption('problem');
+  await input.getByLabel(p.pm_input_value,{exact:true}).fill('My intent for the next Planning discussion');
+  await input.getByLabel(p.pm_input_source,{exact:true}).selectOption({label:'Retain the present direction'});
+  await storageSafe(page);await input.locator('button[type=submit]').click();
+  await page.getByRole('checkbox',{name:p.pm_select_input.replace('{value}','My intent for the next Planning discussion'),exact:true}).check();
+  await openThreadTab(page,'plan');const plan=page.locator('[data-pm-action="pm.thread.plan"]');await expand(plan);
+  await plan.getByLabel(p.pm_plan_rationale,{exact:true}).fill('Request a draft only');await plan.locator('button[type=submit]').click();
+  await expect.poll(()=>f.base.state.draft?.draft_id).toMatch(/^pmd_/);await expect(page.locator('[data-pm-review-planning-boundary]')).toContainText(w.pm_review_draft_only);
+  expect(f.base.state.writes.map((row:any)=>row.body.action)).toEqual(['pm.thread.create','pm.message.append','pm.input.record','pm.thread.plan']);
+  expect(f.base.state.inputs.at(-1).source_ref.kind).toBe('sprint_review_decision');await storageSafe(page);
+  await openPmSection(page,'discussions','ui_meetings');
+  f.state.withdraw=true;await page.getByRole('button',{name:w.pm_meeting_refresh,exact:true}).click();await expect(guide).toHaveCount(0);
+  await storageSafe(page);expect(await page.locator('body').textContent()).not.toContain(f.note.content);
+  expect(f.state.providerCalls).toBe(0);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await context.close();
+});
+test('missing capability preserves legacy meeting fields and hides Sprint entrance',async({page})=>{
+  const f=guidedReviewFixture();f.state.enabled=false;await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'schedule','ui_sprints');
+  await expect(page.getByRole('button',{name:'Guide Sprint Review',exact:true})).toHaveCount(0);
+  await openPmSection(page,'discussions','ui_meetings');await expect(page.locator('[data-pm-guided-review]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-action="pm.meeting.draft"]').getByLabel('Feedback (one point per line)',{exact:true})).toHaveCount(1);
+  expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual([]);
+});
+
+import {seedGuidedReview} from './pm-sprint-review-fixture.ts';
+for(const native of [false,true])for(const locale of ['en','zh-TW'] as const)test(`contributor awaits actual owner and clears sourced stages ${native?'IPC':'HTTP'} ${locale}`,async({browser,baseURL})=>{
+  for(const stage of [1,2,3,4,5]){
+    const context=await browser.newContext({baseURL,locale,viewport:{width:390,height:950}}),page=await context.newPage(),f=guidedReviewFixture(),w=pmMeetingStrings[locale],g=pmGovernanceStrings[locale];
+    f.state.actor='developer';f.state.role='contributor';if(stage>1)seedGuidedReview(f,stage);
+    await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'discussions','ui_meetings');
+    const guide=page.locator('[data-pm-guided-review]');await expect(guide).toBeVisible();await storageSafe(page);
+    if(stage===3)await expect(guide).toContainText(w.pm_review_historical);
+    if(stage===4){await expect(guide).toContainText(w.pm_review_await_owner);await expect(guide.getByRole('button',{name:g.pm_gov_decide,exact:true})).toHaveCount(0);}
+    await expect(page.locator('[data-pm-action="pm.meeting.complete"]')).toHaveCount(0);
+    expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual([]);expect(f.state.providerCalls).toBe(0);
+    f.state.withdraw=true;await page.getByRole('button',{name:w.pm_meeting_refresh,exact:true}).click();await expect(guide).toHaveCount(0);
+    const body=await page.locator('body').textContent();expect(body).not.toMatch(/SOURCE_(FEEDBACK|RESULT|GOVERNANCE|GOAL_OBSERVATION|NEXT_DIRECTION|FOLLOW_UP|EFFECT|VERIFICATION|UNRESOLVED|COMPLETION)/);expect(body).not.toContain('Members regain access without losing their account');
+    for(const [key,value]of await page.evaluate(()=>Object.entries(localStorage)))expect(key+' '+value).not.toMatch(/SOURCE_(FEEDBACK|RESULT|GOVERNANCE|GOAL_OBSERVATION|NEXT_DIRECTION|FOLLOW_UP|EFFECT|VERIFICATION|UNRESOLVED|COMPLETION)/);
+    await storageSafe(page);await context.close();
+  }
+});
+
+test('late Result reads never cross selection or restore withdrawn content; editors survive reflow and composition',async({page})=>{
+  const f=guidedReviewFixture(),w=pmMeetingStrings.en;
+  f.detail.context.document.selected_items.push({...f.meeting.binding,work_item_id:'wi_'+'6'.repeat(20),binding_id:'pmwb_'+'6'.repeat(32),title:'Second readable Work'});
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'discussions','ui_meetings');
+  const draft=page.locator('[data-pm-action="pm.meeting.draft"]');await expand(draft);const editor=draft.getByLabel(w.pm_meeting_goal_review,{exact:true});
+  await editor.focus();await editor.evaluate((node:any)=>{(window as any).reviewEditor=node;node.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true,data:'核對'}));});
+  for(const width of [390,768,1440,390]){
+    await page.setViewportSize({width,height:950});expect(await editor.evaluate(node=>node===(window as any).reviewEditor&&document.activeElement===node)).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  }
+  await editor.evaluate(node=>node.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:'核對'})));await editor.fill('核對原始來源');await storageSafe(page);
+  await draft.locator('[data-pm-review-sources] details').evaluateAll((nodes:Element[])=>nodes.forEach(node=>(node as HTMLDetailsElement).open=true));
+  let release=()=>{};f.state.resultDeferred=new Promise<void>(resolve=>release=resolve);
+  const work=draft.getByLabel(w.pm_review_work,{exact:true});await work.selectOption(f.meeting.binding.work_item_id);
+  await expect.poll(()=>f.state.requests.some((row:any)=>row.path.includes(f.resultRef.attempt_id+'/result'))).toBe(true);
+  await work.selectOption('wi_'+'6'.repeat(20));await expect(draft).toContainText('SOURCE_RESULT_B');const firstLate=page.waitForResponse(response=>response.url().includes(f.resultRef.attempt_id+'/result'));release();await(await firstLate).finished();await page.evaluate(()=>new Promise(requestAnimationFrame));
+  await expect(draft).not.toContainText('SOURCE_RESULT: Reset behavior reported complete.');
+  f.state.resultDeferred=new Promise<void>(resolve=>release=resolve);await work.selectOption(f.meeting.binding.work_item_id);
+  await expect.poll(()=>f.state.requests.filter((row:any)=>row.path.includes(f.resultRef.attempt_id+'/result')).length).toBe(2);
+  f.state.withdraw=true;await page.getByRole('button',{name:w.pm_meeting_refresh,exact:true}).click();await expect(page.locator('[data-pm-guided-review]')).toHaveCount(0);
+  const withdrawnLate=page.waitForResponse(response=>response.url().includes(f.resultRef.attempt_id+'/result'));release();await(await withdrawnLate).finished();await page.evaluate(()=>new Promise(requestAnimationFrame));await expect(page.locator('body')).not.toContainText('SOURCE_RESULT');await storageSafe(page);
+  expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual([]);expect(f.state.providerCalls).toBe(0);
+});
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'] as const)test(`server-authored Review decisions never enter Planning storage ${native?'IPC':'HTTP'} ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:390,height:950}}),page=await context.newPage(),f=guidedReviewFixture(),p=pmStrings[locale];
+  seedGuidedReview(f,5);await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'discussions','ui_meetings');
+  await storageSafe(page);await page.locator('[data-pm-review-step="6"] a').click();
+  await page.getByRole('button',{name:locale==='en'?'Rename':'重新命名',exact:true}).click();
+  await page.getByLabel(locale==='en'?'Discussion title':'討論標題',{exact:true}).fill('An authored next discussion');
+  await page.getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();
+  await page.locator('[data-discussion-composer]').fill('My authored next discussion note');
+  await page.locator('[data-pm-action="pm.thread.create"] button[type=submit]').click();await openThreadTab(page,'inputs');
+  const input=page.locator('[data-pm-action="pm.input.record"]');await expand(input);
+  await input.getByLabel(p.pm_input_value,{exact:true}).fill('An authored Planning intent');await input.getByLabel(p.pm_input_slot,{exact:true}).selectOption('problem');
+  await input.getByLabel(p.pm_input_source,{exact:true}).selectOption({label:'SOURCE_GOVERNANCE: Retain direction'});
+  const noServerProse=async()=>{await storageSafe(page);for(const [key,value]of await page.evaluate(()=>Object.entries(localStorage)))expect(key+' '+value).not.toMatch(/SOURCE_(FEEDBACK|RESULT|GOVERNANCE|GOAL_OBSERVATION|NEXT_DIRECTION|FOLLOW_UP|EFFECT|VERIFICATION|UNRESOLVED|COMPLETION)/);};
+  await noServerProse();await input.locator('button[type=submit]').click();await noServerProse();
+  await page.getByRole('checkbox',{name:p.pm_select_input.replace('{value}','An authored Planning intent'),exact:true}).check();
+  await openThreadTab(page,'plan');const plan=page.locator('[data-pm-action="pm.thread.plan"]');await expand(plan);
+  await plan.getByLabel(p.pm_plan_rationale,{exact:true}).fill('Prepare a draft without adopting scope');await plan.locator('button[type=submit]').click();await expect.poll(()=>f.base.state.draft?.draft_id).toMatch(/^pmd_/);await noServerProse();
+  await page.reload();await openThreadTab(page,'plan');await noServerProse();
+  await expect(page.locator('[data-discussion-tab="plan"] [data-pm-review-decision-source]')).toContainText('SOURCE_GOVERNANCE: Retain direction');
+  const count=f.state.requests.filter((row:any)=>row.method!=='GET').length;
+  f.state.withdraw=true;await page.reload();await expect(page.locator('[data-pm-review-decision-source]')).toHaveCount(0);await noServerProse();
+  expect(await page.locator('body').textContent()).not.toContain('SOURCE_GOVERNANCE');
+  expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toHaveLength(count);expect(f.state.providerCalls).toBe(0);
+  await context.close();
+});

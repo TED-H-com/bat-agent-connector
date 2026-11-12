@@ -1,9 +1,10 @@
+import {hasSprintReview} from './pm-sprint-review-state.js';
 import {button, disclosure, emptyState, iconButton, menu, sectionCard} from './ui/components.js';
 import {retiredView, viewLeft} from './pm-retired.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 // Central Sprint management, with fixed references and the shared durable operation forms.
 import {fixedQualityPicker,qualityFact} from './pm-quality-projections.js';
-export function workspaceSprints({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps,qualitySelection=null}) {
+export function workspaceSprints({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps,qualitySelection=null,onGuideReview=null}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let model = null, signature = '', selectedId = '', serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
   let forms = [], titles = new Map();
@@ -117,6 +118,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
         data.quality === 'fixed_original_assessments' ? null : note('pm_sprint_quality'),
         h('p', {}, t('pm_sprint_product_goal'), ': ', model.fixed.product_goal.document.text),
         h('p', {}, mono(def.product_goal_revision_id)), h('p', {}, mono(def.dod_revision_id)), h('p', {}, mono(def.backlog_revision_id))))));
+    if (hasSprintReview(caps()) && onGuideReview) view.append(button({variant:'secondary',label:t('pm_review_guide'),onClick:()=>onGuideReview(sprint.sprint_id)}));
     const ticket = serial, terminal = ['closed', 'cancelled'].includes(sprint.status);
     let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
     const closure = h('section', {class: 'pm-plans', 'data-pm-sprint-closure': ''});

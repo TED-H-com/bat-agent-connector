@@ -1,18 +1,20 @@
+import {hasSprintReview} from './pm-sprint-review-state.js';
 import {timeStamp} from './ui/stamps.js';
 import {retiredView, viewLeft} from './pm-retired.js';
 import {panelActorLabel} from './pm-governance-strings.js';
 import {iconButton, button, sectionCard, statusPill, disclosure, emptyState} from './ui/components.js';
 // Sourced management findings and explicit direction decisions share one journal.
-export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => ''}) {
+export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => '', onReviewRecorded = null}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = ['risk', 'assumption', 'issue', 'dependency', 'drift', 'change'];
   let serial = 0, loaded = false, dirty = false, stale = false, signature = '', selectedId = '', model = null, forms = [], widgets = [];
   let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
+  let proposalTicket = 0;
   let createOpen = false, createBox = null, entries = [];
   const createId = 'pm-governance-create-' + crypto.randomUUID();
   const actorLabel = value => panelActorLabel(t, value);
   const navigationKey = `batc.pm.governance.selection.${namespace}.${workspaceId}.${caps()?.actor}`;
   try {const saved = sessionStorage.getItem(navigationKey); if (/^pmgov_[0-9a-f]{32}$/.test(saved || '')) selectedId = saved;} catch { /* Navigation is optional. */ }
-  const selectRecord = value => {selectedId = value; try {alive(); sessionStorage.setItem(navigationKey, value);} catch { /* Form persistence remains authoritative. */ }};
+  const selectRecord = value => {++proposalTicket;selectedId = value; try {alive(); sessionStorage.setItem(navigationKey, value);} catch { /* Form persistence remains authoritative. */ }};
   const status = h('div', {role: 'status'}), list = h('div', {class: 'pm-evidence-rows'}), detail = h('div'), editors = h('div');
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_gov_stale'));
   const review = button({variant: 'secondary', hidden: true, onClick: () => {if (loaded) void renderEditors(true);}, label: t('pm_gov_review_fresh')});
@@ -68,7 +70,9 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     warning.hidden = !stale; review.hidden = !stale || !can(); review.disabled = !loaded;
   }
   function unavailable(error) {
+    const reviewLinked=hasSprintReview(caps())&&(model?.detail?.record.context.review_proposal_ref||createEditor?.fields.review_proposal_ref?.value&&createEditor.fields.review_proposal_ref.value!=='null');
     loaded = false; ++sourceTicket; list.replaceChildren(); detail.replaceChildren(); editors.hidden = true;
+    if(reviewLinked){forms.forEach(editor=>editor.dispose?.());clearEditors();model=null;signature='';}
     update(); status.replaceChildren(errorBox(error, {within:status}));
   }
   async function currentWorkspace() {
@@ -114,6 +118,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
         if (result?.workspace_id !== workspaceId || !/^pmgov_[0-9a-f]{32}$/.test(result.record_id)) invalid();
         selectRecord(result.record_id);
         await refresh(true);
+        if (model?.detail?.record.context.review_proposal_ref) await onReviewRecorded?.();
         if (result.deduplicated) status.replaceChildren(note('pm_gov_deduplicated'));
       }});
     if (rebase && !editor.locked()) editor.set('_baseline', expected);
@@ -260,6 +265,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       fields.root_cause_key = input('pm_gov_root', {max: 120});
       fields.snapshot_id = select('pm_gov_snapshot', model.snapshots.map(row => [row.snapshot_id, row.title || row.snapshot_id]), model.snapshots.at(-1)?.snapshot_id || '');
     }
+    if (creating && hasSprintReview(caps())) fields.review_proposal_ref = hidden(null);
     fields.review_at.type = 'datetime-local';
     const reviewValue = h('span', {class: 'ui-meta'});
     const showReview = () => {reviewValue.replaceChildren(fields.review_at.value ? timeStamp(new Date(fields.review_at.value)) : t('pm_gov_unscheduled'));};
@@ -299,7 +305,10 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           && (kind !== 'drift' || fields.dimension.value && chosen.some(ref => ref.kind === 'evidence') && chosen.some(ref => ['plan_input', 'requirement'].includes(ref.kind)))
           && chosen.length > 0 && chosen.length <= 50 && chosen.every(ref => sourceChoices(fixed).some(choice => key(choice) === key(ref)));
       },
-      onStateChange: () => {sourceSync(); affected.sync(); related.sync(); showReview(); inspect.disabled = !allowed() || stale || Boolean(editor?.locked()); driftHint.hidden = (creating ? fields.kind.value : existing.record.kind) !== 'drift';},
+      onStateChange: () => {sourceSync(); affected.sync(); related.sync(); showReview(); inspect.disabled = !allowed() || stale || Boolean(editor?.locked()); driftHint.hidden = (creating ? fields.kind.value : existing.record.kind) !== 'drift';
+        if(fields.review_proposal_ref){const ref=JSON.parse(fields.review_proposal_ref.value);fields.owner_actor.readOnly=Boolean(ref);fields.description.required=!ref;
+          if(ref){fields.kind.disabled=true;fields.snapshot_id.disabled=true;fields.description.closest('label')?.setAttribute('hidden','');}}
+      },
       params: values => {
         const split = value => value.split(',').map(part => part.trim()).filter(Boolean);
         const result = {...values, source_refs: JSON.parse(values.source_refs), affected_requirement_ids: split(values.affected_requirement_ids),
@@ -307,6 +316,10 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           trigger: values.trigger.trim() || null, response: values.response.trim() || null, review_at: values.review_at ? new Date(values.review_at).toISOString() : null,
           dimension: values.dimension || null, proposed_revision_id: values.proposed_revision_id.trim() || null};
         delete result.related_ids; delete result.distinction;
+        if (fields.review_proposal_ref) {
+          const ref=JSON.parse(values.review_proposal_ref);delete result.review_proposal_ref;
+          if(ref){result.review_proposal_ref=ref;delete result.description;}
+        }
         if (values.related_ids.trim() || values.distinction.trim()) result.disambiguation = {record_ids: split(values.related_ids), rationale: values.distinction};
         return result;
       }}, rebase);
@@ -322,6 +335,27 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           if (result.snapshot.snapshot_id !== snapshotId) invalid();
           if (result.snapshot.visibility?.filtered) throw Object.assign(Error(t('pm_gov_source_missing')), {status: 404});
           if (!result.snapshot.baseline?.document) {sourceStatus.append(note('pm_gov_no_snapshot')); update(); return;}
+          if (fields.review_proposal_ref) {
+            const ref=JSON.parse(fields.review_proposal_ref.value);
+            fields.description.required=!ref;fields.description.hidden=Boolean(ref);
+            if(ref&&!editor.locked()){
+              const meeting=check(await api('GET',`${endpoint}/meetings/${ref.meeting_id}`));alive();
+              if(ticket!==sourceTicket||!editor.box.isConnected)return;
+              if(meeting.meeting.meeting_id!==ref.meeting_id)invalid();
+              let fixed=meeting.draft,cursor=0;
+              for(let page=0;fixed?.revision_id!==ref.draft_revision_id&&page<20;page++){
+                const history=check(await api('GET',`${endpoint}/meetings/${ref.meeting_id}/history/drafts?after=${cursor}&limit=50`));alive();
+                if(ticket!==sourceTicket||!editor.box.isConnected)return;
+                if(history.meeting_id!==ref.meeting_id||history.kind!=='drafts')invalid();
+                fixed=history.records.find(row=>row.revision_id===ref.draft_revision_id);
+                if(fixed||history.next_cursor==null)break;
+                if(!Number.isSafeInteger(history.next_cursor)||history.next_cursor<=cursor)invalid();cursor=history.next_cursor;
+              }
+              const decision=fixed?.document.decisions.find(row=>row.id===ref.decision_id);
+              if(fixed?.document_digest!==ref.draft_digest||!decision)throw Object.assign(Error(t('pm_gov_source_missing')),{status:404});
+              sourceStatus.append(text(decision.text),text(t('pm_meeting_assigned',{actor:decision.owner_actor})),fold('pm_gov_details',h('pre',{class:'pm-brief-proof'},JSON.stringify(ref,null,2))));
+            }
+          }
           createSnapshot = result.snapshot; affected.rebuild(sourceChoices(createSnapshot).filter(row => row.kind === 'requirement').map(row => [row.id, sourceLabel(row.kind, row.source)])); sourceSync = refsWidget(fields.source_refs, sourceHolder, createSnapshot, () => editor); update();
         } catch (error) {
           if (ticket !== sourceTicket || !editor.box.isConnected) return;
@@ -378,7 +412,9 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   }
   async function renderEditors(rebase = false) {
     clearEditors(); dirty = false; stale = false;
-    if (model.detail) {
+    if (hasSprintReview(caps()) && model.detail?.record.context.review_proposal_ref) {
+      editors.append(documentView(model.detail.revision), decisionEditors(rebase), !owner()?note('pm_review_await_owner'):'');
+    } else if (model.detail) {
       const finding = findingEditor(model.detail, rebase);
       editors.append(withRegister ? h('strong', {'data-pm-governance-selected': selectedId}, model.detail.revision.document.title) : '', finding.element, decisionEditors(rebase),
         entryPoint(button({variant:'secondary',label:t('pm_gov_resolve'),onClick:()=>void openRef({kind:'governance',id:selectedId},{form:'resolve'})}), finding.permitted));
@@ -451,6 +487,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   }
   async function openRef(ref, {form: requested = 'revise'} = {}) {
     if (ref.kind !== 'governance') return;
+    ++proposalTicket;
     if (requested !== 'record') {if (!/^pmgov_[0-9a-f]{32}$/.test(ref.id || '')) return; selectRecord(ref.id);}
     await refresh(true);
     const action = requested === 'record' ? 'record' : requested === 'decide' ? 'decide' : requested === 'adoption.link' ? 'adoption.link' : 'revise';
@@ -462,7 +499,14 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     const field = requested === 'resolve' ? editor.fields.rationale : editor.box.querySelector('input:not([type="hidden"]), select, textarea');
     field?.focus(); editor.box.scrollIntoView({block: 'nearest'});
   }
-  return {element, refresh, openRef, relabel,
+  async function openReviewProposal(ref, ownerActor, snapshotId) {
+    if(!hasSprintReview(caps()))return;
+    const request=++proposalTicket;await refresh(true);
+    if(request!==proposalTicket||!loaded||!createEditor||createEditor.locked())return;
+    for(const [key,value] of Object.entries({review_proposal_ref:JSON.stringify(ref),kind:'change',owner_actor:ownerActor,snapshot_id:snapshotId,description:''}))createEditor.set(key,value);
+    await refreshCreateSource();showCreate();
+  }
+  return {element, refresh, openRef, openReviewProposal, relabel,
     requirementIds: () => model ? [...model.records.flatMap(row => row.revision.document.affected_requirement_ids),
       ...forms.flatMap(editor => editor.fields?.affected_requirement_ids?.value.split(',').map(value => value.trim()).filter(Boolean) || [])] : [],
     namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id
