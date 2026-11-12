@@ -863,6 +863,12 @@ def record_receipt(
 
 # Own Result evidence is identified by immutable producer-operation membership.
 # A Work-input lookup is one seek through its operation_id unique index per row.
+# At most one row per eligible direct marker, through message_id's unique index.
+# Includes queued inputs: reservation is durable at Work-input admission.
+RESERVED_WORK_MARKER_SQL = """SELECT 1 FROM work_inputs
+    WHERE message_id=? AND workspace_id=? AND attempt_id=? LIMIT 1"""
+
+
 OWN_RECEIPT_PREDICATE = """(operation_id=? OR EXISTS (
     SELECT 1 FROM work_inputs i WHERE i.operation_id=session_results.operation_id
       AND i.attempt_id=session_results.attempt_id
@@ -1579,6 +1585,9 @@ class AttemptResultCollector:
             return None
         for value in inputs:
             if value["marker"] not in terminal:
+                if self.ops.db.execute(RESERVED_WORK_MARKER_SQL,
+                    (value["marker"], cand["workspace_id"], cand["attempt_id"])).fetchone():
+                    continue  # The existing step owns this marker, even while queued.
                 return {**cand, "turn_marker": value["marker"],
                         "receipt_operation_id": value["operation_id"], "direct_marker": value}
         self._record_direct_check(cand["attempt_id"], "unchanged")

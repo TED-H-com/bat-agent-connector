@@ -339,3 +339,12 @@ it never performs an uncharged receipt query per required marker. The additive
 collector step likewise reads the Attempt receipt range once, builds its terminal
 marker set, then chooses the earliest eligible missing marker. Existing selection,
 queue wake and source/generation/attribution requirements do not change.
+
+### Shared direct / Work-input markers
+
+The direct step reserves every existing Work-input marker for its own collector
+step, including queued inputs, by exact message-ID lookup scoped to workspace and
+Attempt. The initial marker already has its own terminal receipt before a direct
+step can run. Either send order keeps the own Result; WIP accepts the same original
+terminal evidence for both holds. At most 500 unique-index seeks per direct pass
+are added; no input-history scan, admission change or extra send is introduced.
