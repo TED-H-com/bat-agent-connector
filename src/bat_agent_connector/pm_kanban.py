@@ -53,6 +53,19 @@ def _flow(ops, principal, wid, item, completion, now):
     seen = {pm_evidence._body(r["body"]).get("operation_id") for r in rows}
     if len(expected) > MAX_HISTORY or any(r[0] not in seen for r in expected):
         return unknown("missing_history")
+    originals = {}
+    for row in rows:
+        oid = pm_evidence._body(row["body"]).get("operation_id")
+        op = pm_evidence._read_operation(ops, principal, wid, oid)
+        receipt = ops.db.execute("SELECT result FROM management_applied WHERE operation_id=?", (oid,)).fetchone()
+        originals[oid] = op, pm_evidence._body(receipt[0]) if receipt else {}
+    return replay_flow(item, completion, now, rows, originals)
+
+
+def replay_flow(item, completion, now, rows, originals):
+    """Pure management flow replay shared with the workspace aggregate."""
+    def unknown(reason):
+        return _unknown_flow(item, completion, reason)
     state, approved, started, closed, since = None, False, None, None, None
     waiting, reopened, last_time, ever_started = 0.0, set(), None, False
     sources = []
@@ -60,9 +73,7 @@ def _flow(ops, principal, wid, item, completion, now):
         body, at = pm_evidence._body(row["body"]), pm_evidence._time(row["created_at"])
         if at is None or at > now or last_time is not None and at < last_time:
             return unknown("clock_uncertain")
-        op = pm_evidence._read_operation(ops, principal, wid, body.get("operation_id"))
-        receipt = ops.db.execute("SELECT result FROM management_applied WHERE operation_id=?", (body.get("operation_id"),)).fetchone()
-        result = pm_evidence._body(receipt[0]) if receipt else {}
+        op, result = originals.get(body.get("operation_id"), (None, {}))
         if op is None or result.get("work_item_id") != item["work_item_id"]:
             return unknown("unavailable_history")
         previous_state, previous_approval = state, approved
@@ -273,11 +284,18 @@ def _card(ops, principal, wid, binding, now):
             "assignment": {"status": "unknown", "actor": None, "reason": "creator_is_not_assignee"}}
 
 
-def _capabilities():
-    return {"read_only": True, "dispatch": False, "session_control": False, "quality_evaluation": False,
+def _capabilities(ops=None, workspace_id=None):
+    result = {"read_only": True, "dispatch": False, "session_control": False, "quality_evaluation": False,
             "ready_gate": False, "work_dependencies": False, "assignment": False,
             "wip_limit": {"status": "not_configured", "value": None},
             "resource_capacity": {"status": "unknown", "value": None}, "cost": "unknown"}
+
+    if ops is not None:
+        from . import pm_workspace_wip
+        if pm_workspace_wip._record(ops.db, workspace_id) is not None:
+            result["wip_limit"] = {"status": "reported_separately", "value": None,
+                                   "read": pm_workspace_wip.READ}
+    return result
 
 
 def _wip(cards):
@@ -298,7 +316,7 @@ def get_board(ops, principal, workspace_id, *, project_id=None, after=0, limit=5
         page = pm_evidence.list_work(ops, principal, workspace_id, project_id=project_id, after=after, limit=limit)
         now, cursor, cards = time.time(), ops.journal.api_head(), []
         out = {"version": 1, "workspace_id": workspace_id, "project_id": project_id, "observed_at": now,
-               "journal_cursor": cursor, "cards": cards, "next_cursor": page["next_cursor"], "capabilities": _capabilities(),
+               "journal_cursor": cursor, "cards": cards, "next_cursor": page["next_cursor"], "capabilities": _capabilities(ops, workspace_id),
                "coverage": {"basis": "current_explicit_work_bindings", "network_checked": False,
                             "scope": "returned_page", "pagination_snapshot": False, "byte_limited": False}}
         size = _read_size(out)

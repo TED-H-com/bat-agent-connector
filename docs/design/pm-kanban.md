@@ -214,3 +214,6 @@ observation entry point, but may recover an authorized original receipt. A sourc
 failure withdraws rows, lane counts, accounting, inspector facts and observation
 controls together. Late responses cannot restore them. Drafts and unknown admissions
 retain their original source and operation key; acknowledged receipts recover by GET.
+
+The independent [workspace WIP policy](pm-workspace-wip.md) defines advisory
+workspace commitment counting. It does not change this board's page-scoped WIP.

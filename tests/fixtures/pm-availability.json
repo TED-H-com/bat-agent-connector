@@ -170,6 +170,7 @@
               "pm.sprint.cancel",
               "pm.sprint.close",
               "pm.thread.rename",
+              "pm.wip_policy.save",
               "pm.work_batch.evidence.record",
               "pm.workload.capture",
               "pm.workspace.adapter.select",
@@ -456,6 +457,23 @@
               "codex"
             ],
             "existing_sessions": "continue_under_original_authority"
+          },
+          "workspace_wip": {
+            "version": 1,
+            "read": "pm_workspace_wip_get",
+            "action": "pm.wip_policy.save",
+            "modes": [
+              "advisory",
+              "disabled"
+            ],
+            "enforcement": false,
+            "counting_basis": "work_commitments_v1",
+            "bounds": {
+              "works": 10000,
+              "contributing_records": 50000,
+              "per_work_history": 500,
+              "per_execution_direct_inputs": 500
+            }
           },
           "work_profiles": {
             "version": 1,
@@ -1119,6 +1137,23 @@
           "selection": "explicit_only"
         }
       },
+      "workspace_wip": {
+        "version": 1,
+        "read": "pm_workspace_wip_get",
+        "action": "pm.wip_policy.save",
+        "modes": [
+          "advisory",
+          "disabled"
+        ],
+        "enforcement": false,
+        "counting_basis": "work_commitments_v1",
+        "bounds": {
+          "works": 10000,
+          "contributing_records": 50000,
+          "per_work_history": 500,
+          "per_execution_direct_inputs": 500
+        }
+      },
       "work_profiles": {
         "version": 1,
         "contract": "work-profile-readiness/v1",
@@ -1403,6 +1438,7 @@
               "pm.sprint.cancel",
               "pm.sprint.close",
               "pm.thread.rename",
+              "pm.wip_policy.save",
               "pm.work_batch.evidence.record",
               "pm.workload.capture",
               "pm.workspace.adapter.select",
@@ -1689,6 +1725,23 @@
               "codex"
             ],
             "existing_sessions": "continue_under_original_authority"
+          },
+          "workspace_wip": {
+            "version": 1,
+            "read": "pm_workspace_wip_get",
+            "action": "pm.wip_policy.save",
+            "modes": [
+              "advisory",
+              "disabled"
+            ],
+            "enforcement": false,
+            "counting_basis": "work_commitments_v1",
+            "bounds": {
+              "works": 10000,
+              "contributing_records": 50000,
+              "per_work_history": 500,
+              "per_execution_direct_inputs": 500
+            }
           },
           "work_profiles": {
             "version": 1,
@@ -2348,6 +2401,23 @@
           "selection": "explicit_only"
         }
       },
+      "workspace_wip": {
+        "version": 1,
+        "read": "pm_workspace_wip_get",
+        "action": "pm.wip_policy.save",
+        "modes": [
+          "advisory",
+          "disabled"
+        ],
+        "enforcement": false,
+        "counting_basis": "work_commitments_v1",
+        "bounds": {
+          "works": 10000,
+          "contributing_records": 50000,
+          "per_work_history": 500,
+          "per_execution_direct_inputs": 500
+        }
+      },
       "work_profiles": {
         "version": 1,
         "contract": "work-profile-readiness/v1",
@@ -2632,6 +2702,7 @@
               "pm.sprint.cancel",
               "pm.sprint.close",
               "pm.thread.rename",
+              "pm.wip_policy.save",
               "pm.work_batch.evidence.record",
               "pm.workload.capture",
               "pm.workspace.adapter.select",
@@ -2918,6 +2989,23 @@
               "codex"
             ],
             "existing_sessions": "continue_under_original_authority"
+          },
+          "workspace_wip": {
+            "version": 1,
+            "read": "pm_workspace_wip_get",
+            "action": "pm.wip_policy.save",
+            "modes": [
+              "advisory",
+              "disabled"
+            ],
+            "enforcement": false,
+            "counting_basis": "work_commitments_v1",
+            "bounds": {
+              "works": 10000,
+              "contributing_records": 50000,
+              "per_work_history": 500,
+              "per_execution_direct_inputs": 500
+            }
           },
           "work_profiles": {
             "version": 1,
@@ -3579,6 +3667,23 @@
           "selection": "explicit_only"
         }
       },
+      "workspace_wip": {
+        "version": 1,
+        "read": "pm_workspace_wip_get",
+        "action": "pm.wip_policy.save",
+        "modes": [
+          "advisory",
+          "disabled"
+        ],
+        "enforcement": false,
+        "counting_basis": "work_commitments_v1",
+        "bounds": {
+          "works": 10000,
+          "contributing_records": 50000,
+          "per_work_history": 500,
+          "per_execution_direct_inputs": 500
+        }
+      },
       "work_profiles": {
         "version": 1,
         "contract": "work-profile-readiness/v1",
@@ -3860,6 +3965,7 @@
               "pm.sprint.cancel",
               "pm.sprint.close",
               "pm.thread.rename",
+              "pm.wip_policy.save",
               "pm.work_batch.evidence.record",
               "pm.workload.capture",
               "pm.workspace.adapter.select",
@@ -4146,6 +4252,23 @@
               "codex"
             ],
             "existing_sessions": "continue_under_original_authority"
+          },
+          "workspace_wip": {
+            "version": 1,
+            "read": "pm_workspace_wip_get",
+            "action": "pm.wip_policy.save",
+            "modes": [
+              "advisory",
+              "disabled"
+            ],
+            "enforcement": false,
+            "counting_basis": "work_commitments_v1",
+            "bounds": {
+              "works": 10000,
+              "contributing_records": 50000,
+              "per_work_history": 500,
+              "per_execution_direct_inputs": 500
+            }
           },
           "work_profiles": {
             "version": 1,
@@ -4786,6 +4909,23 @@
           "version": 1,
           "binding": "original_engineering_handoff",
           "selection": "explicit_only"
+        }
+      },
+      "workspace_wip": {
+        "version": 1,
+        "read": "pm_workspace_wip_get",
+        "action": "pm.wip_policy.save",
+        "modes": [
+          "advisory",
+          "disabled"
+        ],
+        "enforcement": false,
+        "counting_basis": "work_commitments_v1",
+        "bounds": {
+          "works": 10000,
+          "contributing_records": 50000,
+          "per_work_history": 500,
+          "per_execution_direct_inputs": 500
         }
       },
       "work_profiles": {

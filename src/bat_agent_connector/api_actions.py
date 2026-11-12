@@ -138,6 +138,13 @@ async def _send(ctx: OpContext) -> dict:
                 target=target,
                 check_controller_binding_fn=check_controller_binding,
             )
+        # This is the direct-session branch; Work and task sends own their fences.
+        # This direct-only key is not interpreted by the generic <step>_sent handler.
+        # The synchronous hook commits before the frame: true means possibly sent.
+        ctx.set_refs(direct_send_dispatch=False)
+        def transported() -> None:
+            ctx.set_refs(direct_send_dispatch=True)
+
         task_control.check_binding(ctx)
         incarnation = check_controller_binding(ctx, target)
         from .orchestration_operations import linked
@@ -147,7 +154,7 @@ async def _send(ctx: OpContext) -> dict:
                 queue=params.get("queue", False), tool="api:" + ctx.actor,
                 retry_on_disconnect=False, control_version=ctx.effective_preconditions.get("control_version"),
                 operation_id=ctx.operation_id, _exact_session_id=True,
-                _controller_incarnation=incarnation,
+                _controller_incarnation=incarnation, _on_transport=transported,
                 **({"_operation_context": ctx} if linked(ctx.op) else {}))
         except (ConnectionLost, InvokeTimeout, OSError, asyncio.TimeoutError) as exc:
             if linked(ctx.op) and not ctx.relay_send_transported:

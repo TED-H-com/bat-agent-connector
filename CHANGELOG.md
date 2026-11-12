@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Let workspace owners set an advisory WIP limit for a PM workspace, and let API
+  and MCP clients read how much committed Work the workspace holds against it.
+  Each Work counts once, from original evidence: Kanban work in progress,
+  unresolved executions and accepted selections. A Work is released only after
+  management closure, terminal execution evidence and no later input that starts
+  agent work. An acknowledgement, idle time or elapsed time never releases it, and
+  a later direct session input holds it until that input's own terminal receipt.
+  An unreadable source or an exceeded bound gives one generic unknown instead of
+  partial counts. The limit is advisory: no action is refused because of it, and
+  existing Kanban metrics are unchanged. There is no Dashboard view yet.
+
+- Record `direct_send_dispatch` in the `external_refs` of a direct `session.send`
+  operation: `false` before the BAT call and `true` just before the frame is
+  written, so `true` means only that the message may have been sent. Each write
+  also appears as a `resource.bound` operation event. Operation status, retries
+  and reconciliation are unchanged.
+
 - Let API and MCP clients run a guided Sprint Review. A guided meeting draft
   freezes an exact, bounded Review basis: selected Results with their original
   assessments, attributed feedback, governance revisions and one Follow-up
