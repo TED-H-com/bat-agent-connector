@@ -146,3 +146,8 @@ Web and desktop show comparison below the plan versions in the same discussion.
 The reader explicitly selects endpoints and optional work associations. Rechecking
 preserves the original cursor; changing a selection clears the previous result.
 Plain text rendering preserves source content without interpreting embedded HTML.
+
+The additive [fixed affected-work preview](pm-plan-impact.md) joins a selected
+saved snapshot to retained package, Attempt, execution and issue evidence. It
+keeps this comparison unchanged; governance review fields and UI are planned
+separately, and semantic model analysis is outside that read.

@@ -293,6 +293,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans", self.pm_plans, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/projects", self.pm_projects, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plan-comparison", self.pm_plan_comparison, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plan-impact", self.pm_plan_impact_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban", self.pm_kanban, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban/(?P<work_item_id>wi_[0-9a-f]{20})", self.pm_kanban_card, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/governance", self.pm_governance_records, "observe"),
@@ -641,9 +642,14 @@ class ApiV1:
                       self.pm_release_baseline_deployments, self.pm_release_baseline_preview,
                       self.pm_work_adopt_and_start_preview, self.pm_work_start_preview, self.pm_work_attempts, self.pm_work_attempt, self.pm_work_inputs,
                       self.pm_work_attempt_result, self.pm_work_attempt_changes, self.pm_work_attempt_diff,
-                      self.pm_spec_sources, self.pm_spec_source_capabilities}:
+                      self.pm_plan_impact_preview, self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
+            if fn == self.pm_plan_impact_preview:
+                if parts.path != path:
+                    raise ApiError(404, 'NOT_FOUND', 'route not found')
+                if 'transfer-encoding' in headers or not re.fullmatch(r'0+', headers.get('content-length', '0').strip()):
+                    raise ApiError(422, 'INVALID_REQUEST', 'This read does not accept a request body')
             cleanup_guard = contextlib.nullcontext()
             if fn == self.pm_history_cleanup_list:
                 from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard
@@ -852,6 +858,8 @@ class ApiV1:
             params[key] = int(value)
         if method == "pm_plan_compare" and "binding_ids" in params:
             params["binding_ids"] = params["binding_ids"].split(",") if params["binding_ids"] else []
+        if method == "pm_plan_impact_preview" and "binding_ids" in params:
+            params["binding_ids"] = params["binding_ids"].split(",")
         return {**params, **ids}
 
     async def pm_workspaces(self, principal, query, **_):
@@ -933,6 +941,9 @@ class ApiV1:
 
     async def pm_capture_latest(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_capture_latest_get", query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_plan_impact_preview(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_plan_impact_preview", query, workspace_id=workspace_id)
 
     async def pm_plan_comparison(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_plan_compare", query, workspace_id=workspace_id)
@@ -1336,6 +1347,7 @@ class ApiV1:
         gh_cfg = self.daemon.ops.context["github_config"]
         from . import (
             pm_attempt_result_reads,
+            pm_plan_impact,
             pm_work_adopt_and_start,
             pm_work_follow_up,
             pm_work_profiles,
@@ -1401,6 +1413,7 @@ class ApiV1:
                                   "pm_github_observation": pm_github_observation.capabilities(),
                                   "pm_workspaces": {"version": 1, "ahp_observation": pm_ahp_observations.capabilities(), "executable_modes": ["idea", "planning"],
                                                     "runner": False, "context_packages": True,
+                                                    "plan_impact": pm_plan_impact.capabilities(),
                                                     "accepted_context_bundle": {"schema": "pm_context_bundle_v1", "context_version": 2,
                                                         "max_utf8_bytes": 262144, "explicit_selection": True, "complete_files_only": True},
                                                     "installation_eligibility": True,

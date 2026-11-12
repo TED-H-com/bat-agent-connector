@@ -267,6 +267,16 @@ work is unblocked. Later activity belongs in a new snapshot.
 
 ## Fixed plan comparison and Roadmap
 
+Use `pm_plan_impact_preview` with `workspace_id`, `snapshot_id`, fixed
+`from_revision_id` / `to_revision_id`, and 1–50 explicit `binding_ids` from that
+unfiltered saved baseline. It returns the complete bounded historical matrix or
+an error, never captures a snapshot, calls a model or updates work. Check
+`plan_impact.version == 1` in workspace capabilities. Coverage is incomplete:
+missing retained creation events mean `creation_boundary_unproven`; an Attempt
+without its fixed package edge means `association_unknown`. Keep original issue
+IDs; cross-scope publication remains unsupported. This capability offers only
+the read; governance review fields and the UI are not available yet.
+
 Use `pm_plan_compare` with explicit `workspace_id`, `from_revision_id`,
 `to_revision_id`, and optionally up to 100 distinct immutable `binding_ids`.
 Keep the returned `journal_cursor` for the same comparison; a changed selection

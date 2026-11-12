@@ -58,6 +58,14 @@ def test_server_facts_use_existing_bootstrap_golden(matrix):
         assert actual["bootstrap_capabilities_equal"] is True
 
 
+def test_fixed_impact_capability_advertises_only_the_read(matrix):
+    expected = {"version": 1, "read_only": True, "read": "pm_plan_impact_preview",
+                "required_scopes": ["observe"], "max_bindings": 50, "max_subjects": 100,
+                "max_candidate_rows": 1000, "max_bytes": 153600}
+    for variant in ("managed", "plain"):
+        assert matrix["producers"]["server"][variant]["features"]["pm_workspaces"]["plan_impact"] == expected
+
+
 def public_tree(tmp_path):
     for name in PUBLIC_TABLES:
         target = tmp_path / name
