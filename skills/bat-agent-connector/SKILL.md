@@ -562,7 +562,10 @@ Every matching legacy adoption is required; physical row order never selects one
 can return `PM_EXPORT_TOO_LARGE` or source-proof diagnostics. Identity/digest proofs
 precede template compatibility, then the version-1 consumed-field structural validator
 and relationship proofs. The validator also walks whole documents, including opaque
-and extra members: at most 12 nested containers including the document root. Malformed
+and extra members: the native JSON safety budget allows 127 nested dict/list containers,
+including each complete document root; scalars add zero and the 128th container is
+refused. This is a downstream safety bound with producer growth margin, not a contract
+on current producer shapes. Separate output-size limits still apply. Malformed
 or over-depth authorized v1 data returns `PM_REPORT_SOURCE_CHANGED`/409. Connector-owned
 IDs/digests retain the 512-byte UTF-8 bound; external session/resource/kind/type references
 use nonempty UTF-8 scalars and the source budget, with work-link refs limited to their
