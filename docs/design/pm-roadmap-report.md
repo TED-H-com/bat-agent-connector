@@ -24,7 +24,11 @@ authorized with its original commit operation, charged against the traversal bud
 and listed in canonical manifest order. The current adoption CAS produces one match;
 legacy duplicates are all required. Physical rowids and rebuild order are never
 selection criteria. The snapshot's accepted-adoption decision is also resolved
-exactly. Work, capture, evidence, criterion and quality references stay those originally selected.
+exactly, including when the scheduling baseline has no milestones. Compared with
+reports before that existence proof, an ordinary single-adoption/empty-baseline report
+now includes the accepted decision in its manifest. Its source-set, view and output
+digests and source appendix intentionally change; no source authority fix is rolled back.
+Work, capture, evidence, criterion and quality references stay those originally selected.
 
 All accepted requirements, original scope inputs/statuses, baseline milestones,
 dependencies, original/selected baseline dates, forecast dates, quality and coverage
@@ -62,6 +66,31 @@ Version 1 proves observation evidence is a subset of authorized snapshot evidenc
 milestone IDs equal the baseline, selected quality contexts agree, and adoption
 results agree with their rows. It never silently filters an inconsistent observation.
 Source/output bounds and rendering follow these proofs.
+
+`pm_roadmap_report_schema.py` is the single consumed-field inventory. Immediately
+after the template check, its version-1 validator covers observation/baseline/forecast,
+the snapshot (accepted/candidate plan, work, capture, evidence and coverage), plan
+inputs/sections/requirements, adoption results, and each consumed evidence/quality
+variant, including criterion matrices. Container elements are validated too. Optional
+legacy quality context may be absent; a present incompatible context refuses. Fields
+only passed through canonical JSON are explicitly opaque JSON leaves, not silently
+assumed mappings. Required map references are proven before shared projections index
+them. Unknown extra fields retain their original canonical representation.
+
+Before complete authorization, each reference passed by this loader to SQL or a
+reader must be a nonempty UTF-8 string of at most 512 bytes; maintenance kinds and
+optional basis values must belong to their declared sets. Shared readers are unchanged.
+The collection boundary alone conceals OperationError, KeyError, TypeError, ValueError,
+RecursionError, AttributeError, IndexError, sqlite3.ProgrammingError,
+sqlite3.InterfaceError and OverflowError. Other SQLite failures (including locked,
+I/O and corruption errors) retain their existing behavior. No catch surrounds the
+v1 validator, proofs, projection or renderer. Digest-consistent malformed v1 structures
+refuse with PM_REPORT_SOURCE_CHANGED/409 after authorization, never a transport 422.
+Schema-generated tests enumerate every field and container element using all eight
+required mutation types, plus empty and over-bound Unicode strings. Type-compatible
+values (for example a legitimately nullable field) are distinguished from malformed
+ones; invalid authority shapes are compared as raw HTTP bytes in ordinary, oversized
+and hidden-later contexts.
 
 - Bad selectors return `INVALID_PARAMS`/422; absent same-workspace observation is
   `PM_ROADMAP_NOT_FOUND`/404. Missing scope is `FORBIDDEN`/403; workspace access uses

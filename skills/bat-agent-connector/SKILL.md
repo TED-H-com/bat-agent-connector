@@ -555,10 +555,13 @@ Withdrawal refuses the whole report with `PM_REPORT_SOURCE_UNAVAILABLE`; do not
 retry through another principal or route, retain a derived preview, or present a
 partial success. Authorization traversal exhaustion has the same generic refusal.
 Missing named operations, missing exact adoption/commit records and malformed
-authority containers have the same generic refusal. Every matching legacy adoption
-is required; physical row order never selects one. Only fully authorized reports
+authority containers or reference values have the same generic refusal. SQL binding
+errors are concealed only during collection; database lock/I/O errors are not.
+Even an empty milestone baseline includes the exact accepted adoption in the manifest.
+Every matching legacy adoption is required; physical row order never selects one. Only fully authorized reports
 can return `PM_EXPORT_TOO_LARGE` or source-proof diagnostics. Identity/digest proofs
-precede template compatibility, which precedes version-specific proofs. Inconsistent
+precede template compatibility, then the version-1 consumed-field structural validator
+and relationship proofs. Malformed authorized v1 shapes return `PM_REPORT_SOURCE_CHANGED`/409. Inconsistent
 evidence, milestone, quality-context or adoption relationships refuse; they are never
 silently filtered into a successful report. Do not truncate content to fit the output bounds.
 
