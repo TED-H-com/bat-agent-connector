@@ -1,0 +1,882 @@
+"""Fixed published-repository Git operations. Transported by the existing SSH runner.
+
+Only operation-derived paths and configured remote URLs reach this private script.
+No source checkout is named. No hooks, filters, recursive submodules or push.
+"""
+from __future__ import annotations
+
+import base64
+import contextlib
+import fcntl
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+
+LOCK_FDS = []
+
+
+def real(path):
+    if not os.path.isdir(path) or os.path.realpath(path) != path:
+        raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
+
+
+@contextlib.contextmanager
+def directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def git(repo, *args, network=False, optional=False):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_OPTIONAL_LOCKS="0", GIT_TERMINAL_PROMPT="0", GIT_NO_REPLACE_OBJECTS="1",
+               SSH_ASKPASS_REQUIRE="never", GIT_LFS_SKIP_SMUDGE="1")
+    if not network:
+        env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
+    result = subprocess.run(["git", "--no-optional-locks", "-c", "core.hooksPath=/dev/null",  # noqa: S603,S607
+        "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
+        "-c", "protocol.ext.allow=never", "-c", "fetch.recurseSubmodules=false", "-C", repo, *args],
+        capture_output=True, env=env, timeout=1800, pass_fds=tuple(LOCK_FDS))
+    if result.returncode:
+        if optional:
+            return None
+        raise ValueError("REPOSITORY_GIT_FAILED")
+    return result.stdout.decode("utf-8", errors="strict").strip()
+
+
+def identity(req):
+    clone = req["clone_path"]
+    real(clone)
+    common = clone + "/.git"
+    real(common)
+    for parent, dirs, files in os.walk(common, followlinks=False):
+        for name in dirs + files:
+            item = os.lstat(os.path.join(parent, name))
+            if stat.S_ISLNK(item.st_mode) or (not stat.S_ISDIR(item.st_mode) and (
+                    not stat.S_ISREG(item.st_mode) or item.st_nlink != 1)):
+                raise ValueError("REPOSITORY_CLONE_TAMPERED")
+    if any(os.path.lexists(common + "/" + n) for n in ("objects/info/alternates", "objects/info/http-alternates",
+            "info/grafts", "shallow", "commondir")) or git(clone, "for-each-ref", "refs/replace"):
+        raise ValueError("REPOSITORY_CLONE_TAMPERED")
+    allowed = re.compile(r"(?:core\.(?:repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode)|batc\.[a-z-]+)")
+    if any(not allowed.fullmatch(k) for k in git(clone, "config", "--local", "--name-only", "--list").splitlines()):
+        raise ValueError("REPOSITORY_CLONE_TAMPERED")
+    for key, value in req["markers"].items():
+        if git(clone, "config", "--local", "--get-all", "batc." + key, optional=True) != value:
+            raise ValueError("REPOSITORY_CLONE_NOT_OURS")
+    if git(clone, "rev-parse", "--path-format=absolute", "--git-common-dir") != common:
+        raise ValueError("REPOSITORY_CLONE_NOT_OURS")
+
+
+def pinned(req):
+    clone, sha = req["clone_path"], req["source_sha"]
+    ref = "refs/batc/published/" + req["operation_id"][3:]
+    seen = git(clone, "rev-parse", "--verify", ref, optional=True)
+    if seen is None:
+        return False
+    if seen != sha or git(clone, "cat-file", "-t", sha) != "commit":
+        raise ValueError("REPOSITORY_PIN_MISMATCH")
+    return True
+
+
+def carrier(req):
+    clone, path, branch = req["clone_path"], req["worktree_path"], req["branch"]
+    if not os.path.lexists(path):
+        return None
+    real(path)
+    if (git(path, "rev-parse", "--path-format=absolute", "--git-common-dir") != clone + "/.git"
+            or git(path, "symbolic-ref", "--short", "HEAD") != branch):
+        raise ValueError("REPOSITORY_CARRIER_CHANGED")
+    head = git(path, "rev-parse", "HEAD")
+    if head != req["source_sha"] or git(path, "status", "--porcelain", "--untracked-files=all"):
+        raise ValueError("REPOSITORY_CARRIER_CHANGED")
+    return {"clone_path": clone, "worktree_path": path, "branch": branch, "head": head}
+
+
+def fetch_source(req):
+    clone = req["clone_path"]
+    remote = git(clone, "ls-remote", "--refs", req["remote_url"], req["source_ref"], network=True)
+    matches = [r.split("\t", 1)[0] for r in remote.splitlines() if r.endswith("\t" + req["source_ref"])]
+    if matches != [req["source_sha"]]:
+        raise ValueError("REPOSITORY_REF_CHANGED")
+    git(clone, "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules",
+        req["remote_url"], req["source_sha"], network=True)
+    if git(clone, "cat-file", "-t", req["source_sha"]) != "commit":
+        raise ValueError("REPOSITORY_COMMIT_UNPROVEN")
+
+
+def execute(req, *, observe=lambda stage, req, value: value, fetch_source=fetch_source):
+    root, clone, phase = req["managed_root"], req["clone_path"], req["phase"]
+    real(root)
+    if (os.path.dirname(clone) != root or not re.fullmatch(r"batc-published-[0-9a-f]{32}", os.path.basename(clone))
+            or not re.fullmatch(r"op_[0-9a-f]{32}", req["operation_id"])
+            or clone != root + "/batc-published-" + req["operation_id"][3:]
+            or req["worktree_path"] != clone + "/.bat-worktrees/batc-published-" + req["operation_id"][3:15]
+            or req["branch"] != "batc/published-" + req["operation_id"][3:15]
+            or not re.fullmatch(r"[0-9a-f]{40}", req["source_sha"])):
+        raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
+    # Lock an existing directory inode; no lock-file link or pathname replacement.
+    with directory(root) as root_fd:
+        fcntl.flock(root_fd, fcntl.LOCK_EX)
+        LOCK_FDS.append(root_fd)
+        real(root)
+        if os.stat(root) != os.fstat(root_fd):
+            raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
+        # Cleanup locks this same clone inode. Root lock serializes its first creation.
+        exists = os.path.lexists(clone)
+        observe("existing", req, exists)
+        if exists:
+            real(clone)
+        if phase.startswith("read.") and not exists:
+            return {"exists": False}
+        if not exists:
+            print(json.dumps({"locked": True}), flush=True)
+            if json.loads(sys.stdin.readline() or "{}").get("proceed") is not True:
+                raise ValueError("REPOSITORY_GATE_REQUIRED")
+            os.mkdir(clone)
+            git(clone, "init", "--quiet", "--template=")
+            for key, value in req["markers"].items():
+                git(clone, "config", "--local", "batc." + key, value)
+        fd = os.open(clone, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            LOCK_FDS.append(fd)
+            identity(req)
+            if os.stat(clone) != os.fstat(fd):
+                raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
+            if phase.startswith("read."):
+                return observe("result", req, {"exists": True, "pinned": pinned(req), "carrier": carrier(req) if phase == "read.carrier" else None})
+            if exists:
+                print(json.dumps({"locked": True}), flush=True)
+                if json.loads(sys.stdin.readline() or "{}").get("proceed") is not True:
+                    raise ValueError("REPOSITORY_GATE_REQUIRED")
+            if phase == "fetch":
+                if not pinned(req):
+                    fetch_source(req)
+                    git(clone, "update-ref", "refs/batc/published/" + req["operation_id"][3:], req["source_sha"], "")
+                return observe("result", req, {"clone_path": clone, "source_sha": req["source_sha"], "pinned": True})
+            if phase != "prepare" or not pinned(req):
+                raise ValueError("REPOSITORY_PIN_MISMATCH")
+            observed = carrier(req)
+            if observed:
+                return observe("result", req, observed)
+            parent = clone + "/.bat-worktrees"
+            if os.path.lexists(parent):
+                real(parent)
+            else:
+                os.mkdir(parent)
+            # A leftover branch without a registered carrier is not proof of no effect.
+            if git(clone, "show-ref", "--verify", "refs/heads/" + req["branch"], optional=True):
+                raise ValueError("REPOSITORY_CARRIER_UNPROVEN")
+            git(clone, "worktree", "add", "--quiet", "-b", req["branch"], req["worktree_path"], req["source_sha"])
+            return observe("result", req, carrier(req))
+        finally:
+            LOCK_FDS.remove(fd)
+            os.close(fd)
+
+
+"""Private PM carrier extension, appended to repository_sync_host by the runner.
+
+Git setup uses the shared identity/locking helpers. Only fixed service-generated
+JSON draft paths may be created. A manifest outside the worktree records their
+original digests; an arbitrary pre-existing file is never adopted or overwritten.
+"""
+import base64
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+import zlib
+from contextlib import ExitStack
+
+if __name__ != "__main__":
+    from .repository_sync_host import LOCK_FDS, directory, execute, git, identity, pinned, real
+
+_MANIFEST = "batc-pm-drafts.json"
+_DRAFT = re.compile(r"docs/pm/drafts/pmr_[0-9a-f]{32}/(?:context|reply)\.json")
+
+
+def pm_json(value):
+    return (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode()
+
+
+def pm_directory(parent_fd, name, *, create=False):
+    if create:
+        try:
+            os.mkdir(name, mode=0o700, dir_fd=parent_fd)
+            os.fsync(parent_fd)
+        except FileExistsError:
+            pass
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
+    except FileNotFoundError:
+        raise
+    except OSError:
+        raise ValueError("PM_SNAPSHOT_PATH_UNSAFE") from None
+    if not stat.S_ISDIR(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise ValueError("PM_SNAPSHOT_PATH_UNSAFE")
+    return fd
+
+
+@contextlib.contextmanager
+def pm_parent(path, relative, *, create=False):
+    if not _DRAFT.fullmatch(relative):
+        raise ValueError("PM_SNAPSHOT_PATH_UNSAFE")
+    with ExitStack() as stack:
+        root = stack.enter_context(directory(path))
+        fd = root
+        for component in relative.split("/")[:-1]:
+            child = pm_directory(fd, component, create=create)
+            stack.callback(os.close, child)
+            fd = child
+        yield fd
+
+
+def pm_read(fd, name, *, missing=False, maximum=512_000):
+    try:
+        source = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+    except FileNotFoundError:
+        if missing:
+            return None
+        raise ValueError("PM_SNAPSHOT_MISSING") from None
+    try:
+        before = os.fstat(source)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > maximum:
+            raise ValueError("PM_SNAPSHOT_PATH_UNSAFE")
+        chunks = []
+        remaining = maximum + 1
+        while remaining:
+            chunk = os.read(source, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        after = os.fstat(source)
+        content = b"".join(chunks)
+        if len(content) > maximum or (before.st_ino, before.st_size, before.st_mtime_ns) != (
+                after.st_ino, after.st_size, after.st_mtime_ns):
+            raise ValueError("PM_SNAPSHOT_CHANGED")
+        return content
+    finally:
+        os.close(source)
+
+
+def pm_manifest(req):
+    with directory(req["clone_path"] + "/.git") as fd:
+        data = pm_read(fd, _MANIFEST, missing=True, maximum=4_000_000)
+    if data is None:
+        return {}
+    try:
+        value = json.loads(data)
+        if (value.get("schema") != "batc.pm.drafts.v1" or value.get("workspace_id") != req["pm_workspace_id"]
+                or value.get("binding_digest") != req["binding_digest"] or not isinstance(value.get("files"), dict)):
+            raise ValueError("PM_SNAPSHOT_MANIFEST_CHANGED")
+        for path, record in value["files"].items():
+            if (not _DRAFT.fullmatch(path) or not isinstance(record, dict) or set(record) != {"sha256", "size", "operation_id"}
+                    or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"])
+                    or type(record["size"]) is not int or not 0 < record["size"] <= 512_000
+                    or not re.fullmatch(r"op_[0-9a-f]{32}", record["operation_id"])):
+                raise ValueError("PM_SNAPSHOT_MANIFEST_CHANGED")
+        return value["files"]
+    except (TypeError, KeyError, json.JSONDecodeError):
+        raise ValueError("PM_SNAPSHOT_MANIFEST_CHANGED") from None
+
+
+def pm_write(fd, name, content, *, replace=False):
+    # Fixed pending name is only touched when its original bytes match exactly.
+    pending = ".batc-pm-" + hashlib.sha256(content).hexdigest() + ".pending"
+    try:
+        dest = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+    except FileExistsError:
+        if pm_read(fd, pending, maximum=4_000_000) != content:
+            raise ValueError("PM_SNAPSHOT_PENDING_CHANGED") from None
+    else:
+        try:
+            with os.fdopen(dest, "wb", closefd=False) as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(dest)
+        finally:
+            os.close(dest)
+    if replace:
+        os.replace(pending, name, src_dir_fd=fd, dst_dir_fd=fd)
+    else:
+        # Exclusive final creation avoids replacing even a same-name foreign file.
+        # If interrupted after linking, read-back remains conservative until the
+        # original pending link is reconciled; it never rewrites the target.
+        os.link(pending, name, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+        os.unlink(pending, dir_fd=fd)
+    os.fsync(fd)
+
+
+def pm_save_manifest(req, files):
+    content = pm_json({"schema": "batc.pm.drafts.v1", "workspace_id": req["pm_workspace_id"],
+                       "binding_digest": req["binding_digest"], "files": files})
+    with directory(req["clone_path"] + "/.git") as fd:
+        # Validate old inode before replacing this service-owned metadata file.
+        pm_read(fd, _MANIFEST, missing=True, maximum=4_000_000)
+        pm_write(fd, _MANIFEST, content, replace=True)
+
+
+def pm_snapshot_bytes(req):
+    snapshot = req["snapshot"]
+    try:
+        relative = snapshot["path"]
+        content = base64.b64decode(snapshot["content"], validate=True)
+        doc = json.loads(content)
+        if (not _DRAFT.fullmatch(relative) or relative != "docs/pm/drafts/" + snapshot["run_id"] + "/" + snapshot["kind"] + ".json"
+                or len(content) != snapshot["size"] or len(content) > 512_000
+                or hashlib.sha256(content).hexdigest() != snapshot["sha256"]
+                or doc.get("schema") != "batc.pm.draft.v1" or doc.get("status") != "draft"
+                or any(doc.get(key) != snapshot[key] for key in ("run_id", "kind", "operation_id", "payload_digest"))
+                or doc.get("workspace_id") != req["pm_workspace_id"] or doc.get("server_id") != req["server_id"]
+                or doc.get("controller_id") != req["execution_authority"]["controller_id"]
+                or any(doc.get(key) != req[key] for key in ("repository_id", "source_sha", "binding_digest"))
+                or hashlib.sha256(json.dumps(doc["payload"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                    != snapshot["payload_digest"]):
+            raise ValueError("PM_SNAPSHOT_INVALID")
+        return content
+    except (ValueError, TypeError, KeyError):
+        raise ValueError("PM_SNAPSHOT_INVALID") from None
+
+
+def pm_carrier(req, *, pending=None):
+    path, clone = req["worktree_path"], req["clone_path"]
+    if not os.path.lexists(path):
+        return None
+    real(path)
+    with directory(path) as fd:
+        pm_read(fd, ".git", maximum=4096)
+    if (git(path, "rev-parse", "--path-format=absolute", "--git-common-dir") != clone + "/.git"
+            or git(path, "symbolic-ref", "--short", "HEAD") != req["branch"]
+            or git(path, "rev-parse", "HEAD") != req["source_sha"]
+            or git(path, "diff-index", "--raw", "HEAD", "--")):
+        raise ValueError("PM_WORKTREE_CHANGED")
+    files = pm_manifest(req)
+    untracked = set(filter(None, git(path, "ls-files", "--others", "-z").split("\0")))
+    if untracked - set(files):
+        raise ValueError("PM_WORKTREE_UNREGISTERED_FILES")
+    for relative, record in files.items():
+        try:
+            with pm_parent(path, relative) as fd:
+                data = pm_read(fd, relative.rsplit("/", 1)[1], missing=relative == pending)
+        except FileNotFoundError:
+            if relative == pending:
+                continue
+            raise ValueError("PM_SNAPSHOT_MISSING") from None
+        if data is None and relative == pending:
+            continue
+        if len(data) != record["size"] or hashlib.sha256(data).hexdigest() != record["sha256"]:
+            raise ValueError("PM_SNAPSHOT_CHANGED")
+    return {"clone_path": clone, "worktree_path": path, "branch": req["branch"], "head": req["source_sha"]}
+
+
+def pm_snapshot(req, *, write):
+    content = pm_snapshot_bytes(req)
+    item = req["snapshot"]
+    relative = item["path"]
+    files = pm_manifest(req)
+    record = {key: item[key] for key in ("sha256", "size", "operation_id")}
+    if relative in files and files[relative] != record:
+        raise ValueError("PM_SNAPSHOT_CONFLICT")
+    # A tracked path belongs to the fixed source revision, even if bytes match.
+    if git(req["worktree_path"], "ls-files", "--", relative):
+        raise ValueError("PM_SNAPSHOT_TRACKED_PATH")
+    try:
+        with pm_parent(req["worktree_path"], relative) as fd:
+            existing = pm_read(fd, relative.rsplit("/", 1)[1], missing=True)
+    except FileNotFoundError:
+        existing = None
+    if existing is not None:
+        if relative not in files or existing != content:
+            raise ValueError("PM_SNAPSHOT_CONFLICT")
+    elif write:
+        # Journal step already contains this immutable digest before the host
+        # intent is recorded. Interrupted partial writes retain that original key.
+        with pm_parent(req["worktree_path"], relative, create=True) as fd:
+            files[relative] = record
+            pm_save_manifest(req, files)
+            pm_write(fd, relative.rsplit("/", 1)[1], content)
+    else:
+        return {"snapshot": None}
+    result = {key: item[key] for key in ("path", "kind", "run_id", "operation_id", "sha256", "size", "payload_digest")}
+    result.update(worktree_path=req["worktree_path"], status="draft")
+    return result if write else {"snapshot": result}
+
+
+def pm_base_execute(req):
+    before = list(LOCK_FDS)
+    try:
+        return execute(req)
+    finally:
+        LOCK_FDS[:] = before
+
+
+def pm_execute(req):
+    phase = req["phase"]
+    if phase in {"fetch", "prepare", "read.fetch"}:
+        return pm_base_execute(req)
+    if phase not in {"read.pm-carrier", "read.pm-snapshot", "pm-snapshot"}:
+        raise ValueError("PM_HOST_PHASE_INVALID")
+    root, clone = req["managed_root"], req["clone_path"]
+    # Reuse the original helper's strict operation-derived path validation.
+    state = pm_base_execute({**req, "phase": "read.fetch"})
+    if not state.get("exists"):
+        return {"exists": False, "carrier": None, "snapshot": None}
+    with directory(root) as root_fd, directory(clone) as clone_fd:
+        fcntl.flock(root_fd, fcntl.LOCK_EX)
+        fcntl.flock(clone_fd, fcntl.LOCK_EX)
+        LOCK_FDS.extend((root_fd, clone_fd))
+        try:
+            real(root)
+            real(clone)
+            if os.stat(root) != os.fstat(root_fd) or os.stat(clone) != os.fstat(clone_fd):
+                raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
+            identity(req)
+            if not pinned(req):
+                raise ValueError("REPOSITORY_PIN_MISMATCH")
+            pending = req["snapshot"]["path"] if "snapshot" in req else None
+            carrier_result = pm_carrier(req, pending=pending)
+            if phase == "read.pm-carrier":
+                return {"exists": True, "carrier": carrier_result}
+            if carrier_result is None:
+                raise ValueError("PM_WORKTREE_MISSING")
+            if phase == "pm-snapshot":
+                print(json.dumps({"locked": True}), flush=True)
+                if json.loads(sys.stdin.readline() or "{}").get("proceed") is not True:
+                    raise ValueError("REPOSITORY_GATE_REQUIRED")
+                # Final local checks after the central writer/member check.
+                identity(req)
+                pm_carrier(req, pending=pending)
+            return pm_snapshot(req, write=phase == "pm-snapshot")
+        finally:
+            LOCK_FDS.remove(clone_fd)
+            LOCK_FDS.remove(root_fd)
+
+
+"""Portable fixed revision paths shared with the owned-host Git script."""
+import re
+
+
+def rev_paths(data):
+    if data.get("artifact_kind") == "pm-spec":
+        if (not re.fullmatch(r"pmsp_[0-9a-f]{32}", data["revision_id"])
+                or not re.fullmatch(r"pm-[0-9a-f]{32}", data["change_id"])
+                or not re.fullmatch(r"pmwp_[0-9a-f]{32}", data["package_id"])):
+            raise ValueError("PM_REVISION_INVALID")
+        prefix = "openspec/changes/" + data["change_id"] + "/revisions/" + data["package_id"] + "/"
+        return {prefix + name for name in ("package.json", "proposal.md", "requirements.md", "design.md", "tasks.md", "manifest.json")} | {
+            "docs/pm/specs/" + data["change_id"] + "/revisions/" + data["package_id"] + ".json"}
+    if "artifact_kind" in data or not re.fullmatch(r"pmrev_[0-9a-f]{32}", data["revision_id"]):
+        raise ValueError("PM_REVISION_INVALID")
+    return {"docs/pm/revisions/" + data["revision_id"] + "/plan." + ext for ext in ("md", "json")}
+
+"""Deterministic, scoped PM revision Git transaction on the original owned carrier.
+
+Appended after the published repository and PM draft helpers by the existing SSH
+runner. The Git fact is not an adopted-plan decision. No source checkout or remote
+push is involved, and only this clone's dedicated worktree/index is changed.
+"""
+import base64
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import zlib
+from contextlib import ExitStack
+
+if __name__ != "__main__":
+    from .pm_revision_paths import rev_paths
+    from .pm_worktree_host import pm_carrier as _base_carrier
+    from .pm_worktree_host import (
+        pm_directory,
+        pm_execute,
+        pm_manifest,
+        pm_parent,
+        pm_read,
+        pm_write,
+    )
+    from .repository_sync_host import LOCK_FDS, directory, git, identity, pinned, real
+else:
+    _base_carrier = globals()["pm_carrier"]
+
+_REVISIONS = "batc-pm-revisions.json"
+_REV_PATH = re.compile(r"(?:docs/pm/revisions/pmrev_[0-9a-f]{32}/plan\.(?:json|md)|"
+    r"openspec/changes/pm-[0-9a-f]{32}/revisions/pmwp_[0-9a-f]{32}/(?:package\.json|proposal\.md|requirements\.md|design\.md|tasks\.md|manifest\.json)|"
+    r"docs/pm/specs/pm-[0-9a-f]{32}/revisions/pmwp_[0-9a-f]{32}\.json)")
+
+
+def rev_json(value):
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
+
+
+def rev_binding(req):
+    return hashlib.sha256(rev_json({"server_id": req["server_id"], "workspace_id": req["pm_workspace_id"],
+        "bootstrap_id": req["operation_id"], "binding_digest": req["binding_digest"]})).hexdigest()
+
+
+def rev_git(path, *args, data=None):
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update(GIT_OPTIONAL_LOCKS="0", GIT_TERMINAL_PROMPT="0", GIT_NO_REPLACE_OBJECTS="1",
+               GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null", GIT_LFS_SKIP_SMUDGE="1")
+    result = subprocess.run(["git", "--no-optional-locks", "-c", "core.hooksPath=/dev/null",  # noqa: S603,S607
+        "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false",
+        "-c", "protocol.ext.allow=never", "-c", "fetch.recurseSubmodules=false", "-C", path, *args],
+        input=data, capture_output=True, env=env, timeout=1800, pass_fds=tuple(LOCK_FDS))
+    if result.returncode:
+        raise ValueError("PM_REVISION_GIT_FAILED")
+    return result.stdout
+
+
+def rev_load(req):
+    with directory(req["clone_path"] + "/.git") as fd:
+        raw = pm_read(fd, _REVISIONS, missing=True, maximum=4_000_000)
+    if raw is None:
+        return []
+    try:
+        value = json.loads(raw)
+        if value["schema"] != "batc.pm.revisions.v1" or value["binding_id"] != rev_binding(req):
+            raise ValueError("PM_REVISION_MANIFEST_CHANGED")
+        rows = value["records"]
+        if not isinstance(rows, list):
+            raise ValueError("PM_REVISION_MANIFEST_CHANGED")
+        parent, operations, revisions = req["source_sha"], set(), set()
+        for index, row in enumerate(rows):
+            receipt = row["receipt"]
+            if (row["parent"] != parent or row["state"] not in {"prepared", "complete"}
+                    or row["state"] == "prepared" and index != len(rows) - 1
+                    or receipt["binding_id"] != rev_binding(req) or receipt["workspace_id"] != req["pm_workspace_id"]
+                    or not re.fullmatch(r"op_[0-9a-f]{32}", receipt["operation_id"])
+                    or receipt["operation_id"] in operations or receipt["revision_id"] in revisions
+                    or any(not re.fullmatch(r"[0-9a-f]{40}", receipt[key]) for key in ("commit_sha", "tree_sha"))
+                    or not re.fullmatch(r"[0-9a-f]{64}", row["index_before"])
+                    or row["state"] == "complete" and not re.fullmatch(r"[0-9a-f]{64}", row["index_after"])):
+                raise ValueError("PM_REVISION_MANIFEST_CHANGED")
+            expected_paths = rev_paths(receipt)
+            if set(receipt["file_digests"]) != expected_paths:
+                raise ValueError("PM_REVISION_MANIFEST_CHANGED")
+            operations.add(receipt["operation_id"])
+            revisions.add(receipt["revision_id"])
+            parent = receipt["commit_sha"]
+        return rows
+    except (KeyError, TypeError, json.JSONDecodeError):
+        raise ValueError("PM_REVISION_MANIFEST_CHANGED") from None
+
+
+def rev_save(req, rows):
+    raw = rev_json({"schema": "batc.pm.revisions.v1", "binding_id": rev_binding(req), "records": rows}) + b"\n"
+    if len(raw) > 4_000_000:
+        raise ValueError("PM_REVISION_MANIFEST_LIMIT")
+    with directory(req["clone_path"] + "/.git") as fd:
+        pm_read(fd, _REVISIONS, missing=True, maximum=4_000_000)
+        pm_write(fd, _REVISIONS, raw, replace=True)
+
+
+def rev_object(kind, data):
+    return hashlib.sha1(kind.encode() + b" " + str(len(data)).encode() + b"\0" + data).hexdigest()  # noqa: S324 - Git SHA-1 object identity
+
+
+def rev_commit_bytes(record):
+    receipt = record["receipt"]
+    author = b"PM Workspace <pm@example.invalid> " + str(record["timestamp"]).encode() + b" +0000"
+    return (b"tree " + receipt["tree_sha"].encode() + b"\nparent " + record["parent"].encode()
+            + b"\nauthor " + author + b"\ncommitter " + author + b"\n\nPM revision "
+            + receipt["revision_id"].encode() + b"\n\nBATC-Operation: " + receipt["operation_id"].encode() + b"\n")
+
+
+def rev_ref(record):
+    return "refs/batc/pm-revisions/" + record["receipt"]["operation_id"][3:]
+
+
+def rev_verify(req, record):
+    receipt = record["receipt"]
+    clone = req["clone_path"]
+    if git(clone, "rev-parse", "--verify", rev_ref(record), optional=True) != receipt["commit_sha"]:
+        raise ValueError("PM_REVISION_REF_CHANGED")
+    if rev_git(clone, "cat-file", "commit", receipt["commit_sha"]) != rev_commit_bytes(record):
+        raise ValueError("PM_REVISION_COMMIT_CHANGED")
+    paths = rev_git(clone, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", record["parent"], receipt["commit_sha"])
+    if set(paths.decode().strip("\0").split("\0")) != set(receipt["file_digests"]):
+        raise ValueError("PM_REVISION_SCOPE_CHANGED")
+    for path, digest in receipt["file_digests"].items():
+        if hashlib.sha256(rev_git(clone, "cat-file", "blob", receipt["commit_sha"] + ":" + path)).hexdigest() != digest:
+            raise ValueError("PM_REVISION_FILES_CHANGED")
+    if hashlib.sha256(rev_json(receipt["file_digests"])).hexdigest() != receipt["document_digest"]:
+        raise ValueError("PM_REVISION_FILES_CHANGED")
+
+
+def rev_index(req):
+    path = git(req["worktree_path"], "rev-parse", "--path-format=absolute", "--git-path", "index")
+    common = req["clone_path"] + "/.git/worktrees/"
+    if not path.startswith(common) or os.path.realpath(path) != path:
+        raise ValueError("PM_REVISION_INDEX_CHANGED")
+    with directory(os.path.dirname(path)) as fd:
+        value = pm_read(fd, "index", maximum=64_000_000)
+    return hashlib.sha256(value).hexdigest()
+
+
+def rev_head(req, *, pending=False):
+    rows = rev_load(req)
+    head = req["source_sha"]
+    for row in rows:
+        if row["state"] == "prepared":
+            if not pending:
+                raise ValueError("PM_REVISION_PENDING")
+            break
+        rev_verify(req, row)
+        head = row["receipt"]["commit_sha"]
+    return head, rows
+
+
+def pm_carrier(req, *, pending=None):
+    head, rows = rev_head(req, pending=True)
+    if rows and rows[-1]["state"] == "prepared":
+        record = rows[-1]
+        if record["receipt"]["operation_id"] != req.get("active_operation_id"):
+            raise ValueError("PM_REVISION_PENDING")
+        current = rev_pending_guard(req, record,
+            {path: {"sha256": digest} for path, digest in record["receipt"]["file_digests"].items()})
+        return {"clone_path": req["clone_path"], "worktree_path": req["worktree_path"], "branch": req["branch"], "head": current}
+    observed = _base_carrier({**req, "source_sha": head}, pending=pending)
+    if observed and rows and rev_index(req) != rows[-1]["index_after"]:
+        raise ValueError("PM_REVISION_INDEX_CHANGED")
+    return observed
+
+
+@contextlib.contextmanager
+def rev_parent(path, relative, *, create=False):
+    if not _REV_PATH.fullmatch(relative):
+        raise ValueError("PM_REVISION_PATH_INVALID")
+    with ExitStack() as stack:
+        fd = stack.enter_context(directory(path))
+        for component in relative.split("/")[:-1]:
+            fd = pm_directory(fd, component, create=create)
+            stack.callback(os.close, fd)
+        yield fd
+
+
+def rev_request(req):
+    data = req["revision"]
+    try:
+        if (data["workspace_id"] != req["pm_workspace_id"] or data["binding_id"] != rev_binding(req)
+                or not re.fullmatch(r"op_[0-9a-f]{32}", data["operation_id"])
+                or not re.fullmatch(r"[0-9a-f]{40}", data["expected_parent"])
+                or type(data["timestamp"]) is not int or not 0 < data["timestamp"] < 32_503_680_000
+                or set(data["files"]) != rev_paths(data)):
+            raise ValueError("PM_REVISION_INVALID")
+        files = {path: content.encode() for path, content in data["files"].items()}
+        if (sum(map(len, files.values())) > 512_000
+                or {path: hashlib.sha256(content).hexdigest() for path, content in files.items()} != data["file_digests"]
+                or hashlib.sha256(rev_json(data["file_digests"])).hexdigest() != data["document_digest"]):
+            raise ValueError("PM_REVISION_INVALID")
+        return data, files
+    except (KeyError, TypeError, AttributeError, UnicodeEncodeError):
+        raise ValueError("PM_REVISION_INVALID") from None
+
+
+def rev_tree(req, parent, files):
+    """Read only existing ancestor trees; construct Git objects without an index."""
+    objects = []
+    trie = {}
+    for path, data in files.items():
+        node = trie
+        parts = path.split("/")
+        for part in parts[:-1]:
+            node = node.setdefault(part.encode(), {})
+        node[parts[-1].encode()] = data
+    def tree(sha, additions):
+        entries = {}
+        if sha:
+            raw = rev_git(req["clone_path"], "cat-file", "tree", sha)
+            offset = 0
+            while offset < len(raw):
+                zero = raw.index(b"\0", offset)
+                mode, name = raw[offset:zero].split(b" ", 1)
+                entries[name] = (mode, raw[zero + 1:zero + 21].hex())
+                offset = zero + 21
+        for name, item in additions.items():
+            previous = entries.get(name)
+            if isinstance(item, dict):
+                if previous and previous[0] != b"40000":
+                    raise ValueError("PM_REVISION_PATH_INVALID")
+                entries[name] = (b"40000", tree(previous[1] if previous else None, item))
+            else:
+                if previous:
+                    raise ValueError("PM_REVISION_PATH_EXISTS")
+                sha = rev_object("blob", item)
+                objects.append(("blob", sha, item))
+                entries[name] = (b"100644", sha)
+        data = b"".join(mode + b" " + name + b"\0" + bytes.fromhex(sha) for name, (mode, sha) in
+                        sorted(entries.items(), key=lambda pair: pair[0] + (b"/" if pair[1][0] == b"40000" else b"")))
+        sha = rev_object("tree", data)
+        objects.append(("tree", sha, data))
+        return sha
+    parent_tree = git(req["clone_path"], "rev-parse", parent + "^{tree}")
+    return tree(parent_tree, trie), objects
+
+
+def rev_pending_guard(req, record, files):
+    """Prove that an interrupted original transaction can still be finished."""
+    path, receipt = req["worktree_path"], record["receipt"]
+    real(path)
+    if git(path, "symbolic-ref", "--short", "HEAD") != req["branch"]:
+        raise ValueError("PM_WORKTREE_CHANGED")
+    current = git(path, "rev-parse", "HEAD")
+    if current not in {record["parent"], receipt["commit_sha"]}:
+        raise ValueError("PM_REVISION_PARENT_CHANGED")
+    if git(req["clone_path"], "rev-parse", "--verify", rev_ref(record), optional=True) not in {None, receipt["commit_sha"]}:
+        raise ValueError("PM_REVISION_REF_CHANGED")
+    # Reject index flags that would hide worktree changes from normal Git diff.
+    flags = rev_git(path, "ls-files", "-v", "-z").split(b"\0")
+    if any(line and (line[:1].islower() or line[:1] == b"S") for line in flags):
+        raise ValueError("PM_REVISION_INDEX_CHANGED")
+    index = rev_index(req)
+    if index != record["index_before"]:
+        if current != receipt["commit_sha"] or rev_git(path, "diff-index", "--cached", "--raw", current, "--"):
+            raise ValueError("PM_REVISION_INDEX_CHANGED")
+    for args in (("diff-index", "--name-only", "-z", record["parent"], "--"), ("diff-files", "--name-only", "-z", "--")):
+        changed = set(filter(None, rev_git(path, *args).decode().split("\0")))
+        if changed - set(files):
+            raise ValueError("PM_WORKTREE_CHANGED")
+    drafts = pm_manifest(req)
+    for relative, original in drafts.items():
+        with pm_parent(path, relative) as fd:
+            saved = pm_read(fd, relative.rsplit("/", 1)[1])
+        if len(saved) != original["size"] or hashlib.sha256(saved).hexdigest() != original["sha256"]:
+            raise ValueError("PM_SNAPSHOT_CHANGED")
+    unknown = set(filter(None, rev_git(path, "ls-files", "--others", "-z").decode().split("\0")))
+    if unknown - set(drafts) - set(files):
+        raise ValueError("PM_WORKTREE_UNREGISTERED_FILES")
+    for relative, data in files.items():
+        try:
+            with rev_parent(path, relative) as fd:
+                existing = pm_read(fd, relative.rsplit("/", 1)[1], missing=True)
+        except FileNotFoundError:
+            existing = None
+        expected_digest = data["sha256"] if isinstance(data, dict) else hashlib.sha256(data).hexdigest()
+        if existing is not None and hashlib.sha256(existing).hexdigest() != expected_digest:
+            raise ValueError("PM_REVISION_FILES_CHANGED")
+    return current
+
+
+def rev_transaction(req, *, write):
+    data, files = rev_request(req)
+    head, rows = rev_head(req, pending=True)
+    existing = next((row for row in rows if row["receipt"]["operation_id"] == data["operation_id"]), None)
+    digest = hashlib.sha256(rev_json(data)).hexdigest()
+    if existing:
+        if existing["request_digest"] != digest:
+            raise ValueError("PM_REVISION_INTENT_CHANGED")
+        if existing["state"] == "complete":
+            rev_verify(req, existing)
+            pm_carrier(req)
+            return existing["receipt"] if write else {"receipt": existing["receipt"]}
+    else:
+        if rows and rows[-1]["state"] != "complete":
+            raise ValueError("PM_REVISION_PENDING")
+        if head != data["expected_parent"]:
+            raise ValueError("PM_REVISION_PARENT_CHANGED")
+        pm_carrier(req)
+    tree, objects = rev_tree(req, data["expected_parent"], files)
+    receipt = {key: data[key] for key in ("workspace_id", "revision_id", "operation_id", "document_digest", "file_digests", "binding_id")}
+    if data.get("artifact_kind") == "pm-spec":
+        receipt.update({key: data[key] for key in ("artifact_kind", "change_id", "package_id")})
+    receipt.update(tree_sha=tree, status="verified")
+    proposed = {"receipt": receipt, "parent": data["expected_parent"], "timestamp": data["timestamp"],
+                "state": "prepared", "request_digest": digest, "index_before": rev_index(req)}
+    commit = rev_commit_bytes(proposed)
+    receipt["commit_sha"] = rev_object("commit", commit)
+    objects.append(("commit", receipt["commit_sha"], commit))
+    if existing:
+        if existing["receipt"] != receipt:
+            raise ValueError("PM_REVISION_INTENT_CHANGED")
+        proposed = existing
+    rev_pending_guard(req, proposed, files)
+    if not write:
+        # No branch/index effect can be replayed without these exact old/own
+        # resource facts; the mutation path checks them again under its gate.
+        return {"receipt": None, "resume_safe": True, "effect_started": existing is not None}
+    print(json.dumps({"locked": True}), flush=True)
+    if json.loads(sys.stdin.readline() or "{}").get("proceed") is not True:
+        raise ValueError("REPOSITORY_GATE_REQUIRED")
+    identity(req)
+    rev_pending_guard(req, proposed, files)
+    if not existing:
+        rows.append(proposed)
+        rev_save(req, rows)
+    for kind, sha, content in objects:
+        actual = rev_git(req["clone_path"], "hash-object", "-w", "-t", kind, "--stdin", data=content).decode().strip()
+        if actual != sha:
+            raise ValueError("PM_REVISION_OBJECT_CHANGED")
+    for relative, content in files.items():
+        with rev_parent(req["worktree_path"], relative, create=True) as fd:
+            existing_bytes = pm_read(fd, relative.rsplit("/", 1)[1], missing=True)
+            if existing_bytes is None:
+                pm_write(fd, relative.rsplit("/", 1)[1], content)
+            elif existing_bytes != content:
+                raise ValueError("PM_REVISION_FILES_CHANGED")
+    if git(req["clone_path"], "rev-parse", "--verify", rev_ref(proposed), optional=True) is None:
+        git(req["clone_path"], "update-ref", rev_ref(proposed), receipt["commit_sha"], "")
+    current = rev_pending_guard(req, proposed, files)
+    if current == proposed["parent"]:
+        git(req["clone_path"], "update-ref", "refs/heads/" + req["branch"], receipt["commit_sha"], proposed["parent"])
+    # Only this proven PM-owned index is synchronized; objects were built without
+    # using it, so no staged draft or unrelated path can enter the commit.
+    rev_pending_guard(req, proposed, files)
+    git(req["worktree_path"], "read-tree", "--reset", receipt["commit_sha"])
+    git(req["worktree_path"], "update-index", "--refresh")
+    proposed["index_after"] = rev_index(req)
+    proposed["state"] = "complete"
+    rev_verify(req, proposed)
+    rev_save(req, rows)
+    pm_carrier(req)
+    return receipt
+
+
+def rev_execute(req):
+    if req["phase"] not in {"pm-revision", "read.pm-revision"}:
+        return pm_execute(req)
+    root, clone = req["managed_root"], req["clone_path"]
+    real(root)
+    real(clone)
+    if clone != root + "/batc-published-" + req["operation_id"][3:]:
+        raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
+    with directory(root) as root_fd, directory(clone) as clone_fd:
+        fcntl.flock(root_fd, fcntl.LOCK_EX)
+        fcntl.flock(clone_fd, fcntl.LOCK_EX)
+        LOCK_FDS.extend((root_fd, clone_fd))
+        try:
+            if os.stat(root) != os.fstat(root_fd) or os.stat(clone) != os.fstat(clone_fd):
+                raise ValueError("REPOSITORY_DESTINATION_UNPROVEN")
+            identity(req)
+            if not pinned(req):
+                raise ValueError("REPOSITORY_PIN_MISMATCH")
+            return rev_transaction(req, write=req["phase"] == "pm-revision")
+        finally:
+            LOCK_FDS.remove(clone_fd)
+            LOCK_FDS.remove(root_fd)
+
+
+if __name__ == "__main__":
+    try:
+        request = json.loads(zlib.decompress(base64.b64decode(sys.argv[1])))
+        print(json.dumps({"result": rev_execute(request)}), flush=True)
+    except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError):
+        exc = sys.exc_info()[1]
+        code = str(exc) if str(exc).startswith(("REPOSITORY_", "PM_")) else "PM_HOST_UNCERTAIN"
+        print(json.dumps({"error": code}), flush=True)

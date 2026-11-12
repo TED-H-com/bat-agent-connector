@@ -68,7 +68,8 @@ def _spec_receipt(fixed, value):
             or any(value.get(key) != item or type(value.get(key)) is not type(item) for key, item in expected.items())
             or any(not isinstance(value.get(key), str) or not re.fullmatch(r"[0-9a-f]{40}", value[key])
                    for key in ("commit_sha", "tree_sha"))):
-        raise NeedsAttention("PM_GIT_RECEIPT_INVALID", "The original exact Git receipt cannot yet be verified")
+        raise NeedsAttention("PM_GIT_RECEIPT_INVALID", "The original exact Git receipt cannot yet be verified" if report
+                             else "The original exact spec Git receipt cannot yet be verified")
     return value
 
 

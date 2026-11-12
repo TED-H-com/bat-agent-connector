@@ -123,7 +123,11 @@ def host_script(operation_id, plan, phase, *, snapshot=None, revision=None):
     if revision is not None:
         request["revision"] = revision
     arg = base64.b64encode(zlib.compress(json.dumps(request).encode(), level=9)).decode()
-    script = "python3 -c " + shlex.quote(_host_source()) + " " + shlex.quote(arg)
+    # One unconditional helper understands the entire plan/spec/report chain.
+    # Compress source too: helper growth must not consume legacy intent capacity.
+    source = base64.b64encode(zlib.compress(_host_source().encode(), level=9)).decode()
+    bootstrap = "import base64,zlib;exec(compile(zlib.decompress(base64.b64decode(" + repr(source) + ")), '<pm-carrier>', 'exec'))"
+    script = "python3 -c " + shlex.quote(bootstrap) + " " + shlex.quote(arg)
     if len(script.encode()) > 120_000:
         raise OperationError("PM_SNAPSHOT_TOO_LARGE", "The bounded snapshot exceeds the host transport limit", 422)
     return script

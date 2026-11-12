@@ -112,18 +112,26 @@ def test_combined_file_limit_is_exact_and_whole():
     assert (error.value.code, error.value.status) == ('PM_REPORT_MATERIALIZATION_TOO_LARGE', 413)
 
 
-def test_exact_transport_limit_and_incompressible_payload(monkeypatch):
+def test_transport_limit_and_incompressible_payload():
     plan = binding()
-    base = pm_worktree.host_script(OP, plan, 'pm-revision', revision=fixed())
-    source = pm_worktree._host_source()
-    monkeypatch.setattr(pm_worktree, '_host_source', lambda: source + ' ' * (120_000 - len(base.encode())))
-    assert len(pm_worktree.host_script(OP, plan, 'pm-revision', revision=fixed()).encode()) == 120_000
-    with pytest.raises(OperationError, match='PM_SNAPSHOT_TOO_LARGE'):
-        pm_worktree.host_script(OP, plan, 'read.pm-revision', revision=fixed())
-    monkeypatch.setattr(pm_worktree, '_host_source', lambda: source)
     rng = random.Random(42)
     content = ''.join(rng.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for _ in range(160_000))
-    request = fixed(files.files(rendered(content), [], OP))
-    assert sum(len(v.encode()) for v in request['files'].values()) < 512_000
+    def script(size):
+        request = fixed(files.files(rendered(content[:size]), [], OP))
+        assert sum(len(v.encode()) for v in request['files'].values()) < 512_000
+        return pm_worktree.host_script(OP, plan, 'pm-revision', revision=request)
+    lo, hi = 0, len(content)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        try:
+            script(mid)
+        except OperationError as exc:
+            assert exc.code == 'PM_SNAPSHOT_TOO_LARGE'
+            hi = mid - 1
+        else:
+            lo = mid
+    assert 119_990 <= len(script(lo).encode()) <= 120_000
     with pytest.raises(OperationError, match='PM_SNAPSHOT_TOO_LARGE'):
-        pm_worktree.host_script(OP, plan, 'pm-revision', revision=request)
+        script(lo + 1)
+    with pytest.raises(OperationError, match='PM_SNAPSHOT_TOO_LARGE'):
+        script(len(content))
