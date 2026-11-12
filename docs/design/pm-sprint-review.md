@@ -1,6 +1,6 @@
 # Guided Sprint Review
 
-Status: backend increment; Dashboard planned. `sprint_review` remains a contract-only
+Status: backend and shared Dashboard increment. `sprint_review` remains a contract-only
 PhaseProfile. Facilitation is deterministic and human-led; no model or quality
 runtime is enabled. Existing `review` meetings remain compatible without the
 optional fields below. Daily, Retrospective, reviewers and exports are out of scope.
@@ -134,7 +134,7 @@ The sole new DDL is idempotent:
 `CREATE INDEX IF NOT EXISTS pm_meeting_drafts_by_meeting ON pm_meeting_drafts(meeting_id, sequence)`.
 No new table, column, trigger, data step or `user_version` is introduced.
 
-## Transports and planned Dashboard
+## Transports and Dashboard
 
 Use HTTP POST `/api/v1/operations`, RPC `op_submit`, MCP `operation_submit`, and
 existing meeting/governance/thread reads. All adapters share central validation;
@@ -142,7 +142,7 @@ no new action name, route or native domain authority is introduced. Capability
 `features.pm_workspaces.guided_sprint_review` version 1 advertises the complete
 fixed-input, governance and Planning path only when its validators/gates exist.
 
-The later Dashboard increment reuses shared meeting, governance, Idea and Planning
+The Dashboard increment reuses shared meeting, governance, Idea and Planning
 components and English/zh-TW string tables. It shows fixed context, reported versus
 accepted outcomes, exact feedback, unresolved items, owner decisions, and finally
 an optional Planning action. It adds no alternate scheduler or automatic send.
@@ -159,4 +159,80 @@ missing-evidence gaps, actual-owner asymmetry, explicit Planning without adoptio
 source withdrawal at every derived stage, original-key restart replay, read-only
 paths, exact/+1 count and CJK-byte limits, and unchanged legacy request hashes,
 events and responses. Mock BAT/providers and temporary disk SQLite/Git only.
-Dashboard Playwright journeys remain planned for the separate UI increment.
+Dashboard journeys exercise HTTP and injected IPC, English and zh-TW, owner and
+contributor views, withdrawal, original-key recovery, and all localStorage entries.
+
+The selected Sprint offers “Guide Sprint Review” only with capability version 1.
+Discussions/Meetings resumes the same meeting using existing navigation. Reentering
+from a Sprint preserves its explicitly selected Review when a newer meeting exists. Six
+sections fix context, inspect outcomes, hear exact feedback, choose direction,
+record the Review, and optionally request Planning. The next available section is
+projected from context, frozen draft, governance revisions and completion; there
+is no persisted client progress. Up to three facilitation questions reflect missing evidence, feedback and
+decisions; remaining gaps have a count and full source disclosure. Saved narrative is read-only,
+never an editable default. Selection reads existing bounded catalogs; incomplete
+catalogs are disclosed and selections are never silently trimmed.
+
+Proposal links open the existing governance form with fixed IDs and digests,
+assigned actor and snapshot; the server supplies the original description. Actual
+owners decide and the designated Sprint owner completes. Completed and read-only
+Reviews omit unavailable editing actions and prompts; completed decision
+attribution uses the frozen completion without fetching later governance revisions.
+Legacy drafts need an explicit guided revision before typed governance/completion.
+Reference selection compares scalar identities independently of JSON property order;
+this does not rewrite existing durable requests or operation keys. Requirement
+labels also require the exact original plan revision; a local requirement ID alone
+cannot relabel historical facts using a newer baseline. Missing labels retain their
+original readable IDs in Details. Contributors see an
+awaiting-owner state. Completed, governed decisions are explicit source options
+in existing Idea forms; their original proof remains visible in the pmd_ draft.
+“Draft only; scope not adopted; work not started” marks the Planning boundary.
+No adoption, execution, model invocation or extra confirmation is introduced.
+
+A refused required dependency clears its whole derived narrative and editor
+source disclosures, including other mounted panels linked to the same original
+meeting ID. The unchanged durable form retains its original request/key.
+Required meeting dependencies come explicitly from typed `sprint_review_decision`
+lineage in InputRecords, input history, and draft selected/candidate inputs.
+Initial, event and earlier-message reads gate these dependencies and the context
+refs of a thread with this lineage before rendering its derived payload. A
+successful thread read is not permission to render after a required read refuses
+access; the load generation is invalidated before that payload can render.
+An ordinary meeting citation without this lineage keeps the existing unavailable
+chip behavior. Failure to read its kind does not prove a Review dependency.
+Discussion list rows show authored titles, modes and timestamps plus citation
+chips, not InputRecord or Planning bodies. Refused chips lose their labels;
+independent rows and authored metadata remain. A withdrawal also advances the
+list/context read generations, even on the list route, before changing those
+projections. An older hydration cannot restore a removed label between renders.
+Pending first meeting/governance reads have no proven source identity yet; they
+are discarded without clearing unrelated settled views. A subsequent explicit
+refresh reads and authorizes the source again; there is no revocation registry.
+Typed governance detail/snapshot
+404 recovery propagates only to the linked Review. Action refusals propagate
+only through the submitted form's known typed source or selected guided meeting.
+If the first typed InputRecord action refuses before recorded lineage exists,
+only the referenced source projection clears; the thread's own notes remain.
+Ordinary actions keep their local errors. Required-source reads use one refusal
+classification: 403/404, FORBIDDEN, PM_*SOURCE_UNAVAILABLE, filtered or
+scope-mismatched projections and source-integrity failures withdraw derived
+content. Those explicit refusals take precedence over a generic transport status.
+Other 5xx, network, timeout and 401 failures are transient: main, context and
+earlier-message refreshes retain the previously rendered view and the same editor
+node, authored draft and selection, and show status. They never publish the newly
+fetched payload without its required reads; an initial failed read still renders
+no derived payload. Nested required-source lookups preserve this classification.
+Existing parent authority 403/404 clearing behavior remains. No new client record
+or storage key is introduced. Request generations and selected identities reject
+late success and error replies; invalidation covers in-flight hydration as well as
+already rendered projections. Reflow retains
+editor nodes and composition; guide handoffs focus the authored Goal impact editor
+or an enabled visible governance field, never a checkbox inside a closed source
+disclosure or a disabled Kind selector. Returning to the same editor preserves its
+text and selection. Returning to the same unsent governance proposal restores its
+last authored field and range in memory across the server refresh; a different
+proposal or a locked receipt does not reuse that range. Original durable receipts
+remain the replay authority.
+Legacy meetings without this capability retain their current UI and request shapes.
+Older Result catalog paging, model facilitation and the other Scrum events remain
+outside this increment. Physical native and real-host acceptance are separate.
