@@ -671,3 +671,7 @@ reads 原樣返回此 refs metadata，其他 authority／queue／operation-loop 
 這兩次 refs merge 沿用既有 `resource.bound` events，位於 send step started 與
 succeeded 之間；不增加 send frame 或 lifecycle transition。Event summary 維持
 既有欄位白名單，不新增 dispatch key；完整值仍由 operation read 的 external_refs 提供。
+正常派送的 direct send 因此從五筆 operation events 增為七筆，兩筆新增 summary
+都是 `{"refs": {}}`。這會推進 event cursor、占用 event page，並增加 activity／timeline
+rows；不能宣稱 event bytes 或游標不變。False 與 true 各經一次 refs merge transaction
+提交，因此多兩次持久化寫入／commit；不代表新增 resource identity 或 send step。
