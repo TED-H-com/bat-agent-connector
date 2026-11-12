@@ -329,9 +329,21 @@ class _Collector:
             if LINEAGE_ACTIONS[op['action']] != 'input' or input_kinds.get(op['operation_id']) == 'work':
                 continue  # Work inputs retain their existing row/marker path below.
             steps = self.steps(op)
-            if self.unsent(op, steps):
-                continue
-            if op['operation_id'] not in eligible:
+            if pm_work_start._uncertain_db(self.db, op['operation_id']):
+                return False  # Only the original reconciliation can settle this send.
+            if op['status'] in TERMINAL:
+                sends = [row for row in steps if row['name'] == 'send']
+                # REFUSED is the existing WriteRefused pre-dispatch code. A
+                # generic failed step is not proof that no frame was written.
+                if not sends or all(
+                    pm_evidence._body(row['response']).get('accepted') is False
+                    or row['status'] == 'failed' and pm_evidence._body(row['error']).get('code') == 'REFUSED'
+                    for row in sends
+                ):
+                    continue
+                if op['operation_id'] not in eligible:
+                    raise _Unavailable
+            elif op['operation_id'] not in eligible:
                 return False
         if not pm_attempt_results.installed(self.db) or not pm_work_follow_up.installed(self.db):
             return False

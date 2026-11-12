@@ -11,7 +11,7 @@ ELIGIBLE_SQL = """SELECT o.operation_id, o.rowid AS admission_order, s.request, 
     CROSS JOIN operations o ON o.operation_id=l.resource_id
     CROSS JOIN operation_steps s ON s.operation_id=o.operation_id AND s.name='send'
     WHERE l.original_operation_id=? AND l.resource_type='operation'
-      AND o.action='session.send' AND o.status='succeeded'
+      AND o.action='session.send' AND o.status IN ('succeeded','failed','cancelled')
       AND json_extract(o.target,'$.host')=? AND json_extract(o.target,'$.session_id')=?
       AND json_remove(o.target,'$.host','$.session_id')='{}'
       AND s.status='succeeded' AND json_extract(s.response,'$.accepted')=1

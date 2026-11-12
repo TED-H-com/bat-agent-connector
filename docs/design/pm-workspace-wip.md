@@ -264,7 +264,7 @@ unknown, including a mismatched resolved target; targets are never rewritten.
 
 Only new agent-work inputs create or extend a hold. `pm_direct_inputs.eligible`
 is shared by the collector and the WIP read: original handoff lineage, exact
-host/session stored target, succeeded/non-uncertain operation, succeeded send
+host/session stored target, terminal/non-uncertain operation, succeeded send
 step, equal request/response message IDs and accepted=true are all required.
 The original external-step uncertainty predicate is preserved. The WIP read
 still enumerates, authorizes and charges **every** lineage source, including
@@ -297,3 +297,28 @@ remaining pass time may receive one additive direct step. That step never wakes
 the Work queue and never reads or writes the existing memo entry; its check reason
 is stored separately. Thus a queued direct marker cannot delay the existing
 prior-turn queue wake. An eligible pass performs at most one additional session read.
+
+
+### Direct-send outcome table
+
+This is direct-specific; the original handoff `unsent()` predicate is unchanged.
+Every row still requires lineage authorization and budget charging.
+
+| Original durable state | WIP outcome |
+| --- | --- |
+| Accepted/running/waiting/needs_attention without a proven terminal outcome | Hold while the original operation can settle. |
+| Terminal with no send step (including cancellation before dispatch) | No execution hold. |
+| Terminal, failed send step with the established `REFUSED` pre-dispatch code | No execution hold; `WriteRefused` refuses the write before its frame. A generic failure is not this proof. |
+| Terminal with original send response `accepted:false` | No execution hold (including NOT_ACCEPTED followed by cancellation). |
+| Terminal, certain, succeeded send step with `accepted:true` and exact request/response message ID | Hold until its exact terminal receipt. Shared eligibility accepts succeeded, failed or cancelled terminal bookkeeping, so every such ACK has a producer path. |
+| Any unresolved external step, including lost ACK or exhausted reconciliation | Hold until existing reconciliation proves the original outcome; cancellation never proves release. |
+| Any other terminal evidence, including a generic failed send or malformed/mismatched ACK | Generic `coverage_unavailable`, no counts. |
+
+Ordinary cancellation after ACK leaves a succeeded operation unchanged; it does
+not create a cancelled accepted send. Failed/cancelled bookkeeping with a certain
+ACK is conservatively supported by the shared predicate and tested as synthetic
+history, not claimed as an ordinary action outcome. Claude reconciliation can
+recover an exact transcript echo or its durable accepted-turn registry record
+without resending. An unobserved lost ACK (notably Codex without that registry
+record) can exhaust retries without proof; this remains an inherited unresolved
+hold, not a new release authority. Unknown evidence never becomes zero.
