@@ -365,6 +365,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/overview-assessments/(?P<assessment_id>pmoa_[0-9a-f]{32})", self.pm_overview_assessment, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments", self.pm_follow_up_assessments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})/brief-export", self.pm_brief_export, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/roadmap/revisions/(?P<observation_revision_id>pmro_[0-9a-f]{32})/report", self.pm_roadmap_report, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments/(?P<assessment_id>pmfa_[0-9a-f]{32})", self.pm_follow_up_assessment, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-ups", self.pm_follow_ups, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-ups/latest", self.pm_follow_up_latest, "observe"),
@@ -620,7 +621,7 @@ class ApiV1:
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
                       self.pm_overview_assessments, self.pm_overview_assessment,
                       self.pm_conversation_proposals, self.pm_conversation_proposal,
-                      self.pm_brief_export, self.pm_work_deliveries, self.pm_context_bundle,
+                      self.pm_brief_export, self.pm_roadmap_report, self.pm_work_deliveries, self.pm_context_bundle,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_execution_verification_configuration, self.pm_execution_verification_get,
@@ -842,6 +843,8 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method == "pm_work_profiles_list":
             integer_fields.add("cursor")
+        if method == "pm_roadmap_report_get":
+            integer_fields.add("renderer_version")
         if method == "pm_quality_assessment_get":
             integer_fields.add("version")
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
@@ -1311,6 +1314,9 @@ class ApiV1:
     async def pm_snapshot_latest(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_snapshot_latest_get", query, workspace_id=workspace_id)
 
+    async def pm_roadmap_report(self, principal, query, workspace_id, observation_revision_id, **_):
+        return self._pm_read(principal, "pm_roadmap_report_get", query, workspace_id=workspace_id, observation_revision_id=observation_revision_id)
+
     async def pm_brief_export(self, principal, query, workspace_id, snapshot_id, **_):
         return self._pm_read(principal, "pm_brief_export_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
 
@@ -1349,6 +1355,7 @@ class ApiV1:
         from . import (
             pm_attempt_result_reads,
             pm_plan_impact,
+            pm_roadmap_reports,
             pm_work_adopt_and_start,
             pm_work_follow_up,
             pm_work_profiles,
@@ -1459,6 +1466,7 @@ class ApiV1:
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,
                                                     "overview_assessment": "pm.overview.assess" in self.daemon.ops.actions,
                                                     "conversation_proposals": pm_conversation_proposals.capabilities(),
+                                                    "roadmap_report": pm_roadmap_reports.capabilities(),
                                                     "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 4},
                                                     "follow_up_prepare": "pm.follow_up.prepare" in self.daemon.ops.actions,
                                                     **pm_sprint_review.capabilities(self.daemon.ops),

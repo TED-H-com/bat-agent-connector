@@ -1,5 +1,7 @@
 # Fixed Project Brief exports
 
+See [Scope and roadmap report](pm-roadmap-report.md) for the separate fixed observation renderer and shared reads.
+
 This is the first W39/W40 output slice from [PM v1.2 section 10.8](../product/pm-v1.2-plan.md).
 It renders **Project Brief only**, using one explicit existing
 [DocumentSnapshot](pm-snapshots.md). Roadmap, Kanban, Sprint and governance output

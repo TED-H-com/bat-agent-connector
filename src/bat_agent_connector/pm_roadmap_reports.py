@@ -125,7 +125,7 @@ def render_fixed(fixed, *, format='markdown', locale='en', renderer_version=1):
 
 def get_report(ops, principal, workspace_id, observation_revision_id, *, format='markdown', locale='en', renderer_version=1):
     if (not isinstance(format, str) or format not in FORMATS or not isinstance(locale, str) or locale not in _TEXT
-            or type(renderer_version) is not int or renderer_version < 1):
+            or type(renderer_version) is not int or not 1 <= renderer_version <= 999_999_999):
         raise OperationError('INVALID_PARAMS', 'Select markdown, html or svg; en or zh-TW; and an integer renderer version', 422)
     fixed = sources.load_fixed(ops, principal, workspace_id, observation_revision_id)
     return render_fixed(fixed, format=format, locale=locale, renderer_version=renderer_version)

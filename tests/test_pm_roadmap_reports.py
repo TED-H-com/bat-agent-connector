@@ -75,11 +75,21 @@ def test_golden_bytes(format, locale):
 def test_golden_bytes_ignore_process_hash_seed_timezone_and_clock(seed, zone):
     # subprocess uses the current suite interpreter, also exercised under 3.10.
     script = """
-import hashlib, json
+import datetime, hashlib, json, os
 from types import SimpleNamespace
 from tests.test_pm_roadmap_reports import fixture_projection
 from bat_agent_connector import pm_roadmap_reports as r
-r.time = SimpleNamespace(time=lambda: -999999999)
+epoch = -999999999 if os.environ['PYTHONHASHSEED'] == '1' else 1999999999
+class Clock(datetime.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls.fromtimestamp(epoch, tz)
+    @classmethod
+    def utcnow(cls):
+        return cls.fromtimestamp(epoch, datetime.timezone.utc).replace(tzinfo=None)
+# Replace only the renderer/helper's module-owned references, never stdlib classes.
+r.time = SimpleNamespace(time=lambda: epoch)
+r.brief.dt = SimpleNamespace(datetime=Clock, timezone=datetime.timezone)
 print(json.dumps([hashlib.sha256(r.render_fixed(fixture_projection(), format=f, locale=l)['content'].encode()).hexdigest()
                  for l in ('en','zh-TW') for f in ('markdown','html','svg')]))
 """

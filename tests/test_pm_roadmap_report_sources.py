@@ -153,3 +153,29 @@ async def test_authorization_byte_budget_and_tainted_traversal_are_concealed(ops
     monkeypatch.setattr(pm_access, 'require_operation_sources', refused)
     with pytest.raises(OperationError, match='PM_REPORT_SOURCE_UNAVAILABLE'):
         read(ops, chosen)
+
+
+@pytest.mark.parametrize('source', ['forecast', 'candidate', 'historical_plan'])
+async def test_other_original_source_classes_refuse_whole_report(ops, monkeypatch, source):
+    target, old, *_ = await mapped(ops)
+    wid = target['workspace_id']
+    newer = await draft(ops, target, title='Later accepted scope')
+    adopt(adoption(ops, target, newer['revision_id'], previous=old['revision_id']))
+    candidate = await draft(ops, target, title='Unaccepted candidate')
+    forecast = await revision(ops, wid, 'forecast', updates=[{'milestone_id': 'release', 'forecast_date': '2027-03-01'}])
+    frozen = await snapshot(ops, wid)
+    observation = await revision(ops, wid, 'observation', snapshot_id=frozen['snapshot_id'])
+    fixed = reports.load_fixed(ops, READER, wid, observation['revision_id'])
+    assert fixed['snapshot']['candidate_document']['revision_id'] == candidate['revision_id']
+    operation_id = forecast['operation_id'] if source == 'forecast' else pm_plans._revision(
+        ops.db, wid, candidate['revision_id'] if source == 'candidate' else old['revision_id'])['operation_id']
+    original = pm_access.require_operation_sources
+    def denied(db, principal, ids):
+        if operation_id in ids:
+            raise OperationError('FORBIDDEN', 'Source hidden', 403)
+        return original(db, principal, ids)
+    monkeypatch.setattr(pm_access, 'require_operation_sources', denied)
+    monkeypatch.setattr(reports, 'MAX_SOURCE_BYTES', 1)
+    with pytest.raises(OperationError, match='PM_REPORT_SOURCE_UNAVAILABLE') as error:
+        reports.load_fixed(ops, READER, wid, observation['revision_id'])
+    assert error.value.status == 404

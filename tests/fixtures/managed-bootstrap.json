@@ -1841,6 +1841,35 @@
           "max_candidates": 20,
           "max_requirements": 20
         },
+        "roadmap_report": {
+          "version": 1,
+          "read": "pm_roadmap_report_get",
+          "read_only": true,
+          "required_scopes": [
+            "observe"
+          ],
+          "template_version": 1,
+          "renderer_versions": [
+            1
+          ],
+          "formats": [
+            "markdown",
+            "html",
+            "svg"
+          ],
+          "locales": [
+            "en",
+            "zh-TW"
+          ],
+          "source": "roadmap_observation",
+          "withdrawal": "whole_report",
+          "max_content_bytes": 1500000,
+          "max_response_bytes": 2000000,
+          "max_svg_pages": 32,
+          "unicode_version": "15.1.0",
+          "materialization": false,
+          "native_save": false
+        },
         "brief_export": {
           "formats": [
             "markdown",
