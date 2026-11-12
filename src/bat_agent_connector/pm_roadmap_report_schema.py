@@ -34,7 +34,8 @@ def nullable(value):
 
 JSON = node('json')
 TEXT = node('text')
-REF = node('ref')  # UTF-8, nonempty, at most 512 bytes; includes digests.
+REF = node('ref')  # Connector-owned fixed identities and digests, at most 512 UTF-8 bytes.
+EXTERNAL = node('external')  # Producer-owned scalar identity; bounded by the source budget.
 BOOL = node('bool')
 INT = node('int')
 NUMBER = node('number')
@@ -55,8 +56,10 @@ MATRIX = obj(version=INT, criteria=array(obj(criterion=CRITERION, text=JSON)),
     assessment=obj(criteria=array(obj(criterion=CRITERION, status=TEXT)), gaps=JSON, rationale=JSON),
     plan_ref=JSON, work_ref=JSON, dod_ref=JSON, package_ref=JSON, execution_operation_id=JSON)
 FACT_COMMON = {key: optional(nullable(TEXT)) for key in ('state', 'status', 'source_lane')}
-FACT_AUTH = {key: optional(nullable(REF)) for key in
-    ('task_id', 'command_id', 'execution_id', 'session_resource_id', 'resource_id', 'ref', 'kind', 'resource_type')}
+FACT_AUTH = {key: optional(nullable(REF)) for key in ('task_id', 'command_id', 'execution_id')}
+FACT_AUTH.update({key: optional(nullable(EXTERNAL)) for key in
+    ('session_resource_id', 'resource_id', 'ref', 'kind', 'resource_type')})
+FACT_AUTH['ref'] = optional(nullable(node('external', max_chars=300)))
 FACTS = obj(**FACT_COMMON, **FACT_AUTH)
 QUALITY = obj(**FACT_COMMON, **FACT_AUTH, work_item_id=REF, binding_id=REF, scope_revision=REF,
     plan_revision_id=REF, applicable_at_selection=BOOL, qualified=BOOL,
@@ -72,12 +75,22 @@ FACT_VARIANTS = {
     'execution_state': obj(**{**FACTS['fields'], 'task_id': REF}),
     'execution_command': obj(**{**FACTS['fields'], 'task_id': REF, 'command_id': REF}),
 }
+# _fact_summary copies these optional scalars into version/assessment JSON.
+# Identity is conditionally dereferenced as a mapping by the shared projection.
+for _facts in (FACTS, QUALITY, *FACT_VARIANTS.values()):
+    for _key in ('verification', 'deployment', 'delivery', 'merge_verified', 'candidate_commit',
+                 'tree_hash', 'head_sha', 'base_sha', 'merged_sha', 'delivered_sha'):
+        _facts['fields'].setdefault(_key, optional(JSON))
+    _facts['fields']['identity'] = optional(nullable(obj(**{key: optional(JSON) for key in
+        ('source_sha', 'artifact_id', 'artifact_digest', 'release_id')})))
+
 EVIDENCE_KINDS = ('operation_status', 'pr_merge', 'resource_relation', 'execution_state',
     'execution_command', 'observed_verification', 'session_observation', 'integration_delivery',
     'pr_observation', 'deployment', 'work_claim', 'work_link', 'quality_assessment')
 EVIDENCE = obj(evidence_id=REF, source_kind=node('enum', values=EVIDENCE_KINDS), fact_digest=REF, document=obj(facts=FACTS))
 BINDING = obj(binding_id=REF, requirement_ids=REFS)
-CAPTURE = obj(capture_id=REF, binding_id=REF, coverage=MAP)
+CAPTURE = obj(capture_id=REF, binding_id=REF, coverage=obj(**{
+    key: optional(JSON) for key in ('truncated', 'unavailable_sources', 'unsupported_sources', 'inaccessible_sources')}))
 WORK = obj(work_item_id=REF, binding=BINDING, evidence_ids=REFS, capture=nullable(CAPTURE), coverage=COVERAGE)
 MAINTENANCE_KINDS = ('policy', 'baseline', 'github', 'workload', 'maintenance_check',
                      'maintenance_repair', 'evidence', 'snapshot_identity')
@@ -134,12 +147,14 @@ def valid(spec, value):
     kind = spec['kind']
     if kind == 'json':
         return True  # Already canonical-encoded within the collection budget.
-    if kind in ('text', 'ref', 'enum'):
+    if kind in ('text', 'ref', 'external', 'enum'):
         if type(value) is not str:
             return False
-        if kind == 'ref':
-            return (bool(value) and len(value) <= 512 and not any(0xD800 <= ord(c) <= 0xDFFF for c in value)
-                    and len(value.encode('utf-8')) <= 512)
+        if kind in ('ref', 'external'):
+            if not value or any(0xD800 <= ord(c) <= 0xDFFF for c in value):
+                return False
+            return (len(value) <= spec.get('max_chars', len(value)) if kind == 'external'
+                    else len(value) <= 512 and len(value.encode('utf-8')) <= 512)
         return kind != 'enum' or value in spec['values']
     if kind == 'bool':
         return type(value) is bool
@@ -163,8 +178,43 @@ def require(spec, value, *, authority=False):
         raise OperationError('PM_REPORT_SOURCE_CHANGED', 'The fixed report source identities do not match', 409)
 
 
+# Count containers including each document root, not journal row envelopes.
+# The original maintenance repair required-CI matrix sets the producer floor:
+# snapshot/maintenance/report/repairs/entry/progress/required_ci_receipts/entry/
+# proof/required/entry/check_ids (12 containers). Quality matrices need 11.
+MAX_CONTAINER_DEPTH = 12
+
+
+def closure_documents(closure):
+    """Every complete document, including opaque leaves and unknown members."""
+    observation, baseline, forecast, snapshot, evidence, plans, adoptions = closure
+    for row in (observation, baseline, forecast, snapshot, *plans.values(), *evidence):
+        if row is not None:
+            yield row['document']
+    for row in adoptions.values():
+        yield row['result']
+
+
+def require_depth(document):
+    # Iterators keep auxiliary memory proportional to depth, not document size.
+    stack = [iter((document,))]
+    while stack:
+        value = next(stack[-1], _END)
+        if value is _END:
+            stack.pop()
+        elif type(value) in (dict, list):
+            if len(stack) > MAX_CONTAINER_DEPTH:
+                require(BOOL, None)
+            stack.append(iter(value.values() if type(value) is dict else value))
+
+
+_END = object()
+
+
 def validate_v1(closure):
     """One structural gate, before v1 proofs or any shared projection."""
+    for document in closure_documents(closure):
+        require_depth(document)
     observation, baseline, forecast, snapshot, evidence, plans, adoptions = closure
     for name, row in (('observation', observation), ('baseline', baseline), ('forecast', forecast), ('snapshot', snapshot)):
         if row is not None:

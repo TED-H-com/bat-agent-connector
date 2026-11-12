@@ -31,7 +31,7 @@ def example(spec):
         return {key: example(child) for key, child in spec['fields'].items()}
     if kind == 'array':
         return [example(spec['item'])]
-    return {'json': None, 'text': 'text', 'ref': 'reference', 'bool': True,
+    return {'json': None, 'text': 'text', 'ref': 'reference', 'external': 'external', 'bool': True,
             'number': 123, 'int': 1, 'enum': spec.get('values', [''])[0]}[kind]
 
 
