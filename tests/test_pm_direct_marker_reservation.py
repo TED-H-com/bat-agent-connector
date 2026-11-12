@@ -65,7 +65,7 @@ async def test_direct_and_work_marker_meeting_keeps_owned_result(start_ready, mo
     finally:
         ops.db.set_trace_callback(None)
     if order == "direct_first":
-        reservations = [q for q in queries if q.startswith("SELECT 1 FROM work_inputs")]
+        reservations = [q for q in queries if q.startswith(ar.RESERVED_WORK_MARKER_SQL.split("WHERE")[0])]
         assert reservations
         for query in reservations:
             plans = [r[3] for r in ops.db.execute("EXPLAIN QUERY PLAN " + query)]
@@ -144,7 +144,7 @@ async def test_five_hundred_reserved_direct_markers_use_bounded_seeks(start_read
 
     def counted(cursor, values):
         nonlocal rows
-        if [c[0] for c in cursor.description] == ['1']:
+        if [c[0] for c in cursor.description] == ['operation_id', 'status', 'error_code', 'external_refs', 'step_status']:
             rows += 1
         return sqlite3.Row(cursor, values)
 
@@ -159,7 +159,7 @@ async def test_five_hundred_reserved_direct_markers_use_bounded_seeks(start_read
         db.set_progress_handler(None, 0)
         db.set_trace_callback(None)
         db.row_factory = original_factory
-    queries = [q for q in statements if q.startswith('SELECT 1 FROM work_inputs')]
+    queries = [q for q in statements if q.startswith(ar.RESERVED_WORK_MARKER_SQL.split("WHERE")[0])]
     assert len(queries) == rows == 500
     plan = [r[3] for r in db.execute('EXPLAIN QUERY PLAN '+ar.RESERVED_WORK_MARKER_SQL,
         (markers[0], w['workspace_id'], att['attempt_id']))]

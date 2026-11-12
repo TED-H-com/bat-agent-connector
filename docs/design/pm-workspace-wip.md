@@ -354,12 +354,26 @@ queue wake and source/generation/attribution requirements do not change.
 
 ### Shared direct / Work-input markers
 
-The direct step reserves every existing Work-input marker for its own collector
-step, including queued inputs, by exact message-ID lookup scoped to workspace and
-Attempt. The initial marker already has its own terminal receipt before a direct
-step can run. Either send order keeps the own Result; WIP accepts the same original
-terminal evidence for both holds. At most 500 unique-index seeks per direct pass
-are added; no input-history scan, admission change or extra send is introduced.
+The direct step reserves an existing Work-input marker for its own collector step,
+including queued inputs, unless its original operation is failed or cancelled and
+the existing Work-input `receipt_state` proves pre-transport failure/cancellation.
+The original Work `send_sent` fence must not be true. This uses the same saved
+evidence as `unsent()` and `latest_sent_turn`; a never-entered send step has no
+fence, while an entered step writes false before any frame. `NOT_ACCEPTED` after
+a true fence remains reserved. Uncertain or possibly dispatched owners stay
+reserved, as do all nonterminal owners: false alone can still take the existing
+`unsent()` → `RERUN` path. No new release authority or history mutation is added.
+
+The indexed message-ID lookup is scoped to workspace and Attempt and left-joins
+the original operation and its unique send step. Missing owner evidence retains
+the reservation. At most 500 single-row lookups, each with at most three existing
+unique-index seeks, are added per direct pass; no input-history scan is introduced.
+The initial marker already has its own terminal receipt before a direct step runs.
+Both normal send orders keep the own Result, and WIP accepts the same terminal
+evidence for both holds. Once a skipped owner becomes terminal-unsent, a later
+ordinary eligible pass records the direct receipt under the direct operation;
+that receipt remains excluded from the own Result. Cancellation before/after the
+direct ACK and a pre-frame reused-ID refusal require neither resend nor deletion.
 
 Malformed unrelated receipt boundaries do not affect follow-up admission: the
 original marker relevance check still precedes boundary interpretation. The

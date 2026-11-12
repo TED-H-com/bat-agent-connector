@@ -864,9 +864,14 @@ def record_receipt(
 # Own Result evidence is identified by immutable producer-operation membership.
 # A Work-input lookup is one seek through its operation_id unique index per row.
 # At most one row per eligible direct marker, through message_id's unique index.
-# Includes queued inputs: reservation is durable at Work-input admission.
-RESERVED_WORK_MARKER_SQL = """SELECT 1 FROM work_inputs
-    WHERE message_id=? AND workspace_id=? AND attempt_id=? LIMIT 1"""
+# Includes queued inputs; only a terminal, proven-unsent owner can relinquish it.
+# Both joined original records are unique-index seeks, never history scans.
+RESERVED_WORK_MARKER_SQL = """SELECT wi.operation_id, op.status, op.error_code,
+           op.external_refs, st.status AS step_status
+    FROM work_inputs wi
+    LEFT JOIN operations op ON op.operation_id=wi.operation_id
+    LEFT JOIN operation_steps st ON st.operation_id=wi.operation_id AND st.name='send'
+    WHERE wi.message_id=? AND wi.workspace_id=? AND wi.attempt_id=? LIMIT 1"""
 
 
 OWN_RECEIPT_PREDICATE = """(operation_id=? OR EXISTS (
@@ -1567,7 +1572,12 @@ class AttemptResultCollector:
     def _direct_candidate(self, cand: dict[str, Any]) -> dict[str, Any] | None:
         """Select at most one direct input after the unchanged existing step."""
         from . import pm_direct_inputs
-        from .pm_work_follow_up import TURN_RECEIPTS_SQL, terminal_receipt_markers
+        from .pm_work_follow_up import (
+            TURN_RECEIPTS_SQL,
+            _fence_sent_from_row,
+            receipt_state,
+            terminal_receipt_markers,
+        )
 
         # No receipt queries or check writes when no eligible direct input exists.
         inputs = pm_direct_inputs.eligible(self.ops.db, cand["handoff_operation_id"],
@@ -1585,9 +1595,21 @@ class AttemptResultCollector:
             return None
         for value in inputs:
             if value["marker"] not in terminal:
-                if self.ops.db.execute(RESERVED_WORK_MARKER_SQL,
-                    (value["marker"], cand["workspace_id"], cand["attempt_id"])).fetchone():
-                    continue  # The existing step owns this marker, even while queued.
+                reserved = self.ops.db.execute(RESERVED_WORK_MARKER_SQL,
+                    (value["marker"], cand["workspace_id"], cand["attempt_id"])).fetchone()
+                if reserved is not None:
+                    owner = dict(reserved)
+                    owner["send_sent"] = _fence_sent_from_row(owner)
+                    # Reuse the Work-input receipt authority. A false fence alone
+                    # is insufficient: a nonterminal original may still RERUN.
+                    # Keep even a NOT_ACCEPTED owner that crossed transport.
+                    terminal_unsent = (
+                        owner["status"] in {"failed", "cancelled"}
+                        and owner["send_sent"] is not True
+                        and receipt_state(owner, owner["step_status"]) in {"failed", "cancelled"}
+                    )
+                    if not terminal_unsent:
+                        continue
                 return {**cand, "turn_marker": value["marker"],
                         "receipt_operation_id": value["operation_id"], "direct_marker": value}
         self._record_direct_check(cand["attempt_id"], "unchanged")
