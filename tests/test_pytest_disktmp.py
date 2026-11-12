@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_pm_native_runtime import skip_if_bwrap_namespace_denied
+
 WRAPPER = Path(__file__).resolve().parents[1] / "scripts" / "pytest-disktmp"
 pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux local fixture wrapper")
 
@@ -20,8 +22,8 @@ def test_disk_identity_cleanup_exit_status_and_host_permissions(tmp_path, privat
             pytest.skip("bubblewrap is not installed")
         probe = subprocess.run(["bwrap", "--ro-bind", "/", "/", "--", "/usr/bin/true"],
                                capture_output=True, text=True)
-        if probe.returncode:
-            pytest.skip("bubblewrap user namespaces are unavailable")
+        skip_if_bwrap_namespace_denied(probe.returncode, probe.stderr)
+        assert probe.returncode == 0, probe.stderr
     root = tmp_path / "shared-fixtures"
     root.mkdir(mode=0o775)
     root.chmod(0o775)
