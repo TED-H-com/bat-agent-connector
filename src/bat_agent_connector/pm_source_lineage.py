@@ -264,6 +264,10 @@ def _visible_roots(db, principal, original_ids):
             from .pm_follow_up_analysis import operation_visible as follow_up_visible
             if not follow_up_visible(db, principal, operation):
                 return False
+        elif operation["action"] == "pm.roadmap.report.materialize":
+            from .pm_roadmap_report_materialization import source_visible as report_visible
+            if not report_visible(db, principal, operation):
+                return False
         elif operation["action"] == "pm.spec.materialize":
             from .pm_spec_materialization import source_visible as spec_visible
             if not spec_visible(db, principal, operation):
@@ -361,7 +365,8 @@ def bind_operation(db, operation_id, target, params, binding):
         from .session_start_operations import NAMESPACE
         original_ids = [operation_id, *original_ids]
         resources.append(("session", binding["pm_bat_binding"]["target"]["host"] + "/" + str(uuid.uuid5(NAMESPACE, operation_id))))
-    if (binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None
+    if (binding.get("pm_roadmap_report_materialization") is not None
+            or binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None
             or binding.get('pm_review_candidate') is not None or binding.get('pm_work_input_idea') is not None
             or binding.get('pm_sprint_review_decision') is not None
             or binding.get('sprint_review') is not None or binding.get('sprint_review_draft_id') is not None
@@ -382,6 +387,9 @@ def bind_operation(db, operation_id, target, params, binding):
     for kind, identity in resources:
         for original in original_ids:
             db.execute("INSERT OR IGNORE INTO pm_source_lineage VALUES(?,?,?,?)", (kind, identity, original, operation_id))
+    if binding.get("pm_roadmap_report_materialization") is not None:
+        from .pm_access import inherit_operation_sources
+        inherit_operation_sources(db, operation_id, binding["pm_roadmap_report_materialization"]["operation_ids"])
     if binding.get("pm_delivery"):
         from .pm_delivery_lineage import bind
         bind(db, operation_id, binding["pm_delivery"])

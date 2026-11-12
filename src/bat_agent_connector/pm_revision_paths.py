@@ -15,6 +15,8 @@ REPORT_EXTENSIONS = {"markdown": "md", "html": "html", "svg": "svg"}
 def report_manifest(data):
     """Validate the typed report envelope on both the service and owned host."""
     paths = rev_paths(data)
+    if not isinstance(data["files"], dict) or any(not isinstance(value, str) for value in data["files"].values()):
+        raise ValueError("PM_REVISION_INVALID")
     if data["revision_id"] != "pmrpt_" + data["operation_id"][3:]:
         raise ValueError("PM_REVISION_INVALID")
     prefix = "docs/pm/reports/" + data["revision_id"] + "/"

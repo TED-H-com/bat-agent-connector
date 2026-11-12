@@ -491,16 +491,20 @@ def adopt_revision(ctx):
 
 def latest_git_receipt(db, workspace_id):
     """Internal previous Git fact, including commits not yet adopted in SQLite."""
-    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_spec_materializations'").fetchone():
+    spec = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_spec_materializations'").fetchone()
+    report = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_roadmap_report_materializations'").fetchone()
+    reports = [json.loads(row[0]) for row in db.execute(
+        "SELECT git_receipt FROM pm_roadmap_report_materializations WHERE workspace_id=?", (workspace_id,))] if report else []
+    # Preserve the exact legacy fallback when this workspace has no report.
+    if not spec and not reports:
         return original_git_receipt(db, workspace_id)
     from . import pm_runs
-    # Plans and owned spec artifacts use the same carrier. Select the unique tip
-    # from original parent links; wall time and per-table insertion order cannot
-    # interleave those facts safely.
     records = [json.loads(row[0]) for row in db.execute(
         "SELECT receipt FROM pm_plan_git_receipts WHERE workspace_id=?", (workspace_id,))]
-    records += [json.loads(row[0]) for row in db.execute(
-        "SELECT git_receipt FROM pm_spec_materializations WHERE workspace_id=?", (workspace_id,))]
+    if spec:
+        records += [json.loads(row[0]) for row in db.execute(
+            "SELECT git_receipt FROM pm_spec_materializations WHERE workspace_id=?", (workspace_id,))]
+    records += reports
     original = {row["commit_sha"]: row for row in records if "source_operation_id" not in row}
     if not original:
         return None

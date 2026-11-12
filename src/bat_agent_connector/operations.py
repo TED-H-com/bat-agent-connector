@@ -432,6 +432,15 @@ class OperationService:
 
     def list(self, *, statuses: list[str] | None = None, actor: str | None = None, action: str | None = None,
              before: float | None = None, before_id: str | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
+        from contextlib import nullcontext
+
+        from .pm_source_reads import scope
+        with scope(self.db, principal) if principal is not None else nullcontext():
+            return self._list(statuses=statuses, actor=actor, action=action, before=before,
+                              before_id=before_id, limit=limit, principal=principal)
+
+    def _list(self, *, statuses: list[str] | None = None, actor: str | None = None, action: str | None = None,
+             before: float | None = None, before_id: str | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
         limit = max(1, min(200, int(limit)))
         before, before_id = operation_cursor(before, before_id)
         sql, args = "SELECT * FROM operations WHERE 1=1", []

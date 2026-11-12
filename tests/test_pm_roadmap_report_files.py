@@ -56,7 +56,7 @@ async def test_exact_renderer_bytes_and_manifest(ops, format, locale):
     assert paths.report_manifest({**revision, 'operation_id': OP}) == manifest
 
 
-@pytest.mark.parametrize('bad', ['path', 'old_id', 'extra', 'kind', 'format', 'locale', 'version', 'bytes', 'manifest_kind', 'manifest_digest'])
+@pytest.mark.parametrize('bad', ['path', 'old_id', 'extra', 'kind', 'format', 'locale', 'version', 'bytes', 'manifest_kind', 'manifest_digest', 'non_text'])
 def test_service_and_host_reject_changed_or_expanded_intent(bad):
     value = files.files(rendered(), [], OP)
     if bad == 'path':
@@ -69,6 +69,8 @@ def test_service_and_host_reject_changed_or_expanded_intent(bad):
         value['artifact_kind'] = 'generic-file'
     elif bad in {'format', 'locale', 'version'}:
         value[{'version': 'renderer_version'}.get(bad, bad)] = True
+    elif bad == 'non_text':
+        value['files'][next(p for p in value['files'] if '/report.' in p)] = None
     elif bad == 'bytes':
         value['files'][next(iter(value['files']))] += 'changed'
     else:

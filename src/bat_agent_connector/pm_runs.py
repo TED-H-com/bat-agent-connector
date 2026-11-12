@@ -131,7 +131,8 @@ def get_by_operation(db, operation_id):
 
 
 def list_runs(ops, principal, workspace_id, *, thread_id=None, limit=50, after=None):
-    with ops.journal.tx():
+    from .pm_source_reads import scope
+    with ops.journal.tx(), scope(ops.db, principal):
         pm_discussions._read(ops, principal, workspace_id)
         pm_discussions._limit(limit)
         if thread_id is not None:
@@ -205,6 +206,9 @@ def _source_visible(db, principal, run):
     if run['context'].get('output_destination') == 'continuation_brief' or row and row[0] == 'pm.continuation.prepare':
         from .pm_continuation import operation_visible
         return operation_visible(db, principal, {'operation_id': run['operation_id']})
+    if row and row[0] == "pm.roadmap.report.materialize":
+        from .pm_roadmap_report_materialization import source_visible as report_visible
+        return report_visible(db, principal, {"operation_id": run["operation_id"]})
     if row and row[0] == "pm.spec.materialize":
         from .pm_spec_materialization import source_visible as spec_visible
         return spec_visible(db, principal, {"operation_id": run["operation_id"]})
@@ -720,7 +724,7 @@ def complete_service(journal, run_id, generation, outcome):
     with journal.tx():
         run = get(journal.db, run_id)
         operation = journal.db.execute("SELECT action FROM operations WHERE operation_id=?", (run["operation_id"],)).fetchone()
-        if not operation or operation[0] not in {"pm.plan.adopt", "pm.spec.materialize"} or run["adapter"] != "connector.git":
+        if not operation or operation[0] not in {"pm.plan.adopt", "pm.spec.materialize", "pm.roadmap.report.materialize"} or run["adapter"] != "connector.git":
             raise _error("Service completion requires the original registered Git writer", "PM_SERVICE_REQUIRED")
         if run["generation"] != generation:
             raise _error("PM writer changed", "PM_WRITER_CHANGED")
