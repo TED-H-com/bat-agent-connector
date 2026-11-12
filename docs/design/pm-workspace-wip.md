@@ -308,16 +308,28 @@ Every row still requires lineage authorization and budget charging.
 | --- | --- |
 | Accepted/running/waiting/needs_attention without a proven terminal outcome | Hold while the original operation can settle. |
 | Terminal with no send step (including cancellation before dispatch) | No execution hold. |
-| Terminal, failed send step with durable `external_refs.send_sent:false` | No execution hold: the original transport fence proves the frame was not written. |
+| Terminal, failed send step with durable `external_refs.direct_send_dispatch:false` | No execution hold: the original transport fence proves the frame was not written. |
 | Terminal, failed send step with `REFUSED`, without a false transport fence | Generic `coverage_unavailable`: result-phase audit failures can raise `WriteRefused` after transport. Pre-fence history is not guessed. |
 | Terminal with original send response `accepted:false` | No execution hold (including NOT_ACCEPTED followed by cancellation). |
 | Terminal, certain, succeeded send step with `accepted:true` and exact request/response message ID | Hold until its exact terminal receipt. Shared eligibility accepts succeeded, failed or cancelled terminal bookkeeping, so every such ACK has a producer path. |
 | Any unresolved external step, including lost ACK or exhausted reconciliation | Hold until existing reconciliation proves the original outcome; cancellation never proves release. |
 | Any other terminal evidence, including a generic failed send or malformed/mismatched ACK | Generic `coverage_unavailable`, no counts. |
 
-Direct sends persist `send_sent:false` before the BAT call and `true` through the
-existing transport hook. This additive evidence does not change step error mapping,
-retry or reconciliation. A true fence without a certain ACK is not release evidence.
+Direct sends persist `external_refs.direct_send_dispatch:false` before the BAT
+call, and `true` synchronously through the existing `on_transport` hook before
+WebSocket send. The refs merge commits before the hook returns; no await separates
+the hook and send. A crash after that commit but before the frame leaves true:
+**true means possibly sent, never proof of delivery**. A true fence without a
+certain ACK is not release evidence.
+
+This direct-specific key deliberately does not match `<step>_sent`. The generic
+Wait handler, reconciliation, Work-input queue and operation-loop projections do
+not interpret it. In particular, a direct Wait still follows the original generic
+failure path, including after the direct fence becomes true. Work/task send fences
+are unchanged. Only WIP uses this additional dispatch evidence. HTTP, RPC and MCP
+operation reads expose it as additive external_refs metadata; no request hash,
+status, retry or step-error mapping is changed. Older rows without the key, including
+rows with only the earlier send_sent metadata, are not guessed or backfilled.
 
 Ordinary cancellation after ACK leaves a succeeded operation unchanged; it does
 not create a cancelled accepted send. Failed/cancelled bookkeeping with a certain

@@ -139,10 +139,11 @@ async def _send(ctx: OpContext) -> dict:
                 check_controller_binding_fn=check_controller_binding,
             )
         # This is the direct-session branch; Work and task sends own their fences.
-        # The hook is invoked at the frame boundary, before result audit/bookkeeping.
-        ctx.set_refs(send_sent=False)
+        # This direct-only key is not interpreted by the generic <step>_sent handler.
+        # The synchronous hook commits before the frame: true means possibly sent.
+        ctx.set_refs(direct_send_dispatch=False)
         def transported() -> None:
-            ctx.set_refs(send_sent=True)
+            ctx.set_refs(direct_send_dispatch=True)
 
         task_control.check_binding(ctx)
         incarnation = check_controller_binding(ctx, target)

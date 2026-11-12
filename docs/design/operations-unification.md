@@ -465,7 +465,7 @@ Task scope command 外部派送仍由 coordinator 擁有。operation refs 記 ta
 | task_core.resolve_command | task_reconcile 消耗 capability、settle 原 command／reserve 新 command、receipt 與對應 refs 同交易。saved reconcile receipt 在返回或送 prepared prompt 前重播 refs；沒有 command reservation 已提交但 operation 仍指向原 command 的窗口。 |
 | task_actions.send 的 task_binding／refusal replay | binding refs 與本機 receipt 同交易；saved command link 在 refusal／result 返回前修復，不重送。 |
 | task_actions.run 的 result.task_id set_refs | submit／continuation 已由 effect 原子保存新 task link；固定 task controls 的 target 與 admission_binding 已識別 task。若在最後補記前停止，receipt replay 每次返回前重建相同 task_id，不會跳過這項補記，也不重做控制。reconcile command link 由 task_core 的 receipt 機制保護。 |
-| api_actions._send／_answer／_interrupt | 不直接寫 refs；outer step readback／saved success 前重播已有 command receipt，舊 rows 可修復。standalone operation 沒有 command receipt，不寫 task refs。 |
+| api_actions._send／_answer／_interrupt | outer step readback／saved success 前重播已有 command receipt，舊 rows 可修復；standalone operation 不寫 task refs。Direct session.send 另透過原 refs merge 保存下述 direct_send_dispatch。 |
 | task_daemon.work_submit 的 task_submit／task_continuation | audit 延伸修正：task_id 與 effect receipt 同交易；saved receipt replay 也修復舊缺值，不再只依賴 run 的結果後記。 |
 
 | A05 情境 | 固定規則 |
@@ -653,3 +653,17 @@ Phase 1 與 Phase 2 報告都跑 `uv run ruff check .`、`uv run pytest -q`；�
 - 計畫 §23 的 reviewed cleanup 使用已註冊的 `cleanup_preview`／`cleanup_apply`。Restore 是 optional backlog，尚無註冊 API/MCP tool。`LEGACY_CLEANUP_DISABLED` 停用 legacy `session_cleanup` apply，`LEGACY_WORKTREE_REMOVE_DISABLED` 停用直接 remove；本包不包裝這些 apply，也不建立另一個 cleanup writer。
 - BAT GUI 可直接改自己的 session，connector 的鎖不能約束它；不宣稱 BAT 提供跨系統原子控制或 Codex exactly-once receipt。workspace:save race、host sandbox/ACL 與完整 A10 仍按原設計界定。
 - 不變更遠端部署、Fleet Kit、live Goose gate、人工 snapshot／附件與整合來源擴充；正式 owner 升級與備份由部署者另行執行。
+
+### Direct session.send 的 dispatch evidence
+
+`external_refs.direct_send_dispatch` 是 operation reads 可見的 additive metadata，
+不改 request hash、status、error mapping 或 retry。Direct branch 在 BAT call 前
+提交 false；既有 on_transport hook 在 WebSocket frame write 前同步提交 true。
+true 僅表示「可能已送出」：commit 與 frame 之間 crash 也會留下 true，不是 ACK。
+
+此 key 不符合 generic `<step>_sent` 名稱，OpContext.step 的 Wait handler 與
+reconciliation 不讀它；即使 true 後發生 Wait，direct send 仍維持原 failed 路徑。
+Work/task 的 send_sent 不變。僅 WIP read 用 exactly false 的 failed send step
+作為原始未送出證據；true／缺值的 REFUSED 保留 unknown。HTTP／RPC／MCP operation
+reads 原樣返回此 refs metadata，其他 authority／queue／operation-loop 不採用它。
+沒有 migration 或歷史 backfill；詳見 [WIP contract](pm-workspace-wip.md)。

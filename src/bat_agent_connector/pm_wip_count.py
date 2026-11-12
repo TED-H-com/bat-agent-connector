@@ -337,7 +337,7 @@ class _Collector:
                 # come from a result audit after the frame crossed transport.
                 if not sends or all(
                     pm_evidence._body(row['response']).get('accepted') is False
-                    or row['status'] == 'failed' and pm_evidence._body(op['external_refs']).get('send_sent') is False
+                    or row['status'] == 'failed' and pm_evidence._body(op['external_refs']).get('direct_send_dispatch') is False
                     for row in sends
                 ):
                     continue

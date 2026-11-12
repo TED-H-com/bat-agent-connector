@@ -67,7 +67,7 @@ async def test_audit_open_failure_distinguishes_transport(start_ready, mock, mon
         ],
     }
     print(facts)
-    assert op["external_refs"].get("send_sent") is (when == "after")
+    assert op["external_refs"].get("direct_send_dispatch") is (when == "after")
     assert frames == (0 if when == "before" else 1)
     assert value["used"] == (0 if when == "before" else None), (
         "REFUSED after an accepted frame is not unsent evidence"
@@ -137,7 +137,9 @@ async def test_other_predispatch_refusals(start_ready, mock, monkeypatch, case):
     assert value["used"] == 0
 
 
-async def test_legacy_refused_without_transport_fence_is_unknown(start_ready, mock):
+@pytest.mark.parametrize("legacy_fence", [None, False, True])
+async def test_legacy_refused_without_transport_fence_is_unknown(start_ready, mock, legacy_fence):
+    import json
     w = start_ready
     ops = w["d"].ops
     att, _ = await closed_attempt(w, mock)
@@ -156,9 +158,87 @@ async def test_legacy_refused_without_transport_fence_is_unknown(start_ready, mo
     # Synthetic pre-fence durable history; REFUSED alone cannot prove dispatch phase.
     with ops.journal.tx():
         ops.db.execute(
-            "UPDATE operations SET external_refs=json_remove(external_refs, '$.send_sent') WHERE operation_id=?",
-            (op["operation_id"],),
+            "UPDATE operations SET external_refs=json_set(json_remove(external_refs, '$.direct_send_dispatch'), "
+            "'$.send_sent', json(?)) WHERE operation_id=?",
+            (json.dumps(legacy_fence), op["operation_id"]),
         )
     value = read(ops, w["target"], STARTER_OWNER)
     assert value["used"] is None
     assert value["coverage"]["reasons"] == ["coverage_unavailable"]
+
+
+async def test_direct_wait_after_dispatch_fence_keeps_generic_failure(start_ready, mock, monkeypatch):
+    import json
+    import sqlite3
+
+    from bat_agent_connector.operations import Wait
+
+    w = start_ready
+    ops = w['d'].ops
+    att, _ = await closed_attempt(w, mock)
+    database = ops.db.execute('PRAGMA database_list').fetchone()[2]
+    seen = []
+
+    async def wait_after_fence(client, frame, timeout, on_transport, original):
+        if frame.get('channel') != 'claude:send-message':
+            return await original(client, frame, timeout, on_transport=on_transport)
+        if on_transport:
+            on_transport()
+        # A separate disk connection proves the fence was committed before any
+        # frame. A stop in this window must never mean the input was delivered.
+        assert not ops.db.in_transaction
+        with sqlite3.connect(database) as independent:
+            refs = independent.execute('SELECT external_refs FROM operations WHERE operation_id=?',
+                                      (op['operation_id'],)).fetchone()[0]
+            seen.append(json.loads(refs).get('direct_send_dispatch'))
+        raise Wait(status='waiting_external', reason='Synthetic wait after fence', delay_s=5)
+
+    _patch_roundtrip(monkeypatch, wait_after_fence)
+    start = len(mock.invokes)
+    op, _ = ops.create(STARTER_OWNER, action='session.send',
+        target={'host': 'h1', 'session_id': att['session_id']},
+        params={'text': 'Synthetic fenced Wait'}, preconditions={}, idempotency_key='direct-fenced-wait')
+    await settle_operations(ops)
+    done = ops.get(op['operation_id'])
+    assert done['status'] == 'failed', done
+    assert done['error_code'] == 'INTERNAL'
+    assert done['uncertain_tries'] == 0
+    assert done['steps'][-1]['status'] == 'failed'
+    assert 'send_sent' not in done['external_refs']
+    assert seen == [True]
+    assert not any(f['channel'] == 'claude:send-message' for f in mock.invokes[start:])
+    value = read(ops, w['target'], STARTER_OWNER)
+    assert value['used'] is None and value['coverage']['reasons'] == ['coverage_unavailable']
+
+
+async def test_direct_fence_is_committed_before_websocket_write(start_ready, mock, monkeypatch):
+    import json
+    import sqlite3
+
+    w = start_ready
+    ops = w['d'].ops
+    att, _ = await closed_attempt(w, mock)
+    database = ops.db.execute('PRAGMA database_list').fetchone()[2]
+    client = w['d'].fleet.client('h1')
+    socket = client._ws
+    original = socket.send
+    seen = []
+
+    async def inspect_frame(encoded, *args, **kwargs):
+        frame = json.loads(encoded)
+        if frame.get('channel') == 'claude:send-message':
+            assert not ops.db.in_transaction
+            with sqlite3.connect(database) as independent:
+                refs = independent.execute('SELECT external_refs FROM operations WHERE operation_id=?',
+                    (op['operation_id'],)).fetchone()[0]
+                seen.append(json.loads(refs).get('direct_send_dispatch'))
+            assert seen[-1] is True
+        return await original(encoded, *args, **kwargs)
+
+    monkeypatch.setattr(socket, 'send', inspect_frame)
+    op, _ = ops.create(STARTER_OWNER, action='session.send',
+        target={'host': 'h1', 'session_id': att['session_id']},
+        params={'text': 'Synthetic fence ordering'}, preconditions={}, idempotency_key='direct-order')
+    await settle_operations(ops)
+    assert ops.get(op['operation_id'])['status'] == 'succeeded'
+    assert seen == [True]
