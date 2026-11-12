@@ -71,7 +71,8 @@ Source/output bounds and rendering follow these proofs.
 after the template check, its version-1 validator covers observation/baseline/forecast,
 the snapshot (accepted/candidate plan, work, capture, evidence and coverage), plan
 inputs/sections/requirements, adoption results, and each consumed evidence/quality
-variant, including criterion matrices. Container elements are validated too. Optional
+variant, including criterion matrices. Container elements are validated too. Capture
+coverage uses original boolean flags and nonnegative integer source counters. Optional
 legacy quality context may be absent; a present incompatible context refuses. Fields
 only passed through canonical JSON are explicitly opaque JSON leaves, not silently
 assumed mappings. Required map references are proven before shared projections index

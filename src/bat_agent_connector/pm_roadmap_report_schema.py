@@ -89,8 +89,9 @@ EVIDENCE_KINDS = ('operation_status', 'pr_merge', 'resource_relation', 'executio
     'pr_observation', 'deployment', 'work_claim', 'work_link', 'quality_assessment')
 EVIDENCE = obj(evidence_id=REF, source_kind=node('enum', values=EVIDENCE_KINDS), fact_digest=REF, document=obj(facts=FACTS))
 BINDING = obj(binding_id=REF, requirement_ids=REFS)
-CAPTURE = obj(capture_id=REF, binding_id=REF, coverage=obj(**{
-    key: optional(JSON) for key in ('truncated', 'unavailable_sources', 'unsupported_sources', 'inaccessible_sources')}))
+CAPTURE = obj(capture_id=REF, binding_id=REF, coverage=obj(
+    truncated=optional(BOOL), unavailable_sources=optional(INT),
+    unsupported_sources=optional(INT), inaccessible_sources=optional(BOOL)))
 WORK = obj(work_item_id=REF, binding=BINDING, evidence_ids=REFS, capture=nullable(CAPTURE), coverage=COVERAGE)
 MAINTENANCE_KINDS = ('policy', 'baseline', 'github', 'workload', 'maintenance_check',
                      'maintenance_repair', 'evidence', 'snapshot_identity')
