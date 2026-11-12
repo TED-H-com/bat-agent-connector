@@ -25,9 +25,10 @@
   contributors see that the owner's decision is awaited instead of controls the
   server would refuse. When a Review source is refused or withdrawn, every view
   derived from it is withdrawn, while ordinary discussions that only cite it keep
-  their content. Saved drafts keep only what people typed and exact source IDs,
-  never source content. Without the server capability, existing meetings,
-  governance and Planning are unchanged.
+  their content; a temporary network or server error keeps the open discussion
+  and its unsent draft and only reports the error. Saved drafts keep only what
+  people typed and exact source IDs, never source content. Without the server
+  capability, existing meetings, governance and Planning are unchanged.
 
 - Let API and MCP clients preview, for selected Work in one saved plan snapshot,
   which retained packages, Attempts, handoffs and issue mappings connect to the
