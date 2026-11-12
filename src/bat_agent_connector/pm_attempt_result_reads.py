@@ -1960,10 +1960,11 @@ async def _read_result(
         target_ver = str(latest_doc.get("decoder_version") or DECODER_VERSION)
         pos_rows = ops.db.execute(
             """SELECT digest, document FROM session_results
-               WHERE workspace_id=? AND source_key=? AND source_generation=? AND source_position=? AND digest!=?
+               WHERE workspace_id=? AND attempt_id=? AND source_key=? AND source_generation=? AND source_position=? AND digest!=?
                AND """ + pm_attempt_results.OWN_RECEIPT_PREDICATE,  # noqa: S608 - fixed predicate
             (
                 workspace_id,
+                attempt_id,
                 latest_row["source_key"],
                 latest_row["source_generation"],
                 latest_row["source_position_json"],
