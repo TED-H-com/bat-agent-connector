@@ -189,22 +189,35 @@ in existing Idea forms; their original proof remains visible in the pmd_ draft.
 “Draft only; scope not adopted; work not started” marks the Planning boundary.
 No adoption, execution, model invocation or extra confirmation is introduced.
 
-Source refusals clear the whole guided narrative and derived editor disclosures,
-including other mounted Review/governance panels and derived thread content.
-This also applies to source or permission refusals returned by an explicit action;
-the unchanged durable form retains the original request/key for reconciliation.
-A successful thread read is not permission to render after a later original
-meeting dependency refuses access. Initial, event and earlier-message reads gate
-Review InputRecord and draft lineage as well as navigation context; filtered or
-refused meeting references invalidate the load before any derived payload renders.
-Typed governance detail/snapshot 404 recovery also withdraws linked Review views,
-rather than only clearing the selected finding. Ordinary non-Review source labels
-retain their existing unavailable-chip behavior.
+A refused required dependency clears its whole derived narrative and editor
+source disclosures, including other mounted panels linked to the same original
+meeting ID. The unchanged durable form retains its original request/key.
+Required meeting dependencies come explicitly from typed `sprint_review_decision`
+lineage in InputRecords, input history, and draft selected/candidate inputs.
+Initial, event and earlier-message reads gate these dependencies and the context
+refs of a thread with this lineage before rendering its derived payload. A
+successful thread read is not permission to render after a required read refuses
+access; the load generation is invalidated before that payload can render.
+An ordinary meeting citation without this lineage keeps the existing unavailable
+chip behavior. Failure to read its kind does not prove a Review dependency.
+Discussion list rows show authored titles, modes and timestamps plus citation
+chips, not InputRecord or Planning bodies. Refused chips lose their labels;
+independent rows and authored metadata remain. Typed governance detail/snapshot
+404 recovery propagates only to the linked Review. Action refusals propagate
+only through the submitted form's known typed source or selected guided meeting.
+If the first typed InputRecord action refuses before recorded lineage exists,
+only the referenced source projection clears; the thread's own notes remain.
+Ordinary actions keep their local errors; a transient context/list refresh error
+does not withdraw otherwise readable content. Existing parent authority 403/404
+clearing behavior remains. No new client record or storage key is introduced.
 Request generations and selected identities reject late responses. Reflow retains
 editor nodes and composition; guide handoffs focus the authored Goal impact editor
 or an enabled visible governance field, never a checkbox inside a closed source
 disclosure or a disabled Kind selector. Returning to the same editor preserves its
-text and selection. Original durable receipts remain the replay authority.
+text and selection. Returning to the same unsent governance proposal restores its
+last authored field and range in memory across the server refresh; a different
+proposal or a locked receipt does not reuse that range. Original durable receipts
+remain the replay authority.
 Legacy meetings without this capability retain their current UI and request shapes.
 Older Result catalog paging, model facilitation and the other Scrum events remain
 outside this increment. Physical native and real-host acceptance are separate.

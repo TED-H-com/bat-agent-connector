@@ -456,7 +456,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     && workspace?.workspace_id === workspaceId && (threadId === 'new' ? !draftSourceUnavailable
       : threadData?.thread?.workspace_id === workspaceId && threadData.thread.thread_id === threadId
         && !(threadData.thread.context || []).some(ref => ref.available === false));
-  async function draftSourceRefs(refs = launch.refs, reads = new Map(), reviewDerived = false) {
+  async function draftSourceRefs(refs = launch.refs, reads = new Map(), required = false) {
     const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
     const read = path => {
       if (!reads.has(path)) reads.set(path, api('GET', endpoint + path));
@@ -470,20 +470,21 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     const text = value => typeof value === 'string' && value.trim() && !/(?:pm[a-z]*|wi|op)_[0-9a-f]{20,64}/.test(value.trim()) ? value.trim() : '';
     return Promise.all(refs.map(async (ref, position) => {
       if (ref.available === false) {
-        if (hasSprintReview(caps()) && (reviewDerived || ref.kind === 'meeting')) {
-          const error = Object.assign(Error(t('pd_unavailable')), {status:404, code:'PM_MEETING_SOURCE_UNAVAILABLE'});
-          withdrawReviewSources(error); throw error;
+        if (hasSprintReview(caps()) && required) {
+          const error = Object.assign(Error(t('pd_unavailable')), {status:404, code:'PM_MEETING_SOURCE_UNAVAILABLE', reviewRef:{kind:ref.kind,id:ref.id}});
+          throw error;
         }
         return {kind: ref.kind, position, available: false};
       }
       if (ref.available === true && !['governance','plan_revision',...(hasSprintReview(caps())?['meeting']:[])].includes(ref.kind) && text(ref.label))
         return {...ref, label:text(ref.label), bound_label:text(ref.bound_label)};
       try {
-        let label = '', recordType = null, findingIdentity = null, reviewDecisions = null;
+        let label = '', recordType = null, findingIdentity = null, reviewDecisions = null, reviewMeetingId = null;
         if (ref.kind === 'governance') {
           const value = await read(`/governance/${encodeURIComponent(ref.id)}`);
           scoped(value, workspaceId, 'workspace_id');
           if (value.record?.record_id !== ref.id) unavailable();
+          reviewMeetingId = hasSprintReview(caps()) ? value.record.context?.review_proposal_ref?.meeting_id : null;
           label = text(value.revision?.document?.title);
           recordType = ['risk','issue','action','change','decision'].includes(value.record.kind) ? value.record.kind : 'issue';
         } else if (ref.kind === 'plan_revision' || ref.kind === 'requirement') {
@@ -569,27 +570,33 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
         } else unavailable();
         const result = {...ref, available:true, label: label || t('ui_reason_not_recorded'), record_type: recordType, bound_label: text(ref.bound_label)};
         if (reviewDecisions) result.review_decisions=reviewDecisions;
+        if (reviewMeetingId) result.review_meeting_id=reviewMeetingId;
         if (ref.kind === 'finding') {if (findingIdentity) result.finding = findingIdentity; else delete result.finding;}
         return result;
       } catch (error) {
         // An original Review dependency gates the entire derived payload, not its chip.
-        if (hasSprintReview(caps()) && (reviewDerived || ref.kind === 'meeting')) {withdrawReviewSources(error); throw error;}
+        if (hasSprintReview(caps()) && required) throw Object.assign(error,{reviewRef:{kind:ref.kind,id:ref.id}});
         // Display metadata never authorizes Send, and failed reads never consult a URL or old label.
         return {kind: ref.kind, position, available: false};
       }
     }));
   }
+  const reviewInputs = data => [...(data?.inputs || []), ...(data?.input_history || []),
+    ...(data?.draft?.selected_inputs || []), ...(data?.draft?.candidate_inputs || [])];
+  const reviewMeetingIds = (data, selected = null) => !hasSprintReview(caps()) ? [] : [...new Set(reviewInputs(data)
+    .filter(row => row.source_ref?.kind === 'sprint_review_decision' && (!selected || selected.includes(row.input_id)))
+    .map(row => row.source_ref.meeting_id))];
   async function threadSources(data, reads = new Map()) {
-    // Input lineage remains authoritative even when navigation context is absent.
-    let reviewDerived = false;
-    if (hasSprintReview(caps())) {
-      const inputs = [...(data.inputs || []), ...(data.input_history || []),
-        ...(data.draft?.selected_inputs || []), ...(data.draft?.candidate_inputs || [])];
-      const meetings = [...new Set(inputs.filter(row => row.source_ref?.kind === 'sprint_review_decision').map(row => row.source_ref.meeting_id))];
-      reviewDerived = meetings.length > 0;
-      await draftSourceRefs(meetings.map(id => ({kind:'meeting', id})), reads);
+    const meetingIds = reviewMeetingIds(data);
+    try {
+      // Required lineage is explicit; a citation's unreadable kind proves no dependency.
+      await draftSourceRefs(meetingIds.map(id => ({kind:'meeting', id})), reads, true);
+      return {...data, thread:{...data.thread, context:await draftSourceRefs(data.thread.context || [], reads, meetingIds.length > 0)}};
+    } catch (error) {
+      if (meetingIds.length) Object.assign(error, {reviewDependency:true, reviewMeetingIds:
+        error.reviewRef?.kind==='meeting' && meetingIds.includes(error.reviewRef.id) ? [error.reviewRef.id] : []});
+      throw error;
     }
-    return {...data, thread:{...data.thread, context:await draftSourceRefs(data.thread.context || [], reads, reviewDerived)}};
   }
   const threadRows = h('div', {class: 'pd-thread-rows'});
   const threadState = viewState(namespace, workspaceId, 'discussion.' + (threadId || 'list'));
@@ -635,9 +642,9 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
       clientGate,
       onError:error=>{
-        if(hasSprintReview(caps())&&/^(pm\.meeting\.|pm\.governance\.|pm\.input\.|pm\.thread\.plan)/.test(options.action)
-          &&([403,404].includes(error.status)||error.code==='FORBIDDEN'||/^PM_.*SOURCE_UNAVAILABLE$/.test(error.code||''))){
-          withdrawReviewSources(error);status.replaceChildren(errorBox(error,{within:status}));return true;
+        const ids = hasSprintReview(caps()) ? options.reviewSources?.() || [] : [];
+        if(ids.length && ([403,404].includes(error.status)||error.code==='FORBIDDEN'||/^PM_.*SOURCE_UNAVAILABLE$/.test(error.code||''))){
+          withdrawReviewSources(error,ids);status.replaceChildren(errorBox(error,{within:status}));return true;
         }
         return options.onError?.(error)||false;
       },
@@ -789,18 +796,40 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps, withRegister: caps()?.features?.pm_register?.version === 1, onReviewRecorded:()=>meetings?.refresh(),onSourceFailure:withdrawReviewSources, nameFor: (kind, id) => kind === 'requirement' ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ''}) : null;
   if(governance)body.insertBefore(governance.element,content);
   let withdrawingReview = false;
-  function withdrawReviewSources(error) {
-    if(withdrawingReview || !hasSprintReview(caps()))return;
+  function withdrawReviewSources(error, meetingIds = [], selectedThread = false) {
+    if(withdrawingReview || !hasSprintReview(caps()) || !meetingIds.length && !selectedThread)return;
     withdrawingReview=true;
     try {
-      ++sequence; ++contextSequence; refreshing=false; refresh.disabled=false;
-      meetings?.withdraw(error);governance?.withdraw(error);
-      lastThreadList=null;workspaceList.replaceChildren();threadRows.replaceChildren();
-      boundContext?.replaceChildren();panelContext?.replaceChildren();
-      status.replaceChildren(errorBox(error,{within:status}));
-      if(threadId){loaded=false;refreshing=false;refresh.disabled=false;threadData=null;mountedThread=null;discussionTools?.close();
+      const linkedThread = selectedThread || reviewMeetingIds(threadData).some(id => meetingIds.includes(id));
+      const matches = ref => ref.kind==='meeting' && meetingIds.includes(ref.id) || meetingIds.includes(ref.review_meeting_id);
+      const citedThread = !linkedThread && threadData?.thread.context?.some(matches);
+      if (threadId && (linkedThread || citedThread)) {++sequence; ++contextSequence; refreshing=false; refresh.disabled=false;}
+      meetings?.withdrawReview(error,meetingIds);governance?.withdrawReview(error,meetingIds);
+      // List rows contain authored metadata and citation chips, never a Review body.
+      if(lastThreadList){
+        lastThreadList={...lastThreadList,threads:lastThreadList.threads.map(row=>({...row,context:(row.context||[]).map((ref,position)=>
+          linkedThread && row.thread_id===threadId || matches(ref)
+            ? {kind:ref.kind,position,available:false} : ref)}))};
+        renderThreadRows(lastThreadList);
+      }
+      if(threadId && linkedThread){
+        loaded=false;threadData=null;mountedThread=null;
+        boundContext?.replaceChildren();panelContext?.replaceChildren();discussionTools?.close();
         for(const editor of forms)if(content.contains(editor.box))editor.dispose();
-        content.replaceChildren();updateForms();}
+        content.replaceChildren(workspaceList);content.hidden=false;updateForms();
+      } else if (citedThread) {
+        // An explicit typed action can refuse a citation before its first InputRecord exists.
+        // Keep the authored thread and exact form request; remove only that source's projection.
+        threadData={...threadData,thread:{...threadData.thread,context:threadData.thread.context.map((ref,position)=>
+          matches(ref)?{kind:ref.kind,position,available:false}:ref)}};
+        const selectedSource=sourceSelect?.value;
+        renderThread(threadData);
+        if(selectedSource?.startsWith('review:') && meetingIds.includes(JSON.parse(selectedSource.slice(7)).meeting_id)){
+          sourceSelect.append(h('option',{value:selectedSource},t('pd_unavailable')));sourceSelect.value=selectedSource;
+        }
+        updateForms();
+      }
+      status.replaceChildren(errorBox(error,{within:status}));
     } finally {withdrawingReview=false;}
   }
   async function openReviewGovernance({ref,entry,ownerActor,snapshotId}) {
@@ -1419,7 +1448,8 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       const reference = input('pm_source_ref', {required: false, max: 1000});
       const requireReference = () => {reference.required = ['repository', 'external'].includes(sourceSelect.value);};
       sourceSelect.addEventListener('change', requireReference);
-      factForm = form({action: 'pm.input.record', target, fields: {slot: slotSelect, value, status: statusSelect, source: sourceSelect, reference},
+      factForm = form({action: 'pm.input.record', target,
+        reviewSources:()=>sourceSelect.value.startsWith('review:')?[JSON.parse(sourceSelect.value.slice(7)).meeting_id]:[], fields: {slot: slotSelect, value, status: statusSelect, source: sourceSelect, reference},
         params: values => {if (values.status === 'repo_evidence' && values.source !== 'repository') throw Error(t('pm_repository_source_required'));
           return {slot: values.slot, value: values.value, status: hasSprintReview(caps())&&values.source.startsWith('review:')?'unresolved':values.status,
           source_ref: hasSprintReview(caps())&&values.source.startsWith('review:') ? JSON.parse(values.source.slice(7)) : values.source.startsWith('message:') ? {kind: 'message', message_id: values.source.slice(8)}
@@ -1433,7 +1463,8 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       requireReference();
       const selected = h('input', {type: 'hidden'}); selected.value = '[]'; selected.dataset.pmDefault = '[]';
       const rationale = input('pm_plan_rationale', {multiline: true, max: 4000});
-      planForm = form({action: 'pm.thread.plan', target, fields: {selected, rationale},
+      planForm = form({action: 'pm.thread.plan', target,
+        reviewSources:()=>reviewMeetingIds(threadData,JSON.parse(selected.value||'[]')), fields: {selected, rationale},
         params: values => ({selected_input_ids: JSON.parse(values.selected || '[]'), rationale: values.rationale}),
         preconditions, permitted: () => decide() && threadData.thread.mode === 'idea', label: 'pm_create_plan', onSaved: () => load(), recoverPermitted: decide,
         onStateChange: () => {
@@ -1446,7 +1477,8 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
         selected.dataset.pmDefault = '[]';
         const draftId = h('input', {type: 'hidden'}); draftId.value = data.draft?.draft_id || '';
         const rationale = input('pm_planning_revision_rationale', {multiline: true, max: 4000});
-        planningRevisionForm = form({action: 'pm.thread.plan.revise', target, fields: {selected, draftId, rationale},
+        planningRevisionForm = form({action: 'pm.thread.plan.revise', target,
+          reviewSources:()=>reviewMeetingIds(threadData,JSON.parse(selected.value||'[]')), fields: {selected, draftId, rationale},
           params: values => ({selected_input_ids: JSON.parse(values.selected || '[]'), rationale: values.rationale}),
           preconditions: () => ({expected_version: threadData.thread.version, expected_draft_id: planningRevisionForm.values().draftId}),
           permitted: () => decide() && threadData.thread.mode === 'planning', recoverPermitted: decide,
@@ -1584,7 +1616,8 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       if(item.source_candidate)row.append(reviewCandidateProof({h,t,source:item.source_candidate}));
       if (data.capabilities?.decide && item.status !== 'user_confirmed') {
         const rationale = input('pm_confirm_rationale', {max: 2000});
-        const confirm = form({action: 'pm.input.confirm', target: {workspace_id: workspaceId, thread_id: threadId},
+        const confirm = form({action: 'pm.input.confirm',
+          reviewSources:()=>item.source_ref?.kind==='sprint_review_decision'?[item.source_ref.meeting_id]:[], target: {workspace_id: workspaceId, thread_id: threadId},
           // Each input owns a separate intent. The source input ID is part of params, never inferred from its label.
           namespace: `${namespace}.${item.input_id}`, fields: {rationale}, params: values => ({input_id: item.input_id, rationale: values.rationale}),
           preconditions: () => ({expected_version: threadData.thread.version}), permitted: () => permitted(true) && threadData.capabilities?.decide === true,
@@ -1702,7 +1735,8 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       historyCursor = data.next_message_cursor; historyExpanded = true; renderThread(data);
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
-        if(hasSprintReview(caps()))withdrawReviewSources(error);
+        if(error.reviewDependency){withdrawReviewSources(error,error.reviewMeetingIds,true);return;}
+        if ([403,404].includes(error.status)) withdrawReviewSources(error,[],reviewMeetingIds(threadData).length>0);
         loaded = false; lastThreadList = null; workspace = null; withdrawNames(); publishContext(); detailPanel?.close(); discussionTools?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale'), within: status}));
@@ -1771,9 +1805,13 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
           threadList = {...next, threads: [...threadList.threads, ...next.threads]};
         }
       }
-      const contextReads = new Map();
-      if (data?.thread) data = await threadSources(data, contextReads);
+      const contextReads = new Map(); let sourceError = null;
       if (threadList?.threads) threadList = {...threadList, threads:await Promise.all(threadList.threads.map(async thread => ({...thread, context:await draftSourceRefs(thread.context || [], contextReads)})))};
+      if (data?.thread) {
+        if (data.thread.workspace_id !== workspaceId || data.thread.thread_id !== threadId) throw Error(t('pm_scope_mismatch'));
+        try {data = await threadSources(data, contextReads);}
+        catch(error){if(!error.reviewDependency)throw error;sourceError=error;data=null;}
+      }
       alive();
       if (ticket !== sequence) return;
       if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t('pm_scope_mismatch'));
@@ -1792,6 +1830,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       filterThreads(); workspaceList.scrollTop = scroll;
       workspaceList.querySelector('[data-discussion-more]')?.remove();
       if (threadList?.next_cursor) workspaceList.append(h('button', {type: 'button', class: 'secondary', 'data-discussion-more': '', onclick: () => {threadPages++; void load();}}, t('pm_more_threads')));
+      if(sourceError){withdrawReviewSources(sourceError,sourceError.reviewMeetingIds,true);return;}
       if (data) renderThread(data, runs);
       else if (!content.querySelector('.pm-thread-layout')) {
         if (!workspace) content.append(emptyState({icon:'message-square',title:t('pm_start_title'),text:t('pm_start_help')}));
@@ -1902,7 +1941,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         if (capabilityReadError) {pmCapabilitiesError = capabilityReadError; pmCapabilities = null;}
-        if(hasSprintReview(caps()))withdrawReviewSources(error);
+        if ([403,404].includes(error.status)) withdrawReviewSources(error,[],reviewMeetingIds(threadData).length>0);
         loaded = false; workspace = null; threadData = null; withdrawNames();
         if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
         brief?.withdraw();traceability?.withdraw();kanban?.withdraw();resources?.withdraw();schedule?.withdraw();dependencies?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
@@ -2020,7 +2059,8 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     content.hidden = false;
     } catch (error) {
       alive(); if (ticket !== contextSequence || generation !== sequence) return;
-      if(hasSprintReview(caps()))withdrawReviewSources(error);
+      if(error.reviewDependency){withdrawReviewSources(error,error.reviewMeetingIds,true);return;}
+      if ([403,404].includes(error.status)) withdrawReviewSources(error,[],reviewMeetingIds(threadData).length>0);
       if ([403,404].includes(error.status)) {
         loaded = false; threadData = null; lastThreadList = null; content.hidden = true;
         workspaceList.replaceChildren(); boundContext?.replaceChildren(); panelContext?.replaceChildren();

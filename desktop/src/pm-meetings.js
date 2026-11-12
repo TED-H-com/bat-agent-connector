@@ -66,16 +66,18 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     };
     entries.push(sync); sync(); return slot;
   }
+  const reviewMeetingIds = () => guided() && model.detail.meeting.meeting_id===selectedId ? [selectedId] : [];
   function unavailable(error) {
-    const review=guided();++serial;loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true;
+    const ids=reviewMeetingIds();const review=guided();++serial;loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true;
     if (review) {sourcePicker?.dispose(); forms.forEach(editor => editor.dispose?.()); editors.replaceChildren(); model = null; signature = '';}
     status.replaceChildren(errorBox(error, {within:status}));
-    if(review)onSourceFailure?.(error);
+    if(ids.length&&([403,404].includes(error.status)||error.code==='FORBIDDEN'||/^PM_.*SOURCE_UNAVAILABLE$/.test(error.code||'')))onSourceFailure?.(error,ids);
   }
   function localForm(config) {
     const expected = JSON.stringify({preconditions: config.preconditions(), context: config.context || null});
     const baseline = h('input', {type: 'hidden', value: expected}); baseline.dataset.pmDefault = expected;
-    const editor = form({...config, fields: {...config.fields, _baseline: baseline},
+    const ids=config.target.meeting_id===selectedId?reviewMeetingIds():[];
+    const editor = form({...config, reviewSources:()=>ids, fields: {...config.fields, _baseline: baseline},
       params: values => config.params(Object.fromEntries(Object.entries(values).filter(([key]) => key !== '_baseline'))),
       preconditions: () => JSON.parse(baseline.value).preconditions,
       permitted: () => !stale && config.permitted(), recoverPermitted: can,
@@ -481,5 +483,6 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     if(guidedSprint!==sprintId)return;
     if(model?.detail)remember('meeting_id',model.detail.meeting.meeting_id);else reveal('pm.meeting.create');
   }
-  return {element,refresh,openRef,openSprint,withdraw:unavailable};
+  return {element,refresh,openRef,openSprint,withdraw:unavailable,
+    withdrawReview:(error,ids)=>{if(reviewMeetingIds().some(id=>ids.includes(id)))unavailable(error);}};
 }

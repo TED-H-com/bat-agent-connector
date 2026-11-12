@@ -69,11 +69,13 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     if (createBox) createBox.hidden = !createOpen;
     warning.hidden = !stale; review.hidden = !stale || !can(); review.disabled = !loaded;
   }
-  function unavailable(error, reviewLinked=hasSprintReview(caps())&&(model?.detail?.record.context.review_proposal_ref||createEditor?.fields.review_proposal_ref?.value&&createEditor.fields.review_proposal_ref.value!=='null')) {
+  const reviewSources = () => !hasSprintReview(caps()) ? [] : [model?.detail?.record.context.review_proposal_ref?.meeting_id,
+    JSON.parse(createEditor?.fields.review_proposal_ref?.value || 'null')?.meeting_id].filter(Boolean);
+  function unavailable(error, reviewLinked=hasSprintReview(caps())&&(model?.detail?.record.context.review_proposal_ref||createEditor?.fields.review_proposal_ref?.value&&createEditor.fields.review_proposal_ref.value!=='null'), ids=reviewSources()) {
     ++serial; loaded = false; ++sourceTicket; list.replaceChildren(); detail.replaceChildren(); editors.hidden = true;
     if(reviewLinked){forms.forEach(editor=>editor.dispose?.());clearEditors();model=null;signature='';}
     update(); status.replaceChildren(errorBox(error, {within:status}));
-    if(reviewLinked)onSourceFailure?.(error);
+    if(reviewLinked&&ids.length&&([403,404].includes(error.status)||error.code==='FORBIDDEN'||/^PM_.*SOURCE_UNAVAILABLE$/.test(error.code||'')))onSourceFailure?.(error,ids);
   }
   async function currentWorkspace() {
     const value = await api('GET', endpoint); alive(); check(value.workspace);
@@ -106,7 +108,11 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     const expected = JSON.stringify({preconditions: options.preconditions(), context: options.context});
     const baseline = h('input', {type: 'hidden', value: expected}); baseline.dataset.pmDefault = expected;
     let editor;
-    editor = form({...options, fields: {...options.fields, _baseline: baseline}, extra: h('div', {}, options.extra, baseline),
+    editor = form({...options, reviewSources:()=>{
+      const ref=options.action==='pm.governance.record'?JSON.parse(options.fields.review_proposal_ref?.value||'null')
+        : model?.detail?.record.record_id===options.target.record_id?model.detail.record.context.review_proposal_ref:null;
+      return ref?[ref.meeting_id]:[];
+    }, fields: {...options.fields, _baseline: baseline}, extra: h('div', {}, options.extra, baseline),
       params: values => {
         if (options.valid && !options.valid()) throw Error(t('pm_gov_check_sources'));
         return options.params(Object.fromEntries(Object.entries(values).filter(([key]) => key !== '_baseline')));
@@ -126,6 +132,10 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       }});
     if (rebase && !editor.locked()) editor.set('_baseline', expected);
     if (!editor.locked() && baseline.value !== expected) stale = true;
+    editor.box.addEventListener('focusin', event => {
+      const field = Object.entries(editor.fields).find(([, node]) => node === event.target);
+      if (field) editor.lastFocusedField = field[0];
+    });
     editor.box.addEventListener('input', () => {dirty = true;}); editor.box.addEventListener('change', () => {dirty = true; update();});
     forms.push(editor); return editor;
   }
@@ -362,7 +372,8 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           createSnapshot = result.snapshot; affected.rebuild(sourceChoices(createSnapshot).filter(row => row.kind === 'requirement').map(row => [row.id, sourceLabel(row.kind, row.source)])); sourceSync = refsWidget(fields.source_refs, sourceHolder, createSnapshot, () => editor); update();
         } catch (error) {
           if (ticket !== sourceTicket || !editor.box.isConnected) return;
-          if (error.status !== 404 || fields.review_proposal_ref?.value&&fields.review_proposal_ref.value!=='null') {unavailable(error); return;}
+          const ref = JSON.parse(fields.review_proposal_ref?.value || 'null');
+          if (error.status !== 404 || ref) {unavailable(error, Boolean(ref), ref ? [ref.meeting_id] : []); return;}
           // One unavailable source must not trap the source selector. Recheck
           // the parent boundary before retaining any other workspace facts.
           try {
@@ -462,9 +473,9 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
         } catch (error) {
           if (ticket !== serial) return;
           if (error.status !== 404) throw error;
-          const linked = [current, model?.detail, ...records.filter(row => row.record.record_id === selectedId)]
-            .some(row => row?.record.context.review_proposal_ref);
-          if (hasSprintReview(caps()) && linked) {unavailable(error, true); return;}
+          const linked = [current, model?.detail?.record.record_id===selectedId?model.detail:null, ...records.filter(row => row.record.record_id === selectedId)]
+            .map(row => row?.record.context.review_proposal_ref?.meeting_id).filter(Boolean);
+          if (hasSprintReview(caps()) && linked.length) {unavailable(error, true, linked); return;}
           const withdrawn = selectedId;
           detail.replaceChildren(); list.replaceChildren(); clearEditors();
           await currentWorkspace(); if (ticket !== serial) return;
@@ -507,12 +518,25 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   }
   async function openReviewProposal(ref, ownerActor, snapshotId) {
     if(!hasSprintReview(caps()))return;
+    const previous = JSON.parse(createEditor?.fields.review_proposal_ref?.value || 'null');
+    const same = previous && ['meeting_id','draft_revision_id','draft_digest','decision_id'].every(key => previous[key] === ref[key]);
+    const name = createEditor?.lastFocusedField, field = createEditor?.fields[name];
+    const selection = same && !createEditor.locked() && typeof field?.selectionStart === 'number'
+      ? {name, start:field.selectionStart, end:field.selectionEnd, direction:field.selectionDirection} : null;
     const request=++proposalTicket;await refresh(true);
     if(request!==proposalTicket||!loaded||!createEditor||createEditor.locked())return;
     for(const [key,value] of Object.entries({review_proposal_ref:JSON.stringify(ref),kind:'change',owner_actor:ownerActor,snapshot_id:snapshotId,description:''}))createEditor.set(key,value);
-    await refreshCreateSource();showCreate();
+    await refreshCreateSource();
+    if(request!==proposalTicket||!loaded||!createEditor)return;
+    showCreate();
+    const restored = selection && createEditor.fields[selection.name];
+    if (restored && !restored.disabled && !createEditor.locked()) {
+      for (let parent = restored.parentElement; parent && parent !== element; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
+      restored.focus(); restored.setSelectionRange(selection.start,selection.end,selection.direction);
+    }
   }
   return {element, refresh, openRef, openReviewProposal, relabel, withdraw:unavailable,
+    withdrawReview:(error,ids)=>{if(reviewSources().some(id=>ids.includes(id)))unavailable(error);},
     requirementIds: () => model ? [...model.records.flatMap(row => row.revision.document.affected_requirement_ids),
       ...forms.flatMap(editor => editor.fields?.affected_requirement_ids?.value.split(',').map(value => value.trim()).filter(Boolean) || [])] : [],
     namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id
