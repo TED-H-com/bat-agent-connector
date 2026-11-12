@@ -7,7 +7,7 @@ import {pmStrings} from '../src/pm-strings.js';
 import {pmMeetingStrings} from '../src/pm-meetings-strings.js';
 import {workResultStrings} from '../src/pm-work-result-strings.js';
 const route=`/dashboard/#/pm/${workspaceId}`;
-const prohibited=['SOURCE_REQUIREMENT_LABEL','SOURCE_ASSESSMENT_TEXT','SOURCE_HISTORICAL_INPUT','SOURCE_FEEDBACK','SOURCE_RESULT','Members regain access without losing their account','Account recovery snapshot','Relevant tests and actual behavior are checked'];
+const prohibited=['SOURCE_DIFFERENT_PLAN_REQUIREMENT','SOURCE_REQUIREMENT_LABEL','SOURCE_ASSESSMENT_TEXT','SOURCE_HISTORICAL_INPUT','SOURCE_FEEDBACK','SOURCE_RESULT','Members regain access without losing their account','Account recovery snapshot','Relevant tests and actual behavior are checked'];
 async function storageSafe(page:any){
   const entries=await page.evaluate(()=>Object.entries(localStorage));
   for(const [key,value]of entries)for(const text of prohibited)expect(key+' '+value).not.toContain(text);
@@ -277,4 +277,17 @@ test('Sprint entrance resumes the selected Review when a newer meeting exists',a
   await openPmSection(page,'schedule','ui_sprints');await page.getByRole('button',{name:w.pm_review_guide,exact:true}).click();
   await expect.poll(()=>f.state.requests.filter((row:any)=>row.path.includes('/meetings/'+original)).length).toBeGreaterThan(before);await expect(choice).toBeEnabled();await expect(choice).toHaveValue(original);
   expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual([]);await storageSafe(page);
+});
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'] as const)test(`requirement labels stay with their fixed plan revision ${native?'IPC':'HTTP'} ${locale}`,async({browser,baseURL})=>{
+  for(const samePlan of [false,true]){
+  const context=await browser.newContext({baseURL,locale,viewport:{width:390,height:950}}),page=await context.newPage(),f=guidedReviewFixture();
+  seedGuidedReview(f,3);f.detail.snapshot.baseline.document.requirements[0].text='SOURCE_DIFFERENT_PLAN_REQUIREMENT';
+  f.detail.draft.document.guided_review.requirements=[{plan_revision_id:samePlan?f.detail.snapshot.baseline.document_revision:'pmrev_'+'f'.repeat(32),requirement_id:'account.recovery',acceptance:'unassessed',qualified:false,contributions:[]}];
+  await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'discussions','ui_meetings');
+  const outcomes=page.locator('[data-pm-review-step="2"]');
+  if(samePlan)await expect(outcomes).toContainText('SOURCE_DIFFERENT_PLAN_REQUIREMENT');
+  else{await expect(outcomes).not.toContainText('SOURCE_DIFFERENT_PLAN_REQUIREMENT');await expect(outcomes).toContainText('pmrev_'+'f'.repeat(32));}
+  await storageSafe(page);expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual([]);expect(f.state.providerCalls).toBe(0);await context.close();
+  }
 });

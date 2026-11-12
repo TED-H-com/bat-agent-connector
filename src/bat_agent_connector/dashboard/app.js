@@ -25811,6 +25811,11 @@ function reviewPromptKeys(detail, governance = []) {
 		!fixed || !draft.output.next_steps.length || (draft.decisions || []).some((decision) => !governance.some((row) => row.revision?.action === "pm.governance.decide" && Object.entries(reviewProposal(detail, decision.id) || { missing: true }).every(([key, value]) => row.record.context.review_proposal_ref?.[key] === value))) ? "pm_review_direction_prompt" : null
 	].filter(Boolean);
 }
+function reviewRequirementLabel(snapshot, requirement, fallback) {
+	const baseline = snapshot?.baseline;
+	if (!requirement.plan_revision_id || requirement.plan_revision_id !== baseline?.document_revision) return fallback;
+	return baseline.document?.requirements?.find((row) => row.id === requirement.requirement_id)?.text || fallback;
+}
 //#endregion
 //#region src/pm-sprint-review.js
 function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = null, onNote = null, canPlan = false }) {
@@ -25849,7 +25854,7 @@ function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = 
 		plan: row.plan_ref,
 		requirements: row.requirements,
 		assessment: row.assessment
-	}))), ...(fixed?.requirements || []).map((row) => h("p", {}, detail.snapshot.baseline?.document?.requirements?.find((item) => item.id === row.requirement_id)?.text || t("pm_meeting_unknown"), " · ", t("pq_" + row.acceptance), exact({
+	}))), ...(fixed?.requirements || []).map((row) => h("p", {}, reviewRequirementLabel(detail.snapshot, row, t("pm_meeting_unknown")), " · ", t("pq_" + row.acceptance), exact({
 		requirement_id: row.requirement_id,
 		plan_revision_id: row.plan_revision_id
 	}))), edit())), section(3, h("div", {}, prompt("pm_review_feedback_prompt"), ...(fixed?.feedback || []).map((row) => h("article", { class: "pm-fact" }, text(row.content), row.superseded_at_selection ? text(t("pm_review_historical")) : "", exact(row.reference))), ...(draft?.output.environment_changes || []).map((value) => text(t("pm_meeting_environment_changes") + ": " + value)), onNote ? button({

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {hasSprintReview, reviewPromptKeys, reviewReferenceKey, reviewStep, reviewPrompts, reviewProposal, reviewInputSource, emptyReviewBasis} from '../src/pm-sprint-review-state.js';
+import {hasSprintReview, reviewPromptKeys, reviewReferenceKey, reviewRequirementLabel, reviewStep, reviewPrompts, reviewProposal, reviewInputSource, emptyReviewBasis} from '../src/pm-sprint-review-state.js';
 
 test('guide requires exactly capability version one',()=>{
   for(const value of [undefined,true,{}, {version:2},{version:'1'}])assert.equal(hasSprintReview({features:{pm_workspaces:{guided_sprint_review:value}}}),false);
@@ -47,4 +47,13 @@ test('facilitation prompts reflect missing server facts and stop after completio
   assert.deepEqual(reviewPromptKeys(detail,governance),[]);detail.draft.document.guided_review.gaps.push({reason:'acceptance_missing'});
   assert.deepEqual(reviewPromptKeys(detail,governance),['pm_review_outcomes_prompt']);
   detail.completion={document:{}};assert.deepEqual(reviewPromptKeys(detail),[]);
+});
+
+test('a requirement label needs the exact original plan revision as well as its local ID',()=>{
+  const snapshot={baseline:{document_revision:'pmrev_'+'1'.repeat(32),document:{requirements:[{id:'same',text:'New plan meaning'}]}}};
+  const before=structuredClone(snapshot),fallback='Original label unavailable';
+  assert.equal(reviewRequirementLabel(snapshot,{plan_revision_id:snapshot.baseline.document_revision,requirement_id:'same'},fallback),'New plan meaning');
+  for(const plan_revision_id of [undefined,'pmrev_'+'2'.repeat(32)])assert.equal(reviewRequirementLabel(snapshot,{plan_revision_id,requirement_id:'same'},fallback),fallback);
+  assert.equal(reviewRequirementLabel(snapshot,{plan_revision_id:snapshot.baseline.document_revision,requirement_id:'missing'},fallback),fallback);
+  assert.deepEqual(snapshot,before);
 });

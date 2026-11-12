@@ -36,3 +36,9 @@ export function reviewPromptKeys(detail, governance = []) {
       && Object.entries(reviewProposal(detail,decision.id)||{missing:true}).every(([key,value])=>row.record.context.review_proposal_ref?.[key]===value))) ? 'pm_review_direction_prompt' : null,
   ].filter(Boolean);
 }
+
+export function reviewRequirementLabel(snapshot, requirement, fallback) {
+  const baseline=snapshot?.baseline;
+  if(!requirement.plan_revision_id || requirement.plan_revision_id!==baseline?.document_revision)return fallback;
+  return baseline.document?.requirements?.find(row=>row.id===requirement.requirement_id)?.text || fallback;
+}

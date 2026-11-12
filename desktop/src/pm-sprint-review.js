@@ -2,7 +2,7 @@ import {button, disclosure, sectionCard} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {qualityFact} from './pm-quality-projections.js';
 import {discussHref} from './pm-discuss-link.js';
-import {emptyReviewBasis, reviewPrompts, reviewPromptKeys, reviewReferenceKey, reviewStep} from './pm-sprint-review-state.js';
+import {emptyReviewBasis, reviewPrompts, reviewPromptKeys, reviewReferenceKey, reviewRequirementLabel, reviewStep} from './pm-sprint-review-state.js';
 
 // All prose here is ephemeral server content. Only the explicit typed selection
 // is passed to the existing durable meeting form.
@@ -24,7 +24,7 @@ export function reviewProjection({h, t, detail, governance = [], onEdit, onCompl
       text(t('pm_review_reported') + ': ' + t('pm_review_'+(row.reported||'none'))),
       qualityFact({h,t,fact:{...row,reference:row.reference.assessment_ref}}), text(t('pm_review_verification') + ': ' + t('pm_review_' + row.verification)),
       exact({reference:row.reference,original_binding:row.binding_id,plan:row.plan_ref,requirements:row.requirements,assessment:row.assessment}))),
-      ...(fixed?.requirements || []).map(row => h('p', {}, detail.snapshot.baseline?.document?.requirements?.find(item=>item.id===row.requirement_id)?.text || t('pm_meeting_unknown'), ' · ', t('pq_' + row.acceptance),exact({requirement_id:row.requirement_id,plan_revision_id:row.plan_revision_id}))), edit())),
+      ...(fixed?.requirements || []).map(row => h('p', {}, reviewRequirementLabel(detail.snapshot,row,t('pm_meeting_unknown')), ' · ', t('pq_' + row.acceptance),exact({requirement_id:row.requirement_id,plan_revision_id:row.plan_revision_id}))), edit())),
     section(3, h('div', {}, prompt('pm_review_feedback_prompt'), ...(fixed?.feedback || []).map(row => h('article', {class: 'pm-fact'},
       text(row.content), row.superseded_at_selection ? text(t('pm_review_historical')) : '', exact(row.reference))), ...(draft?.output.environment_changes||[]).map(value=>text(t('pm_meeting_environment_changes')+': '+value)),
       onNote?button({variant:'secondary',label:t('pm_meeting_save_note'),onClick:onNote}):'',edit())),

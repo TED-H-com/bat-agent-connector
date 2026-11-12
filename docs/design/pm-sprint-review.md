@@ -180,7 +180,10 @@ Reviews omit unavailable editing actions and prompts; completed decision
 attribution uses the frozen completion without fetching later governance revisions.
 Legacy drafts need an explicit guided revision before typed governance/completion.
 Reference selection compares scalar identities independently of JSON property order;
-this does not rewrite existing durable requests or operation keys. Contributors see an
+this does not rewrite existing durable requests or operation keys. Requirement
+labels also require the exact original plan revision; a local requirement ID alone
+cannot relabel historical facts using a newer baseline. Missing labels retain their
+original readable IDs in Details. Contributors see an
 awaiting-owner state. Completed, governed decisions are explicit source options
 in existing Idea forms; their original proof remains visible in the pmd_ draft.
 “Draft only; scope not adopted; work not started” marks the Planning boundary.
