@@ -59,8 +59,12 @@ async def test_deep_json_real_http_and_all_downstream_stages(ops, served, monkey
     for depth in (getattr(schema, 'MAX_CONTAINER_DEPTH', 12), getattr(schema, 'MAX_CONTAINER_DEPTH', 12) + 1, 500):
         with fault(ops):
             changed = copy.deepcopy(original)
-            # Root and coverage are containers 1 and 2.
-            changed['coverage']['extension'] = nested(depth - 2, kind)
+            if depth == 500:
+                # Preserve the original review probe in the printed coverage field.
+                changed['coverage']['extension'] = nested(depth - 2, kind)
+            else:
+                # Root is container 1; isolate depth from the separate SVG size bound.
+                changed['extension'] = nested(depth - 1, kind)
             document(ops, 'pm_roadmap_revisions', 'revision_id', rid, changed)
             ops.db.execute('UPDATE pm_roadmap_revisions SET document_digest=? WHERE revision_id=?',
                            (sources.digest(changed), rid))

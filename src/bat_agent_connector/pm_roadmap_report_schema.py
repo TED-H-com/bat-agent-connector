@@ -179,11 +179,15 @@ def require(spec, value, *, authority=False):
         raise OperationError('PM_REPORT_SOURCE_CHANGED', 'The fixed report source identities do not match', 409)
 
 
-# Count containers including each document root, not journal row envelopes.
-# The original maintenance repair required-CI matrix sets the producer floor:
-# snapshot/maintenance/report/repairs/entry/progress/required_ci_receipts/entry/
-# proof/required/entry/check_ids (12 containers). Quality matrices need 11.
-MAX_CONTAINER_DEPTH = 12
+# Native JSON safety budget (serde_json / connection_sources): count dict/list
+# containers including each complete document root, not journal row envelopes.
+# Scalars do not consume depth. This is downstream safety margin, not a producer
+# shape contract; the iterative walk also covers opaque and future members.
+MAX_CONTAINER_DEPTH = 127
+
+
+def source_changed():
+    return OperationError('PM_REPORT_SOURCE_CHANGED', 'The fixed report source identities do not match', 409)
 
 
 def closure_documents(closure):
@@ -205,7 +209,7 @@ def require_depth(document):
             stack.pop()
         elif type(value) in (dict, list):
             if len(stack) > MAX_CONTAINER_DEPTH:
-                require(BOOL, None)
+                raise source_changed()
             stack.append(iter(value.values() if type(value) is dict else value))
 
 

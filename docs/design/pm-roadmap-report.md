@@ -92,22 +92,29 @@ I/O and corruption errors) retain their existing behavior. No catch surrounds th
 v1 validator, proofs, projection or renderer. Digest-consistent malformed v1 structures
 refuse with PM_REPORT_SOURCE_CHANGED/409 after authorization, never a transport 422.
 Immediately after the template check, an iterative whole-document walk includes
-opaque JSON leaves and unknown members. It permits at most **12 nested containers**,
-counting each document root as one; the 13th gives the same controlled 409 after
-authorization. The deepest fixed producer structure is a snapshot's maintenance repair
-required-CI receipt: maintenance/report/repairs/entry/progress/required_ci_receipts/entry/
-proof/required/entry/check_ids (12 including the root; status_ids has the same depth).
-The repair child result also reaches 12 at confinement/evidence/host_check/protected_roots.
-Original quality criterion verification references need 11 containers.
-This is below serde_json's 127-container budget. No interpreter recursion limit or
-post-authorization catch changes. Collection's existing concealment still applies
-if decoding or authorization cannot complete.
+opaque JSON leaves and unknown members. The downstream safety bound is the native
+JSON budget of **127 nested containers**, matching `connection_sources._native_json_values`
+and serde_json. Each complete document's root dict/list counts as container one;
+each nested dict/list adds one; scalars add zero. Journal row envelopes do not count.
+The 128th container gives the same controlled 409 after authorization. The production
+walk is iterative and checks depth only; it does not call the recursive native checker.
+This generous safety bound is not a contract on current producer shapes. The real
+maintenance repair fixture currently reaches 12 containers, leaving 115 containers
+of margin. Its test requires producer depth to remain at most one quarter of the
+budget, so producer growth is detected long before the read boundary. It prints the
+deepest path (currently the repair child's confinement/evidence/host_check/protected_roots).
+No interpreter recursion limit or post-authorization catch changes. Collection's
+existing concealment still applies if decoding or authorization cannot complete.
+The separate content-byte and SVG-page limits still apply to authorized documents
+within the depth budget; depth acceptance is not a promise of unbounded output.
 
 Field enumeration alone does not prove downstream safety. Test-only recording
 mappings audit actual projection and all renderer accesses for ordinary, legacy,
 quality matrix, maintenance, forecast and empty-baseline closures. Explicit opaque
-metadata is only copied to serialized JSON. Boundary tests measure real HTTP stack
-headroom through deepcopy, canonical JSON and all six outputs; over-depth input
+metadata is only copied to serialized JSON. Boundary tests measure stack headroom
+through the service, shared read, daemon, HTTP, RPC and MCP paths, including deepcopy,
+canonical JSON and all six outputs.
+The peak must leave at least half the default recursion budget free; over-depth input
 never reaches projection. Producer literal enumeration drift is checked separately.
 
 Schema-generated tests enumerate every field and container element using all eight

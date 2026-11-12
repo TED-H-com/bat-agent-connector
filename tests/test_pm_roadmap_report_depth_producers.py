@@ -22,7 +22,7 @@ def deepest(value):
     return len(result) + 1, result
 
 
-async def test_actual_repair_required_ci_sets_minimum_depth(published):
+async def test_actual_repair_required_ci_preserves_depth_margin(published):
     w, ops = published, published['d'].ops
     await shared.select(w, w['ci_ref'])
     repair = shared.view(w, w['parent'])
@@ -32,10 +32,10 @@ async def test_actual_repair_required_ci_sets_minimum_depth(published):
     # The existing snapshot carrier embeds this report at maintenance.report.
     snapshot = {'maintenance': {'report': report, 'access_refs': refs}}
     depth, path = deepest(snapshot)
-    print('producer container floor', depth, path)
-    assert depth == schema.MAX_CONTAINER_DEPTH == 12
+    print('producer container depth', depth, path, 'margin', schema.MAX_CONTAINER_DEPTH - depth)
+    assert depth <= schema.MAX_CONTAINER_DEPTH // 4
     proof = report['repairs'][0]['progress']['required_ci_receipts'][0]['proof']
     assert isinstance(proof['required'][0]['check_ids'], list)
     assert len(('maintenance', 'report', 'repairs', 0, 'progress', 'required_ci_receipts', 0,
-                'proof', 'required', 0, 'check_ids')) + 1 == depth
+                'proof', 'required', 0, 'check_ids')) + 1 <= depth
     schema.require_depth(snapshot)
