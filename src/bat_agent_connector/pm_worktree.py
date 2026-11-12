@@ -115,8 +115,9 @@ def _host_source() -> str:
     return shared + "\n" + drafts + "\n" + paths + "\n" + (resources.files(__package__) / "pm_revision_host.py").read_text()
 
 
-async def _host_call(ctx, plan, phase, *, check, snapshot=None, revision=None):
-    request = {**plan, "phase": phase, "active_operation_id": ctx.operation_id, **{key: plan["config"][key] for key in ("managed_root", "remote_url")}}
+def host_script(operation_id, plan, phase, *, snapshot=None, revision=None):
+    """The exact bounded wire encoding, also used by local report preflight."""
+    request = {**plan, "phase": phase, "active_operation_id": operation_id, **{key: plan["config"][key] for key in ("managed_root", "remote_url")}}
     if snapshot is not None:
         request["snapshot"] = snapshot
     if revision is not None:
@@ -125,6 +126,11 @@ async def _host_call(ctx, plan, phase, *, check, snapshot=None, revision=None):
     script = "python3 -c " + shlex.quote(_host_source()) + " " + shlex.quote(arg)
     if len(script.encode()) > 120_000:
         raise OperationError("PM_SNAPSHOT_TOO_LARGE", "The bounded snapshot exceeds the host transport limit", 422)
+    return script
+
+
+async def _host_call(ctx, plan, phase, *, check, snapshot=None, revision=None):
+    script = host_script(ctx.operation_id, plan, phase, snapshot=snapshot, revision=revision)
     async def locked_check():
         await _guard(ctx, plan, check)
         if phase == "fetch":
