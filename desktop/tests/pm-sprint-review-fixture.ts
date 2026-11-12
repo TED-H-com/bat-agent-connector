@@ -16,7 +16,7 @@ export function guidedReviewFixture() {
   const note={meeting_id:detail.meeting.meeting_id,context_revision_id:detail.context.context_revision_id,note_id:'pmmnote_'+'9'.repeat(32),sequence:1,content:'SOURCE_FEEDBACK: 使用者需要更清楚的確認步驟。',source_refs:[],actor:'stakeholder'};
   detail.notes.push(note);
   const resultRef={attempt_id:'att_'+'a'.repeat(32),result_id:'res_'+'b'.repeat(32),digest:'sha256:'+'c'.repeat(64),assessment_ref:null};
-  const result={workspace_id:workspaceId,attempt_id:resultRef.attempt_id,sources:{result_id:resultRef.result_id,digest:resultRef.digest},
+  const result:any={workspace_id:workspaceId,attempt_id:resultRef.attempt_id,sources:{result_id:resultRef.result_id,digest:resultRef.digest},
     conversation:{latest_assistant_summary:{text:'SOURCE_RESULT: Reset behavior reported complete.'}},requirements:{items:[]}};
   const response=(data:any,status=200)=>({data:structuredClone(data),status});
   const denied=()=>response({error:{code:'PM_MEETING_SOURCE_UNAVAILABLE',message:'Original source withdrawn'}},404);
@@ -37,6 +37,7 @@ export function guidedReviewFixture() {
     if(path===prefix+'/work/'+'wi_'+'6'.repeat(20)+'/attempts')return response({workspace_id:workspaceId,attempts:[{attempt_id:'att_'+'6'.repeat(32)}],next_cursor:null});
     if(path===prefix+'/work-attempts/'+'att_'+'6'.repeat(32)+'/result')return response({...result,attempt_id:'att_'+'6'.repeat(32),sources:{...result.sources,result_id:'res_'+'6'.repeat(32)},conversation:{latest_assistant_summary:{text:'SOURCE_RESULT_B'}}});
     if(path===prefix+'/threads')return base.dispatch(input);
+    if(input.method==='GET'&&path===prefix+'/threads/'+threadId&&state.feedbackHistory){const reply=await base.dispatch(input);reply.data.input_history=structuredClone(state.feedbackHistory);return reply;}
     if(path.startsWith('/operations/')&&input.method==='GET')return response({operation:[...meeting.state.ops.values(),...governance.state.ops.values(),...base.state.ops.values()].find((op:any)=>path.endsWith(op.operation_id))});
     if(path.includes('/meetings')||path===prefix+'/sprints'||path===prefix+'/snapshots'||action?.startsWith('pm.meeting.')){
       if(state.defer&&input.method==='GET'&&path.includes('/meetings/'))await state.defer;
@@ -73,7 +74,7 @@ export function guidedReviewFixture() {
     if(action==='pm.input.record'&&input.body.params.source_ref.kind==='sprint_review_decision'){const item=base.state.inputs.at(-1),ref=item.source_ref;item.source_decision={reference:ref,decision:detail.completion.document.decisions.find((row:any)=>row.id===ref.decision_id),governance:detail.completion.document.governance_decisions.find((row:any)=>row.decision_id===ref.decision_id),follow_ups:detail.completion.document.follow_ups};}
     return reply;
   }
-  return {state,meeting,sprint,governance,base,detail,note,resultRef,dispatch};
+  return {state,meeting,sprint,governance,base,detail,note,resultRef,result,dispatch};
 }
 
 export function seedGuidedReview(f:ReturnType<typeof guidedReviewFixture>,stage=4){

@@ -196,9 +196,9 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     }
     const context = detail.context.document;
     if (guided()) {
-      const projection=reviewProjection({h,t,detail,governance:model.governance,onEdit:()=>reveal('pm.meeting.draft'),onComplete:owner()?()=>reveal('pm.meeting.complete'):null,onNote:can()?()=>reveal('pm.meeting.note'):null});
+      const projection=reviewProjection({h,t,detail,governance:model.governance,canPlan:can(),onEdit:can()&&detail.meeting.status==='draft'?()=>reveal('pm.meeting.draft'):null,onComplete:owner()&&detail.meeting.status==='draft'&&detail.draft?.document.guided_review?()=>reveal('pm.meeting.complete'):null,onNote:can()&&detail.meeting.status==='draft'?()=>reveal('pm.meeting.note'):null});
       const direction=projection.querySelector('[data-pm-review-step="4"]');
-      for (const decision of detail.draft?.document.decisions||[]) {
+      for (const decision of !detail.completion&&detail.draft?.document.guided_review?detail.draft.document.decisions:[]) {
         const ref=reviewProposal(detail,decision.id),entry=(model.governance||[]).find(row=>Object.entries(ref||{}).every(([key,value])=>row.record.context.review_proposal_ref?.[key]===value));
         if (entry?.revision.document.decision) direction.append(h('p',{},t('pm_meeting_recorded_by',{actor:entry.revision.document.decision.recorded_by}), ' · ',t('pm_gov_'+entry.revision.document.decision.disposition), ' · ', t('pm_meeting_assigned',{actor:entry.revision.document.owner_actor})));
         else if(entry&&role(caps()?.actor)!=='owner')direction.append(note('pm_review_await_owner'));
@@ -432,14 +432,15 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     const ticket=++serial;loaded=false;update();status.replaceChildren();
     try{
       const [meetings,sprints,snapshots]=await Promise.all([pages('meetings','meetings'),pages('sprints','sprints'),pages('snapshots','snapshots')]);alive();if(ticket!==serial)return;
-      if (guidedSprint) selectedId=meetings.filter(row=>row.sprint_id===guidedSprint&&row.kind==='review').at(-1)?.meeting_id||'';
+      if (guidedSprint) selectedId=meetings.find(row=>row.meeting_id===selectedId&&row.sprint_id===guidedSprint&&row.kind==='review')?.meeting_id
+        ||meetings.filter(row=>row.sprint_id===guidedSprint&&row.kind==='review').at(-1)?.meeting_id||'';
       else if(!meetings.some(row=>row.meeting_id===selectedId))selectedId=meetings.at(-1)?.meeting_id||'';
       const detail=selectedId?check(await api('GET',`${endpoint}/meetings/${selectedId}?history_limit=20`)):null;alive();if(ticket!==serial)return;
       if(detail&&(check(detail.meeting).meeting_id!==selectedId||detail.context?.meeting_id!==selectedId||detail.context.context_revision_id!==detail.meeting.context_revision_id
         ||detail.context.document.sprint_id!==detail.meeting.sprint_id||check(detail.snapshot).snapshot_id!==detail.context.document.snapshot_ref.snapshot_id
         ||detail.draft&&(detail.draft.meeting_id!==selectedId||detail.draft.revision_id!==detail.meeting.draft_revision_id)
         ||detail.completion&&(detail.completion.meeting_id!==selectedId||detail.completion.completion_id!==detail.meeting.completion_id)))throw Error(t('pm_scope_mismatch'));
-      const governance=hasSprintReview(caps())&&detail?.meeting.kind==='review'?await pages('governance','records'):[];alive();if(ticket!==serial)return;
+      const governance=hasSprintReview(caps())&&detail?.meeting.kind==='review'&&!detail.completion?await pages('governance','records'):[];alive();if(ticket!==serial)return;
       const next=JSON.stringify([governance.map(row=>row.revision.revision_id),selectedId,detail?.meeting.version,sprints.map(row=>[row.sprint_id,row.version]),snapshots.map(row=>row.snapshot_id),workspace()?.version]);
       const changed=signature&&signature!==next;model={meetings,sprints,snapshots,detail,governance};loaded=true;editors.hidden=false;
       choose.replaceChildren(...meetings.map(row=>h('option',{value:row.meeting_id},row.title)));choose.value=selectedId;

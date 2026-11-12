@@ -22,3 +22,17 @@ export function reviewInputSource(detail, decisionId) {
     completion_id: detail.completion.completion_id, completion_digest: detail.completion.document_digest, decision_id: decisionId};
 }
 export const emptyReviewBasis = () => ({version: 1, results: [], feedback_items: [], governance_revision_ids: [], follow_up_ref: null});
+
+// Typed references contain fixed scalar identities. Object property order is not identity.
+export const reviewReferenceKey = reference => JSON.stringify(reference === null ? null
+  : Object.fromEntries(Object.keys(reference).sort().map(key => [key, reference[key]])));
+export function reviewPromptKeys(detail, governance = []) {
+  if(detail?.completion)return [];
+  const draft=detail?.draft?.document, fixed=draft?.guided_review;
+  return [
+    !fixed || fixed.gaps?.length ? 'pm_review_outcomes_prompt' : null,
+    !fixed?.feedback?.length ? 'pm_review_feedback_prompt' : null,
+    !fixed || !draft.output.next_steps.length || (draft.decisions||[]).some(decision=>!governance.some(row=>row.revision?.action==='pm.governance.decide'
+      && Object.entries(reviewProposal(detail,decision.id)||{missing:true}).every(([key,value])=>row.record.context.review_proposal_ref?.[key]===value))) ? 'pm_review_direction_prompt' : null,
+  ].filter(Boolean);
+}

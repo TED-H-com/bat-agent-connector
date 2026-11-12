@@ -1,41 +1,43 @@
 import {button, disclosure, sectionCard} from './ui/components.js';
-import {timeStamp} from './ui/stamps.js';
+import {timeStamp, timeText} from './ui/stamps.js';
 import {qualityFact} from './pm-quality-projections.js';
 import {discussHref} from './pm-discuss-link.js';
-import {emptyReviewBasis, reviewPrompts, reviewStep} from './pm-sprint-review-state.js';
+import {emptyReviewBasis, reviewPrompts, reviewPromptKeys, reviewReferenceKey, reviewStep} from './pm-sprint-review-state.js';
 
 // All prose here is ephemeral server content. Only the explicit typed selection
 // is passed to the existing durable meeting form.
-export function reviewProjection({h, t, detail, governance = [], onEdit, onComplete=null, onNote=null}) {
+export function reviewProjection({h, t, detail, governance = [], onEdit, onComplete=null, onNote=null, canPlan=false}) {
   const draft = detail.draft?.document, fixed = draft?.guided_review, context = detail.context.document, next = reviewStep(detail,governance);
   const text = value => h('p', {class: 'pm-note-text'}, value);
   const exact = value => disclosure({label: t('pm_meeting_details'), body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(value, null, 2))});
   const section = (number, body) => sectionCard({body: h('section', {'data-pm-review-step': number},
     h('h3', {}, `${number}. ${t('pm_review_step_' + number)}`), body)});
-  const edit = () => button({variant: 'secondary', label: t('pm_meeting_edit_draft'), onClick: onEdit});
+  const edit = () => onEdit ? button({variant: 'secondary', label: t('pm_meeting_edit_draft'), onClick: onEdit}) : '';
+  const promptKeys = reviewPromptKeys(detail,governance);
+  const prompt = key => onEdit&&promptKeys.includes(key) ? text(t(key)) : '';
   const result = h('div', {'data-pm-guided-review': '', 'data-pm-review-next': next},
     h('p',{class:'muted'},t('pm_review_available_step',{step:t('pm_review_step_'+next)})),
     section(1, h('div', {}, h('h4',{},t('pm_meeting_goal')),text(context.sprint_goal.text), h('h4', {}, t('pm_meeting_dod')),
       ...(context.artifacts.dod?.document.criteria || []).map(row => text(row.text)), text(t('pm_meeting_source_frozen')),h('p',{},t('pm_meeting_snapshot'),' · ',timeStamp(context.snapshot_ref.as_of)),
       exact({snapshot: context.snapshot_ref, context_revision_id: detail.context.context_revision_id, coverage:detail.snapshot.coverage, frozen_at: fixed?.frozen_at}))),
-    section(2, h('div', {}, text(t('pm_review_outcomes_prompt')), ...(draft?[text(draft.output.goal_review),...(draft.output.outcomes||[]).map(row=>text(row.observation))]:[]), ...(fixed?.results || []).map(row => h('article', {class: 'pm-fact'},
+    section(2, h('div', {}, prompt('pm_review_outcomes_prompt'), ...(draft?[text(draft.output.goal_review),...(draft.output.outcomes||[]).map(row=>text(row.observation))]:[]), ...(fixed?.results || []).map(row => h('article', {class: 'pm-fact'},
       text(t('pm_review_reported') + ': ' + t('pm_review_'+(row.reported||'none'))),
       qualityFact({h,t,fact:{...row,reference:row.reference.assessment_ref}}), text(t('pm_review_verification') + ': ' + t('pm_review_' + row.verification)),
       exact({reference:row.reference,original_binding:row.binding_id,plan:row.plan_ref,requirements:row.requirements,assessment:row.assessment}))),
       ...(fixed?.requirements || []).map(row => h('p', {}, detail.snapshot.baseline?.document?.requirements?.find(item=>item.id===row.requirement_id)?.text || t('pm_meeting_unknown'), ' · ', t('pq_' + row.acceptance),exact({requirement_id:row.requirement_id,plan_revision_id:row.plan_revision_id}))), edit())),
-    section(3, h('div', {}, text(t('pm_review_feedback_prompt')), ...(fixed?.feedback || []).map(row => h('article', {class: 'pm-fact'},
+    section(3, h('div', {}, prompt('pm_review_feedback_prompt'), ...(fixed?.feedback || []).map(row => h('article', {class: 'pm-fact'},
       text(row.content), row.superseded_at_selection ? text(t('pm_review_historical')) : '', exact(row.reference))), ...(draft?.output.environment_changes||[]).map(value=>text(t('pm_meeting_environment_changes')+': '+value)),
       onNote?button({variant:'secondary',label:t('pm_meeting_save_note'),onClick:onNote}):'',edit())),
-    section(4, h('div', {}, text(t('pm_review_direction_prompt')), ...(draft?.decisions || []).map(row => h('article', {class: 'pm-fact'},
-      text(row.text), text(row.rationale), text(t('pm_meeting_assigned', {actor: row.owner_actor})), exact({id:row.id,follow_up_ids:row.follow_up_ids}))), ...(draft?.output.next_steps||[]).map(text),
+    section(4, h('div', {}, prompt('pm_review_direction_prompt'), ...(draft?.decisions || []).map(row => h('article', {class: 'pm-fact'},
+      text(row.text), text(row.rationale), text(t('pm_meeting_assigned', {actor: row.owner_actor||t('pm_meeting_unknown')})), exact({id:row.id,follow_up_ids:row.follow_up_ids}))), ...(draft?.output.next_steps||[]).map(text),
       ...(draft?.follow_ups||[]).map(row=>h('article',{class:'pm-fact'},text(row.text),text(t('pm_meeting_assigned',{actor:row.owner_actor})),text(row.expected_effect),text(row.verification))),
       disclosure({label:t('pm_meeting_unresolved_questions'),body:h('ul',{},...(draft?.unresolved_questions||[]).map(value=>h('li',{},value)))}),edit())),
     section(5, h('div', {}, text(detail.completion?.document.discussion_summary || t('pm_meeting_complete_help')),
       !detail.completion&&onComplete?button({variant:'primary',label:t('pm_meeting_complete'),onClick:onComplete}):'',
       ...(detail.completion?.document.governance_decisions || []).map(row => h('p', {}, t('pm_meeting_recorded_by', {actor:row.recorded_by}), ' · ',t('pm_gov_'+row.disposition),' · ',
         t('pm_meeting_assigned', {actor:row.owner_actor}))), exact(detail.completion ? {completion_id:detail.completion.completion_id,document_digest:detail.completion.document_digest} : {}))),
-    section(6, h('div', {}, text(t('pm_review_draft_only')), detail.completion?.document.governance_decisions?.length ? h('a', {class:'ui-button secondary', href:discussHref({workspaceId:detail.workspace_id,
-      refs:[{kind:'meeting',id:detail.meeting.meeting_id}]})}, t('pm_review_planning')) : text(t(detail.completion?'pm_review_no_decision':'pm_review_complete_first')))));
+    section(6, h('div', {}, text(t('pm_review_draft_only')), canPlan&&detail.completion?.document.governance_decisions?.length ? h('a', {class:'ui-button secondary', href:discussHref({workspaceId:detail.workspace_id,
+      refs:[{kind:'meeting',id:detail.meeting.meeting_id}]})}, t('pm_review_planning')) : text(t(!canPlan?'pm_panel_read_only':detail.completion?'pm_review_no_decision':'pm_review_complete_first')))));
   if (fixed?.gaps.length) {
     const prompts = reviewPrompts(fixed.gaps);
     result.prepend(sectionCard({body:h('div', {'data-pm-review-gaps':''}, h('h3', {}, t('pm_meeting_unresolved_questions')),
@@ -75,7 +77,7 @@ export function reviewSources({h,t,api,alive,workspaceId,detail,field,getEditor,
     controls.push(()=>{clear.disabled=!can();});holder.append(clear);
   }
   const notes=(detail.notes||[]).filter(row=>row.context_revision_id===detail.context.context_revision_id);
-  for(const row of notes)choice(feedback,row.content,{id:row.note_id,source_ref:{kind:'meeting_note',note_id:row.note_id}},'feedback_items',row=>JSON.stringify(row.source_ref));
+  for(const row of notes)choice(feedback,row.content,{id:row.note_id,source_ref:{kind:'meeting_note',note_id:row.note_id}},'feedback_items',row=>reviewReferenceKey(row.source_ref));
   // A source must be explicitly opened. Neither selection nor opening dispatches work.
   const work=h('select',{'aria-label':t('pm_review_work')},h('option',{value:''},t('pm_review_choose')),
     ...detail.context.document.selected_items.map(row=>h('option',{value:row.work_item_id},row.title||detail.snapshot.work?.find(item=>item.work_item_id===row.work_item_id)?.title||t('pm_meeting_unknown'))));
@@ -96,11 +98,11 @@ export function reviewSources({h,t,api,alive,workspaceId,detail,field,getEditor,
           h('p',{},t('pq_acceptance'),': ',t('pq_unassessed')),exact({verification:data.verification,requirements:data.requirements}));
         const seen=new Set(), assessment=h('select',{'aria-label':t('pm_review_assessment')},h('option',{value:'null'},t('pq_unassessed')));
         for(const item of data.requirements?.items||[])for(const row of item.assessments||[]){
-          const value=JSON.stringify(row.reference);if(seen.has(value))continue;seen.add(value);
-          assessment.append(h('option',{value},`${row.assessed_by} · ${row.assessed_at} · ${t(row.applicable?'pq_original':'pm_review_historical')}`));
+          const value=reviewReferenceKey(row.reference);if(seen.has(value))continue;seen.add(value);
+          assessment.append(h('option',{value},`${row.assessed_by} · ${timeText(row.assessed_at)} · ${t(row.applicable===true?'wres_req_applicable':row.applicable===false?'wres_req_no_longer_applies':'pq_fixed')}`));
           resultRows.append(h('ul',{},...(row.original?.requirements||[]).map(requirement=>h('li',{},data.requirements.items.find(item=>item.requirement_id===requirement.requirement_id)?.text||t('pm_meeting_unknown'),' · ',t('pq_'+requirement.status)))),exact({reference:row.reference,proof:row.original}));
         }
-        const syncAssessment=()=>{assessment.disabled=!can()||!basis().results.some(row=>row.result_id===ref.result_id);assessment.value=JSON.stringify(basis().results.find(row=>row.result_id===ref.result_id)?.assessment_ref||null);};
+        const syncAssessment=()=>{assessment.disabled=!can()||!basis().results.some(row=>row.result_id===ref.result_id);assessment.value=reviewReferenceKey(basis().results.find(row=>row.result_id===ref.result_id)?.assessment_ref||null);};
         assessment.addEventListener('change',()=>change(value=>{const row=value.results.find(row=>row.result_id===ref.result_id);if(row)row.assessment_ref=JSON.parse(assessment.value);}));
         controls.push(syncAssessment);resultRows.append(h('label',{},t('pm_review_assessment'),assessment));
       }sync();
@@ -121,7 +123,7 @@ export function reviewSources({h,t,api,alive,workspaceId,detail,field,getEditor,
     try{const data=await read(`/threads/${id}`);if(!current(ticket)||thread.value!==id)return;check(data.thread);
       if(data.thread?.thread_id!==id)throw Error(t('pm_scope_mismatch'));
       if(data.coverage?.inputs_truncated||data.coverage?.history_truncated)threadRows.append(h('p',{},t('pm_meeting_partial')));
-      for(const row of [...(data.inputs||[]),...(data.input_history||[])])choice(threadRows,row.value,{id:row.input_id,source_ref:{kind:'discussion_input',thread_id:id,input_id:row.input_id,operation_id:row.operation_id}},'feedback_items',row=>JSON.stringify(row.source_ref));sync();
+      for(const row of [...(data.inputs||[]),...(data.input_history||[])])choice(threadRows,row.value,{id:row.input_id,source_ref:{kind:'discussion_input',thread_id:id,input_id:row.input_id,operation_id:row.operation_id}},'feedback_items',row=>reviewReferenceKey(row.source_ref));sync();
     }catch(error){if(current(ticket))fail(error);}
   }}),threadRows);
   const governanceRows=h('div');issues.append(governanceRows);

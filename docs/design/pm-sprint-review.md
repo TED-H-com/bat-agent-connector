@@ -163,18 +163,24 @@ Dashboard journeys exercise HTTP and injected IPC, English and zh-TW, owner and
 contributor views, withdrawal, original-key recovery, and all localStorage entries.
 
 The selected Sprint offers “Guide Sprint Review” only with capability version 1.
-Discussions/Meetings resumes the same meeting using existing navigation. Six
+Discussions/Meetings resumes the same meeting using existing navigation. Reentering
+from a Sprint preserves its explicitly selected Review when a newer meeting exists. Six
 sections fix context, inspect outcomes, hear exact feedback, choose direction,
 record the Review, and optionally request Planning. The next available section is
 projected from context, frozen draft, governance revisions and completion; there
-is no persisted client progress. Three facilitation questions stay visible;
-remaining gaps have a count and full source disclosure. Saved narrative is read-only,
+is no persisted client progress. Up to three facilitation questions reflect missing evidence, feedback and
+decisions; remaining gaps have a count and full source disclosure. Saved narrative is read-only,
 never an editable default. Selection reads existing bounded catalogs; incomplete
 catalogs are disclosed and selections are never silently trimmed.
 
 Proposal links open the existing governance form with fixed IDs and digests,
 assigned actor and snapshot; the server supplies the original description. Actual
-owners decide and the designated Sprint owner completes. Contributors see an
+owners decide and the designated Sprint owner completes. Completed and read-only
+Reviews omit unavailable editing actions and prompts; completed decision
+attribution uses the frozen completion without fetching later governance revisions.
+Legacy drafts need an explicit guided revision before typed governance/completion.
+Reference selection compares scalar identities independently of JSON property order;
+this does not rewrite existing durable requests or operation keys. Contributors see an
 awaiting-owner state. Completed, governed decisions are explicit source options
 in existing Idea forms; their original proof remains visible in the pmd_ draft.
 “Draft only; scope not adopted; work not started” marks the Planning boundary.

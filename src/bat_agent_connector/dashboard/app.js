@@ -25801,9 +25801,19 @@ var emptyReviewBasis = () => ({
 	governance_revision_ids: [],
 	follow_up_ref: null
 });
+var reviewReferenceKey = (reference) => JSON.stringify(reference === null ? null : Object.fromEntries(Object.keys(reference).sort().map((key) => [key, reference[key]])));
+function reviewPromptKeys(detail, governance = []) {
+	if (detail?.completion) return [];
+	const draft = detail?.draft?.document, fixed = draft?.guided_review;
+	return [
+		!fixed || fixed.gaps?.length ? "pm_review_outcomes_prompt" : null,
+		!fixed?.feedback?.length ? "pm_review_feedback_prompt" : null,
+		!fixed || !draft.output.next_steps.length || (draft.decisions || []).some((decision) => !governance.some((row) => row.revision?.action === "pm.governance.decide" && Object.entries(reviewProposal(detail, decision.id) || { missing: true }).every(([key, value]) => row.record.context.review_proposal_ref?.[key] === value))) ? "pm_review_direction_prompt" : null
+	].filter(Boolean);
+}
 //#endregion
 //#region src/pm-sprint-review.js
-function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = null, onNote = null }) {
+function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = null, onNote = null, canPlan = false }) {
 	const draft = detail.draft?.document, fixed = draft?.guided_review, context = detail.context.document, next = reviewStep(detail, governance);
 	const text = (value) => h("p", { class: "pm-note-text" }, value);
 	const exact = (value) => disclosure({
@@ -25811,11 +25821,13 @@ function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = 
 		body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(value, null, 2))
 	});
 	const section = (number, body) => sectionCard({ body: h("section", { "data-pm-review-step": number }, h("h3", {}, `${number}. ${t("pm_review_step_" + number)}`), body) });
-	const edit = () => button({
+	const edit = () => onEdit ? button({
 		variant: "secondary",
 		label: t("pm_meeting_edit_draft"),
 		onClick: onEdit
-	});
+	}) : "";
+	const promptKeys = reviewPromptKeys(detail, governance);
+	const prompt = (key) => onEdit && promptKeys.includes(key) ? text(t(key)) : "";
 	const result = h("div", {
 		"data-pm-guided-review": "",
 		"data-pm-review-next": next
@@ -25824,7 +25836,7 @@ function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = 
 		context_revision_id: detail.context.context_revision_id,
 		coverage: detail.snapshot.coverage,
 		frozen_at: fixed?.frozen_at
-	}))), section(2, h("div", {}, text(t("pm_review_outcomes_prompt")), ...draft ? [text(draft.output.goal_review), ...(draft.output.outcomes || []).map((row) => text(row.observation))] : [], ...(fixed?.results || []).map((row) => h("article", { class: "pm-fact" }, text(t("pm_review_reported") + ": " + t("pm_review_" + (row.reported || "none"))), qualityFact({
+	}))), section(2, h("div", {}, prompt("pm_review_outcomes_prompt"), ...draft ? [text(draft.output.goal_review), ...(draft.output.outcomes || []).map((row) => text(row.observation))] : [], ...(fixed?.results || []).map((row) => h("article", { class: "pm-fact" }, text(t("pm_review_reported") + ": " + t("pm_review_" + (row.reported || "none"))), qualityFact({
 		h,
 		t,
 		fact: {
@@ -25840,11 +25852,11 @@ function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = 
 	}))), ...(fixed?.requirements || []).map((row) => h("p", {}, detail.snapshot.baseline?.document?.requirements?.find((item) => item.id === row.requirement_id)?.text || t("pm_meeting_unknown"), " · ", t("pq_" + row.acceptance), exact({
 		requirement_id: row.requirement_id,
 		plan_revision_id: row.plan_revision_id
-	}))), edit())), section(3, h("div", {}, text(t("pm_review_feedback_prompt")), ...(fixed?.feedback || []).map((row) => h("article", { class: "pm-fact" }, text(row.content), row.superseded_at_selection ? text(t("pm_review_historical")) : "", exact(row.reference))), ...(draft?.output.environment_changes || []).map((value) => text(t("pm_meeting_environment_changes") + ": " + value)), onNote ? button({
+	}))), edit())), section(3, h("div", {}, prompt("pm_review_feedback_prompt"), ...(fixed?.feedback || []).map((row) => h("article", { class: "pm-fact" }, text(row.content), row.superseded_at_selection ? text(t("pm_review_historical")) : "", exact(row.reference))), ...(draft?.output.environment_changes || []).map((value) => text(t("pm_meeting_environment_changes") + ": " + value)), onNote ? button({
 		variant: "secondary",
 		label: t("pm_meeting_save_note"),
 		onClick: onNote
-	}) : "", edit())), section(4, h("div", {}, text(t("pm_review_direction_prompt")), ...(draft?.decisions || []).map((row) => h("article", { class: "pm-fact" }, text(row.text), text(row.rationale), text(t("pm_meeting_assigned", { actor: row.owner_actor })), exact({
+	}) : "", edit())), section(4, h("div", {}, prompt("pm_review_direction_prompt"), ...(draft?.decisions || []).map((row) => h("article", { class: "pm-fact" }, text(row.text), text(row.rationale), text(t("pm_meeting_assigned", { actor: row.owner_actor || t("pm_meeting_unknown") })), exact({
 		id: row.id,
 		follow_up_ids: row.follow_up_ids
 	}))), ...(draft?.output.next_steps || []).map(text), ...(draft?.follow_ups || []).map((row) => h("article", { class: "pm-fact" }, text(row.text), text(t("pm_meeting_assigned", { actor: row.owner_actor })), text(row.expected_effect), text(row.verification))), disclosure({
@@ -25857,7 +25869,7 @@ function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = 
 	}) : "", ...(detail.completion?.document.governance_decisions || []).map((row) => h("p", {}, t("pm_meeting_recorded_by", { actor: row.recorded_by }), " · ", t("pm_gov_" + row.disposition), " · ", t("pm_meeting_assigned", { actor: row.owner_actor }))), exact(detail.completion ? {
 		completion_id: detail.completion.completion_id,
 		document_digest: detail.completion.document_digest
-	} : {}))), section(6, h("div", {}, text(t("pm_review_draft_only")), detail.completion?.document.governance_decisions?.length ? h("a", {
+	} : {}))), section(6, h("div", {}, text(t("pm_review_draft_only")), canPlan && detail.completion?.document.governance_decisions?.length ? h("a", {
 		class: "ui-button secondary",
 		href: discussHref({
 			workspaceId: detail.workspace_id,
@@ -25866,7 +25878,7 @@ function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = 
 				id: detail.meeting.meeting_id
 			}]
 		})
-	}, t("pm_review_planning")) : text(t(detail.completion ? "pm_review_no_decision" : "pm_review_complete_first")))));
+	}, t("pm_review_planning")) : text(t(!canPlan ? "pm_panel_read_only" : detail.completion ? "pm_review_no_decision" : "pm_review_complete_first")))));
 	if (fixed?.gaps.length) {
 		const prompts = reviewPrompts(fixed.gaps);
 		result.prepend(sectionCard({ body: h("div", { "data-pm-review-gaps": "" }, h("h3", {}, t("pm_meeting_unresolved_questions")), disclosure({
@@ -25963,7 +25975,7 @@ function reviewSources({ h, t, api, alive, workspaceId, detail, field, getEditor
 			kind: "meeting_note",
 			note_id: row.note_id
 		}
-	}, "feedback_items", (row) => JSON.stringify(row.source_ref));
+	}, "feedback_items", (row) => reviewReferenceKey(row.source_ref));
 	const work = h("select", { "aria-label": t("pm_review_work") }, h("option", { value: "" }, t("pm_review_choose")), ...detail.context.document.selected_items.map((row) => h("option", { value: row.work_item_id }, row.title || detail.snapshot.work?.find((item) => item.work_item_id === row.work_item_id)?.title || t("pm_meeting_unknown"))));
 	results.append(h("label", {}, t("pm_review_work"), work));
 	const resultRows = h("div");
@@ -25994,10 +26006,10 @@ function reviewSources({ h, t, api, alive, workspaceId, detail, field, getEditor
 				}));
 				const seen = new Set(), assessment = h("select", { "aria-label": t("pm_review_assessment") }, h("option", { value: "null" }, t("pq_unassessed")));
 				for (const item of data.requirements?.items || []) for (const row of item.assessments || []) {
-					const value = JSON.stringify(row.reference);
+					const value = reviewReferenceKey(row.reference);
 					if (seen.has(value)) continue;
 					seen.add(value);
-					assessment.append(h("option", { value }, `${row.assessed_by} · ${row.assessed_at} · ${t(row.applicable ? "pq_original" : "pm_review_historical")}`));
+					assessment.append(h("option", { value }, `${row.assessed_by} · ${timeText(row.assessed_at)} · ${t(row.applicable === true ? "wres_req_applicable" : row.applicable === false ? "wres_req_no_longer_applies" : "pq_fixed")}`));
 					resultRows.append(h("ul", {}, ...(row.original?.requirements || []).map((requirement) => h("li", {}, data.requirements.items.find((item) => item.requirement_id === requirement.requirement_id)?.text || t("pm_meeting_unknown"), " · ", t("pq_" + requirement.status)))), exact({
 						reference: row.reference,
 						proof: row.original
@@ -26005,7 +26017,7 @@ function reviewSources({ h, t, api, alive, workspaceId, detail, field, getEditor
 				}
 				const syncAssessment = () => {
 					assessment.disabled = !can() || !basis().results.some((row) => row.result_id === ref.result_id);
-					assessment.value = JSON.stringify(basis().results.find((row) => row.result_id === ref.result_id)?.assessment_ref || null);
+					assessment.value = reviewReferenceKey(basis().results.find((row) => row.result_id === ref.result_id)?.assessment_ref || null);
 				};
 				assessment.addEventListener("change", () => change((value) => {
 					const row = value.results.find((row) => row.result_id === ref.result_id);
@@ -26062,7 +26074,7 @@ function reviewSources({ h, t, api, alive, workspaceId, detail, field, getEditor
 						input_id: row.input_id,
 						operation_id: row.operation_id
 					}
-				}, "feedback_items", (row) => JSON.stringify(row.source_ref));
+				}, "feedback_items", (row) => reviewReferenceKey(row.source_ref));
 				sync();
 			} catch (error) {
 				if (current(ticket)) fail(error);
@@ -50449,12 +50461,13 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				t,
 				detail,
 				governance: model.governance,
-				onEdit: () => reveal("pm.meeting.draft"),
-				onComplete: owner() ? () => reveal("pm.meeting.complete") : null,
-				onNote: can() ? () => reveal("pm.meeting.note") : null
+				canPlan: can(),
+				onEdit: can() && detail.meeting.status === "draft" ? () => reveal("pm.meeting.draft") : null,
+				onComplete: owner() && detail.meeting.status === "draft" && detail.draft?.document.guided_review ? () => reveal("pm.meeting.complete") : null,
+				onNote: can() && detail.meeting.status === "draft" ? () => reveal("pm.meeting.note") : null
 			});
 			const direction = projection.querySelector("[data-pm-review-step=\"4\"]");
-			for (const decision of detail.draft?.document.decisions || []) {
+			for (const decision of !detail.completion && detail.draft?.document.guided_review ? detail.draft.document.decisions : []) {
 				const ref = reviewProposal(detail, decision.id), entry = (model.governance || []).find((row) => Object.entries(ref || {}).every(([key, value]) => row.record.context.review_proposal_ref?.[key] === value));
 				if (entry?.revision.document.decision) direction.append(h("p", {}, t("pm_meeting_recorded_by", { actor: entry.revision.document.decision.recorded_by }), " · ", t("pm_gov_" + entry.revision.document.decision.disposition), " · ", t("pm_meeting_assigned", { actor: entry.revision.document.owner_actor })));
 				else if (entry && role(caps()?.actor) !== "owner") direction.append(note("pm_review_await_owner"));
@@ -51108,13 +51121,13 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			]);
 			alive();
 			if (ticket !== serial) return;
-			if (guidedSprint) selectedId = meetings.filter((row) => row.sprint_id === guidedSprint && row.kind === "review").at(-1)?.meeting_id || "";
+			if (guidedSprint) selectedId = meetings.find((row) => row.meeting_id === selectedId && row.sprint_id === guidedSprint && row.kind === "review")?.meeting_id || meetings.filter((row) => row.sprint_id === guidedSprint && row.kind === "review").at(-1)?.meeting_id || "";
 			else if (!meetings.some((row) => row.meeting_id === selectedId)) selectedId = meetings.at(-1)?.meeting_id || "";
 			const detail = selectedId ? check(await api("GET", `${endpoint}/meetings/${selectedId}?history_limit=20`)) : null;
 			alive();
 			if (ticket !== serial) return;
 			if (detail && (check(detail.meeting).meeting_id !== selectedId || detail.context?.meeting_id !== selectedId || detail.context.context_revision_id !== detail.meeting.context_revision_id || detail.context.document.sprint_id !== detail.meeting.sprint_id || check(detail.snapshot).snapshot_id !== detail.context.document.snapshot_ref.snapshot_id || detail.draft && (detail.draft.meeting_id !== selectedId || detail.draft.revision_id !== detail.meeting.draft_revision_id) || detail.completion && (detail.completion.meeting_id !== selectedId || detail.completion.completion_id !== detail.meeting.completion_id))) throw Error(t("pm_scope_mismatch"));
-			const governance = hasSprintReview(caps()) && detail?.meeting.kind === "review" ? await pages("governance", "records") : [];
+			const governance = hasSprintReview(caps()) && detail?.meeting.kind === "review" && !detail.completion ? await pages("governance", "records") : [];
 			alive();
 			if (ticket !== serial) return;
 			const next = JSON.stringify([
