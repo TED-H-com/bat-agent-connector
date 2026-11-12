@@ -41660,6 +41660,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		withdraw: unavailable,
 		withdrawReview: (error, ids) => {
 			if (reviewSources().some((id) => ids.includes(id))) unavailable(error);
+			else if (!loaded) ++serial;
 		},
 		requirementIds: () => model ? [...model.records.flatMap((row) => row.revision.document.affected_requirement_ids), ...forms.flatMap((editor) => editor.fields?.affected_requirement_ids?.value.split(",").map((value) => value.trim()).filter(Boolean) || [])] : [],
 		namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id && Array.isArray(model.plan.document?.requirements) ? model.plan : void 0
@@ -51269,6 +51270,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		withdraw: unavailable,
 		withdrawReview: (error, ids) => {
 			if (reviewMeetingIds().some((id) => ids.includes(id))) unavailable(error);
+			else if (!loaded) ++serial;
 		}
 	};
 }
@@ -58028,17 +58030,21 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
 	let draftSourceUnavailable = false, contextSequence = 0, settledContextSequence = 0;
 	const canRestoreDiscussion = () => !disposed && loaded && !refreshing && contextSequence === settledContextSequence && workspace?.workspace_id === workspaceId && (threadId === "new" ? !draftSourceUnavailable : threadData?.thread?.workspace_id === workspaceId && threadData.thread.thread_id === threadId && !(threadData.thread.context || []).some((ref) => ref.available === false));
+	const reviewRefusal = (error) => [403, 404].includes(error.status) || error.code === "FORBIDDEN" || /^PM_.*SOURCE_UNAVAILABLE$/.test(error.code || "") || error.reviewIntegrity === true;
 	async function draftSourceRefs(refs = launch.refs, reads = new Map(), required = false) {
 		const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+		const lookup = (path) => api("GET", path).catch((error) => {
+			throw Object.assign(error, { reviewLookupFailure: true });
+		});
 		const read = (path) => {
-			if (!reads.has(path)) reads.set(path, api("GET", endpoint + path));
+			if (!reads.has(path)) reads.set(path, lookup(endpoint + path));
 			return reads.get(path);
 		};
 		const unavailable = () => {
-			throw Error(t("pd_unavailable"));
+			throw Object.assign(Error(t("pd_unavailable")), { reviewIntegrity: true });
 		};
 		const scoped = (value, id, key) => {
-			if (!value || value.workspace_id !== workspaceId || key && value[key] !== id) unavailable();
+			if (!value || value.workspace_id !== workspaceId || key && value[key] !== id || value.visibility_filtered || value.visibility?.filtered) unavailable();
 			return value;
 		};
 		const text = (value) => typeof value === "string" && value.trim() && !/(?:pm[a-z]*|wi|op)_[0-9a-f]{20,64}/.test(value.trim()) ? value.trim() : "";
@@ -58098,7 +58104,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					label = text(card.work.title);
 				} else if (ref.kind === "work_input") {
 					const key = `/operations/${encodeURIComponent(ref.id)}`;
-					if (!reads.has(key)) reads.set(key, api("GET", key));
+					if (!reads.has(key)) reads.set(key, lookup(key));
 					const value = (await reads.get(key)).operation;
 					const receipt = value?.input_receipt;
 					if (value?.operation_id !== ref.id || receipt?.operation_id !== ref.id || receipt.workspace_id !== workspaceId || receipt.state !== "cancelled") unavailable();
@@ -58110,7 +58116,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					const work = await draftSourceRefs([{
 						kind: "work_item",
 						id: review.work_item_id
-					}], reads);
+					}], reads, required);
 					if (work[0].available === false) unavailable();
 					label = work[0].label;
 				} else if (ref.kind === "snapshot") {
@@ -58140,7 +58146,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					const work = await draftSourceRefs([{
 						kind: "work_item",
 						id: repair.work_item_id
-					}], reads);
+					}], reads, required);
 					if (work[0].available === false) unavailable();
 					label = work[0].label;
 				} else if (ref.kind === "follow_up") {
@@ -58157,7 +58163,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					const work = await draftSourceRefs([{
 						kind: "work_item",
 						id: value.current.work_item_id
-					}], reads);
+					}], reads, required);
 					if (work[0].available === false) unavailable();
 					label = text(value.current.document?.public_title) || work[0].label;
 				} else if (ref.kind === "meeting") {
@@ -58188,10 +58194,13 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				}
 				return result;
 			} catch (error) {
-				if (hasSprintReview(caps()) && required) throw Object.assign(error, { reviewRef: {
-					kind: ref.kind,
-					id: ref.id
-				} });
+				if (hasSprintReview(caps()) && required) {
+					if (!error.reviewLookupFailure) error.reviewIntegrity = true;
+					throw Object.assign(error, { reviewRef: {
+						kind: ref.kind,
+						id: ref.id
+					} });
+				}
 				return {
 					kind: ref.kind,
 					position,
@@ -58222,10 +58231,13 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				}
 			};
 		} catch (error) {
-			if (meetingIds.length) Object.assign(error, {
-				reviewDependency: true,
-				reviewMeetingIds: error.reviewRef?.kind === "meeting" && meetingIds.includes(error.reviewRef.id) ? [error.reviewRef.id] : []
-			});
+			if (meetingIds.length) {
+				if (reviewRefusal(error)) Object.assign(error, {
+					reviewDependency: true,
+					reviewMeetingIds: error.reviewRef?.kind === "meeting" && meetingIds.includes(error.reviewRef.id) ? [error.reviewRef.id] : []
+				});
+				else error.reviewSourcePending = true;
+			}
 			throw error;
 		}
 	}
@@ -58307,7 +58319,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 			clientGate,
 			onError: (error) => {
 				const ids = hasSprintReview(caps()) ? options.reviewSources?.() || [] : [];
-				if (ids.length && ([403, 404].includes(error.status) || error.code === "FORBIDDEN" || /^PM_.*SOURCE_UNAVAILABLE$/.test(error.code || ""))) {
+				if (ids.length && reviewRefusal(error)) {
 					withdrawReviewSources(error, ids);
 					status.replaceChildren(errorBox(error, { within: status }));
 					return true;
@@ -58774,12 +58786,10 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 			const linkedThread = selectedThread || reviewMeetingIds(threadData).some((id) => meetingIds.includes(id));
 			const matches = (ref) => ref.kind === "meeting" && meetingIds.includes(ref.id) || meetingIds.includes(ref.review_meeting_id);
 			const citedThread = !linkedThread && threadData?.thread.context?.some(matches);
-			if (threadId && (linkedThread || citedThread)) {
-				++sequence;
-				++contextSequence;
-				refreshing = false;
-				refresh.disabled = false;
-			}
+			++sequence;
+			++contextSequence;
+			refreshing = false;
+			refresh.disabled = false;
 			meetings?.withdrawReview(error, meetingIds);
 			governance?.withdrawReview(error, meetingIds);
 			if (lastThreadList) {
@@ -58827,6 +58837,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				}
 				updateForms();
 			}
+			if (earlier) earlier.disabled = !loaded;
 			status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			withdrawingReview = false;
@@ -60677,6 +60688,12 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					withdrawReviewSources(error, error.reviewMeetingIds, true);
 					return;
 				}
+				if (error.reviewSourcePending) {
+					++contextSequence;
+					updateForms();
+					status.replaceChildren(errorBox(error, { within: status }));
+					return;
+				}
 				if ([403, 404].includes(error.status)) withdrawReviewSources(error, [], reviewMeetingIds(threadData).length > 0);
 				loaded = false;
 				lastThreadList = null;
@@ -61094,6 +61111,11 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 			}
 		} catch (error) {
 			if (!retiredView(error) && ticket === sequence) {
+				if (error.reviewSourcePending) {
+					updateForms();
+					status.replaceChildren(errorBox(error, { within: status }));
+					return;
+				}
 				if (capabilityReadError) {
 					pmCapabilitiesError = capabilityReadError;
 					pmCapabilities = null;

@@ -202,15 +202,30 @@ An ordinary meeting citation without this lineage keeps the existing unavailable
 chip behavior. Failure to read its kind does not prove a Review dependency.
 Discussion list rows show authored titles, modes and timestamps plus citation
 chips, not InputRecord or Planning bodies. Refused chips lose their labels;
-independent rows and authored metadata remain. Typed governance detail/snapshot
+independent rows and authored metadata remain. A withdrawal also advances the
+list/context read generations, even on the list route, before changing those
+projections. An older hydration cannot restore a removed label between renders.
+Pending first meeting/governance reads have no proven source identity yet; they
+are discarded without clearing unrelated settled views. A subsequent explicit
+refresh reads and authorizes the source again; there is no revocation registry.
+Typed governance detail/snapshot
 404 recovery propagates only to the linked Review. Action refusals propagate
 only through the submitted form's known typed source or selected guided meeting.
 If the first typed InputRecord action refuses before recorded lineage exists,
 only the referenced source projection clears; the thread's own notes remain.
-Ordinary actions keep their local errors; a transient context/list refresh error
-does not withdraw otherwise readable content. Existing parent authority 403/404
-clearing behavior remains. No new client record or storage key is introduced.
-Request generations and selected identities reject late responses. Reflow retains
+Ordinary actions keep their local errors. Required-source reads use one refusal
+classification: 403/404, FORBIDDEN, PM_*SOURCE_UNAVAILABLE, filtered or
+scope-mismatched projections and source-integrity failures withdraw derived
+content. Those explicit refusals take precedence over a generic transport status.
+Other 5xx, network, timeout and 401 failures are transient: main, context and
+earlier-message refreshes retain the previously rendered view and the same editor
+node, authored draft and selection, and show status. They never publish the newly
+fetched payload without its required reads; an initial failed read still renders
+no derived payload. Nested required-source lookups preserve this classification.
+Existing parent authority 403/404 clearing behavior remains. No new client record
+or storage key is introduced. Request generations and selected identities reject
+late success and error replies; invalidation covers in-flight hydration as well as
+already rendered projections. Reflow retains
 editor nodes and composition; guide handoffs focus the authored Goal impact editor
 or an enabled visible governance field, never a checkbox inside a closed source
 disclosure or a disabled Kind selector. Returning to the same editor preserves its

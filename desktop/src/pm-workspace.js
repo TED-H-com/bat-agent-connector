@@ -456,15 +456,19 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     && workspace?.workspace_id === workspaceId && (threadId === 'new' ? !draftSourceUnavailable
       : threadData?.thread?.workspace_id === workspaceId && threadData.thread.thread_id === threadId
         && !(threadData.thread.context || []).some(ref => ref.available === false));
+  const reviewRefusal = error => [403,404].includes(error.status) || error.code === 'FORBIDDEN'
+    || /^PM_.*SOURCE_UNAVAILABLE$/.test(error.code || '') || error.reviewIntegrity === true;
   async function draftSourceRefs(refs = launch.refs, reads = new Map(), required = false) {
     const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+    const lookup = path => api('GET', path).catch(error => {throw Object.assign(error, {reviewLookupFailure:true});});
     const read = path => {
-      if (!reads.has(path)) reads.set(path, api('GET', endpoint + path));
+      if (!reads.has(path)) reads.set(path, lookup(endpoint + path));
       return reads.get(path);
     };
-    const unavailable = () => {throw Error(t('pd_unavailable'));};
+    const unavailable = () => {throw Object.assign(Error(t('pd_unavailable')), {reviewIntegrity:true});};
     const scoped = (value, id, key) => {
-      if (!value || value.workspace_id !== workspaceId || key && value[key] !== id) unavailable();
+      if (!value || value.workspace_id !== workspaceId || key && value[key] !== id
+        || value.visibility_filtered || value.visibility?.filtered) unavailable();
       return value;
     };
     const text = value => typeof value === 'string' && value.trim() && !/(?:pm[a-z]*|wi|op)_[0-9a-f]{20,64}/.test(value.trim()) ? value.trim() : '';
@@ -503,7 +507,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
           label = text(card.work.title);
         } else if (ref.kind === 'work_input') {
           const key = `/operations/${encodeURIComponent(ref.id)}`;
-          if (!reads.has(key)) reads.set(key, api('GET', key));
+          if (!reads.has(key)) reads.set(key, lookup(key));
           const value = (await reads.get(key)).operation;
           const receipt = value?.input_receipt;
           if (value?.operation_id !== ref.id || receipt?.operation_id !== ref.id
@@ -514,7 +518,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
           const review = scoped(value.review, ref.review_id, 'review_id');
           if (!review.history?.some(item => item.kind === 'assessment' && item.operation_id === ref.id
               && item.document_digest === ref.document_digest)) unavailable();
-          const work = await draftSourceRefs([{kind:'work_item', id:review.work_item_id}], reads);
+          const work = await draftSourceRefs([{kind:'work_item', id:review.work_item_id}], reads, required);
           if (work[0].available === false) unavailable();
           label = work[0].label;
         } else if (ref.kind === 'snapshot') {
@@ -541,7 +545,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
           const value = scoped(await read(`/maintenance-repairs/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
           const repair = value.repair;
           if (repair?.repair_id !== ref.id) unavailable();
-          const work = await draftSourceRefs([{kind:'work_item', id:repair.work_item_id}], reads);
+          const work = await draftSourceRefs([{kind:'work_item', id:repair.work_item_id}], reads, required);
           if (work[0].available === false) unavailable();
           label = work[0].label;
         } else if (ref.kind === 'follow_up') {
@@ -555,7 +559,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
         } else if (ref.kind === 'issue_mapping') {
           const value = scoped(await read(`/issue-mappings/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
           if (value.current?.mapping_id !== ref.id) unavailable();
-          const work = await draftSourceRefs([{kind:'work_item', id:value.current.work_item_id}], reads);
+          const work = await draftSourceRefs([{kind:'work_item', id:value.current.work_item_id}], reads, required);
           if (work[0].available === false) unavailable();
           label = text(value.current.document?.public_title) || work[0].label;
         } else if (ref.kind === 'meeting') {
@@ -575,7 +579,12 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
         return result;
       } catch (error) {
         // An original Review dependency gates the entire derived payload, not its chip.
-        if (hasSprintReview(caps()) && required) throw Object.assign(error,{reviewRef:{kind:ref.kind,id:ref.id}});
+        if (hasSprintReview(caps()) && required) {
+          // Transport errors and rejected reads retain their status; invalid source
+          // projections (including local shape failures) are integrity refusals.
+          if (!error.reviewLookupFailure) error.reviewIntegrity = true;
+          throw Object.assign(error,{reviewRef:{kind:ref.kind,id:ref.id}});
+        }
         // Display metadata never authorizes Send, and failed reads never consult a URL or old label.
         return {kind: ref.kind, position, available: false};
       }
@@ -593,8 +602,11 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       await draftSourceRefs(meetingIds.map(id => ({kind:'meeting', id})), reads, true);
       return {...data, thread:{...data.thread, context:await draftSourceRefs(data.thread.context || [], reads, meetingIds.length > 0)}};
     } catch (error) {
-      if (meetingIds.length) Object.assign(error, {reviewDependency:true, reviewMeetingIds:
-        error.reviewRef?.kind==='meeting' && meetingIds.includes(error.reviewRef.id) ? [error.reviewRef.id] : []});
+      if (meetingIds.length) {
+        if (reviewRefusal(error)) Object.assign(error, {reviewDependency:true, reviewMeetingIds:
+          error.reviewRef?.kind==='meeting' && meetingIds.includes(error.reviewRef.id) ? [error.reviewRef.id] : []});
+        else error.reviewSourcePending = true;
+      }
       throw error;
     }
   }
@@ -643,7 +655,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       clientGate,
       onError:error=>{
         const ids = hasSprintReview(caps()) ? options.reviewSources?.() || [] : [];
-        if(ids.length && ([403,404].includes(error.status)||error.code==='FORBIDDEN'||/^PM_.*SOURCE_UNAVAILABLE$/.test(error.code||''))){
+        if(ids.length && reviewRefusal(error)){
           withdrawReviewSources(error,ids);status.replaceChildren(errorBox(error,{within:status}));return true;
         }
         return options.onError?.(error)||false;
@@ -803,7 +815,9 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       const linkedThread = selectedThread || reviewMeetingIds(threadData).some(id => meetingIds.includes(id));
       const matches = ref => ref.kind==='meeting' && meetingIds.includes(ref.id) || meetingIds.includes(ref.review_meeting_id);
       const citedThread = !linkedThread && threadData?.thread.context?.some(matches);
-      if (threadId && (linkedThread || citedThread)) {++sequence; ++contextSequence; refreshing=false; refresh.disabled=false;}
+      // A pending list or initial context read may not have published its source
+      // identities yet. Retire reads globally; settled projections remain ID-scoped.
+      ++sequence; ++contextSequence; refreshing=false; refresh.disabled=false;
       meetings?.withdrawReview(error,meetingIds);governance?.withdrawReview(error,meetingIds);
       // List rows contain authored metadata and citation chips, never a Review body.
       if(lastThreadList){
@@ -829,6 +843,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
         }
         updateForms();
       }
+      if (earlier) earlier.disabled = !loaded;
       status.replaceChildren(errorBox(error,{within:status}));
     } finally {withdrawingReview=false;}
   }
@@ -1736,6 +1751,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         if(error.reviewDependency){withdrawReviewSources(error,error.reviewMeetingIds,true);return;}
+        if(error.reviewSourcePending){++contextSequence;updateForms();status.replaceChildren(errorBox(error,{within:status}));return;}
         if ([403,404].includes(error.status)) withdrawReviewSources(error,[],reviewMeetingIds(threadData).length>0);
         loaded = false; lastThreadList = null; workspace = null; withdrawNames(); publishContext(); detailPanel?.close(); discussionTools?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
         for (const section of sourceSections()) section.hidden = true;
@@ -1940,6 +1956,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       if (initialReadComplete) {proposalReview?.recheck(); nativeAnalysis?.recheck(); continuation?.recheck();}
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
+        if(error.reviewSourcePending){updateForms();status.replaceChildren(errorBox(error,{within:status}));return;}
         if (capabilityReadError) {pmCapabilitiesError = capabilityReadError; pmCapabilities = null;}
         if ([403,404].includes(error.status)) withdrawReviewSources(error,[],reviewMeetingIds(threadData).length>0);
         loaded = false; workspace = null; threadData = null; withdrawNames();

@@ -484,5 +484,10 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     if(model?.detail)remember('meeting_id',model.detail.meeting.meeting_id);else reveal('pm.meeting.create');
   }
   return {element,refresh,openRef,openSprint,withdraw:unavailable,
-    withdrawReview:(error,ids)=>{if(reviewMeetingIds().some(id=>ids.includes(id)))unavailable(error);}};
+    withdrawReview:(error,ids)=>{
+      if(reviewMeetingIds().some(id=>ids.includes(id)))unavailable(error);
+      // Before the first projection arrives, its source identity is not proven.
+      // Discard that pending read without clearing an unrelated settled view.
+      else if(!loaded)++serial;
+    }};
 }

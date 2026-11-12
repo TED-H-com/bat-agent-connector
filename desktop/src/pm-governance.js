@@ -536,7 +536,12 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     }
   }
   return {element, refresh, openRef, openReviewProposal, relabel, withdraw:unavailable,
-    withdrawReview:(error,ids)=>{if(reviewSources().some(id=>ids.includes(id)))unavailable(error);},
+    withdrawReview:(error,ids)=>{
+      if(reviewSources().some(id=>ids.includes(id)))unavailable(error);
+      // Before the first projection arrives, its source identity is not proven.
+      // Discard that pending read without clearing an unrelated settled view.
+      else if(!loaded)++serial;
+    },
     requirementIds: () => model ? [...model.records.flatMap(row => row.revision.document.affected_requirement_ids),
       ...forms.flatMap(editor => editor.fields?.affected_requirement_ids?.value.split(',').map(value => value.trim()).filter(Boolean) || [])] : [],
     namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id
