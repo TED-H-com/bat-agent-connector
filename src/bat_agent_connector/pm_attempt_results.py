@@ -1576,6 +1576,7 @@ class AttemptResultCollector:
             TURN_RECEIPTS_SQL,
             _fence_sent_from_row,
             receipt_state,
+            rejected_turn,
             terminal_receipt_markers,
         )
 
@@ -1602,13 +1603,15 @@ class AttemptResultCollector:
                     owner["send_sent"] = _fence_sent_from_row(owner)
                     # Reuse the Work-input receipt authority. A false fence alone
                     # is insufficient: a nonterminal original may still RERUN.
-                    # Keep even a NOT_ACCEPTED owner that crossed transport.
                     terminal_unsent = (
                         owner["status"] in {"failed", "cancelled"}
                         and owner["send_sent"] is not True
                         and receipt_state(owner, owner["step_status"]) in {"failed", "cancelled"}
                     )
-                    if not terminal_unsent:
+                    # A terminal BAT rejection is also excluded by the original
+                    # latest_sent_turn selector: it cannot own a Work receipt.
+                    terminal_rejected = owner["status"] == "failed" and rejected_turn(owner)
+                    if not (terminal_unsent or terminal_rejected):
                         continue
                 return {**cand, "turn_marker": value["marker"],
                         "receipt_operation_id": value["operation_id"], "direct_marker": value}

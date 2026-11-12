@@ -556,6 +556,11 @@ def unsent(ctx: OpContext) -> bool:
     return fence_sent(ctx) is False
 
 
+def rejected_turn(op: dict[str, Any]) -> bool:
+    """The existing Work-turn selector excludes BAT's explicit rejection."""
+    return op["error_code"] == "NOT_ACCEPTED"
+
+
 def latest_sent_turn(db, attempt_id: str) -> tuple[str | None, str | None]:
     """Return `(message_id, operation_id)` of the highest-position follow-up that may have started a turn.
 
@@ -576,7 +581,7 @@ def latest_sent_turn(db, attempt_id: str) -> tuple[str | None, str | None]:
         (attempt_id,),
     ).fetchall()
     for row in rows:
-        if row["error_code"] == "NOT_ACCEPTED":
+        if rejected_turn(row):
             continue
         sent = _fence_sent_from_row(dict(row))
         st = row["status"]

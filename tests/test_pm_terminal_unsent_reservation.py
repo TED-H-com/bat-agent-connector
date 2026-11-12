@@ -161,7 +161,10 @@ async def test_nonterminal_and_possibly_sent_owners_stay_reserved(start_ready, m
         ('waiting_checks', False, None), ('waiting_external', False, None),
         ('needs_attention', False, None), ('uncertain', False, None),
         ('uncertain', True, None), ('succeeded', True, None),
-        ('failed', True, 'REFUSED'), ('failed', True, 'NOT_ACCEPTED'),
+        ('failed', True, 'REFUSED'), ('failed', True, 'INTERNAL'),
+        ('running', True, 'NOT_ACCEPTED'), ('needs_attention', True, 'NOT_ACCEPTED'),
+        ('uncertain', True, 'NOT_ACCEPTED'), ('succeeded', True, 'NOT_ACCEPTED'),
+        ('cancelled', True, 'NOT_ACCEPTED'),
         ('cancelled', True, None),
     ]:
         ops.db.execute('SAVEPOINT owner_state')
@@ -173,3 +176,12 @@ async def test_nonterminal_and_possibly_sent_owners_stay_reserved(start_ready, m
         finally:
             ops.db.execute('ROLLBACK TO owner_state')
             ops.db.execute('RELEASE owner_state')
+
+    # Synthetic orphan: incomplete evidence never relinquishes the marker.
+    ops.db.execute('SAVEPOINT missing_owner')
+    try:
+        ops.db.execute('DELETE FROM operations WHERE operation_id=?', (work['operation_id'],))
+        assert c._direct_candidate(candidate) is None
+    finally:
+        ops.db.execute('ROLLBACK TO missing_owner')
+        ops.db.execute('RELEASE missing_owner')
