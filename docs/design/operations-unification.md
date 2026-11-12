@@ -667,3 +667,7 @@ Work/task 的 send_sent 不變。僅 WIP read 用 exactly false 的 failed send 
 作為原始未送出證據；true／缺值的 REFUSED 保留 unknown。HTTP／RPC／MCP operation
 reads 原樣返回此 refs metadata，其他 authority／queue／operation-loop 不採用它。
 沒有 migration 或歷史 backfill；詳見 [WIP contract](pm-workspace-wip.md)。
+
+這兩次 refs merge 沿用既有 `resource.bound` events，位於 send step started 與
+succeeded 之間；不增加 send frame 或 lifecycle transition。Event summary 維持
+既有欄位白名單，不新增 dispatch key；完整值仍由 operation read 的 external_refs 提供。

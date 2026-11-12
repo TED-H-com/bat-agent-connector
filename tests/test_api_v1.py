@@ -177,7 +177,16 @@ async def test_standalone_operation_records_no_task_refs(daemon, mock, kind):
         await daemon.inventory.close()
 
 
-async def test_send_operation_runs_once_and_records_steps_and_events(daemon, mock):
+async def test_send_operation_runs_once_and_records_steps_and_events(daemon, mock, monkeypatch):
+    dispatch_refs = []
+    merge_refs = daemon.ops._merge_refs
+
+    def record_refs(operation_id, refs):
+        if "direct_send_dispatch" in refs:
+            dispatch_refs.append(refs["direct_send_dispatch"])
+        return merge_refs(operation_id, refs)
+
+    monkeypatch.setattr(daemon.ops, "_merge_refs", record_refs)
     adopt(MANUAL)
     mock.echo_sends = True
     op, _ = send_op(daemon)
@@ -189,8 +198,12 @@ async def test_send_operation_runs_once_and_records_steps_and_events(daemon, moc
     sends = [i for i in mock.invokes if i["channel"] == "claude:send-message"]
     assert len(sends) == 1 and sends[0]["params"]["clientMessageId"] == "batc-" + op["operation_id"]
     kinds = [e["kind"] for e in daemon.journal.api_events(0, 100, resource_id=op["operation_id"])["events"]]
+    # The existing refs merge journals both additive dispatch metadata writes.
+    # These are not extra sends or lifecycle transitions.
+    assert dispatch_refs == [False, True]
+    assert done["external_refs"]["direct_send_dispatch"] is True
     assert kinds == ["operation.accepted", "operation.running", "operation.step.started",
-                     "operation.step.succeeded", "operation.succeeded"]
+                     "resource.bound", "resource.bound", "operation.step.succeeded", "operation.succeeded"]
     await settle_operations(daemon.ops)  # a finished operation never runs again
     assert len([i for i in mock.invokes if i["channel"] == "claude:send-message"]) == 1
     await daemon.fleet.close()
