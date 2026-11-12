@@ -41,3 +41,10 @@ test('shared frontend central routes are on the desktop bridge allow-list', () =
     .map(call => `${call.method} ${call.path} (${call.file}:${call.line})`);
   assert.deepEqual(refused, []);
 });
+
+test('fixed impact preview exposes only the exact native read route before UI', () => {
+  const path = '/pm/workspaces/ws_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/plan-impact';
+  assert.ok(allowedByBridge({method: 'GET', path}));
+  assert.equal(allowedByBridge({method: 'POST', path}), false);
+  assert.equal(allowedByBridge({method: 'GET', path: `${path}/raw`}), false);
+});

@@ -138,7 +138,7 @@ READ_TOOLS = [
     "pm_sprints_list",
     "pm_sprint_get",
     "pm_sprint_history_list",
-    "pm_plan_compare",
+    "pm_plan_compare", "pm_plan_impact_preview",
     "pm_roadmap_get", "pm_roadmap_revisions_list", "pm_roadmap_revision_get",
     "project_get",
     "work_items_list",
@@ -1160,6 +1160,12 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read original Sprint goals, selections or events with sequence paging."""
         return await pm_daemon("pm_sprint_history_list", workspace_id=workspace_id, sprint_id=sprint_id, kind=kind, after=after, limit=limit)
 
+    async def pm_plan_impact_preview(workspace_id: str, snapshot_id: str, from_revision_id: str,
+                                     to_revision_id: str, binding_ids: list[str] | str) -> dict[str, Any]:
+        """Compare an explicit saved binding subset at fixed revisions; no effects or semantic inference."""
+        return await pm_daemon("pm_plan_impact_preview", workspace_id=workspace_id, snapshot_id=snapshot_id,
+            from_revision_id=from_revision_id, to_revision_id=to_revision_id, binding_ids=binding_ids)
+
     async def pm_plan_compare(workspace_id: str, from_revision_id: str, to_revision_id: str,
                               binding_ids: list[str] | None = None, journal_cursor: int | None = None) -> dict[str, Any]:
         """Compare fixed plan revisions and selected work associations without changing work or scope."""
@@ -1321,11 +1327,13 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_follow_up_list, pm_follow_up_get, pm_follow_up_latest_get,
                pm_kanban_get, pm_kanban_card_get, pm_meetings_list, pm_meeting_get, pm_meeting_history_list,
                pm_sprint_artifacts_get, pm_sprint_artifact_revisions_list, pm_sprint_artifact_get, pm_sprints_list, pm_sprint_get, pm_sprint_history_list,
-               pm_plan_compare,
+               pm_plan_compare, pm_plan_impact_preview,
                pm_roadmap_get, pm_roadmap_revisions_list, pm_roadmap_revision_get,
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 
+    _strict_tool_arguments(mcp, "pm_plan_impact_preview",
+        string_parameters=frozenset({"workspace_id", "snapshot_id", "from_revision_id", "to_revision_id", "binding_ids"}))
     _strict_tool_arguments(mcp, "pm_quality_assessment_get",
         string_parameters=frozenset({"workspace_id", "review_id", "operation_id", "document_digest"}))
     mcp.add_tool(_wrap(pm_history_cleanup_list), name="pm_history_cleanup_list", annotations=ro)

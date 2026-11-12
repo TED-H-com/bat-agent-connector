@@ -199,6 +199,9 @@ async def test_pm_operation_cannot_be_exposed_through_global_work_item_links(dae
 @pytest.mark.parametrize("method,params", [
     ("pm_workspaces_list", {}), ("operations_list", {}), ("events_list", {}),
     ("operation_get", {"operation_id": "op_" + "0" * 32}),
+    ("pm_plan_impact_preview", {"workspace_id": "ws_" + "1" * 32, "snapshot_id": "pmsnap_" + "2" * 32,
+                                 "from_revision_id": "pmrev_" + "3" * 32, "to_revision_id": "pmrev_" + "4" * 32,
+                                 "binding_ids": ["pmwb_" + "5" * 32]}),
     ("pm_quality_assessment_get", {"workspace_id": "ws_" + "1" * 32, "review_id": "pmqr_" + "2" * 32,
                                    "operation_id": "op_" + "3" * 32, "version": 2, "document_digest": "4" * 64}),
 ])
