@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 
 from . import (
     pm_access,
@@ -17,6 +18,9 @@ from . import (
     pm_roadmap_quality,
     pm_snapshots,
     pm_source_reads,
+)
+from . import (
+    pm_roadmap_report_schema as shapes,
 )
 from .operations import OperationError
 from .pm_release_baselines import _snapshot_read
@@ -52,8 +56,7 @@ def structure(value, kind):
 
 
 def reference(value):
-    if not isinstance(value, str) or not value:
-        raise unavailable()
+    shapes.require(shapes.REF, value, authority=True)
     return value
 
 
@@ -83,6 +86,7 @@ class _Closure:
             pm_access.require_operation_sources(self.ops.db, self.principal, [identity])
 
     def roadmap(self, identity):
+        reference(identity)
         self.charge()
         row = self.ops.db.execute('SELECT * FROM pm_roadmap_revisions WHERE workspace_id=? AND revision_id=?',
                                   (self.wid, identity)).fetchone()
@@ -97,10 +101,12 @@ class _Closure:
         return value
 
     def plan(self, identity):
+        reference(identity)
         self.charge()
         value = pm_plans._revision(self.ops.db, self.wid, identity)
         self.charge(value)
         document = structure(value['document'], dict)
+        shapes.require(shapes.AUTHORITY['plan'], document, authority=True)
         for item in mappings(document.get('selected_inputs', [])):
             reference(item['operation_id'])
         self.operations(pm_plans.source_operation_ids(self.ops.db, self.wid, identity, include_adoption=False))
@@ -110,9 +116,11 @@ class _Closure:
         if row is None:
             raise unavailable()
         value = dict(row)
+        reference(value['decision_id'])
         if value['decision_id'] not in adoptions:
             self.charge(value)
             value['result'] = structure(json.loads(value['result']), dict)
+            shapes.require(shapes.AUTHORITY['adoption'], value['result'], authority=True)
             self.operations([value['operation_id'], reference(value['result']['commit_operation_id'])])
             adoptions[value['decision_id']] = value
         return adoptions[value['decision_id']]
@@ -120,6 +128,7 @@ class _Closure:
     def collect(self, identity):
         observation = self.roadmap(identity)
         doc = observation['document']
+        shapes.require(shapes.AUTHORITY['observation'], doc, authority=True)
         baseline = self.roadmap(reference(doc['baseline_revision_id']))
         forecast = self.roadmap(reference(doc['forecast_revision_id'])) if doc['forecast_revision_id'] is not None else None
         row = self.ops.db.execute('SELECT * FROM pm_document_snapshots WHERE workspace_id=? AND snapshot_id=?',
@@ -131,6 +140,8 @@ class _Closure:
         snapshot['document'] = structure(json.loads(row['document']), dict)
         self.charge(snapshot)
         saved = snapshot['document']
+        shapes.require(shapes.AUTHORITY['snapshot'], saved, authority=True)
+        shapes.require(shapes.AUTHORITY['baseline'], baseline['document'], authority=True)
         accepted = structure(saved['baseline'], dict)
         candidate = saved.get('candidate_document')
         if candidate is not None:
@@ -156,12 +167,21 @@ class _Closure:
         for entry in mappings(saved['evidence']):
             self.charge(entry)
             structure(entry['document'], dict)
-            evidence.append(pm_evidence.get_evidence(self.ops, self.principal, self.wid, reference(entry['evidence_id']))['evidence'])
+            visible = pm_evidence.get_evidence(self.ops, self.principal, self.wid, reference(entry['evidence_id']))['evidence']
+            original_facts, visible_facts = entry['document']['facts'], visible['document']['facts']
+            for facts in (original_facts, visible_facts):
+                shapes.require(shapes.AUTHORITY['evidence_facts'], facts, authority=True)
+            # A malformed current record cannot erase an original authority edge.
+            if (entry['source_kind'] != visible['source_kind'] or any(
+                    original_facts.get(key) != visible_facts.get(key) for key in shapes.FACT_AUTH)):
+                raise unavailable()
+            evidence.append(visible)
         maintenance = saved.get('maintenance')
         if maintenance is not None:
             from . import pm_maintenance_review_sources
             for item in mappings(structure(maintenance, dict)['access_refs']):
                 self.charge(item)
+                shapes.require(shapes.ACCESS_REF, item, authority=True)
                 pm_maintenance_review_sources.access(self.ops, self.principal, self.wid, [item])
         plans = {}
         selected = [(reference(m['plan_revision_id']), reference(m['scope_revision']))
@@ -188,28 +208,33 @@ def _verify(closure):
         if value is not None:
             proof(value['kind'] == kind and digest(value['document']) == value['document_digest'])
     doc, saved = observation['document'], snapshot['document']
-    proof(doc['baseline_revision_id'] == observation['baseline_revision_id'] == baseline['revision_id'])
+    proof(doc.get('baseline_revision_id') == observation['baseline_revision_id'] == baseline['revision_id'])
     proof(baseline['baseline_revision_id'] == baseline['revision_id'])
     if forecast:
-        proof(forecast['baseline_revision_id'] == forecast['document']['baseline_revision_id'] == baseline['revision_id'])
-    proof(doc['snapshot_digest'] == snapshot['snapshot_digest'] == digest(saved))
-    proof(saved['snapshot_id'] == snapshot['snapshot_id'] and saved['workspace_id'] == snapshot['workspace_id'])
-    proof(doc['as_of'] == saved['as_of'] and doc['journal_cursor'] == saved['journal_cursor'])
+        proof(forecast['baseline_revision_id'] == forecast['document'].get('baseline_revision_id') == baseline['revision_id'])
+    proof(doc.get('snapshot_digest') == snapshot['snapshot_digest'] == digest(saved))
+    proof(saved.get('snapshot_id') == snapshot['snapshot_id'] and saved.get('workspace_id') == snapshot['workspace_id'])
+    proof(doc.get('as_of') == saved.get('as_of') and doc.get('journal_cursor') == saved.get('journal_cursor'))
     if type(saved.get('template_version')) is not int or saved['template_version'] != 1:
         raise OperationError('PM_EXPORT_TEMPLATE_UNAVAILABLE', 'The snapshot template is unsupported', 409)
+    shapes.validate_v1(closure)
+    proof(len(saved['evidence']) == len(evidence))
     for original, visible in zip(saved['evidence'], evidence, strict=True):
         proof(original == visible and digest(original['document']) == original['fact_digest'])
     for identity, plan in plans.items():
         proof(pm_plans._files(identity, plan['document'])['document_digest'] == plan['document_digest'])
     accepted = saved['baseline']
     if accepted['document_revision']:
+        proof(accepted['document_revision'] in plans)
         plan = plans[accepted['document_revision']]
         proof(plan['document_digest'] == accepted['document_digest'] and plan['document'] == accepted['document'])
         proof(plan['scope_digest'] == accepted['structured_scope_digest'])
     candidate = saved.get('candidate_document')
     if candidate:
+        proof(candidate['revision_id'] in plans)
         proof(plans[candidate['revision_id']]['document_digest'] == candidate['document_digest'])
     for milestone in baseline['document']['milestones']:
+        proof(milestone['plan_revision_id'] in plans)
         plan = plans[milestone['plan_revision_id']]
         proof(plan['document_digest'] == milestone['plan_document_digest'])
         proof(set(milestone['requirement_ids']) <= {r['id'] for r in plan['document']['requirements']})
@@ -233,6 +258,7 @@ def _verify(closure):
             proof(result.get('document_digest') == plan['document_digest'] and result.get('structured_scope_digest') == plan['scope_digest'])
     original = accepted.get('adoption')
     if original:
+        proof(original['decision_id'] in adoptions)
         value = adoptions[original['decision_id']]
         proof(value['revision_id'] == accepted['document_revision'] and value['scope_revision'] == accepted['scope_revision'])
         proof(original['commit_operation_id'] == value['result']['commit_operation_id'])
@@ -287,7 +313,8 @@ def load_fixed(ops, principal, workspace_id, observation_revision_id):
             closure = _Closure(ops, principal, workspace_id).collect(observation_revision_id)
             if generation != pm_read_cache.refusal_generation():
                 raise unavailable()
-    except (OperationError, KeyError, TypeError, ValueError, RecursionError, AttributeError, IndexError):
+    except (OperationError, KeyError, TypeError, ValueError, RecursionError, AttributeError, IndexError,
+            sqlite3.ProgrammingError, sqlite3.InterfaceError, OverflowError):
         # No source-specific corruption/size/coverage information before full access.
         raise unavailable() from None
     _verify(closure)
