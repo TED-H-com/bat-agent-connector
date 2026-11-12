@@ -1,5 +1,33 @@
 # PM v1.2 開發狀態
 
+Connector 0.2.19／Desktop 0.1.15：[版本與交付紀錄](implementation-status.md#connector-0219desktop-0115-交付)
+及[發布頁](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19)。
+分支 `release/0.2.19-desktop-0.1.15` 的版本準備已由 #536 合併；#524–#532 先行
+合併。發布版本與套件來源見上述紀錄；安裝：沒有新增 owner 安裝證據；實機：
+沒有新增實體裝置或真 BAT／模型驗收。來源、合併、發布、安裝與實機證據分別記錄。
+本版加入共用 Dashboard 的引導式 Sprint Review、原始評估審查與清理關聯 ID 發現，
+以及 API／MCP 的 WIP 建議上限與唯讀範圍影響預覽；後兩項目前沒有 Dashboard UI。
+完成 Review 不代表品質驗收，Planning 草稿不採納範圍或啟動工作。
+Linux／Windows 未簽章，macOS 採 ad-hoc 簽章且未公證；沒有 signed updater feed。
+圖庫仍為歷史 0.2.13／0.1.9。E00–E11、R0–R5、A01–A40 與 PM v1.2 未修訂
+生命週期待辦保持開放。下方段落描述各自當時狀態，不取代上述版本交付紀錄。
+
+Connector 0.2.19 / Desktop 0.1.15: see the linked release and delivery record.
+Branch: `release/0.2.19-desktop-0.1.15` preparation is integrated. Merged: #536,
+following #524–#532. Released: the version and package source are linked above.
+Installed: no new owner installation evidence. Live-tested: no new physical-device
+or real BAT/model acceptance. Source, merge, release, installation and live evidence
+remain separate. Changes include shared Dashboard guided Sprint Review, original
+assessment review and cleanup-ID discovery, plus API/MCP advisory WIP and read-only
+scope-impact previews; the latter two have no Dashboard UI. Review completion is
+separate from quality acceptance; Planning drafts adopt no scope and start no work.
+Linux/Windows remain unsigned; macOS is ad-hoc signed, not notarized; there is no
+signed updater feed. The gallery remains historical 0.2.13 / 0.1.9. Open E00–E11,
+R0–R5, A01–A40 and unrevised PM lifecycle requirements remain open.
+Earlier entries retain their own historical states.
+
+## 2026-11-11：Connector 0.2.18／Desktop 0.1.14 交付（歷史 / historical）
+
 Connector 0.2.18／Desktop 0.1.14：[版本與交付紀錄](implementation-status.md#connector-0218desktop-0114-交付)
 及[發布頁](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18)。
 已於 2026-11-11 12:16 UTC 發布，固定來源 `e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270`；主線 CI 與資產核對見交付紀錄。

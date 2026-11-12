@@ -1,25 +1,42 @@
 # Better Agent Dashboard／Connector 實作狀態
 
-## 2026-11-12：Connector 0.2.19／Desktop 0.1.15 發布準備
+## Connector 0.2.19／Desktop 0.1.15 交付
 
-分支 `release/0.2.19-desktop-0.1.15` 同步套件、技能及身分 golden 的版本。
-主線已合併 #524、#525、#526、#527、#528、#529、#530、#531 與 #532，
-涵蓋原始評估／清理 ID 讀取及共用介面、scope impact 預覽、workspace WIP 建議、
-引導式 Sprint Review 與測試基礎設施修正。最新穩定版升級 fixture 改用已發布
-0.2.18，保留 0.2.12 較早基準。這是發布準備，尚不代表發布、安裝或驗收；
-簽章、公證、signed updater feed、owner／真 BAT／模型及 R0–R5 驗收不因此完成。
-已發布下載文件與網站仍指向 0.2.18／0.1.14，待發布後另行更新。
-E00–E11、R0–R5、A01–A40 與未修訂的 PM v1.2 生命週期待辦保持開放。
+分支：`release/0.2.19-desktop-0.1.15` 的版本準備已整合；合併：#536 納入套件、
+技能、身分 golden 與 native lock 版本。#524、#525、#526、#527、#528、#529、
+#530、#531 與 #532 已先行合併於主線；各分支舊紀錄保留於下方。
 
-This branch prepares Connector 0.2.19 / Desktop 0.1.15 package, skill and identity
-golden versions. Main has merged #524, #525, #526, #527, #528, #529, #530, #531 and
-#532: original-assessment and cleanup-ID reads and shared UI, scope-impact preview,
-advisory workspace WIP, guided Sprint Review and test infrastructure fixes.
-The latest-stable upgrade fixture uses published 0.2.18 alongside the earlier
-0.2.12 baseline. Publication, installation, signing, notarization, a signed updater
-feed and owner/live acceptance remain separate gates. Published download documentation
-and the site retain 0.2.18 / 0.1.14 until publication. Open E00–E11, R0–R5, A01–A40
-and unrevised PM v1.2 lifecycle requirements remain open.
+發布：[Connector 0.2.19／Desktop 0.1.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19)。
+套件來源及 fixture 回執以發布附件 `release-manifest.json` 為準，校驗碼見 `SHA256SUMS`。
+升級 fixture 使用固定發布的 0.2.12 與 0.2.18 核心，保留原身分、工作區與操作；
+這不等於舊桌面安裝器到新安裝器的完整升級驗收。
+
+Connector 0.2.19／Desktop 0.1.15 在共用 Dashboard 加入引導式 Sprint Review、從 Result 與 Overview 檢視並審查精確的原始評估，以及為選定 Work 尋找可撤回的外部對話關聯。完成 Review 記錄方向與責任歸屬，品質驗收仍須另行進行；Planning 產出維持草稿，不採納範圍，也不啟動工作。API／MCP 用戶端另可使用 workspace WIP 建議上限及唯讀的範圍影響預覽，這兩項功能目前沒有 Dashboard UI。既有權限、草稿及原 operation key 均保留。
+
+安裝：本輪沒有新增 owner 主機安裝證據。實機：沒有新增真 BAT／模型、原生
+使用者操作或實體裝置驗收。Linux／Windows 套件未簽章；macOS 採 ad-hoc 簽章，
+未公證；沒有 signed updater feed。歷史圖庫仍為 0.2.13／0.1.9，Desktop／site-demo
+離線 producer receipts 仍不齊全，不宣稱完整離線組裝資格。
+E00–E11、R0–R5、A01–A40 與未修訂的 PM v1.2 生命週期待辦保持開放；
+持續開發授權不等於 R0／R1 接受。
+
+Branch: `release/0.2.19-desktop-0.1.15` version preparation is integrated.
+Merged: #536 includes package, skill, identity golden and native lock versions;
+#524, #525, #526, #527, #528, #529, #530, #531 and #532 were merged to main earlier.
+Released: Connector 0.2.19 / Desktop 0.1.15 is linked above; the manifest and
+checksums record package source and fixture provenance.
+The core-upgrade baselines are 0.2.12 and 0.2.18; they do not prove old-to-new desktop
+installer acceptance.
+
+Connector 0.2.19 / Desktop 0.1.15 adds guided Sprint Review, review of exact original assessments from Result and Overview, and discovery of withdrawable external-conversation relationships for a selected Work in the shared Dashboard. Review completion records direction and ownership; quality acceptance remains separate. Planning outputs remain drafts without adopting scope or starting work. API and MCP clients also gain advisory workspace WIP and read-only scope-impact previews; these two features have no Dashboard UI. Existing permissions, drafts and original operation keys are preserved.
+
+Installed: no new owner installation evidence. Live-tested: no new real BAT/model,
+native user-operation or physical-device acceptance. Linux/Windows remain unsigned;
+macOS is ad-hoc signed, not notarized; there is no signed updater feed. The historical
+0.2.13 / 0.1.9 gallery and incomplete offline producer receipts remain explicit.
+Open E00–E11, R0–R5, A01–A40 and unrevised PM lifecycle requirements remain open;
+continued development authorization does not constitute R0/R1 acceptance.
+Entries below retain their historical branch, candidate and release states.
 
 ## Connector 0.2.18／Desktop 0.1.14 交付
 
