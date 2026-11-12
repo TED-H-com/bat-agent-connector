@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "72eca00e4586aa4496b3e4406e79fbc9341d485fde7b9adb2f9c7ccb228998e0"
+  canonical_sha256: "70eada037e74df99f53509297f3cbc626e87dcdc2b524c3c6eba9b9f67bad37f"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -584,7 +584,13 @@ Even an empty milestone baseline includes the exact accepted adoption in the man
 Every matching legacy adoption is required; physical row order never selects one. Only fully authorized reports
 can return `PM_EXPORT_TOO_LARGE` or source-proof diagnostics. Identity/digest proofs
 precede template compatibility, then the version-1 consumed-field structural validator
-and relationship proofs. Malformed authorized v1 shapes return `PM_REPORT_SOURCE_CHANGED`/409. Inconsistent
+and relationship proofs. The validator also walks whole documents, including opaque
+and extra members: at most 12 nested containers including the document root. Malformed
+or over-depth authorized v1 data returns `PM_REPORT_SOURCE_CHANGED`/409. Connector-owned
+IDs/digests retain the 512-byte UTF-8 bound; external session/resource/kind/type references
+use nonempty UTF-8 scalars and the source budget, with work-link refs limited to their
+producer's 300 characters. Field enumeration is supplemented by consumer-access,
+producer-drift and downstream depth-boundary tests. Inconsistent
 evidence, milestone, quality-context or adoption relationships refuse; they are never
 silently filtered into a successful report. Do not truncate content to fit the output bounds.
 

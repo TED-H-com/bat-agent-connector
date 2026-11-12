@@ -77,8 +77,12 @@ only passed through canonical JSON are explicitly opaque JSON leaves, not silent
 assumed mappings. Required map references are proven before shared projections index
 them. Unknown extra fields retain their original canonical representation.
 
-Before complete authorization, each reference passed by this loader to SQL or a
-reader must be a nonempty UTF-8 string of at most 512 bytes; maintenance kinds and
+Before complete authorization, Connector-owned fixed IDs and digests passed by
+this loader to SQL or a reader remain nonempty UTF-8 strings of at most 512 bytes.
+External session/resource IDs and externally sourced kind/type strings instead
+accept nonempty UTF-8 scalars within the existing source budget. Work-link `ref`
+uses its producer's 300-character bound, not a 512-byte bound. The committed
+reference-domain inventory classifies all 168 paths; producer admission is unchanged; maintenance kinds and
 optional basis values must belong to their declared sets. Shared readers are unchanged.
 The collection boundary alone conceals OperationError, KeyError, TypeError, ValueError,
 RecursionError, AttributeError, IndexError, sqlite3.ProgrammingError,
@@ -86,6 +90,25 @@ sqlite3.InterfaceError and OverflowError. Other SQLite failures (including locke
 I/O and corruption errors) retain their existing behavior. No catch surrounds the
 v1 validator, proofs, projection or renderer. Digest-consistent malformed v1 structures
 refuse with PM_REPORT_SOURCE_CHANGED/409 after authorization, never a transport 422.
+Immediately after the template check, an iterative whole-document walk includes
+opaque JSON leaves and unknown members. It permits at most **12 nested containers**,
+counting each document root as one; the 13th gives the same controlled 409 after
+authorization. The deepest fixed producer structure is a snapshot's maintenance repair
+required-CI receipt: maintenance/report/repairs/entry/progress/required_ci_receipts/entry/
+proof/required/entry/check_ids (12 including the root; status_ids has the same depth).
+The repair child result also reaches 12 at confinement/evidence/host_check/protected_roots.
+Original quality criterion verification references need 11 containers.
+This is below serde_json's 127-container budget. No interpreter recursion limit or
+post-authorization catch changes. Collection's existing concealment still applies
+if decoding or authorization cannot complete.
+
+Field enumeration alone does not prove downstream safety. Test-only recording
+mappings audit actual projection and all renderer accesses for ordinary, legacy,
+quality matrix, maintenance, forecast and empty-baseline closures. Explicit opaque
+metadata is only copied to serialized JSON. Boundary tests measure real HTTP stack
+headroom through deepcopy, canonical JSON and all six outputs; over-depth input
+never reaches projection. Producer literal enumeration drift is checked separately.
+
 Schema-generated tests enumerate every field and container element using all eight
 required mutation types, plus empty and over-bound Unicode strings. Type-compatible
 values (for example a legitimately nullable field) are distinguished from malformed
