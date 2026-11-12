@@ -96,7 +96,10 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   function showCreate() {
     if (!loaded || !createEditor) return;
     createOpen = true; update();
-    createEditor.box.querySelector('input:not([type="hidden"]), select, textarea')?.focus();
+    const ref = createEditor.fields.review_proposal_ref?.value;
+    const field = ref && ref !== 'null' ? createEditor.fields.title : [...createEditor.box.querySelectorAll('input:not([type="hidden"]), select, textarea')]
+      .find(node => !node.disabled && node.getClientRects().length);
+    if (field && !field.disabled) field.focus();
     createEditor.box.scrollIntoView({block: 'nearest'});
   }
   function localForm(options, rebase = false) {

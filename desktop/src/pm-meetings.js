@@ -463,7 +463,11 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     }
     if (!editor.box.isConnected) return;
     for (let node = editor.box.parentElement; node && node !== element; node = node.parentElement) if (node instanceof HTMLDetailsElement) {node.hidden = false; node.open = true;}
-    editor.box.querySelector('input:not([type="hidden"]), select, textarea')?.focus(); editor.box.scrollIntoView({block: 'nearest'});
+    const authored = action === 'pm.meeting.draft' ? editor.fields.goal_review : null;
+    const field = authored && !authored.disabled ? authored : [...editor.box.querySelectorAll('input:not([type="hidden"]), select, textarea')]
+      .find(node => !node.disabled && node.getClientRects().length);
+    for (let node = field?.parentElement; node && node !== element; node = node.parentElement) if (node instanceof HTMLDetailsElement) {node.hidden = false; node.open = true;}
+    field?.focus(); editor.box.scrollIntoView({block: 'nearest'});
   }
   async function openRef(target, {form: requested = 'follow_up.record'} = {}) {
     if (!target?.meeting_id) return;

@@ -201,7 +201,10 @@ Typed governance detail/snapshot 404 recovery also withdraws linked Review views
 rather than only clearing the selected finding. Ordinary non-Review source labels
 retain their existing unavailable-chip behavior.
 Request generations and selected identities reject late responses. Reflow retains
-editor nodes and composition; original durable receipts remain the replay authority.
+editor nodes and composition; guide handoffs focus the authored Goal impact editor
+or an enabled visible governance field, never a checkbox inside a closed source
+disclosure or a disabled Kind selector. Returning to the same editor preserves its
+text and selection. Original durable receipts remain the replay authority.
 Legacy meetings without this capability retain their current UI and request shapes.
 Older Result catalog paging, model facilitation and the other Scrum events remain
 outside this increment. Physical native and real-host acceptance are separate.

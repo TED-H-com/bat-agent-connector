@@ -40840,7 +40840,9 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		if (!loaded || !createEditor) return;
 		createOpen = true;
 		update();
-		createEditor.box.querySelector("input:not([type=\"hidden\"]), select, textarea")?.focus();
+		const ref = createEditor.fields.review_proposal_ref?.value;
+		const field = ref && ref !== "null" ? createEditor.fields.title : [...createEditor.box.querySelectorAll("input:not([type=\"hidden\"]), select, textarea")].find((node) => !node.disabled && node.getClientRects().length);
+		if (field && !field.disabled) field.focus();
 		createEditor.box.scrollIntoView({ block: "nearest" });
 	}
 	function localForm(options, rebase = false) {
@@ -51196,7 +51198,13 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			node.hidden = false;
 			node.open = true;
 		}
-		editor.box.querySelector("input:not([type=\"hidden\"]), select, textarea")?.focus();
+		const authored = action === "pm.meeting.draft" ? editor.fields.goal_review : null;
+		const field = authored && !authored.disabled ? authored : [...editor.box.querySelectorAll("input:not([type=\"hidden\"]), select, textarea")].find((node) => !node.disabled && node.getClientRects().length);
+		for (let node = field?.parentElement; node && node !== element; node = node.parentElement) if (node instanceof HTMLDetailsElement) {
+			node.hidden = false;
+			node.open = true;
+		}
+		field?.focus();
 		editor.box.scrollIntoView({ block: "nearest" });
 	}
 	async function openRef(target, { form: requested = "follow_up.record" } = {}) {
