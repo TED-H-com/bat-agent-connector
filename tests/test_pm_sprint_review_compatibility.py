@@ -1,20 +1,43 @@
-"""Byte comparison captured on ce3df78a before adding optional Review fields."""
+"""Capture on detached ce3df78a with this test's pinned setup and BATC_CAPTURE_SPRINT_REVIEW_LEGACY=1."""
 
 import itertools
 import json
 import os
 import secrets
+import subprocess
 import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
-from bat_agent_connector import pm_discussions, pm_governance, pm_plans, pm_workspace
+import pytest
+
+from bat_agent_connector import pm_discussions, pm_governance, pm_native_runtime, pm_plans, pm_workspace
 from tests import test_pm_meetings as meetings
 from tests.test_pm_discussions import OWNER, settle
 
 sprint_ops = meetings.sprint_ops
 ops = meetings.ops
 FIXTURE = Path(__file__).parent / "fixtures" / "sprint-review-legacy.json"
+
+
+@pytest.fixture(autouse=True)
+def fixed_native_installation(tmp_path, monkeypatch):
+    # Match the availability golden's module-owned isolation before ops setup.
+    # Fake readable auth is an installation hint, never real provider evidence.
+    native = tmp_path / "native"
+    native.mkdir()
+    (native / "auth.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(pm_native_runtime, "sys", SimpleNamespace(platform="linux"))
+    monkeypatch.setattr(pm_native_runtime, "shutil", SimpleNamespace(which=lambda _: "/fixture/tool"))
+    monkeypatch.setattr(pm_native_runtime, "_host_paths", lambda: (tmp_path, native))
+    monkeypatch.setattr(pm_native_runtime, "SYSTEM_CONFIG_ROOT", tmp_path / "absent-system-config")
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Legacy reads must not launch a native runtime or discover its version")
+
+    monkeypatch.setattr(pm_native_runtime, "_spawn", forbidden)
+    monkeypatch.setattr(pm_native_runtime, "_runtime_version", forbidden)
 
 
 async def test_legacy_envelopes_hashes_events_and_response_bytes(ops, monkeypatch):
@@ -144,9 +167,11 @@ async def test_legacy_envelopes_hashes_events_and_response_bytes(ops, monkeypatc
     server = pm_workspace.server_id(ops.db)
     # Match ApiV1._send_json serialization, including insertion order and spaces.
     encoded = json.dumps(captured, ensure_ascii=False, default=str).replace(server, "fixed-server") + "\n"
-    if os.environ.get("SRV_ACTUAL"):
-        Path(os.environ["SRV_ACTUAL"]).write_text(encoded)
-    if os.environ.get("SRV_CAPTURE_LEGACY") == "1":
-        FIXTURE.write_text(encoded)
-    assert encoded == FIXTURE.read_text()
+    if os.environ.get("BATC_CAPTURE_SPRINT_REVIEW_LEGACY") == "1":
+        head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=FIXTURE.parents[2], text=True
+        ).strip()
+        assert head == "ce3df78adaa3ca96b28ab84afe3c2d99880320b9", "Capture only on the legacy baseline"
+        FIXTURE.write_text(encoded, encoding="utf-8")
+    assert encoded == FIXTURE.read_text(encoding="utf-8")
     assert len(captured) == 7
