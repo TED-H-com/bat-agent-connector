@@ -136,3 +136,20 @@ async def test_historical_plan_and_original_forecast_are_fixed(ops):
     assert result['snapshot']['baseline']['document_revision'] == newer['revision_id']
     assert result['historical_plans'][0]['revision_id'] == old['revision_id']
     assert result['forecast']['revision_id'] == forecast['revision_id']
+
+
+async def test_authorization_byte_budget_and_tainted_traversal_are_concealed(ops, monkeypatch):
+    from bat_agent_connector import pm_read_cache
+    chosen = await selected(ops)
+    with monkeypatch.context() as limits:
+        limits.setattr(reports, 'MAX_AUTH_BYTES', 1)
+        with pytest.raises(OperationError, match='PM_REPORT_SOURCE_UNAVAILABLE') as error:
+            read(ops, chosen)
+        assert error.value.status == 404
+    original = pm_access.require_operation_sources
+    def refused(*args):
+        original(*args)
+        pm_read_cache.refuse()
+    monkeypatch.setattr(pm_access, 'require_operation_sources', refused)
+    with pytest.raises(OperationError, match='PM_REPORT_SOURCE_UNAVAILABLE'):
+        read(ops, chosen)

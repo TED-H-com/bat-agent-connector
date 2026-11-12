@@ -61,6 +61,7 @@ class _Closure:
             raise unavailable()
         value = dict(row)
         # Defer digest/kind/relationship checks until the entire closure is authorized.
+        self.charge(row['document'])
         value['document'] = json.loads(row['document'])
         self.charge(value)
         self.operations([value['operation_id']])
@@ -83,6 +84,7 @@ class _Closure:
         if row is None:
             raise unavailable()
         snapshot = dict(row)
+        self.charge(row['document'])
         snapshot['document'] = json.loads(row['document'])
         self.charge(snapshot)
         saved = snapshot['document']
@@ -127,11 +129,13 @@ def _verify(closure):
         if value is not None:
             proof(value['kind'] == kind and digest(value['document']) == value['document_digest'])
     doc, saved = observation['document'], snapshot['document']
-    proof(doc['baseline_revision_id'] == baseline['revision_id'])
+    proof(doc['baseline_revision_id'] == observation['baseline_revision_id'] == baseline['revision_id'])
+    proof(baseline['baseline_revision_id'] == baseline['revision_id'])
     if forecast:
-        proof(forecast['baseline_revision_id'] == baseline['revision_id'])
+        proof(forecast['baseline_revision_id'] == forecast['document']['baseline_revision_id'] == baseline['revision_id'])
     proof(doc['snapshot_digest'] == snapshot['snapshot_digest'] == digest(saved))
     proof(saved['snapshot_id'] == snapshot['snapshot_id'] and saved['workspace_id'] == snapshot['workspace_id'])
+    proof(doc['as_of'] == saved['as_of'] and doc['journal_cursor'] == saved['journal_cursor'])
     for original, visible in zip(saved['evidence'], evidence, strict=True):
         proof(original == visible and digest(original['document']) == original['fact_digest'])
     for identity, plan in plans.items():
@@ -140,6 +144,10 @@ def _verify(closure):
     if accepted['document_revision']:
         plan = plans[accepted['document_revision']]
         proof(plan['document_digest'] == accepted['document_digest'] and plan['document'] == accepted['document'])
+        proof(plan['scope_digest'] == accepted['structured_scope_digest'])
+    candidate = saved.get('candidate_document')
+    if candidate:
+        proof(plans[candidate['revision_id']]['document_digest'] == candidate['document_digest'])
     for milestone in baseline['document']['milestones']:
         plan = plans[milestone['plan_revision_id']]
         proof(plan['document_digest'] == milestone['plan_document_digest'])
@@ -165,6 +173,7 @@ def project(closure):
     result = {'version': 1, 'template_version': 1, 'workspace_id': saved['workspace_id'],
         'observation_revision_id': observation['revision_id'], 'snapshot_id': saved['snapshot_id'],
         'snapshot_digest': snapshot['snapshot_digest'], 'snapshot_view_digest': snapshot_view['view_digest'],
+        'baseline_revision_id': baseline['revision_id'], 'forecast_revision_id': forecast['revision_id'] if forecast else None,
         'baseline_digest': baseline['document_digest'], 'forecast_digest': forecast['document_digest'] if forecast else None,
         'observation_digest': observation['document_digest'], 'source_manifest': references,
         'source_set_digest': digest({'profile': 'roadmap_report_v1', 'sources': references}),
@@ -196,7 +205,7 @@ def load_fixed(ops, principal, workspace_id, observation_revision_id):
             closure = _Closure(ops, principal, workspace_id).collect(observation_revision_id)
             if generation != pm_read_cache.refusal_generation():
                 raise unavailable()
-    except (OperationError, KeyError, TypeError, ValueError):
+    except (OperationError, KeyError, TypeError, ValueError, RecursionError):
         # No source-specific corruption/size/coverage information before full access.
         raise unavailable() from None
     _verify(closure)
