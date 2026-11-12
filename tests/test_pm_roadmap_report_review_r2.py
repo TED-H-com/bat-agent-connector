@@ -1,7 +1,5 @@
 """Exact R2 product triggers, adapted only from characterization to required refusals."""
 import copy
-import subprocess
-import types
 
 import pytest
 
@@ -88,29 +86,26 @@ async def test_proof_shapes_and_legacy(ops):
     assert projected['observation']['document']['milestones'][0]['actual']['actual_finish_date'] is None
     print('legacy missing quality context remains unassessed')
 
-async def test_single_adoption_bytes_against_r1(ops):
-    raw = subprocess.check_output(['git', 'show', '49fe29bb:src/bat_agent_connector/pm_roadmap_report_sources.py'])
-    prior = types.ModuleType('bat_agent_connector._r1_sources')
-    prior.__package__ = 'bat_agent_connector'
-    exec(compile(raw, '49fe29bb/sources.py', 'exec'), prior.__dict__)
+async def test_exact_accepted_adoption_in_empty_baseline(ops):
     chosen = await selected(ops)
     wid = chosen[0]['workspace_id']
-    rid = chosen[3]['revision_id']
-    before = prior.load_fixed(ops, READER, wid, rid)
-    after = s.load_fixed(ops, READER, wid, rid)
-    assert before == after
+    expected = chosen[2]['baseline']['adoption']['decision_id']
+    initial = s.load_fixed(ops, READER, wid, chosen[3]['revision_id'])
+    assert [a['id'] for a in initial['source_manifest'] if a['kind'] == 'adoption'] == [expected]
+    await revision(ops, wid, milestones=[])
+    observed = await revision(ops, wid, 'observation', snapshot_id=chosen[2]['snapshot_id'])
+    closure = s._Closure(ops, READER, wid).collect(observed['revision_id'])
+    after = s.load_fixed(ops, READER, wid, observed['revision_id'])
+    assert [a['id'] for a in after['source_manifest'] if a['kind'] == 'adoption'] == [expected]
+    # Characterize the old omission without depending on repository history in CI.
+    omitted = s.project((*closure[:-1], {}))
+    assert omitted['source_set_digest'] != after['source_set_digest']
+    assert omitted['view_digest'] != after['view_digest']
     for locale in ('en', 'zh-TW'):
         for fmt in r.FORMATS:
-            assert r.render_fixed(before, locale=locale, format=fmt) == r.render_fixed(after, locale=locale, format=fmt)
-    print('single adoption also selected by milestone: entire projection and six outputs unchanged')
-    await revision(ops, wid, milestones=[])
-    obs = await revision(ops, wid, 'observation', snapshot_id=chosen[2]['snapshot_id'])
-    before = prior.load_fixed(ops, READER, wid, obs['revision_id'])
-    after = s.load_fixed(ops, READER, wid, obs['revision_id'])
-    assert before != after
-    assert len([a for a in before['source_manifest'] if a['kind'] == 'adoption']) == 0
-    assert len([a for a in after['source_manifest'] if a['kind'] == 'adoption']) == 1
-    print('single adoption, empty milestone baseline: newly explicit accepted adoption changes manifest/source/view/output digests')
+            assert r.render_fixed(omitted, locale=locale, format=fmt)['output_digest'] != r.render_fixed(
+                after, locale=locale, format=fmt)['output_digest']
+    print('Empty milestone baseline retains its exact accepted adoption; omission changes all six output digests')
 
 async def test_relationship_scalar_mismatches_and_malformed_http(ops, served):
     chosen = await selected(ops)
