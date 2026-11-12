@@ -92,6 +92,7 @@ FIELDS = {
     "pm_sprints_list": ('workspace_id', 'after', 'limit'),
     "pm_sprint_get": ('workspace_id', 'sprint_id', 'history_limit'),
     "pm_sprint_history_list": ('workspace_id', 'sprint_id', 'kind', 'after', 'limit'),
+    "pm_plan_impact_preview": ("workspace_id", "snapshot_id", "from_revision_id", "to_revision_id", "binding_ids"),
     "pm_plan_compare": ("workspace_id", "from_revision_id", "to_revision_id", "binding_ids", "journal_cursor"),
     "pm_roadmap_get": ("workspace_id",),
     "pm_roadmap_revisions_list": ("workspace_id", "kind", "after", "limit"),
@@ -382,6 +383,10 @@ def read(ops, principal, method, params):
         if method == "pm_sprint_history_list":
             return pm_sprints.list_history(ops, principal, workspace_id, params.get("sprint_id"), params.get("kind"), **page)
         return pm_sprints.list_revisions(ops, principal, workspace_id, params.get("kind"), **page)
+    if method == "pm_plan_impact_preview":
+        from . import pm_plan_impact
+        return pm_plan_impact.preview(ops, principal, workspace_id, params.get("snapshot_id"),
+            params.get("from_revision_id"), params.get("to_revision_id"), params.get("binding_ids"))
     if method == "pm_plan_compare":
         from . import pm_plan_diff
         if not all(isinstance(params.get(key), str) and params[key] for key in ("from_revision_id", "to_revision_id")):
@@ -451,6 +456,7 @@ def read(ops, principal, method, params):
             pm_bat_operations,
             pm_native_capabilities,
             pm_overview_assessments,
+            pm_plan_impact,
             pm_runs,
             pm_runtime,
             pm_work_follow_up,
@@ -481,6 +487,7 @@ def read(ops, principal, method, params):
             "authority": "context_only", "output_destination": "follow_up_assessment",
             "conclusions_verified": False, "execution_authorized": False}
         return {"workspace_id": workspace_id, "context_packages": True,
+                "plan_impact": pm_plan_impact.capabilities(),
                 "plan_drafting": "pm.plan.draft" in ops.actions,
                 "plan_adoption": "pm.plan.adopt" in ops.actions,
                 "plan_adoption_available": adoption_reason is None, "plan_adoption_reason": adoption_reason,
