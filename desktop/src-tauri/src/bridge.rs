@@ -1914,7 +1914,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|hosts/deploy-status|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/history(?:/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}(?:/associations)?)?|/history-excerpts/hxe_[0-9a-f]{64}|/external-links/hxl_[0-9a-f]{32}|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/wip|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32}(?:/assessments/op_[0-9a-f]{32})?)?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/overview-assessments(?:/pmoa_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs|external-links(?:/cleanup)?))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/installation-capabilities|pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/history(?:/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}(?:/associations)?)?|/history-excerpts/hxe_[0-9a-f]{64}|/external-links/hxl_[0-9a-f]{32}|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/wip|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32}(?:/assessments/op_[0-9a-f]{32})?)?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-profiles(?:/wpf_[0-9a-f]{32}(?:/readiness)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/overview-assessments(?:/pmoa_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/plan-impact|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality|attempts|inputs|external-links(?:/cleanup)?))?|/work-attempts/att_[0-9a-f]{32}(?:/(?:result|changes|diff))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -2110,6 +2110,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let brief_export = path.ends_with("/brief-export");
             let lifecycle_inflight = path.ends_with("/lifecycle/inflight");
             let lifecycle_list = lifecycle_inflight || path.ends_with("/lifecycle/transitions");
+            let impact = path.ends_with("/plan-impact");
             let comparison = path.ends_with("/plan-comparison");
             let spec_sources = path.ends_with("/spec-sources");
             let roadmap_list = path.ends_with("/roadmap/revisions");
@@ -2444,12 +2445,32 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                             .split(',')
                             .all(|path| valid_spec_source_path(path) && selected.insert(path))
                 }
-                "from_revision_id" | "to_revision_id" if comparison => {
+                "from_revision_id" | "to_revision_id" if comparison || impact => {
                     value.len() == 38
                         && value.starts_with("pmrev_")
                         && value[6..]
                             .bytes()
                             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "snapshot_id" if impact => {
+                    value.len() == 39
+                        && value.starts_with("pmsnap_")
+                        && value[7..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "binding_ids" if impact => {
+                    let ids: Vec<_> = value.split(',').collect();
+                    !value.is_empty()
+                        && ids.len() <= 50
+                        && ids.iter().collect::<std::collections::HashSet<_>>().len() == ids.len()
+                        && ids.iter().all(|id| {
+                            id.len() == 37
+                                && id.starts_with("pmwb_")
+                                && id[5..]
+                                    .bytes()
+                                    .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                        })
                 }
                 "binding_ids" if comparison => {
                     value.is_empty()
@@ -2924,6 +2945,21 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Saved history cannot be used as a live turn observation".into());
         }
     }
+    if pm
+        && path.ends_with("/plan-impact")
+        && ![
+            "snapshot_id",
+            "from_revision_id",
+            "to_revision_id",
+            "binding_ids",
+        ]
+        .iter()
+        .all(|key| query_keys.contains(*key))
+    {
+        return Err(
+            "Impact preview requires a snapshot, both revisions and explicit bindings".into(),
+        );
+    }
     if quality_assessment
         && !(query_keys.contains("version") && query_keys.contains("document_digest"))
     {
@@ -3009,6 +3045,60 @@ mod tests {
         sync::mpsc,
         thread,
     };
+    #[test]
+    fn fixed_impact_preview_requires_exact_bounded_selectors() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/plan-impact";
+        let binding = "pmwb_22222222222222222222222222222222";
+        let query = format!("snapshot_id=pmsnap_33333333333333333333333333333333&from_revision_id=pmrev_44444444444444444444444444444444&to_revision_id=pmrev_55555555555555555555555555555555&binding_ids={binding}");
+        assert!(validate_request(&get(&format!("{root}?{query}"))).is_ok());
+        for extra in ["&actor=x", "&snapshot_id=", "&limit=1", "&journal_cursor=0"] {
+            assert!(validate_request(&get(&format!("{root}?{query}{extra}"))).is_err());
+        }
+        for invalid in [
+            "".to_string(),
+            "null".into(),
+            "[]".into(),
+            format!("{binding},{binding}"),
+            format!("{binding},"),
+            (0..51)
+                .map(|i| format!("pmwb_{i:032x}"))
+                .collect::<Vec<_>>()
+                .join(","),
+        ] {
+            assert!(validate_request(&get(&format!(
+                "{root}?{}",
+                query.replace(binding, &invalid)
+            )))
+            .is_err());
+        }
+        let fifty = (0..50)
+            .map(|i| format!("pmwb_{i:032x}"))
+            .collect::<Vec<_>>()
+            .join("%2C");
+        assert!(
+            validate_request(&get(&format!("{root}?{}", query.replace(binding, &fifty)))).is_ok()
+        );
+        for key in [
+            "snapshot_id",
+            "from_revision_id",
+            "to_revision_id",
+            "binding_ids",
+        ] {
+            let missing = query
+                .split('&')
+                .filter(|pair| !pair.starts_with(key))
+                .collect::<Vec<_>>()
+                .join("&");
+            assert!(validate_request(&get(&format!("{root}?{missing}"))).is_err());
+        }
+        assert!(validate_request(&get(root)).is_err());
+        assert!(validate_request(&get(&format!("{root}/raw?{query}"))).is_err());
+        assert!(validate_request(&request("POST", &format!("{root}?{query}"))).is_err());
+        let mut body = get(&format!("{root}?{query}"));
+        body.body = Some(serde_json::json!({}));
+        assert!(validate_request(&body).is_err());
+    }
+
     #[test]
     fn operation_history_cursor_is_paired_and_read_only() {
         let id = format!("op_{}", "a".repeat(32));

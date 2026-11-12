@@ -18,6 +18,20 @@ RUN, THREAD, TURN, CLIENT, MODEL = "owned-run", "owned-thread", "owned-turn", "o
 PROMPT = "Compare the supplied evidence. Do not adopt or execute anything."
 
 
+def skip_if_bwrap_namespace_denied(returncode: int | None, stderr: str | bytes) -> None:
+    """Skip only a failed launch with a known namespace-creation denial."""
+    if returncode is None or returncode <= 0:
+        return
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode(errors="replace")
+    messages = (
+        "bwrap: Creating new namespace failed: Operation not permitted",
+        "bwrap: No permissions to create a new namespace,",
+    )
+    if any(line.startswith(messages) for line in stderr.splitlines()):
+        pytest.skip("bubblewrap cannot create a namespace: denied by this environment")
+
+
 def config():
     result = {"mcp_servers": {}}
     for dotted, value in native._settings(Path("/private-profile")).items():
@@ -745,7 +759,6 @@ async def test_real_readonly_mount_cannot_change_host_canary(tmp_path):
         if process.returncode is None:
             process.kill()
             await process.wait()
-    if process.returncode != 0 and b"Operation not permitted" in stderr:
-        pytest.skip("Kernel does not permit this user's namespace creation")
+    skip_if_bwrap_namespace_denied(process.returncode, stderr)
     assert process.returncode == 0, stderr.decode(errors="replace")
     assert canary.read_text() == "unchanged"

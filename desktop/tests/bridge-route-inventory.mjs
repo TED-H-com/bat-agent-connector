@@ -46,7 +46,7 @@ const ID = {
 };
 const SEGMENT = new Map([
   ['workspaces', ID.ws], ['work', ID.wi], ['work-items', ID.wi], ['work-attempts', ID.att],
-  ['operations', ID.op], ['projects', ID.prj], ['plans', ID.pmrev], ['snapshots', ID.pmsnap],
+  ['operations', ID.op], ['assessments', ID.op], ['projects', ID.prj], ['plans', ID.pmrev], ['snapshots', ID.pmsnap],
   ['threads', ID.pmt], ['runs', ID.pmr], ['meetings', ID.pmmeet], ['sprints', ID.pms],
   ['work-packages', ID.pmwp], ['work-profiles', ID.wpf], ['quality-reviews', ID.pmqr], ['follow-ups', ID.pmfu],
   ['follow-up-assessments', ID.pmfa], ['overview-assessments', ID.pmoa], ['conversation-proposals', ID.pmcp],
@@ -171,6 +171,10 @@ function isForwarder(fn) {
 }
 
 function queryValue(pathname, key) {
+  if (/\/quality-reviews\/[^/]+\/assessments\//.test(pathname)) {
+    if (key === 'version') return '2';
+    if (key === 'document_digest') return hex(64);
+  }
   if (key === 'after' && pathname.endsWith('/threads')) return ID.pmt;
   if (key === 'after' && pathname.endsWith('/runs')) return ID.pmr;
   if (key === 'after' && pathname.endsWith('/result-sources')) return ID.wi;

@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "ccde02ec8b2567446a9c8088b8aa120ce95ae77320d78fb525721da073353a16"
+  canonical_sha256: "09a5c913b3697d28b6f2fff7716307f9d7c42c12f4ebda53a846d87be4981796"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -290,6 +290,16 @@ work is unblocked. Later activity belongs in a new snapshot.
 
 ## Fixed plan comparison and Roadmap
 
+Use `pm_plan_impact_preview` with `workspace_id`, `snapshot_id`, fixed
+`from_revision_id` / `to_revision_id`, and 1–50 explicit `binding_ids` from that
+unfiltered saved baseline. It returns the complete bounded historical matrix or
+an error, never captures a snapshot, calls a model or updates work. Check
+`plan_impact.version == 1` in workspace capabilities. Coverage is incomplete:
+missing retained creation events mean `creation_boundary_unproven`; an Attempt
+without its fixed package edge means `association_unknown`. Keep original issue
+IDs; cross-scope publication remains unsupported. This capability offers only
+the read; governance review fields and the UI are not available yet.
+
 Use `pm_plan_compare` with explicit `workspace_id`, `from_revision_id`,
 `to_revision_id`, and optionally up to 100 distinct immutable `binding_ids`.
 Keep the returned `journal_cursor` for the same comparison; a changed selection
@@ -437,6 +447,17 @@ policy against the current count. UI warnings are planned separately; do not
 claim this backend caps work or reserves capacity.
 
 ## Sourced risks, changes and decisions
+
+When `features.pm_workspaces.guided_sprint_review.version` is 1, the optional
+`review_basis` on `pm.meeting.draft` freezes selected Result receipts, exact
+feedback and unresolved evidence. Use the [guided Review contract](../../docs/design/pm-sprint-review.md)
+for exact selectors and bounds. Reported completion never establishes acceptance.
+Link each proposal with `review_proposal_ref` on `pm.governance.record`; an actual
+owner records direction through `pm.governance.decide`. Completion requires
+`governance_decisions` for selected decisions. Only an explicit request may create
+an unresolved Idea input with `source_ref.kind=sprint_review_decision`, then a
+`pmd_` via `pm.thread.plan`. No adoption or start is composed. On withdrawal,
+reread original sources; retain the original operation key for replay.
 
 Use `pm_governance_list`, `pm_governance_get` and `pm_governance_history_list`
 for attributed findings and immutable decision history. Select an existing adopted

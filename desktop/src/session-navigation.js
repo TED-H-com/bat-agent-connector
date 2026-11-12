@@ -1,3 +1,4 @@
+import {assessmentQueryKeys, parseAssessmentSelection, assessmentQuery} from './pm-assessment-selection.js';
 // Return locations are cosmetic. Work context is only a requested selection;
 // callers must validate its public Work/Attempt relationship before using it.
 const projectViews = new Set(['overview', 'discussions', 'requirements', 'schedule', 'dependencies', 'issues', 'agents', 'board']);
@@ -25,11 +26,27 @@ export function sessionOrigin(value) {
     const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
     if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return '';
     const query = new URLSearchParams(match[3] || '');
-    if ([...query.keys()].some(key => !['from', 'workspace', 'work', 'attempt'].includes(key)) || query.getAll('from').length > 1) return '';
+    if ([...query.keys()].some(key => !['from', 'workspace', 'work', 'attempt', ...assessmentQueryKeys].includes(key)) || query.getAll('from').length > 1) return '';
     const from = query.get('from') || '';
     if (from && !projectViews.has(from)) return '';
     const context = workSessionContext(query);
     if (['workspace', 'work', 'attempt'].some(key => query.has(key)) && !context) return '';
-    return sessionHref({host, sessionId, from, ...context});
+    const base = sessionHref({host, sessionId, from, ...context});
+    if (![...query.keys()].some(key => key.startsWith('qa_'))) return base;
+    const pin = parseAssessmentSelection(query, query.get('qa_partition'));
+    if (!pin || !context || pin.workspace_id !== context.workspaceId || pin.work_item_id !== context.workItemId
+      || pin.attempt_id !== context.attemptId) return '';
+    return base + (base.includes('?') ? '&' : '?') + assessmentQuery(pin, pin.partition);
   } catch {return '';}
+}
+
+// Persistence retains the ordinary return identity, never an assessment pin.
+export function persistedSessionOrigin(value) {
+  if (typeof value !== 'string') return '';
+  const [route, raw] = value.split('?'), query = new URLSearchParams(raw || '');
+  for (const key of [...query.keys()]) if (key.startsWith('qa_')) query.delete(key);
+  return sessionOrigin(route + (query.size ? '?' + query : ''));
+}
+export function persistedDiscussionOrigin(value) {
+  return {...value, from: value.from?.startsWith('#/session/') ? persistedSessionOrigin(value.from) : value.from};
 }

@@ -184,3 +184,110 @@ test('an unavailable original execution cannot be replaced by another work opera
   await expect(editor(page)).toHaveCount(0);
   expect(f.state.writes).toHaveLength(0);
 });
+
+import {assessmentRoundtrip} from './assessment-roundtrip-fixture.ts';
+import {workResultFixture,workspaceId as resultWorkspace,workId as resultWork,route as resultRoute} from './work-result-fixture.ts';
+import {mountConversation} from './conversation-fixture.ts';
+async function pinned(page:any,f:any,zh=false,native=false){
+  await mountConversation(page,native,f.dispatch);await page.goto(resultRoute);
+  if((page.viewportSize()?.width||1440)<768)await page.locator('#workspace-menu').click();
+  await page.locator('[data-pm-view="board"]').click();
+  await page.locator(`[data-pm-kanban-work="${resultWork(1)}"] [data-board-open]`).click();
+  await page.locator('[data-result-requirement="recovery"] summary').filter({hasText:zh?'原結論':'Original conclusion'}).first().click();
+  await page.locator('[data-assessment-open]').click();
+  const reader=page.locator('[data-original-assessment]:visible');
+  await reader.getByRole('button',{name:zh?'審閱這份成果':'Review this result',exact:true}).click();
+  await expect(reader.locator('[data-pm-quality-reviews]')).toBeVisible();
+  return reader;
+}
+for(const [locale,width] of [['en',1440],['zh-TW',390]] as const)for(const native of [false,true])test(`pinned assessment adopts the newer version explicitly and keeps its receipt ${locale} ${native?'IPC':'HTTP'}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage();
+  const base=workResultFixture(),f=assessmentRoundtrip(base,resultWorkspace,resultWork(1)),zh=locale==='zh-TW';f.newer();
+  try{
+    const reader=await pinned(page,f,zh,native),form=reader.locator(`[data-pm-action="${RECORD}"]`);
+    await expect(page.locator('[data-work-quality]')).toHaveCount(1);
+    await reader.locator('[data-quality-assess]>summary').click();
+    await expect(form.locator('button[type=submit]')).toBeDisabled();
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+    await form.getByRole('button',{name:zh?'使用目前審查版本':'Use current review version',exact:true}).click();
+    for(const field of await form.getByLabel(zh?'條件判斷理由':'Criterion rationale',{exact:true}).all())await field.fill('Keep the original pin while recording this deliberate review.');
+    await form.getByLabel(zh?'這次評估的理由':'Reason for this assessment',{exact:true}).fill('Original requirements remain unassessed.');
+    await form.locator('button[type=submit]').click();
+    await expect(reader.getByRole('button',{name:zh?'檢視已記錄的評估':'View recorded assessment',exact:true})).toBeVisible();
+    expect(f.state.requests.filter(input=>input.method==='POST')).toHaveLength(1);
+    expect(new URLSearchParams((await page.evaluate(()=>location.hash)).split('?')[1]).get('qa_version')).toBe('2');
+    await reader.getByRole('button',{name:zh?'檢視已記錄的評估':'View recorded assessment',exact:true}).click();
+    await expect.poll(async()=>new URLSearchParams((await page.evaluate(()=>location.hash)).split('?')[1]).get('qa_version')).toBe('4');
+    await reader.getByRole('button',{name:zh?'返回來源':'Return to source',exact:true}).click();
+    await expect(page.locator('[data-assessment-open]').first()).toBeFocused();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  }finally{await context.close();}
+});
+
+for(const native of [false,true])test(`unknown assessment reply and reload keep the original key without resubmitting ${native?'IPC':'HTTP'}`,async({page})=>{
+  const f=assessmentRoundtrip(workResultFixture(),resultWorkspace,resultWork(1));
+  let reader=await pinned(page,f,false,native),form=reader.locator(`[data-pm-action="${RECORD}"]`);
+  await reader.locator('[data-quality-assess]>summary').click();
+  for(const field of await form.getByLabel('Criterion rationale',{exact:true}).all())await field.fill('Review once only.');
+  await form.getByLabel('Reason for this assessment',{exact:true}).fill('Keep uncertain admission tied to its original key.');
+  f.q.state.lost=true;await form.locator('button[type=submit]').click();
+  await expect.poll(()=>f.state.requests.filter(input=>input.method==='POST').length).toBe(1);
+  const key=f.state.requests.find(input=>input.method==='POST').idempotency_key;
+  await page.reload();
+  reader=page.locator('[data-original-assessment]:visible');await expect(reader).toContainText('Original assessment');
+  await reader.getByRole('button',{name:'Review this result',exact:true}).click();
+  form=reader.locator(`[data-pm-action="${RECORD}"]`);
+  await expect(form).toBeVisible();
+  expect(f.state.requests.filter(input=>input.method==='POST')).toHaveLength(1);
+  const intents=await page.evaluate(()=>Object.values(localStorage).map(raw=>{try{return JSON.parse(raw);}catch{return null;}}).filter(value=>value?.intent));
+  expect(intents.some((value:any)=>value.intent.key===key)).toBe(true);
+  await expect(reader.getByRole('button',{name:'View recorded assessment',exact:true})).toHaveCount(0);
+});
+
+import {installBodyCompletedCounter,pendingBodyIds,syncBodyIds} from './page-sync.ts';
+test('a held pinned reread during save cannot replace the newer refresh or resubmit',async({page})=>{
+  const base=workResultFixture(),f=assessmentRoundtrip(base,resultWorkspace,resultWork(1));
+  await installBodyCompletedCounter(page);const reader=await pinned(page,f),form=reader.locator(`[data-pm-action="${RECORD}"]`);
+  await reader.locator('[data-quality-assess]>summary').click();
+  for(const field of await form.getByLabel('Criterion rationale',{exact:true}).all())await field.fill('Keep one intentional review.');
+  await form.getByLabel('Reason for this assessment',{exact:true}).fill('Persist the receipt while refreshing the original pin.');
+  const path='/assessments/'+f.ref.operation_id;
+  let release!:()=>void;f.state.hold=new Promise<void>(resolve=>{release=resolve;});
+  try{
+    await form.locator('button[type=submit]').click();
+    await expect.poll(()=>pendingBodyIds(page,path)).toHaveLength(2);
+    const held=await pendingBodyIds(page,path);
+    const key=f.state.requests.find(input=>input.method==='POST').idempotency_key;
+    f.state.hold=null;base.emitResultRecorded('att_'+'1'.repeat(32));
+    await expect(reader).toContainText('Original conclusion: accepted');
+    expect(await pendingBodyIds(page,path)).toEqual(held);
+    release();await syncBodyIds(page,held);
+    await expect(reader.getByRole('button',{name:'View recorded assessment',exact:true})).toBeVisible();
+    expect(new URLSearchParams((await page.evaluate(()=>location.hash)).split('?')[1]).get('qa_version')).toBe('2');
+    const posts=f.state.requests.filter(input=>input.method==='POST');expect(posts).toHaveLength(1);expect(posts[0].idempotency_key).toBe(key);
+    await reader.getByRole('button',{name:'View recorded assessment',exact:true}).click();
+    await expect.poll(async()=>new URLSearchParams((await page.evaluate(()=>location.hash)).split('?')[1]).get('qa_version')).toBe('3');
+  }finally{release();}
+});
+
+for(const locale of ['en','zh-TW'] as const)test(`repeated keyboard expansion keeps one Result original body and the review draft ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),zh=locale==='zh-TW';
+  const f=assessmentRoundtrip(workResultFixture(),resultWorkspace,resultWork(1));
+  try{
+    const reader=await pinned(page,f,zh),source=page.locator('[data-assessment-open]').locator('..'),exact=reader.locator('details').first();
+    await reader.locator('[data-quality-assess]>summary').click();
+    const reason=reader.getByRole('textbox',{name:zh?'這次評估的理由':'Reason for this assessment',exact:true});
+    await reason.fill('Keep this deliberate unsaved review.');const pin=await page.evaluate(()=>location.hash);
+    for(let i=0;i<3;i++){
+      await source.locator(':scope > summary').focus();await page.keyboard.press('Enter');
+      await expect(source).toHaveAttribute('open','');await expect(exact).not.toHaveAttribute('open','');
+      await expect(source.locator(':scope > summary')).toBeFocused();
+      await exact.locator(':scope > summary').focus();await page.keyboard.press('Enter');
+      await expect(exact).toHaveAttribute('open','');await expect(source).not.toHaveAttribute('open','');
+      await expect(exact.locator(':scope > summary')).toBeFocused();
+      await expect(reason).toHaveValue('Keep this deliberate unsaved review.');
+      expect(await page.evaluate(()=>location.hash)).toBe(pin);
+    }
+    expect(f.state.requests.filter(input=>input.method!=='GET')).toEqual([]);
+  }finally{await context.close();}
+});

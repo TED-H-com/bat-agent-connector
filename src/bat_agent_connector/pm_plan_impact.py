@@ -1,0 +1,397 @@
+"""Fixed, source-authorized affected-work joins; no semantic inference or effects."""
+from __future__ import annotations
+
+import json
+
+from . import (
+    pm_evidence,
+    pm_impact_discovery,
+    pm_issue_mappings,
+    pm_plans,
+    pm_snapshots,
+    pm_source_lineage,
+    pm_work_packages,
+    pm_work_start,
+    pm_workspace,
+)
+from . import pm_plan_diff as diff
+from .operations import OperationError
+from .pm_release_baselines import _snapshot
+
+MAX_BINDINGS = 50
+MAX_SUBJECTS = 100
+MAX_CANDIDATES = 1000
+MAX_BYTES = 153600
+READ = "pm_plan_impact_preview"
+
+
+def capabilities():
+    return {"version": 1, "read_only": True, "read": READ, "required_scopes": ["observe"],
+            "max_bindings": MAX_BINDINGS, "max_subjects": MAX_SUBJECTS,
+            "max_candidate_rows": MAX_CANDIDATES, "max_bytes": MAX_BYTES}
+
+
+def _unavailable():
+    return OperationError("PM_IMPACT_SOURCE_UNAVAILABLE",
+        "The selected impact sources are unavailable or cannot be established within the read's bounds; select fewer bindings", 404)
+
+
+def _proof(condition):
+    if not condition:
+        raise OperationError("PM_IMPACT_EVIDENCE_INVALID", "Retained impact evidence is inconsistent or ambiguous", 409)
+
+
+def _bound(condition):
+    if not condition:
+        raise OperationError("PM_IMPACT_TOO_LARGE", "Select a smaller binding subset; the complete impact matrix exceeds its bounds", 413)
+
+
+def _encoded_size(value, remaining):
+    size = 0
+    for chunk in json.JSONEncoder(ensure_ascii=False, allow_nan=False).iterencode(value):
+        size += len(chunk.encode("utf-8"))
+        _bound(size <= remaining)
+    return size
+
+
+def _source(reader, *args, **kwargs):
+    try:
+        return reader(*args, **kwargs)
+    except OperationError:
+        # Do not disclose even the kind/identity/count of a failed source closure.
+        raise _unavailable() from None
+
+
+def _lineage(ops, principal, document, references):
+    references.update(pm_source_lineage.references(document))
+    _source(pm_source_lineage.require_document, ops.db, principal, document)
+
+
+def _eligible(ops, operation, bindings, cursor):
+    """Private selection from original relations, before any source reader."""
+    try:
+        action = operation["action"]
+        saved = operation["external_refs"].get("admission_binding", {})
+        if action == "pm.work_package.create":
+            bid = operation["preconditions"]["expected_binding_id"]
+        elif action in {"pm.issue.publish", "pm.issue.cancel"}:
+            bid = saved["issue_intent"]["relation"]["binding_id"]
+        elif action == "repository.continue":
+            bid = saved["pm_handoff"]["contract"]["package"]["context"]["work_ref"]["binding_id"]
+        else:
+            # Without a unique retained finish, an Attempt remains unassigned.
+            row = ops.db.execute("SELECT attempt_id FROM work_attempts WHERE start_operation_id=?",
+                                 (operation["operation_id"],)).fetchone()
+            if row is None:
+                return True
+            # Two proofs suffice to establish ambiguity. Never materialize all
+            # duplicates again for each candidate from this same Attempt.
+            events = ops.db.execute("""SELECT body FROM api_events WHERE resource_type='pm_work_attempt'
+                AND resource_id=? AND seq<=? AND kind='work.start.succeeded' LIMIT 2""", (row[0], cursor)).fetchall()
+            if len(events) != 1:
+                return True
+            body = json.loads(events[0][0])
+            link = ops.db.execute("SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'",
+                                  (operation["operation_id"],)).fetchone()
+            child = ops._row(link[0]) if link else None
+            if child is None or child["operation_id"] != body.get("execution_operation_id"):
+                return True
+            ref = child["external_refs"]["admission_binding"]["pm_handoff"]["contract"]
+            if ref["package_ref"]["package_id"] != body.get("package_id"):
+                return True
+            bid = ref["package"]["context"]["work_ref"]["binding_id"]
+        return bid in bindings
+    except (KeyError, TypeError, ValueError):
+        # Malformed evidence is checked after selected-source authorization.
+        return True
+
+
+def _candidates(ops, workspace_id, work_ids, cursor, bindings):
+    groups, seen = {}, set()
+    for raw in pm_impact_discovery.rows(ops.db, workspace_id, work_ids, cursor):
+        row = {**dict(raw), "body": json.loads(raw["body"])}
+        oid = row["resource_id"] if row["kind"] == "operation.accepted" else row["body"].get("operation_id")
+        operation = ops._row(oid)
+        if operation is None:
+            raise _unavailable()
+        if not _eligible(ops, operation, bindings, cursor) or row["seq"] in seen:
+            continue
+        seen.add(row["seq"])
+        if len(seen) > MAX_CANDIDATES:
+            raise _unavailable()
+        groups.setdefault(oid, []).append(row)
+    return groups
+
+
+def _authorize(ops, principal, wid, oid, events, references):
+    """Authorize every source before interpreting proof or materializing rows.
+
+    Original records locate sources, even if their proof contradicts them. They
+    never replace retained events as creation/association evidence.
+    """
+    operation = _source(ops.get, oid, steps=False, principal=principal)
+    _lineage(ops, principal, {"operation_id": oid, "target": operation["target"]}, references)
+    action = operation["action"]
+    saved = operation["external_refs"].get("admission_binding", {})
+    package_ids = set()
+    if action == "pm.work_package.create":
+        package_ids.update(row[0] for row in ops.db.execute(
+            "SELECT package_id FROM pm_work_packages WHERE operation_id=?", (oid,)))
+        package_ids.update(e["resource_id"] for e in events if e["kind"] == "pm.work_package.created")
+    elif action in {"pm.issue.publish", "pm.issue.cancel"}:
+        intent = saved.get("issue_intent", {})
+        _lineage(ops, principal, {"work_item_id": intent.get("work_item_id"),
+                                  "relation": intent.get("relation"), "package_ref": intent.get("package_ref")}, references)
+        package_ids.add(intent.get("package_ref", {}).get("package_id"))
+        if any(e["kind"] == "pm.issue.recorded" for e in events):
+            mapping = _source(pm_issue_mappings.get_mapping, ops, principal, wid, intent.get("mapping_id"))
+            revision_ids = [e["body"].get("revision_id") for e in events if e["kind"] == "pm.issue.recorded"]
+            for revision in mapping["revisions"]:
+                if revision["revision_id"] in revision_ids:
+                    document = revision["document"]
+                    _lineage(ops, principal, {"relation": document.get("relation"), "issue": document.get("issue")}, references)
+    elif action == "repository.continue":
+        package_ids.add(saved.get("pm_handoff", {}).get("contract", {}).get("package_ref", {}).get("package_id"))
+    elif action == "work.start":
+        row = ops.db.execute("SELECT attempt_id FROM work_attempts WHERE start_operation_id=?", (oid,)).fetchone()
+        if row is None:
+            raise _unavailable()
+        _source(pm_work_start.get_attempt, ops, principal, wid, row[0])
+        # Use the immutable relation only to locate sources; _subject validates it.
+        for link in ops.db.execute("SELECT operation_id FROM pm_work_start_children WHERE parent_id=? AND slot='handoff'", (oid,)):
+            child = _source(ops.get, link[0], steps=False, principal=principal)
+            _lineage(ops, principal, {"execution_operation_id": child["operation_id"]}, references)
+            package_ids.add(child["external_refs"].get("admission_binding", {}).get("pm_handoff", {})
+                            .get("contract", {}).get("package_ref", {}).get("package_id"))
+    for pid in sorted(package_ids, key=lambda value: str(value)):
+        package = _package(ops, principal, wid, pid)
+        document = package["document"]
+        _lineage(ops, principal, {"work_item_id": package["work_item_id"],
+            "plan_ref": document["context"]["plan_ref"], "requirements": document["requirements"],
+            "verification": document["verification"]}, references)
+    return operation
+
+
+def _event(event, resource_type, resource_id, **fields):
+    _proof(event["resource_type"] == resource_type and event["resource_id"] == resource_id
+           and fields.keys() <= event["body"].keys()
+           and diff._json({key: event["body"][key] for key in fields}) == diff._json(fields))
+
+
+def _package(ops, principal, wid, package_id):
+    return _source(pm_work_packages.get_package, ops, principal, wid, package_id)["package"]
+
+
+def _package_ref(package):
+    return {key: package[key] for key in ("package_id", "document_digest")}
+
+
+def _requirements(package):
+    return sorted(r["id"] for r in package["document"]["requirements"])
+
+
+def _handoff(ops, principal, wid, operation):
+    saved = operation["external_refs"]["admission_binding"]["pm_handoff"]
+    contract = saved["contract"]
+    _proof(diff._digest(contract) == saved["contract_digest"])
+    ref = contract["package_ref"]
+    _proof(ref["workspace_id"] == wid)
+    package = _package(ops, principal, wid, ref["package_id"])
+    _proof(package["document_digest"] == ref["document_digest"] and package["document"] == contract["package"])
+    return package, saved["contract_digest"]
+
+
+def _subject(ops, principal, wid, bindings, operation, events):
+    oid, action = operation["operation_id"], operation["action"]
+    admission = events.get("operation.accepted")
+    if admission:
+        _event(admission, "operation", oid, action=action, target=operation["target"], entry=operation["entry"])
+        _proof(admission["actor"] == operation["actor"])
+    base = {"operation_id": oid, "event_seqs": sorted(e["seq"] for e in events.values()),
+            "semantic_impact": "unassessed"}
+    target = operation["target"]
+    saved = operation["external_refs"].get("admission_binding", {})
+    if action == "pm.work_package.create":
+        bid = operation["preconditions"]["expected_binding_id"]
+        if bid not in bindings:
+            return None
+        base.update(kind="package", binding_id=bid, work_item_id=target["work_item_id"])
+        event = events.get("pm.work_package.created")
+        if not event:
+            return {**base, "boundary": "creation_boundary_unproven", "package_ref": None}
+        package = _package(ops, principal, wid, event["resource_id"])
+        _event(event, "pm_work_package", package["package_id"], workspace_id=wid, operation_id=oid,
+               work_item_id=package["work_item_id"], package_id=package["package_id"], document_digest=package["document_digest"],
+               previous_package_id=package["previous_package_id"], execution_authorized=False, execution_spec="not_assigned")
+        _proof(event["actor"] == package["actor"] == operation["actor"])
+        doc = package["document"]
+        _proof(package["operation_id"] == oid and package["work_item_id"] == target["work_item_id"]
+               and doc["context"]["work_ref"]["binding_id"] == bid)
+        return {**base, "boundary": "proven", "package_ref": _package_ref(package),
+                "plan_ref": doc["context"]["plan_ref"], "requirements": doc["requirements"],
+                "requirement_ids": _requirements(package),
+                "verification": doc["verification"], "acceptance_verification": "not_performed"}
+    if action == "repository.continue":
+        package, digest = _handoff(ops, principal, wid, operation)
+        bid = package["document"]["context"]["work_ref"]["binding_id"]
+        if bid not in bindings:
+            return None
+        _proof(admission is not None)
+        return {**base, "kind": "execution", "boundary": "proven", "binding_id": bid,
+                "work_item_id": package["work_item_id"], "package_ref": _package_ref(package),
+                "requirement_ids": _requirements(package), "contract_digest": digest, "execution_state": "not_reconstructed"}
+    if action in {"pm.issue.publish", "pm.issue.cancel"}:
+        intent = saved["issue_intent"]
+        _proof(diff._digest(intent) == saved["issue_intent_digest"])
+        bid = intent["relation"]["binding_id"]
+        if bid not in bindings:
+            return None
+        package = _package(ops, principal, wid, intent["package_ref"]["package_id"])
+        _proof(_package_ref(package) == intent["package_ref"])
+        base.update(kind="issue", binding_id=bid, work_item_id=intent["work_item_id"],
+                    package_ref=intent["package_ref"], requirement_ids=_requirements(package), cross_scope_publication="unsupported")
+        event = events.get("pm.issue.recorded")
+        if not event:
+            return {**base, "boundary": "creation_boundary_unproven", "publication": "publication_unknown"}
+        mapping = _source(pm_issue_mappings.get_mapping, ops, principal, wid, intent["mapping_id"])
+        matches = [r for r in mapping["revisions"] if r["revision_id"] == event["body"].get("revision_id")]
+        _proof(len(matches) == 1)
+        revision = matches[0]
+        doc = revision["document"]
+        _event(event, "pm_issue_mapping", intent["mapping_id"], workspace_id=wid, operation_id=oid,
+               work_item_id=intent["work_item_id"], mapping_id=intent["mapping_id"], revision_id=revision["revision_id"],
+               issue=doc["issue"], publication=doc["receipt"], state=doc["state"],
+               external_issue_state=doc["external_issue_state"], execution_authorized=doc["execution_authorized"])
+        _proof(event["actor"] == revision["actor"] == operation["actor"])
+        _proof(revision["operation_id"] == oid and doc["relation"] == intent["relation"]
+               and doc["package_ref"] == intent["package_ref"])
+        return {**base, "boundary": "proven", "mapping_id": intent["mapping_id"], "revision_id": revision["revision_id"],
+                "document_digest": revision["document_digest"], "relation": doc["relation"], "issue": doc["issue"],
+                "publication": "receipt_recorded" if doc.get("receipt") else "publication_unknown"}
+    _proof(action == "work.start")
+    intent = pm_work_start._intent(operation)
+    row = ops.db.execute("SELECT * FROM work_attempts WHERE start_operation_id=?", (oid,)).fetchone()
+    if row is None:
+        raise _unavailable()
+    _source(pm_work_start.get_attempt, ops, principal, wid, row["attempt_id"])
+    _proof(row["workspace_id"] == wid and row["work_item_id"] == target["work_item_id"]
+           and row["admission_digest"] == diff._digest(intent))
+    base.update(kind="attempt", work_item_id=target["work_item_id"],
+                boundary="proven" if admission else "creation_boundary_unproven",
+                association="association_unknown", package_ref=None)
+    # An admitted Attempt row is inserted in the same transaction as its event.
+    if admission:
+        base["attempt_id"] = row["attempt_id"]
+    event = events.get("work.start.succeeded")
+    if not event:
+        return base
+    body = event["body"]
+    _event(event, "pm_work_attempt", row["attempt_id"], workspace_id=wid, operation_id=oid,
+           work_item_id=row["work_item_id"], attempt_id=row["attempt_id"],
+           package_reused=intent["package_plan"]["mode"] == "reuse")
+    _proof(event["actor"] == operation["actor"])
+    children = pm_work_start._children(ops, operation)
+    execution = children.get("handoff")
+    _proof(execution is not None and execution["operation_id"] == body["execution_operation_id"])
+    execution = _source(ops.get, execution["operation_id"], steps=False, principal=principal)
+    package, _ = _handoff(ops, principal, wid, execution)
+    _proof(package["package_id"] == body["package_id"] and package["work_item_id"] == row["work_item_id"])
+    bid = package["document"]["context"]["work_ref"]["binding_id"]
+    if bid not in bindings:
+        return None
+    return {**base, "attempt_id": row["attempt_id"], "association": "proven", "binding_id": bid,
+            "package_ref": _package_ref(package), "requirement_ids": _requirements(package),
+            "execution_operation_id": execution["operation_id"]}
+
+
+def preview(ops, principal, workspace_id, snapshot_id, from_revision_id, to_revision_id, binding_ids):
+    if not principal.allows("observe"):
+        raise OperationError("FORBIDDEN", "PM reads need observe", 403)
+    for name, value, pattern in (("workspace_id", workspace_id, pm_workspace._WORKSPACE),
+                                  ("snapshot_id", snapshot_id, pm_snapshots.SNAPSHOT_ID),
+                                  ("from_revision_id", from_revision_id, pm_plans.REVISION_ID),
+                                  ("to_revision_id", to_revision_id, pm_plans.REVISION_ID)):
+        if not isinstance(value, str) or not pattern.fullmatch(value):
+            raise OperationError("INVALID_PARAMS", f"{name} must be a canonical identifier", 422)
+    if (not isinstance(binding_ids, list) or not 1 <= len(binding_ids) <= MAX_BINDINGS
+            or any(not isinstance(b, str) or not pm_evidence._BINDING.fullmatch(b) for b in binding_ids)
+            or len(set(binding_ids)) != len(binding_ids)):
+        raise OperationError("INVALID_PARAMS", "Select 1-50 distinct immutable work binding IDs", 422)
+    with _snapshot(ops.db):
+        snapshot = _source(pm_snapshots.get_snapshot, ops, principal, workspace_id, snapshot_id)["snapshot"]
+        if snapshot["visibility"]["filtered"]:
+            raise _unavailable()
+        for rid in (from_revision_id, to_revision_id):
+            _source(pm_plans._require_revision_sources, ops.db, principal, workspace_id, rid)
+        if snapshot["baseline"]["document_revision"] != from_revision_id:
+            raise OperationError("PM_IMPACT_BASELINE_MISMATCH", "Select the saved snapshot's adopted baseline", 409)
+        selected = [w for w in snapshot["work"] if (w.get("binding") or {}).get("binding_id") in binding_ids]
+        if {w["binding"]["binding_id"] for w in selected} != set(binding_ids):
+            raise OperationError("PM_IMPACT_BINDING_MISMATCH", "Select bindings from this saved snapshot", 409)
+        # Preflight exactly the saved projections and fixed comparison inputs.
+        # The snapshot reader does not apply the public Work/document barrier.
+        # Do not inspect current Work heads or unselected snapshot Work lineage.
+        references = set()
+        _lineage(ops, principal, {"work": selected, "coverage": snapshot["coverage"]}, references)
+        for rid in (from_revision_id, to_revision_id):
+            _lineage(ops, principal, pm_plans._revision(ops.db, workspace_id, rid), references)
+        for bid in binding_ids:
+            row = ops.db.execute("SELECT * FROM pm_work_bindings WHERE workspace_id=? AND binding_id=?",
+                                 (workspace_id, bid)).fetchone()
+            if row is not None:
+                _lineage(ops, principal, dict(row), references)
+        cursor = snapshot["journal_cursor"]
+        groups = _candidates(ops, workspace_id, sorted({w["work_item_id"] for w in selected}), cursor, set(binding_ids))
+        operations = {oid: _authorize(ops, principal, workspace_id, oid, events, references)
+                      for oid, events in sorted(groups.items())}
+        # Apply the shared whole-document root bound before any derived errors,
+        # without retaining copies of source text just for this final preflight.
+        _source(pm_source_lineage.require_document, ops.db, principal,
+                [{"resource_type": kind, "resource_id": identity} for kind, identity in sorted(references)])
+        try:
+            comparison = diff.compare(ops, principal, workspace_id, from_revision_id, to_revision_id,
+                                      binding_ids=binding_ids, journal_cursor=cursor)["comparison"]
+        except OperationError as error:
+            if error.code == "PM_DIFF_TOO_LARGE":
+                _bound(False)  # The comparison alone already exceeds the smaller matrix bound.
+            raise
+        candidates = {c["binding"]["binding_id"]: c for c in comparison["impact_candidates"]}
+        subjects = []
+        matrix = {"selector": {"workspace_id": workspace_id, "snapshot_id": snapshot_id,
+                              "from_revision_id": from_revision_id, "to_revision_id": to_revision_id,
+                              "binding_ids": sorted(binding_ids)},
+                  "snapshot_digest": snapshot["snapshot_digest"], "journal_cursor": cursor,
+                  "comparison": comparison, "work": sorted(selected, key=lambda w: w["binding"]["binding_id"]),
+                  "subjects": subjects, "coverage": {"work": "selected_bindings_only", "project_complete": False,
+                      "unselected_work": "not_scanned", "history": "retained_events_only",
+                      "snapshot": snapshot["coverage"], "undiscoverable_history": "creation_boundary_unproven",
+                      "semantic_impact": "unassessed", "acceptance_verification": "not_performed",
+                      "delivery_verification": "not_performed", "network_checked": False,
+                      "cross_scope_issue_publication": "unsupported"},
+                  "execution_authorized": False, "work_update_authorized": False}
+        # Digest has a fixed wire width. Account for the whole response shell,
+        # then each complete subject before retaining it in the matrix.
+        used = _encoded_size({"version": 1, "workspace_id": workspace_id, "matrix": matrix,
+                              "impact_digest": "0" * 64}, MAX_BYTES)
+        for oid, rows in sorted(groups.items()):
+            events = {e["kind"]: e for e in rows}
+            _proof(len(events) == len(rows))
+            operation = operations[oid]
+            try:
+                subject = _subject(ops, principal, workspace_id, set(binding_ids), operation, events)
+            except (KeyError, TypeError, ValueError):
+                _proof(False)
+            if subject is not None:
+                candidate = candidates.get(subject.get("binding_id"))
+                requirements = set(subject.get("requirement_ids", ()))
+                for key in ("direct_requirement_ids", "dependent_requirement_ids"):
+                    subject[key] = sorted(requirements.intersection(candidate[key])) if candidate else []
+                _bound(len(subjects) < MAX_SUBJECTS)
+                separator = 2 if subjects else 0
+                used += separator + _encoded_size(subject, MAX_BYTES - used - separator)
+                subjects.append(subject)
+        result = {"version": 1, "workspace_id": workspace_id, "matrix": matrix, "impact_digest": diff._digest(matrix)}
+        _source(pm_source_lineage.require_document, ops.db, principal, result)
+        # Check the ordinary wire encoding too, not just compact digest bytes.
+        _encoded_size(result, MAX_BYTES)
+        return result

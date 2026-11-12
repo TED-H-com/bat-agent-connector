@@ -125,6 +125,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_sprint_get": "observe",
            "pm_sprint_history_list": "observe",
            "pm_plan_compare": "observe",
+           "pm_plan_impact_preview": "observe",
            "pm_roadmap_get": "observe", "pm_roadmap_revisions_list": "observe", "pm_roadmap_revision_get": "observe",
            "pm_snapshots_list": "observe", "pm_snapshot_get": "observe", "pm_snapshot_latest_get": "observe",
            "projects_list": "observe", "project_get": "observe", "work_items_list": "observe",

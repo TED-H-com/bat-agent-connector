@@ -141,6 +141,8 @@ async def test_skill_tool_references_and_recovery_parameters_match_discovered_sc
         text = (ROOT / generator.SOURCE).read_text()
         referenced = set(re.findall(r"\b([a-z]+_[a-z_]+)\(", text))
         assert referenced <= tools.keys(), f"Unknown tool references: {referenced - tools.keys()}"
+        assert "pm_plan_impact_preview" in text and "plan_impact.version == 1" in text
+        assert tools["pm_plan_impact_preview"]["additionalProperties"] is False
         assert "pm_history_cleanup_list" in referenced
         assert tools["pm_history_cleanup_list"]["additionalProperties"] is False
         assert tools["pm_history_cleanup_list"]["properties"]["after"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
@@ -149,6 +151,7 @@ async def test_skill_tool_references_and_recovery_parameters_match_discovered_sc
         # a renamed/removed parameter must invalidate the skill's instructions.
         expected = {
             "capabilities_get": set(),
+            "pm_plan_impact_preview": {"workspace_id", "snapshot_id", "from_revision_id", "to_revision_id", "binding_ids"},
             "pm_quality_assessment_get": {"workspace_id", "review_id", "operation_id", "version", "document_digest"},
             "pm_workspace_wip_get": {"workspace_id", "policy_revision"},
             "pm_history_cleanup_list": {"workspace_id", "work_item_id", "after", "limit"},

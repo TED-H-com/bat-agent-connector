@@ -229,3 +229,5 @@ and source revocation never triggers another write or dispatch.
 建立討論以單一按鈕開啟原位置表單並聚焦第一欄；取消只收起表單，重載仍展開既有草稿或原操作。唯讀時隱藏新增動作，權限說明放在同列左側，重新讀取按鈕保持靠右。會議選單只顯示標題，類型與狀態由下方標記呈現，通用角色以本地化名稱顯示。
 
 唯讀時不提供記錄及建立表單入口；完成討論只向符合原指定擁有者條件的人提供，後續結果依原負責人及成員權限判斷。權限降低時將入口及表單移出畫面，保留草稿與原請求，權限恢復後還原；基準過期及原操作鎖定的行為維持不變。
+
+The optional guided Review is specified in [Guided Sprint Review](pm-sprint-review.md).

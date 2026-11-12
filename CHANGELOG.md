@@ -2,9 +2,37 @@
 
 ## Unreleased
 
+- Let API and MCP clients run a guided Sprint Review. A guided meeting draft
+  freezes an exact, bounded Review basis: selected Results with their original
+  assessments, attributed feedback, governance revisions and one Follow-up
+  intake's issues. Decisions are recorded through the existing governance
+  actions by the actual responsible owner, and completing the Review requires
+  their exact revisions; completion records direction and ownership, never
+  quality acceptance. A completed decision can become a typed Planning input,
+  from which the existing planner produces only explicit drafts, without adopting
+  scope or starting work. A withdrawn source makes everything derived from it
+  unavailable, overflow is refused instead of trimmed, and existing requests keep
+  their exact responses. The Dashboard is not changed yet.
+
+- Let API and MCP clients preview, for selected Work in one saved plan snapshot,
+  which retained packages, Attempts, handoffs and issue mappings connect to the
+  requirement and acceptance changes between two fixed plan revisions. The read
+  is bounded, deterministic and read-only, requires every joined source to be
+  readable, and reports missing history as unknown instead of guessing; no review
+  fields or UI are added yet.
+
 - Let API and MCP clients reopen the exact original PM assessment named by a
   Result reference under existing authorization. This read explicitly leaves
-  applicability to the current candidate unevaluated; no UI is added yet.
+  applicability to the current candidate unevaluated.
+
+- Let Dashboard users open that exact original assessment from a Work Result's
+  requirement section or from an Overview delivery, with its original conclusion
+  shown apart from whether it still applies to the current Result. Review this
+  result opens the existing review editor for that assessment and saves through
+  the existing action and its original operation key; Return to source restores
+  the entrance and keyboard focus. A refused or withdrawn source clears every view
+  of the assessment, reads stay bound to the verified Connector, and assessment
+  pins are not kept in persisted drafts.
 
 - Let API and MCP clients discover withdrawable external-conversation relationship
   IDs for a selected Work with observe/manage scope and current cleanup authority,
