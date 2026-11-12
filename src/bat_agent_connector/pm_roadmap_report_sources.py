@@ -8,7 +8,16 @@ from __future__ import annotations
 import json
 import re
 
-from . import pm_access, pm_evidence, pm_plans, pm_read_cache, pm_roadmap, pm_snapshots, pm_source_reads
+from . import (
+    pm_access,
+    pm_evidence,
+    pm_plans,
+    pm_read_cache,
+    pm_roadmap,
+    pm_roadmap_quality,
+    pm_snapshots,
+    pm_source_reads,
+)
 from .operations import OperationError
 from .pm_release_baselines import _snapshot_read
 
@@ -35,6 +44,24 @@ def bounded(value):
     return value
 
 
+def structure(value, kind):
+    """Only the containers/keys needed to enumerate original authority."""
+    if not isinstance(value, kind):
+        raise unavailable()
+    return value
+
+
+def reference(value):
+    if not isinstance(value, str) or not value:
+        raise unavailable()
+    return value
+
+
+def mappings(value):
+    for item in structure(value, list):
+        yield structure(item, dict)
+
+
 class _Closure:
     """An authorization budget is a concealment boundary, never a size error."""
     def __init__(self, ops, principal, wid):
@@ -49,8 +76,10 @@ class _Closure:
             raise unavailable()
 
     def operations(self, ids):
-        for identity in sorted(set(ids)):
+        for identity in sorted({reference(identity) for identity in ids}):
             self.charge()
+            if not self.ops.db.execute('SELECT 1 FROM operations WHERE operation_id=?', (identity,)).fetchone():
+                raise unavailable()
             pm_access.require_operation_sources(self.ops.db, self.principal, [identity])
 
     def roadmap(self, identity):
@@ -62,7 +91,7 @@ class _Closure:
         value = dict(row)
         # Defer digest/kind/relationship checks until the entire closure is authorized.
         self.charge(row['document'])
-        value['document'] = json.loads(row['document'])
+        value['document'] = structure(json.loads(row['document']), dict)
         self.charge(value)
         self.operations([value['operation_id']])
         return value
@@ -71,55 +100,85 @@ class _Closure:
         self.charge()
         value = pm_plans._revision(self.ops.db, self.wid, identity)
         self.charge(value)
+        document = structure(value['document'], dict)
+        for item in mappings(document.get('selected_inputs', [])):
+            reference(item['operation_id'])
         self.operations(pm_plans.source_operation_ids(self.ops.db, self.wid, identity, include_adoption=False))
         return value
+
+    def adoption(self, row, adoptions):
+        if row is None:
+            raise unavailable()
+        value = dict(row)
+        if value['decision_id'] not in adoptions:
+            self.charge(value)
+            value['result'] = structure(json.loads(value['result']), dict)
+            self.operations([value['operation_id'], reference(value['result']['commit_operation_id'])])
+            adoptions[value['decision_id']] = value
+        return adoptions[value['decision_id']]
 
     def collect(self, identity):
         observation = self.roadmap(identity)
         doc = observation['document']
-        baseline = self.roadmap(doc['baseline_revision_id'])
-        forecast = self.roadmap(doc['forecast_revision_id']) if doc['forecast_revision_id'] else None
+        baseline = self.roadmap(reference(doc['baseline_revision_id']))
+        forecast = self.roadmap(reference(doc['forecast_revision_id'])) if doc['forecast_revision_id'] is not None else None
         row = self.ops.db.execute('SELECT * FROM pm_document_snapshots WHERE workspace_id=? AND snapshot_id=?',
-                                  (self.wid, doc['snapshot_id'])).fetchone()
+                                  (self.wid, reference(doc['snapshot_id']))).fetchone()
         if row is None:
             raise unavailable()
         snapshot = dict(row)
         self.charge(row['document'])
-        snapshot['document'] = json.loads(row['document'])
+        snapshot['document'] = structure(json.loads(row['document']), dict)
         self.charge(snapshot)
         saved = snapshot['document']
-        self.operations([row['operation_id'], *pm_snapshots._plan_source_operations(self.ops.db, saved)])
+        accepted = structure(saved['baseline'], dict)
+        candidate = saved.get('candidate_document')
+        if candidate is not None:
+            structure(candidate, dict)
+            reference(candidate['revision_id'])
+        if accepted.get('document') is not None:
+            structure(accepted['document'], dict)
+        plan_id = accepted.get('document_revision')
+        if plan_id is not None:
+            reference(plan_id)
+        self.operations([row['operation_id']])
+        adoptions = {}
+        original = accepted.get('adoption')
+        if original is not None:
+            structure(original, dict)
+            self.operations([reference(original['commit_operation_id'])])
+            self.adoption(self.ops.db.execute('''SELECT * FROM pm_plan_adoptions
+                WHERE workspace_id=? AND decision_id=?''',
+                (self.wid, reference(original['decision_id']))).fetchone(), adoptions)
+        elif plan_id:
+            raise unavailable()
         evidence = []
-        for entry in saved['evidence']:
+        for entry in mappings(saved['evidence']):
             self.charge(entry)
-            evidence.append(pm_evidence.get_evidence(self.ops, self.principal, self.wid, entry['evidence_id'])['evidence'])
+            structure(entry['document'], dict)
+            evidence.append(pm_evidence.get_evidence(self.ops, self.principal, self.wid, reference(entry['evidence_id']))['evidence'])
         maintenance = saved.get('maintenance')
-        if maintenance:
+        if maintenance is not None:
             from . import pm_maintenance_review_sources
-            for reference in maintenance['access_refs']:
-                self.charge(reference)
-                pm_maintenance_review_sources.access(self.ops, self.principal, self.wid, [reference])
-        plans, adoptions = {}, {}
-        selected = [(m['plan_revision_id'], m['scope_revision']) for m in baseline['document']['milestones']]
-        # The snapshot's candidate lineage is also in the conservative closure.
-        for identity in {saved['baseline'].get('document_revision'),
-                         (saved.get('candidate_document') or {}).get('revision_id')} - {None}:
+            for item in mappings(structure(maintenance, dict)['access_refs']):
+                self.charge(item)
+                pm_maintenance_review_sources.access(self.ops, self.principal, self.wid, [item])
+        plans = {}
+        selected = [(reference(m['plan_revision_id']), reference(m['scope_revision']))
+                    for m in mappings(baseline['document']['milestones'])]
+        for identity in {plan_id, candidate['revision_id'] if candidate is not None else None} - {None}:
             plans[identity] = self.plan(identity)
         for identity, scope in sorted(set(selected)):
             if identity not in plans:
                 plans[identity] = self.plan(identity)
-            # A scope may be reused on readoption. The first matching historical
-            # decision is stable; a later adoption can never substitute for it.
-            adoption = self.ops.db.execute('''SELECT * FROM pm_plan_adoptions
-                WHERE workspace_id=? AND revision_id=? AND scope_revision=? ORDER BY rowid LIMIT 1''',
-                (self.wid, identity, scope)).fetchone()
-            if adoption is None:
+            # Include all legacy matches. Never make physical row order a fact.
+            found = False
+            for row in self.ops.db.execute('''SELECT * FROM pm_plan_adoptions
+                WHERE workspace_id=? AND revision_id=? AND scope_revision=?''', (self.wid, identity, scope)):
+                found = True
+                self.adoption(row, adoptions)
+            if not found:
                 raise unavailable()
-            value = dict(adoption)
-            value['result'] = json.loads(value['result'])
-            self.charge(value)
-            self.operations([value['operation_id'], value['result']['commit_operation_id']])
-            adoptions[identity, scope] = value
         return observation, baseline, forecast, snapshot, evidence, plans, adoptions
 
 
@@ -136,6 +195,8 @@ def _verify(closure):
     proof(doc['snapshot_digest'] == snapshot['snapshot_digest'] == digest(saved))
     proof(saved['snapshot_id'] == snapshot['snapshot_id'] and saved['workspace_id'] == snapshot['workspace_id'])
     proof(doc['as_of'] == saved['as_of'] and doc['journal_cursor'] == saved['journal_cursor'])
+    if type(saved.get('template_version')) is not int or saved['template_version'] != 1:
+        raise OperationError('PM_EXPORT_TEMPLATE_UNAVAILABLE', 'The snapshot template is unsupported', 409)
     for original, visible in zip(saved['evidence'], evidence, strict=True):
         proof(original == visible and digest(original['document']) == original['fact_digest'])
     for identity, plan in plans.items():
@@ -152,8 +213,29 @@ def _verify(closure):
         plan = plans[milestone['plan_revision_id']]
         proof(plan['document_digest'] == milestone['plan_document_digest'])
         proof(set(milestone['requirement_ids']) <= {r['id'] for r in plan['document']['requirements']})
-    if saved['template_version'] != 1:
-        raise OperationError('PM_EXPORT_TEMPLATE_UNAVAILABLE', 'The snapshot template is unsupported', 409)
+    baseline_milestones = {m['milestone_id']: m for m in baseline['document']['milestones']}
+    proof(len(baseline_milestones) == len(baseline['document']['milestones']))
+    observed = doc['milestones']
+    proof(len(observed) == len(baseline_milestones) and {m['milestone_id'] for m in observed} == set(baseline_milestones))
+    evidence_ids = {item['evidence_id'] for item in evidence}
+    for milestone in observed:
+        ids = milestone['evidence_ids']
+        proof(isinstance(ids, list) and all(isinstance(eid, str) for eid in ids) and set(ids) <= evidence_ids)
+        if 'quality_context' in milestone:  # Legacy observations have no quality context.
+            proof(milestone['quality_context'] == pm_roadmap_quality.context(baseline_milestones[milestone['milestone_id']]))
+    for value in adoptions.values():
+        result = value['result']
+        proof(all(result.get(key) == value[key] for key in
+            ('workspace_id', 'revision_id', 'previous_revision_id', 'scope_revision', 'decision_id', 'adopted_by')))
+        proof(result.get('document_revision') == value['revision_id'])
+        plan = plans.get(value['revision_id'])
+        if plan:
+            proof(result.get('document_digest') == plan['document_digest'] and result.get('structured_scope_digest') == plan['scope_digest'])
+    original = accepted.get('adoption')
+    if original:
+        value = adoptions[original['decision_id']]
+        proof(value['revision_id'] == accepted['document_revision'] and value['scope_revision'] == accepted['scope_revision'])
+        proof(original['commit_operation_id'] == value['result']['commit_operation_id'])
 
 
 def project(closure):
@@ -205,7 +287,7 @@ def load_fixed(ops, principal, workspace_id, observation_revision_id):
             closure = _Closure(ops, principal, workspace_id).collect(observation_revision_id)
             if generation != pm_read_cache.refusal_generation():
                 raise unavailable()
-    except (OperationError, KeyError, TypeError, ValueError, RecursionError):
+    except (OperationError, KeyError, TypeError, ValueError, RecursionError, AttributeError, IndexError):
         # No source-specific corruption/size/coverage information before full access.
         raise unavailable() from None
     _verify(closure)

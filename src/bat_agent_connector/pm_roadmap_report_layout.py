@@ -35,13 +35,12 @@ def _union(*tables):
 
 _EXTEND = _union(ucd.MARK, ucd.VARIATION, ucd.MODIFIER, ucd.ZWJ)
 _WIDE = _union(ucd.WIDE, ucd.REGIONAL)
+_ESCAPE = _union(ucd.CONTROL, ucd.BIDI, ucd.NONCHARACTER, ucd.SURROGATE)
 
 
 def literal(value):
     text = str(value).replace('\r\n', '\n').replace('\r', '\n').expandtabs(4)
-    return ''.join(f'\\u{ord(c):04x}' if (ord(c) < 32 and c != '\n' or 0x7F <= ord(c) <= 0x9F
-        or 0xD800 <= ord(c) <= 0xDFFF or ord(c) & 0xFFFF in {0xFFFE, 0xFFFF}
-        or 0x202A <= ord(c) <= 0x202E or 0x2066 <= ord(c) <= 0x2069) else c for c in text)
+    return ''.join(f'\\u{ord(c):04x}' if contains(ord(c), _ESCAPE) else c for c in text)
 
 
 def clusters(value):
