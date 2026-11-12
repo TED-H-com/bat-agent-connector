@@ -69,8 +69,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     if (createBox) createBox.hidden = !createOpen;
     warning.hidden = !stale; review.hidden = !stale || !can(); review.disabled = !loaded;
   }
-  function unavailable(error) {
-    const reviewLinked=hasSprintReview(caps())&&(model?.detail?.record.context.review_proposal_ref||createEditor?.fields.review_proposal_ref?.value&&createEditor.fields.review_proposal_ref.value!=='null');
+  function unavailable(error, reviewLinked=hasSprintReview(caps())&&(model?.detail?.record.context.review_proposal_ref||createEditor?.fields.review_proposal_ref?.value&&createEditor.fields.review_proposal_ref.value!=='null')) {
     ++serial; loaded = false; ++sourceTicket; list.replaceChildren(); detail.replaceChildren(); editors.hidden = true;
     if(reviewLinked){forms.forEach(editor=>editor.dispose?.());clearEditors();model=null;signature='';}
     update(); status.replaceChildren(errorBox(error, {within:status}));
@@ -460,6 +459,9 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
         } catch (error) {
           if (ticket !== serial) return;
           if (error.status !== 404) throw error;
+          const linked = [current, model?.detail, ...records.filter(row => row.record.record_id === selectedId)]
+            .some(row => row?.record.context.review_proposal_ref);
+          if (hasSprintReview(caps()) && linked) {unavailable(error, true); return;}
           const withdrawn = selectedId;
           detail.replaceChildren(); list.replaceChildren(); clearEditors();
           await currentWorkspace(); if (ticket !== serial) return;

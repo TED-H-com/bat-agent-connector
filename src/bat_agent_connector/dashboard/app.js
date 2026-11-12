@@ -40786,8 +40786,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		review.hidden = !stale || !can();
 		review.disabled = !loaded;
 	}
-	function unavailable(error) {
-		const reviewLinked = hasSprintReview(caps()) && (model?.detail?.record.context.review_proposal_ref || createEditor?.fields.review_proposal_ref?.value && createEditor.fields.review_proposal_ref.value !== "null");
+	function unavailable(error, reviewLinked = hasSprintReview(caps()) && (model?.detail?.record.context.review_proposal_ref || createEditor?.fields.review_proposal_ref?.value && createEditor.fields.review_proposal_ref.value !== "null")) {
 		++serial;
 		loaded = false;
 		++sourceTicket;
@@ -41521,6 +41520,15 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			} catch (error) {
 				if (ticket !== serial) return;
 				if (error.status !== 404) throw error;
+				const linked = [
+					current,
+					model?.detail,
+					...records.filter((row) => row.record.record_id === selectedId)
+				].some((row) => row?.record.context.review_proposal_ref);
+				if (hasSprintReview(caps()) && linked) {
+					unavailable(error, true);
+					return;
+				}
 				const withdrawn = selectedId;
 				detail.replaceChildren();
 				list.replaceChildren();
@@ -57971,7 +57979,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
 	let draftSourceUnavailable = false, contextSequence = 0, settledContextSequence = 0;
 	const canRestoreDiscussion = () => !disposed && loaded && !refreshing && contextSequence === settledContextSequence && workspace?.workspace_id === workspaceId && (threadId === "new" ? !draftSourceUnavailable : threadData?.thread?.workspace_id === workspaceId && threadData.thread.thread_id === threadId && !(threadData.thread.context || []).some((ref) => ref.available === false));
-	async function draftSourceRefs(refs = launch.refs, reads = new Map()) {
+	async function draftSourceRefs(refs = launch.refs, reads = new Map(), reviewDerived = false) {
 		const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 		const read = (path) => {
 			if (!reads.has(path)) reads.set(path, api("GET", endpoint + path));
@@ -57986,11 +57994,21 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		};
 		const text = (value) => typeof value === "string" && value.trim() && !/(?:pm[a-z]*|wi|op)_[0-9a-f]{20,64}/.test(value.trim()) ? value.trim() : "";
 		return Promise.all(refs.map(async (ref, position) => {
-			if (ref.available === false) return {
-				kind: ref.kind,
-				position,
-				available: false
-			};
+			if (ref.available === false) {
+				if (hasSprintReview(caps()) && (reviewDerived || ref.kind === "meeting")) {
+					const error = Object.assign(Error(t("pd_unavailable")), {
+						status: 404,
+						code: "PM_MEETING_SOURCE_UNAVAILABLE"
+					});
+					withdrawReviewSources(error);
+					throw error;
+				}
+				return {
+					kind: ref.kind,
+					position,
+					available: false
+				};
+			}
 			if (ref.available === true && ![
 				"governance",
 				"plan_revision",
@@ -58119,6 +58137,10 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				}
 				return result;
 			} catch (error) {
+				if (hasSprintReview(caps()) && (reviewDerived || ref.kind === "meeting")) {
+					withdrawReviewSources(error);
+					throw error;
+				}
 				return {
 					kind: ref.kind,
 					position,
@@ -58126,6 +58148,30 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				};
 			}
 		}));
+	}
+	async function threadSources(data, reads = new Map()) {
+		let reviewDerived = false;
+		if (hasSprintReview(caps())) {
+			const inputs = [
+				...data.inputs || [],
+				...data.input_history || [],
+				...data.draft?.selected_inputs || [],
+				...data.draft?.candidate_inputs || []
+			];
+			const meetings = [...new Set(inputs.filter((row) => row.source_ref?.kind === "sprint_review_decision").map((row) => row.source_ref.meeting_id))];
+			reviewDerived = meetings.length > 0;
+			await draftSourceRefs(meetings.map((id) => ({
+				kind: "meeting",
+				id
+			})), reads);
+		}
+		return {
+			...data,
+			thread: {
+				...data.thread,
+				context: await draftSourceRefs(data.thread.context || [], reads, reviewDerived)
+			}
+		};
 	}
 	const threadRows = h("div", { class: "pd-thread-rows" });
 	const threadState = viewState(namespace, workspaceId, "discussion." + (threadId || "list"));
@@ -58668,10 +58714,19 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		if (withdrawingReview || !hasSprintReview(caps())) return;
 		withdrawingReview = true;
 		try {
+			++sequence;
+			++contextSequence;
+			refreshing = false;
+			refresh.disabled = false;
 			meetings?.withdraw(error);
 			governance?.withdraw(error);
+			lastThreadList = null;
+			workspaceList.replaceChildren();
+			threadRows.replaceChildren();
+			boundContext?.replaceChildren();
+			panelContext?.replaceChildren();
+			status.replaceChildren(errorBox(error, { within: status }));
 			if (threadId) {
-				++sequence;
 				loaded = false;
 				refreshing = false;
 				refresh.disabled = false;
@@ -60511,15 +60566,19 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		headerReads++;
 		try {
 			alive();
-			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
+			let data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
 			alive();
 			if (ticket !== sequence) return;
 			if (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId) throw Error(t("pm_scope_mismatch"));
+			data = await threadSources(data);
+			alive();
+			if (ticket !== sequence) return;
 			historyCursor = data.next_message_cursor;
 			historyExpanded = true;
 			renderThread(data);
 		} catch (error) {
 			if (!retiredView(error) && ticket === sequence) {
+				if (hasSprintReview(caps())) withdrawReviewSources(error);
 				loaded = false;
 				lastThreadList = null;
 				workspace = null;
@@ -60645,13 +60704,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				}
 			}
 			const contextReads = new Map();
-			if (data?.thread?.context) data = {
-				...data,
-				thread: {
-					...data.thread,
-					context: await draftSourceRefs(data.thread.context, contextReads)
-				}
-			};
+			if (data?.thread) data = await threadSources(data, contextReads);
 			if (threadList?.threads) threadList = {
 				...threadList,
 				threads: await Promise.all(threadList.threads.map(async (thread) => ({
@@ -61110,13 +61163,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				let data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`);
 				alive();
 				if (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId) throw Error(t("pm_scope_mismatch"));
-				data = {
-					...data,
-					thread: {
-						...data.thread,
-						context: await draftSourceRefs(data.thread.context || [])
-					}
-				};
+				data = await threadSources(data);
 				alive();
 				if (ticket !== contextSequence || generation !== sequence) return;
 				renderThread(data);
@@ -61151,6 +61198,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		} catch (error) {
 			alive();
 			if (ticket !== contextSequence || generation !== sequence) return;
+			if (hasSprintReview(caps())) withdrawReviewSources(error);
 			if ([403, 404].includes(error.status)) {
 				loaded = false;
 				threadData = null;

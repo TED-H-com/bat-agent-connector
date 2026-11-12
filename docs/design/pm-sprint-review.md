@@ -193,6 +193,13 @@ Source refusals clear the whole guided narrative and derived editor disclosures,
 including other mounted Review/governance panels and derived thread content.
 This also applies to source or permission refusals returned by an explicit action;
 the unchanged durable form retains the original request/key for reconciliation.
+A successful thread read is not permission to render after a later original
+meeting dependency refuses access. Initial, event and earlier-message reads gate
+Review InputRecord and draft lineage as well as navigation context; filtered or
+refused meeting references invalidate the load before any derived payload renders.
+Typed governance detail/snapshot 404 recovery also withdraws linked Review views,
+rather than only clearing the selected finding. Ordinary non-Review source labels
+retain their existing unavailable-chip behavior.
 Request generations and selected identities reject late responses. Reflow retains
 editor nodes and composition; original durable receipts remain the replay authority.
 Legacy meetings without this capability retain their current UI and request shapes.
