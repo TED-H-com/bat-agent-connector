@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.19 / Desktop 0.1.15 (2026-11-12)
+
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API
   and MCP clients read how much committed Work the workspace holds against it.
   Each Work counts once, from original evidence: Kanban work in progress,
@@ -81,6 +83,11 @@
 
 - Give each browser UI test shard a 30-minute job limit so a slow package mirror
   no longer cancels an otherwise passing run; per-test time limits are unchanged.
+
+- Advance both package versions and move the latest-stable core upgrade fixture
+  to published 0.2.18, retaining the earlier 0.2.12 baseline and existing identity,
+  workspace and history checks. Release preparation does not imply publication
+  or owner, native-installation or live BAT/model acceptance.
 
 ## 0.2.18 / Desktop 0.1.14 (2026-11-11)
 
