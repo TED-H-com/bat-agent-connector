@@ -1854,6 +1854,13 @@
           "renderer_version": 4
         },
         "follow_up_prepare": true,
+        "guided_sprint_review": {
+          "version": 1,
+          "fixed_results": true,
+          "sourced_feedback": true,
+          "governance_decisions": true,
+          "planning_source": true
+        },
         "kanban": true,
         "spec_sources": true,
         "meetings": true,

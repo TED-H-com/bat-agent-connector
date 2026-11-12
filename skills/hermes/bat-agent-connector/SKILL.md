@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "b6ccca57a119d99c18cfd33ae41cd560eddf6683ce5d2be4a6b1e5de9a0aba71"
+  canonical_sha256: "51ae2cbe5a888fcdf4ad2351ba5a3a202c41844ba219e0325edc134feb3b6a96"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -413,6 +413,17 @@ a reason; useful reflection does not require manufacturing new work. Shared
 quality assessment, Daily Scrum and complete Scrum conformance remain separate.
 
 ## Sourced risks, changes and decisions
+
+When `features.pm_workspaces.guided_sprint_review.version` is 1, the optional
+`review_basis` on `pm.meeting.draft` freezes selected Result receipts, exact
+feedback and unresolved evidence. Use the [guided Review contract](../../docs/design/pm-sprint-review.md)
+for exact selectors and bounds. Reported completion never establishes acceptance.
+Link each proposal with `review_proposal_ref` on `pm.governance.record`; an actual
+owner records direction through `pm.governance.decide`. Completion requires
+`governance_decisions` for selected decisions. Only an explicit request may create
+an unresolved Idea input with `source_ref.kind=sprint_review_decision`, then a
+`pmd_` via `pm.thread.plan`. No adoption or start is composed. On withdrawal,
+reread original sources; retain the original operation key for replay.
 
 Use `pm_governance_list`, `pm_governance_get` and `pm_governance_history_list`
 for attributed findings and immutable decision history. Select an existing adopted
