@@ -295,3 +295,46 @@ def test_alternating_principals_cannot_reset_traversal_bound(db, monkeypatch):
     with pytest.raises(OperationError, match='fresh snapshot'):
         cycle(0)
     assert len(calls) == 5 and not db.in_transaction
+
+
+def test_collection_records_share_completed_proof_not_traversal_budget(db, monkeypatch):
+    monkeypatch.setattr(reads, 'MAX_NODES', 2)
+    calls = []
+    with reads.scope(db, OWNER):
+        for index in range(4):
+            with reads.record(db, OWNER) as state:
+                assert state['budget']['nodes'] == 0
+                assert decision(db, calls=calls)
+                assert reads.check(db, OWNER, 'original', str(index), lambda: True)
+        assert calls == [OWNER.credential_id]
+    assert not db.in_transaction
+
+
+def test_record_boundary_cannot_reset_live_recursion_or_cross_principal_budget(db, monkeypatch):
+    monkeypatch.setattr(reads, 'MAX_NODES', 1)
+    other = Principal('another-reader', OWNER.scopes)
+    with reads.scope(db, OWNER):
+        def nested():
+            with reads.record(db, OWNER) as state:
+                assert state['budget']['nodes'] == 1
+                assert not reads.check(db, OWNER, 'original', 'outer', lambda: True)
+                with reads.record(db, other) as child:
+                    assert child['budget'] is state['budget']
+                    assert not reads.check(db, other, 'original', 'inner', lambda: True)
+            return False
+        with reads.record(db, OWNER):
+            assert not reads.check(db, OWNER, 'original', 'outer', nested)
+        # The previous record's traversal-dependent refusal is not a page decision.
+        with reads.record(db, OWNER) as state:
+            assert not state['active'] and not state['refused']
+            assert reads.check(db, OWNER, 'original', 'outer', lambda: True)
+
+
+def test_record_boundary_keeps_live_guard_and_rejects_changed_page(db):
+    with pytest.raises(OperationError, match='PM_SOURCE_READ_CHANGED'), reads.scope(db, OWNER) as page:
+        with pm_read_cache.guarded(), reads.record(db, OWNER) as record:
+            assert record is page
+        db.execute('UPDATE original_source SET visible=0')
+        with pytest.raises(OperationError, match='PM_SOURCE_READ_CHANGED'):
+            with reads.record(db, OWNER):
+                pytest.fail('Changed page must not start a new traversal')

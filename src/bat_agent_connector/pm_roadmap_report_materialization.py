@@ -213,7 +213,11 @@ def list_materializations(ops, principal, workspace_id, *, after=0, limit=20):
     with pm_source_reads.scope(ops.db, principal):
         rows = ops.db.execute('SELECT * FROM pm_roadmap_report_materializations WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT ?',
             (workspace_id, after, limit + 1)).fetchall()
-        values = [row for row in rows[:limit] if source_visible(ops.db, principal, dict(row))]
+        values = []
+        for row in rows[:limit]:
+            with pm_source_reads.record(ops.db, principal):
+                if source_visible(ops.db, principal, dict(row)):
+                    values.append(row)
         return {'version': 1, 'workspace_id': workspace_id,
             'materializations': [_record(ops.db, workspace_id, row['materialization_id']) for row in values],
             'next_after': rows[limit - 1]['sequence'] if len(rows) > limit else None,

@@ -287,6 +287,11 @@ def event_visible(db, principal, event):
 
 
 def filter_events(db, principal, page):
-    from .pm_source_reads import scope
+    from .pm_source_reads import record, scope
     with scope(db, principal):
-        return {**page, "events": [event for event in page["events"] if event_visible(db, principal, event)]}
+        events = []
+        for event in page["events"]:
+            with record(db, principal):
+                if event_visible(db, principal, event):
+                    events.append(event)
+        return {**page, "events": events}

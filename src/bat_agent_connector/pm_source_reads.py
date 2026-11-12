@@ -62,7 +62,7 @@ def validate_scope(db, principal):
 
 
 @contextmanager
-def scope(db, principal):
+def scope(db, principal, *, _record=False):
     """Join only a live same-caller synchronous scope; otherwise open a new one.
 
 Callers perform source reads only. No await, transaction boundary or
@@ -71,7 +71,8 @@ copied asynchronous context invalidates reuse rather than granting access.
 """
     parent, identity = _parent_scope(db, principal)
     if parent is not None and parent['open']:
-        if parent['identity'] == identity:
+        _record = _record and not (parent['active'] or parent['remembering'] or pm_read_cache.is_guarded())
+        if parent['identity'] == identity and not _record:
             yield parent
             if not _valid(parent):
                 raise _changed()
@@ -95,7 +96,7 @@ copied asynchronous context invalidates reuse rather than granting access.
             'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
             'guard_contexts': {}, 'partial_sources': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
             'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
-            'budget': parent['budget'] if parent and parent['open'] else {'nodes': 0}}
+            'budget': parent['budget'] if parent and parent['open'] and not _record else {'nodes': 0}}
         token = _READ.set(state)
         # Establish the WAL read point before any nested source predicate.
         db.execute('SELECT name FROM sqlite_schema LIMIT 1').fetchone()
@@ -154,6 +155,16 @@ copied asynchronous context invalidates reuse rather than granting access.
             handle.cancel()
         if token is not None:
             _READ.reset(token)
+
+
+def record(db, principal):
+    """Start a collection row's traversal, sharing only snapshot/completed cache.
+
+    Lists call this at each row boundary. Nested lists inside a live traversal
+    keep that traversal's budget and guards; they cannot reset an active walk.
+    Fresh states keep refused/partial answers private to their original record.
+    """
+    return scope(db, principal, _record=True)
 
 
 def _guard_context(db, principal):

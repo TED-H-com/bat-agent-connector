@@ -466,7 +466,13 @@ class OperationService:
         next_before_id = ops[-1]["operation_id"] if len(rows) > limit else None
         if principal is not None:
             from .pm_access import visible
-            ops = [op for op in ops if visible(self.db, principal, op)]
+            from .pm_source_reads import record
+            selected = []
+            for op in ops:
+                with record(self.db, principal):
+                    if visible(self.db, principal, op):
+                        selected.append(op)
+            ops = selected
         return {"operations": ops, "next_before": next_before, "next_before_id": next_before_id}
 
     def _transition(self, operation_id: str, status: str, *, reason: str | None = None,

@@ -65,7 +65,12 @@ Visibility uses the existing source-lineage hook and request-scoped read cache.
 Within one synchronous snapshot, the same observation's full `load_fixed` closure
 is authorized at most once for a principal. No permission cache persists between
 requests, writes, transactions, tasks or event-loop turns. Cycle and budget
-refusals retain the existing guarded-cache rules.
+refusals retain the existing guarded-cache rules. Collection readers start an
+independent traversal budget and recursion state for each top-level record while
+sharing their snapshot and completed memo results. A nested read inside an active
+traversal keeps its original guards; page grouping cannot turn an independently
+readable record into a hidden one. Response-wide work limits and transport
+finalization are still part of the pending public integration.
 
 The private freeze stays for the journal's lifetime, following spec materialization.
 Frozen bytes can exist without a receipt, including after a failed or uncertain
