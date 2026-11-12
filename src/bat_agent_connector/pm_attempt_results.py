@@ -864,7 +864,7 @@ def record_receipt(
 # Own Result evidence is identified by immutable producer-operation membership.
 # A Work-input lookup is one seek through its operation_id unique index per row.
 # At most one row per eligible direct marker, through message_id's unique index.
-# Includes queued inputs; only a terminal, proven-unsent owner can relinquish it.
+# Includes queued inputs; only a terminal proven-unsent or terminal rejected owner can relinquish it.
 # Both joined original records are unique-index seeks, never history scans.
 RESERVED_WORK_MARKER_SQL = """SELECT wi.operation_id, op.status, op.error_code,
            op.external_refs, st.status AS step_status
