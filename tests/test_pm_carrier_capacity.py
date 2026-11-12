@@ -70,6 +70,19 @@ def near_limit(w, kind):
             hi = mid - 1
     payload = make(lo)
     old_size = len(legacy_script(OP, plan, phase, **payload).encode())
+    if kind == 'plan' and old_size != 119_999:
+        # zlib sizes need not be monotonic: UUIDs/paths can move a local jump
+        # across the target. Keep the exact historical probe, searching nearby
+        # synthetic intents before executing either helper, never after effects.
+        for offset in range(1, 129):
+            for candidate in (lo - offset, lo + offset):
+                if 0 <= candidate <= len(content):
+                    value = make(candidate)
+                    if len(legacy_script(OP, plan, phase, **value).encode()) == 119_999:
+                        payload, old_size = value, 119_999
+                        break
+            if old_size == 119_999:
+                break
     assert 119_990 <= old_size <= 120000
     if kind == 'plan':
         assert old_size == 119_999

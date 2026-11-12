@@ -15,6 +15,7 @@ import shlex
 import tokenize
 import uuid
 import zlib
+from functools import lru_cache
 from importlib import resources
 
 from . import checkpoints, controller_authority, native_carrier, pm_workspace, repository_sync
@@ -117,12 +118,15 @@ def _host_source() -> str:
     return shared + "\n" + drafts + "\n" + paths + "\n" + (resources.files(__package__) / "pm_revision_host.py").read_text()
 
 
+@lru_cache(maxsize=1)
 def _normalize_host_source(source: str) -> str:
     """Shrink only indentation and comment-only lines, preserving literal bytes/lines.
 
     Python 3.10 tokenizes an f-string as one STRING; newer versions expose its
     parts. Protect the entire outer f-string in either case. Irregular block
     indentation is left alone rather than introducing ambiguous tab/space levels.
+    Cache only immutable code, keyed by the exact assembled source; no request
+    or authority enters this one-entry cache. Source edits cannot reuse old code.
     """
     tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
     protected = set()
@@ -139,7 +143,7 @@ def _normalize_host_source(source: str) -> str:
         elif token.type == tokenize.STRING:
             protected.update(range(token.start[0] + 1, token.end[0] + 1))
         elif token.type == tokenize.COMMENT and not fstrings:
-            if not token.line[:token.start[1]].strip(" \t"):
+            if not token.line[:token.start[1]].strip(" \t\f"):
                 comments.add(token.start[0])
         elif token.type == tokenize.INDENT and not fstrings:
             regular = regular and not token.string.strip(" ") and len(token.string) % 4 == 0

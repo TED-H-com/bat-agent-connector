@@ -37,6 +37,13 @@ source uses 39,579 UTF-8 bytes, 39,585 quoted bytes, leaving 1,834 bytes spare.
 Growth beyond that budget requires equal savings elsewhere in the helper or a
 separate transport decision. It must not consume previously valid request capacity,
 select code by revision kind, change frozen intent or enlarge the command limit.
+Normalized block indentation uses tabs, with irregular indentation preserved.
+The helper executes on the host's own `python3`, not the central service's venv.
+Host execution and normalization are tested on Python 3.10 and 3.13.
+The wider Python 3.7+ evidence is syntax only, not runtime certification or a new
+host requirement.
+One cached normalized text is keyed by its exact assembled source; this caches
+immutable code only, never request data or authority.
 Existing report directories, accepted specs, `roadmap.yaml`, arbitrary paths and
 generic file writes remain refused. The commit changes neither adopted scope nor
 roadmap heads. No artifact upload or model execution occurs.
