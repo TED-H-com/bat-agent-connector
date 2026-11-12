@@ -308,11 +308,16 @@ Every row still requires lineage authorization and budget charging.
 | --- | --- |
 | Accepted/running/waiting/needs_attention without a proven terminal outcome | Hold while the original operation can settle. |
 | Terminal with no send step (including cancellation before dispatch) | No execution hold. |
-| Terminal, failed send step with the established `REFUSED` pre-dispatch code | No execution hold; `WriteRefused` refuses the write before its frame. A generic failure is not this proof. |
+| Terminal, failed send step with durable `external_refs.send_sent:false` | No execution hold: the original transport fence proves the frame was not written. |
+| Terminal, failed send step with `REFUSED`, without a false transport fence | Generic `coverage_unavailable`: result-phase audit failures can raise `WriteRefused` after transport. Pre-fence history is not guessed. |
 | Terminal with original send response `accepted:false` | No execution hold (including NOT_ACCEPTED followed by cancellation). |
 | Terminal, certain, succeeded send step with `accepted:true` and exact request/response message ID | Hold until its exact terminal receipt. Shared eligibility accepts succeeded, failed or cancelled terminal bookkeeping, so every such ACK has a producer path. |
 | Any unresolved external step, including lost ACK or exhausted reconciliation | Hold until existing reconciliation proves the original outcome; cancellation never proves release. |
 | Any other terminal evidence, including a generic failed send or malformed/mismatched ACK | Generic `coverage_unavailable`, no counts. |
+
+Direct sends persist `send_sent:false` before the BAT call and `true` through the
+existing transport hook. This additive evidence does not change step error mapping,
+retry or reconciliation. A true fence without a certain ACK is not release evidence.
 
 Ordinary cancellation after ACK leaves a succeeded operation unchanged; it does
 not create a cancelled accepted send. Failed/cancelled bookkeeping with a certain

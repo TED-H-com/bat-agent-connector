@@ -333,11 +333,11 @@ class _Collector:
                 return False  # Only the original reconciliation can settle this send.
             if op['status'] in TERMINAL:
                 sends = [row for row in steps if row['name'] == 'send']
-                # REFUSED is the existing WriteRefused pre-dispatch code. A
-                # generic failed step is not proof that no frame was written.
+                # Error codes do not prove dispatch phase: even REFUSED can
+                # come from a result audit after the frame crossed transport.
                 if not sends or all(
                     pm_evidence._body(row['response']).get('accepted') is False
-                    or row['status'] == 'failed' and pm_evidence._body(row['error']).get('code') == 'REFUSED'
+                    or row['status'] == 'failed' and pm_evidence._body(op['external_refs']).get('send_sent') is False
                     for row in sends
                 ):
                     continue
