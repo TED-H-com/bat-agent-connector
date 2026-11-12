@@ -2,6 +2,7 @@ import {pmPanelStrings} from './pm-governance-strings.js';
 export const pmMeetingStrings = {
   en: {
     ...pmPanelStrings.en,
+    pm_review_available_step:'Available next step: {step}',
     pm_review_decision_source:'Recorded Sprint Review decision',
     pm_review_clear_sources:'Clear this source selection',
     pm_review_no_decision:'No recorded governance decision is available as a Planning source.',
@@ -106,6 +107,7 @@ export const pmMeetingStrings = {
   },
   'zh-TW': {
     ...pmPanelStrings['zh-TW'],
+    pm_review_available_step:'可進行的下一步：{step}',
     pm_review_decision_source:'已記錄的衝刺成果檢視決策',
     pm_review_clear_sources:'清除此組來源選擇',
     pm_review_no_decision:'沒有已記錄的治理決策可作為規劃來源。',

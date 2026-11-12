@@ -7,13 +7,14 @@ import {emptyReviewBasis, reviewPrompts, reviewStep} from './pm-sprint-review-st
 // All prose here is ephemeral server content. Only the explicit typed selection
 // is passed to the existing durable meeting form.
 export function reviewProjection({h, t, detail, governance = [], onEdit, onComplete=null, onNote=null}) {
-  const draft = detail.draft?.document, fixed = draft?.guided_review, context = detail.context.document;
+  const draft = detail.draft?.document, fixed = draft?.guided_review, context = detail.context.document, next = reviewStep(detail,governance);
   const text = value => h('p', {class: 'pm-note-text'}, value);
   const exact = value => disclosure({label: t('pm_meeting_details'), body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(value, null, 2))});
   const section = (number, body) => sectionCard({body: h('section', {'data-pm-review-step': number},
     h('h3', {}, `${number}. ${t('pm_review_step_' + number)}`), body)});
   const edit = () => button({variant: 'secondary', label: t('pm_meeting_edit_draft'), onClick: onEdit});
-  const result = h('div', {'data-pm-guided-review': '', 'data-pm-review-next': reviewStep(detail,governance)},
+  const result = h('div', {'data-pm-guided-review': '', 'data-pm-review-next': next},
+    h('p',{class:'muted'},t('pm_review_available_step',{step:t('pm_review_step_'+next)})),
     section(1, h('div', {}, h('h4',{},t('pm_meeting_goal')),text(context.sprint_goal.text), h('h4', {}, t('pm_meeting_dod')),
       ...(context.artifacts.dod?.document.criteria || []).map(row => text(row.text)), text(t('pm_meeting_source_frozen')),h('p',{},t('pm_meeting_snapshot'),' · ',timeStamp(context.snapshot_ref.as_of)),
       exact({snapshot: context.snapshot_ref, context_revision_id: detail.context.context_revision_id, coverage:detail.snapshot.coverage, frozen_at: fixed?.frozen_at}))),

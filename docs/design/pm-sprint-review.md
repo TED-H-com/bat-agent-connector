@@ -180,7 +180,10 @@ in existing Idea forms; their original proof remains visible in the pmd_ draft.
 “Draft only; scope not adopted; work not started” marks the Planning boundary.
 No adoption, execution, model invocation or extra confirmation is introduced.
 
-Source refusals clear the whole guided narrative and derived editor disclosures.
+Source refusals clear the whole guided narrative and derived editor disclosures,
+including other mounted Review/governance panels and derived thread content.
+This also applies to source or permission refusals returned by an explicit action;
+the unchanged durable form retains the original request/key for reconciliation.
 Request generations and selected identities reject late responses. Reflow retains
 editor nodes and composition; original durable receipts remain the replay authority.
 Legacy meetings without this capability retain their current UI and request shapes.

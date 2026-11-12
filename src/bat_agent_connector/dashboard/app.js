@@ -9092,6 +9092,7 @@ var init_pm_meetings_strings = __esmMin((() => {
 	pmMeetingStrings = {
 		en: {
 			...pmPanelStrings.en,
+			pm_review_available_step: "Available next step: {step}",
 			pm_review_decision_source: "Recorded Sprint Review decision",
 			pm_review_clear_sources: "Clear this source selection",
 			pm_review_no_decision: "No recorded governance decision is available as a Planning source.",
@@ -9261,6 +9262,7 @@ var init_pm_meetings_strings = __esmMin((() => {
 		},
 		"zh-TW": {
 			...pmPanelStrings["zh-TW"],
+			pm_review_available_step: "可進行的下一步：{step}",
 			pm_review_decision_source: "已記錄的衝刺成果檢視決策",
 			pm_review_clear_sources: "清除此組來源選擇",
 			pm_review_no_decision: "沒有已記錄的治理決策可作為規劃來源。",
@@ -25802,7 +25804,7 @@ var emptyReviewBasis = () => ({
 //#endregion
 //#region src/pm-sprint-review.js
 function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = null, onNote = null }) {
-	const draft = detail.draft?.document, fixed = draft?.guided_review, context = detail.context.document;
+	const draft = detail.draft?.document, fixed = draft?.guided_review, context = detail.context.document, next = reviewStep(detail, governance);
 	const text = (value) => h("p", { class: "pm-note-text" }, value);
 	const exact = (value) => disclosure({
 		label: t("pm_meeting_details"),
@@ -25816,8 +25818,8 @@ function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = 
 	});
 	const result = h("div", {
 		"data-pm-guided-review": "",
-		"data-pm-review-next": reviewStep(detail, governance)
-	}, section(1, h("div", {}, h("h4", {}, t("pm_meeting_goal")), text(context.sprint_goal.text), h("h4", {}, t("pm_meeting_dod")), ...(context.artifacts.dod?.document.criteria || []).map((row) => text(row.text)), text(t("pm_meeting_source_frozen")), h("p", {}, t("pm_meeting_snapshot"), " · ", timeStamp(context.snapshot_ref.as_of)), exact({
+		"data-pm-review-next": next
+	}, h("p", { class: "muted" }, t("pm_review_available_step", { step: t("pm_review_step_" + next) })), section(1, h("div", {}, h("h4", {}, t("pm_meeting_goal")), text(context.sprint_goal.text), h("h4", {}, t("pm_meeting_dod")), ...(context.artifacts.dod?.document.criteria || []).map((row) => text(row.text)), text(t("pm_meeting_source_frozen")), h("p", {}, t("pm_meeting_snapshot"), " · ", timeStamp(context.snapshot_ref.as_of)), exact({
 		snapshot: context.snapshot_ref,
 		context_revision_id: detail.context.context_revision_id,
 		coverage: detail.snapshot.coverage,
@@ -40626,7 +40628,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 //#endregion
 //#region src/pm-governance.js
 init_pm_governance_strings();
-function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => "", onReviewRecorded = null }) {
+function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => "", onReviewRecorded = null, onSourceFailure = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = [
 		"risk",
 		"assumption",
@@ -40769,6 +40771,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	}
 	function unavailable(error) {
 		const reviewLinked = hasSprintReview(caps()) && (model?.detail?.record.context.review_proposal_ref || createEditor?.fields.review_proposal_ref?.value && createEditor.fields.review_proposal_ref.value !== "null");
+		++serial;
 		loaded = false;
 		++sourceTicket;
 		list.replaceChildren();
@@ -40782,6 +40785,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		}
 		update();
 		status.replaceChildren(errorBox(error, { within: status }));
+		if (reviewLinked) onSourceFailure?.(error);
 	}
 	async function currentWorkspace() {
 		const value = await api("GET", endpoint);
@@ -41300,7 +41304,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					update();
 				} catch (error) {
 					if (ticket !== sourceTicket || !editor.box.isConnected) return;
-					if (error.status !== 404) {
+					if (error.status !== 404 || fields.review_proposal_ref?.value && fields.review_proposal_ref.value !== "null") {
 						unavailable(error);
 						return;
 					}
@@ -41595,6 +41599,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		openRef,
 		openReviewProposal,
 		relabel,
+		withdraw: unavailable,
 		requirementIds: () => model ? [...model.records.flatMap((row) => row.revision.document.affected_requirement_ids), ...forms.flatMap((editor) => editor.fields?.affected_requirement_ids?.value.split(",").map((value) => value.trim()).filter(Boolean) || [])] : [],
 		namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id && Array.isArray(model.plan.document?.requirements) ? model.plan : void 0
 	};
@@ -50076,7 +50081,7 @@ function workspaceKanban({ t, api, alive, serverId, namespace = "", workspaceId,
 //#endregion
 //#region src/pm-meetings.js
 init_pm_governance_strings();
-function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, onGovernance = null }) {
+function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, onGovernance = null, onSourceFailure = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const navigationKey = `batc.pm.meeting-navigation.${namespace}.${workspaceId}.${caps()?.actor}`;
 	let navigation = {};
@@ -50215,12 +50220,14 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		return slot;
 	}
 	function unavailable(error) {
+		const review = guided();
+		++serial;
 		loaded = false;
 		update();
 		view.replaceChildren();
 		choose.replaceChildren();
 		editors.hidden = true;
-		if (guided()) {
+		if (review) {
 			sourcePicker?.dispose();
 			forms.forEach((editor) => editor.dispose?.());
 			editors.replaceChildren();
@@ -50228,6 +50235,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			signature = "";
 		}
 		status.replaceChildren(errorBox(error, { within: status }));
+		if (review) onSourceFailure?.(error);
 	}
 	function localForm(config) {
 		const expected = JSON.stringify({
@@ -51185,7 +51193,8 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		element,
 		refresh,
 		openRef,
-		openSprint
+		openSprint,
+		withdraw: unavailable
 	};
 }
 //#endregion
@@ -58176,6 +58185,14 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 			...options,
 			canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
 			clientGate,
+			onError: (error) => {
+				if (hasSprintReview(caps()) && /^(pm\.meeting\.|pm\.governance\.|pm\.input\.|pm\.thread\.plan)/.test(options.action) && ([403, 404].includes(error.status) || error.code === "FORBIDDEN" || /^PM_.*SOURCE_UNAVAILABLE$/.test(error.code || ""))) {
+					withdrawReviewSources(error);
+					status.replaceChildren(errorBox(error, { within: status }));
+					return true;
+				}
+				return options.onError?.(error) || false;
+			},
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)(),
 			onConnectionChange: (connected) => {
@@ -58604,7 +58621,8 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		labelled,
 		errorBox,
 		caps,
-		onGovernance: openReviewGovernance
+		onGovernance: openReviewGovernance,
+		onSourceFailure: withdrawReviewSources
 	}) : null;
 	if (meetings) body.insertBefore(meetings.element, content);
 	let governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance ? workspaceGovernance({
@@ -58623,9 +58641,33 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		caps,
 		withRegister: caps()?.features?.pm_register?.version === 1,
 		onReviewRecorded: () => meetings?.refresh(),
+		onSourceFailure: withdrawReviewSources,
 		nameFor: (kind, id) => kind === "requirement" ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ""
 	}) : null;
 	if (governance) body.insertBefore(governance.element, content);
+	let withdrawingReview = false;
+	function withdrawReviewSources(error) {
+		if (withdrawingReview || !hasSprintReview(caps())) return;
+		withdrawingReview = true;
+		try {
+			meetings?.withdraw(error);
+			governance?.withdraw(error);
+			if (threadId) {
+				++sequence;
+				loaded = false;
+				refreshing = false;
+				refresh.disabled = false;
+				threadData = null;
+				mountedThread = null;
+				discussionTools?.close();
+				for (const editor of forms) if (content.contains(editor.box)) editor.dispose();
+				content.replaceChildren();
+				updateForms();
+			}
+		} finally {
+			withdrawingReview = false;
+		}
+	}
 	async function openReviewGovernance({ ref, entry, ownerActor, snapshotId }) {
 		if (!governance) {
 			governance = workspaceGovernance({
@@ -58642,7 +58684,8 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				labelled,
 				errorBox,
 				caps,
-				onReviewRecorded: () => meetings?.refresh()
+				onReviewRecorded: () => meetings?.refresh(),
+				onSourceFailure: withdrawReviewSources
 			});
 			drawersHome.append(governance.element);
 		}
@@ -60110,7 +60153,8 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				labelled,
 				errorBox,
 				caps,
-				onGovernance: openReviewGovernance
+				onGovernance: openReviewGovernance,
+				onSourceFailure: withdrawReviewSources
 			});
 			if (thread.mode === "follow_up" && caps()?.features?.pm_workspaces?.follow_up_prepare) contextPane.append(h("a", {
 				class: "ui-button secondary ui-sm",
@@ -60870,6 +60914,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					pmCapabilitiesError = capabilityReadError;
 					pmCapabilities = null;
 				}
+				if (hasSprintReview(caps())) withdrawReviewSources(error);
 				loaded = false;
 				workspace = null;
 				threadData = null;

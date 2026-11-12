@@ -614,6 +614,13 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
       canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
       clientGate,
+      onError:error=>{
+        if(hasSprintReview(caps())&&/^(pm\.meeting\.|pm\.governance\.|pm\.input\.|pm\.thread\.plan)/.test(options.action)
+          &&([403,404].includes(error.status)||error.code==='FORBIDDEN'||/^PM_.*SOURCE_UNAVAILABLE$/.test(error.code||''))){
+          withdrawReviewSources(error);status.replaceChildren(errorBox(error,{within:status}));return true;
+        }
+        return options.onError?.(error)||false;
+      },
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
       recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)(),
       onConnectionChange: connected => {
@@ -756,13 +763,24 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection,onGuideReview:id=>{openRegisterForm('discussions','ui_meetings');void openVisibleSource(meetings,()=>meetings?.openSprint(id));}}) : null;
   if(sprints)body.insertBefore(sprints.box,content);
   let meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings
-    ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onGovernance:openReviewGovernance}) : null;
+    ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onGovernance:openReviewGovernance,onSourceFailure:withdrawReviewSources}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
   let governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
-    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps, withRegister: caps()?.features?.pm_register?.version === 1, onReviewRecorded:()=>meetings?.refresh(), nameFor: (kind, id) => kind === 'requirement' ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ''}) : null;
+    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps, withRegister: caps()?.features?.pm_register?.version === 1, onReviewRecorded:()=>meetings?.refresh(),onSourceFailure:withdrawReviewSources, nameFor: (kind, id) => kind === 'requirement' ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ''}) : null;
   if(governance)body.insertBefore(governance.element,content);
+  let withdrawingReview = false;
+  function withdrawReviewSources(error) {
+    if(withdrawingReview || !hasSprintReview(caps()))return;
+    withdrawingReview=true;
+    try {
+      meetings?.withdraw(error);governance?.withdraw(error);
+      if(threadId){++sequence;loaded=false;refreshing=false;refresh.disabled=false;threadData=null;mountedThread=null;discussionTools?.close();
+        for(const editor of forms)if(content.contains(editor.box))editor.dispose();
+        content.replaceChildren();updateForms();}
+    } finally {withdrawingReview=false;}
+  }
   async function openReviewGovernance({ref,entry,ownerActor,snapshotId}) {
-    if(!governance){governance=workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onReviewRecorded:()=>meetings?.refresh()});drawersHome.append(governance.element);}
+    if(!governance){governance=workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onReviewRecorded:()=>meetings?.refresh(),onSourceFailure:withdrawReviewSources});drawersHome.append(governance.element);}
     openPanel(t('ui_governance'),governance.element,false);
     await openVisibleSource(governance,()=>entry?governance.openRef({kind:'governance',id:entry.record.record_id},{form:'decide'}):governance.openReviewProposal(ref,ownerActor,snapshotId));
   }
@@ -1421,7 +1439,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
       for (const node of [...column.querySelectorAll(':scope > .pm-package-preparation, :scope > .pm-packages')]) contextPane.append(node);
       if (nativeAnalysis) contextPane.append(h('details', {}, h('summary', {}, t('pd_analysis')), nativeAnalysis.box));
       const meetingThread = ['sprint_planning', 'sprint_review', 'retrospective', 'maintenance_review'].includes(thread.mode);
-      if (meetingThread && caps()?.features?.pm_workspaces?.meetings) meetings = workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onGovernance:openReviewGovernance});
+      if (meetingThread && caps()?.features?.pm_workspaces?.meetings) meetings = workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,onGovernance:openReviewGovernance,onSourceFailure:withdrawReviewSources});
       if (thread.mode === 'follow_up' && caps()?.features?.pm_workspaces?.follow_up_prepare) contextPane.append(h('a', {class: 'ui-button secondary ui-sm', 'data-discussion-follow-up': '', href: `#/pm/${encodeURIComponent(workspaceId)}/issues`}, t('ui_follow_up')));
       if (specifications) contextPane.append(secondary('ui_specs', specifications.element));
       if (evidence) drawersHome.append(evidence.box);
@@ -1858,6 +1876,7 @@ export async function mountPmWorkspace({main, h, t, api, serverId, caps, guard, 
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         if (capabilityReadError) {pmCapabilitiesError = capabilityReadError; pmCapabilities = null;}
+        if(hasSprintReview(caps()))withdrawReviewSources(error);
         loaded = false; workspace = null; threadData = null; withdrawNames();
         if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
         brief?.withdraw();traceability?.withdraw();kanban?.withdraw();resources?.withdraw();schedule?.withdraw();dependencies?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();

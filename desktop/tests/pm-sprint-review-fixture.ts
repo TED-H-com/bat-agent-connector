@@ -19,9 +19,10 @@ export function guidedReviewFixture() {
   const result={workspace_id:workspaceId,attempt_id:resultRef.attempt_id,sources:{result_id:resultRef.result_id,digest:resultRef.digest},
     conversation:{latest_assistant_summary:{text:'SOURCE_RESULT: Reset behavior reported complete.'}},requirements:{items:[]}};
   const response=(data:any,status=200)=>({data:structuredClone(data),status});
-  const denied=()=>response({error:{code:'PM_SOURCE_UNAVAILABLE',message:'Original source withdrawn'}},404);
+  const denied=()=>response({error:{code:'PM_MEETING_SOURCE_UNAVAILABLE',message:'Original source withdrawn'}},404);
   async function dispatch(input:any):Promise<any>{
     state.requests.push(structuredClone(input));const path=new URL(input.path,'http://fixture').pathname,prefix='/pm/workspaces/'+workspaceId,action=input.body?.action;
+    if(state.withdrawOnSubmit&&input.method==='POST'){state.withdraw=true;return denied();}
     for(const fixture of [meeting,sprint,governance,base])Object.assign(fixture.state,{actor:state.actor,role:state.role});
     if(/provider|model|run.prepare|session.send/.test(path+' '+(action||'')))state.providerCalls++;
     if(path==='/bootstrap'||path==='/capabilities'){

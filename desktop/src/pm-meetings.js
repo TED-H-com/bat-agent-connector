@@ -5,7 +5,7 @@ import {hasSprintReview, emptyReviewBasis, reviewProposal} from './pm-sprint-rev
 import {reviewProjection, reviewSources} from './pm-sprint-review.js';
 import {panelActorLabel} from './pm-governance-strings.js';
 // Meeting records share the existing durable command forms. A draft is not a completed discussion.
-export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, onGovernance=null}) {
+export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, onGovernance=null, onSourceFailure=null}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const navigationKey = `batc.pm.meeting-navigation.${namespace}.${workspaceId}.${caps()?.actor}`;
   let navigation = {};
@@ -67,9 +67,10 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     entries.push(sync); sync(); return slot;
   }
   function unavailable(error) {
-    loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true;
-    if (guided()) {sourcePicker?.dispose(); forms.forEach(editor => editor.dispose?.()); editors.replaceChildren(); model = null; signature = '';}
+    const review=guided();++serial;loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true;
+    if (review) {sourcePicker?.dispose(); forms.forEach(editor => editor.dispose?.()); editors.replaceChildren(); model = null; signature = '';}
     status.replaceChildren(errorBox(error, {within:status}));
+    if(review)onSourceFailure?.(error);
   }
   function localForm(config) {
     const expected = JSON.stringify({preconditions: config.preconditions(), context: config.context || null});
@@ -475,5 +476,5 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     if(guidedSprint!==sprintId)return;
     if(model?.detail)remember('meeting_id',model.detail.meeting.meeting_id);else reveal('pm.meeting.create');
   }
-  return {element,refresh,openRef,openSprint};
+  return {element,refresh,openRef,openSprint,withdraw:unavailable};
 }

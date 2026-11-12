@@ -4,7 +4,7 @@ import {retiredView, viewLeft} from './pm-retired.js';
 import {panelActorLabel} from './pm-governance-strings.js';
 import {iconButton, button, sectionCard, statusPill, disclosure, emptyState} from './ui/components.js';
 // Sourced management findings and explicit direction decisions share one journal.
-export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => '', onReviewRecorded = null}) {
+export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => '', onReviewRecorded = null, onSourceFailure = null}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = ['risk', 'assumption', 'issue', 'dependency', 'drift', 'change'];
   let serial = 0, loaded = false, dirty = false, stale = false, signature = '', selectedId = '', model = null, forms = [], widgets = [];
   let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
@@ -71,9 +71,10 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   }
   function unavailable(error) {
     const reviewLinked=hasSprintReview(caps())&&(model?.detail?.record.context.review_proposal_ref||createEditor?.fields.review_proposal_ref?.value&&createEditor.fields.review_proposal_ref.value!=='null');
-    loaded = false; ++sourceTicket; list.replaceChildren(); detail.replaceChildren(); editors.hidden = true;
+    ++serial; loaded = false; ++sourceTicket; list.replaceChildren(); detail.replaceChildren(); editors.hidden = true;
     if(reviewLinked){forms.forEach(editor=>editor.dispose?.());clearEditors();model=null;signature='';}
     update(); status.replaceChildren(errorBox(error, {within:status}));
+    if(reviewLinked)onSourceFailure?.(error);
   }
   async function currentWorkspace() {
     const value = await api('GET', endpoint); alive(); check(value.workspace);
@@ -359,7 +360,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           createSnapshot = result.snapshot; affected.rebuild(sourceChoices(createSnapshot).filter(row => row.kind === 'requirement').map(row => [row.id, sourceLabel(row.kind, row.source)])); sourceSync = refsWidget(fields.source_refs, sourceHolder, createSnapshot, () => editor); update();
         } catch (error) {
           if (ticket !== sourceTicket || !editor.box.isConnected) return;
-          if (error.status !== 404) {unavailable(error); return;}
+          if (error.status !== 404 || fields.review_proposal_ref?.value&&fields.review_proposal_ref.value!=='null') {unavailable(error); return;}
           // One unavailable source must not trap the source selector. Recheck
           // the parent boundary before retaining any other workspace facts.
           try {
@@ -506,7 +507,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     for(const [key,value] of Object.entries({review_proposal_ref:JSON.stringify(ref),kind:'change',owner_actor:ownerActor,snapshot_id:snapshotId,description:''}))createEditor.set(key,value);
     await refreshCreateSource();showCreate();
   }
-  return {element, refresh, openRef, openReviewProposal, relabel,
+  return {element, refresh, openRef, openReviewProposal, relabel, withdraw:unavailable,
     requirementIds: () => model ? [...model.records.flatMap(row => row.revision.document.affected_requirement_ids),
       ...forms.flatMap(editor => editor.fields?.affected_requirement_ids?.value.split(',').map(value => value.trim()).filter(Boolean) || [])] : [],
     namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id

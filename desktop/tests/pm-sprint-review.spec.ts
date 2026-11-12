@@ -170,3 +170,43 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'] as const)tes
   expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toHaveLength(count);expect(f.state.providerCalls).toBe(0);
   await context.close();
 });
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'] as const)test(`governance withdrawal clears every mounted Review projection ${native?'IPC':'HTTP'} ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:390,height:950}}),page=await context.newPage(),f=guidedReviewFixture(),g=pmGovernanceStrings[locale];
+  seedGuidedReview(f,4);await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'discussions','ui_meetings');
+  await page.locator('[data-pm-review-step="4"]').getByRole('button',{name:g.pm_gov_decide,exact:true}).click();
+  await expect(page.locator('[data-pm-action="pm.governance.decide"]')).toBeVisible();await storageSafe(page);
+  f.state.withdraw=true;await page.getByRole('button',{name:g.pm_gov_refresh,exact:true}).click();
+  await expect(page.locator('[data-pm-guided-review]')).toHaveCount(0);
+  expect(await page.locator('body').textContent()).not.toMatch(/SOURCE_(FEEDBACK|GOVERNANCE|GOAL_OBSERVATION|NEXT_DIRECTION|FOLLOW_UP|EFFECT|VERIFICATION|UNRESOLVED)/);
+  for(const [key,value]of await page.evaluate(()=>Object.entries(localStorage)))expect(key+' '+value).not.toMatch(/SOURCE_(FEEDBACK|GOVERNANCE|GOAL_OBSERVATION|NEXT_DIRECTION|FOLLOW_UP|EFFECT|VERIFICATION|UNRESOLVED)/);
+  expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual([]);expect(f.state.providerCalls).toBe(0);await context.close();
+});
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'] as const)test(`Sprint entrance creates a Review only after explicit submit ${native?'IPC':'HTTP'} ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:390,height:950}}),page=await context.newPage(),f=guidedReviewFixture(),w=pmMeetingStrings[locale];
+  f.meeting.state.meetings=[];await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'schedule','ui_sprints');
+  await page.getByRole('button',{name:w.pm_review_guide,exact:true}).click();
+  const create=page.locator('[data-pm-action="pm.meeting.create"]');await expect(create).toBeVisible();
+  await expect(create.getByLabel(w.pm_meeting_kind,{exact:true})).toHaveValue('review');await storageSafe(page);
+  expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual([]);expect(f.state.providerCalls).toBe(0);
+  await create.getByLabel(w.pm_meeting_name,{exact:true}).fill('An explicitly requested Review');
+  await create.getByLabel(w.pm_meeting_reason,{exact:true}).fill('Inspect this Sprint together');await storageSafe(page);
+  await create.locator('button[type=submit]').click();await expect(page.locator('[data-pm-guided-review]')).toBeVisible();await storageSafe(page);
+  expect(f.meeting.state.writes).toHaveLength(1);expect(f.meeting.state.writes[0].body.params.kind).toBe('review');
+  const id=f.meeting.state.meetings[0].meeting.meeting_id;await page.reload();await openPmSection(page,'discussions','ui_meetings');
+  await expect(page.locator('[data-pm-guided-review]')).toBeVisible();expect(f.meeting.state.meetings[0].meeting.meeting_id).toBe(id);expect(f.meeting.state.writes).toHaveLength(1);await storageSafe(page);await context.close();
+});
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'] as const)test(`source refusal on submit clears Review without resending ${native?'IPC':'HTTP'} ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:390,height:950}}),page=await context.newPage(),f=guidedReviewFixture(),w=pmMeetingStrings[locale];
+  seedGuidedReview(f,3);await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'discussions','ui_meetings');
+  const draft=page.locator('[data-pm-action="pm.meeting.draft"]');await expand(draft);
+  await draft.getByLabel(w.pm_meeting_goal_review,{exact:true}).fill('My additional observation');
+  await draft.getByLabel(w.pm_meeting_next_steps,{exact:true}).fill('Observe the gap');
+  await draft.getByLabel(w.pm_meeting_reason,{exact:true}).fill('Keep this authored intent');
+  f.state.withdrawOnSubmit=true;await draft.locator('button[type=submit]').click();await expect(page.locator('[data-pm-guided-review]')).toHaveCount(0);
+  expect(await page.locator('body').textContent()).not.toContain('SOURCE_GOAL_OBSERVATION');await storageSafe(page);
+  const sent=f.state.requests.filter((row:any)=>row.method!=='GET');expect(sent).toHaveLength(1);
+  await page.reload();await storageSafe(page);expect(f.state.requests.filter((row:any)=>row.method!=='GET')).toEqual(sent);expect(f.state.providerCalls).toBe(0);await context.close();
+});
