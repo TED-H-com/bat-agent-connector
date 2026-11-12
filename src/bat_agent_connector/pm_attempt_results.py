@@ -861,17 +861,28 @@ def record_receipt(
         return _decode_row(stored), True
 
 
-def receipts(db, workspace_id: str, attempt_id: str, limit: int = 20) -> dict[str, Any]:
-    """Return receipts for ``(workspace_id, attempt_id)`` newest first, with ``has_more``."""
+# Own Result evidence is identified by immutable producer-operation membership.
+# A Work-input lookup is one seek through its operation_id unique index per row.
+OWN_RECEIPT_PREDICATE = """(operation_id=? OR EXISTS (
+    SELECT 1 FROM work_inputs i WHERE i.operation_id=session_results.operation_id
+      AND i.attempt_id=session_results.attempt_id
+      AND i.workspace_id=session_results.workspace_id))"""
+OWN_RECEIPTS_SQL = """SELECT * FROM session_results  -- static own-receipt predicate
+    WHERE workspace_id=? AND attempt_id=? AND """ + OWN_RECEIPT_PREDICATE + """
+    ORDER BY sequence DESC LIMIT ?"""  # noqa: S608 - fixed SQL constants; values are bound
+
+
+def receipts(db, workspace_id: str, attempt_id: str, limit: int = 20, *,
+             own_operation_id: str | None = None) -> dict[str, Any]:
+    """Page raw evidence, or only own Result receipts when the handoff ID is supplied."""
     if not installed(db):
         return {"receipts": [], "results": [], "has_more": False}
     lim = max(1, min(200, int(limit)))
-    rows = db.execute(
-        """SELECT * FROM session_results
-           WHERE workspace_id=? AND attempt_id=?
-           ORDER BY sequence DESC LIMIT ?""",
-        (workspace_id, attempt_id, lim + 1),
-    ).fetchall()
+    sql = OWN_RECEIPTS_SQL if own_operation_id is not None else """SELECT * FROM session_results
+        WHERE workspace_id=? AND attempt_id=? ORDER BY sequence DESC LIMIT ?"""
+    args = ((workspace_id, attempt_id, own_operation_id, lim + 1) if own_operation_id is not None
+            else (workspace_id, attempt_id, lim + 1))
+    rows = db.execute(sql, args).fetchall()
     has_more = len(rows) > lim
     decoded = [_decode_row(r) for r in rows[:lim]]
     summary_list = [
@@ -1502,9 +1513,9 @@ class AttemptResultCollector:
                 and self.ops.db.execute(
                     """SELECT 1 FROM session_results
                        WHERE workspace_id=? AND attempt_id=?
-                         AND json_extract(document, '$.turn_marker') = ?
-                       LIMIT 1""",
-                    (workspace_id, attempt_id, cand_mid),
+                         AND json_extract(document, '$.turn_marker') = ? AND """ + OWN_RECEIPT_PREDICATE + " LIMIT 1",  # noqa: S608 - fixed predicate
+
+                    (workspace_id, attempt_id, cand_mid, handoff["operation_id"]),
                 ).fetchone()
                 is not None
             )
@@ -1668,6 +1679,12 @@ class AttemptResultCollector:
             check(attempt_id, "no_boundary")
             return None
 
+        if direct and boundary == "process_ended":
+            # Direct rows are release evidence only. Repeated process-ended
+            # observations must not append an unbounded nonterminal history.
+            check(attempt_id, "direct_boundary_not_terminal")
+            return None
+
         last_message_id = ""
         for item in reversed(slice_items):
             if isinstance(item, dict) and item.get("id"):
@@ -1689,12 +1706,13 @@ class AttemptResultCollector:
         digest = "sha256:" + hashlib.sha256(digest_bytes).hexdigest()
 
         # Skip when the latest receipt already has this position and digest
-        latest = self.ops.db.execute(
-            """SELECT source_position, digest FROM session_results
-               WHERE workspace_id=? AND attempt_id=?
-               ORDER BY sequence DESC LIMIT 1""",
-            (workspace_id, attempt_id),
-        ).fetchone()
+        latest_sql = """SELECT source_position, digest FROM session_results
+            WHERE workspace_id=? AND attempt_id=?"""
+        latest_args = (workspace_id, attempt_id)
+        if not direct:
+            latest_sql += " AND " + OWN_RECEIPT_PREDICATE
+            latest_args += (cand["handoff_operation_id"],)
+        latest = self.ops.db.execute(latest_sql + " ORDER BY sequence DESC LIMIT 1", latest_args).fetchone()
         if latest is not None and latest["source_position"] == source_position and latest["digest"] == digest:
             if obs_tuple is not None and not direct:
                 self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}

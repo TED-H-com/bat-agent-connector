@@ -61,8 +61,10 @@ async def test_direct_hold_from_acceptance_to_original_receipt(start_ready, mock
             await w['d'].inventory.refresh_host('h1')
         rows = await producer.collect(w)
         rows = [r for r in rows if r['operation_id'] == op['operation_id']]
-        assert len(rows) == 1
-        assert rows[0]['document']['boundary'] == ('process_ended' if case == 'process_ended' else 'turn_done')
+        if case == 'process_ended':
+            assert rows == []
+        else:
+            assert len(rows) == 1 and rows[0]['document']['boundary'] == 'turn_done'
     value = read(ops, w['target'], STARTER_OWNER)
     if case in {'hidden', 'budget'}:
         assert value['used'] is None and value['coverage']['reasons'] == ['coverage_unavailable']

@@ -1394,19 +1394,13 @@ async def _wait_for_related_event(
         await asyncio.sleep(min(WAIT_POLL_INTERVAL_S, rem))
 
 
-SELECTED_MARKER_SQL = """SELECT * FROM session_results
-    WHERE workspace_id=? AND attempt_id=? AND json_extract(source_position, '$.turn_marker')=?
-    ORDER BY sequence DESC LIMIT 1"""
-
-
 def _selected_receipt(ops, workspace_id, attempt_id, turn_marker, page):
     if turn_marker is None:
         return None
     for receipt in page:
         if receipt.get("turn_marker") == turn_marker:
             return receipt
-    row = ops.db.execute(SELECTED_MARKER_SQL, (workspace_id, attempt_id, turn_marker)).fetchone()
-    return pm_attempt_results._decode_row(row) if row is not None else None
+    return None
 
 
 async def _read_result(
@@ -1439,7 +1433,8 @@ async def _read_result(
     turn_marker = ctx["turn_marker"]
     base_sha = ctx["base_sha"]
 
-    rec_data = pm_attempt_results.receipts(ops.db, workspace_id, attempt_id, limit=20)
+    rec_data = pm_attempt_results.receipts(ops.db, workspace_id, attempt_id, limit=20,
+                                           own_operation_id=execution_op_id or "")
     all_rows = rec_data["receipts"]
     latest_row = all_rows[0] if all_rows else None
     latest_doc = latest_row["document"] if (latest_row and isinstance(latest_row.get("document"), dict)) else {}
@@ -1965,13 +1960,15 @@ async def _read_result(
         target_ver = str(latest_doc.get("decoder_version") or DECODER_VERSION)
         pos_rows = ops.db.execute(
             """SELECT digest, document FROM session_results
-               WHERE workspace_id=? AND source_key=? AND source_generation=? AND source_position=? AND digest!=?""",
+               WHERE workspace_id=? AND source_key=? AND source_generation=? AND source_position=? AND digest!=?
+               AND """ + pm_attempt_results.OWN_RECEIPT_PREDICATE,  # noqa: S608 - fixed predicate
             (
                 workspace_id,
                 latest_row["source_key"],
                 latest_row["source_generation"],
                 latest_row["source_position_json"],
                 latest_row["digest"],
+                execution_op_id or "",
             ),
         ).fetchall()
         for pr in pos_rows:
@@ -2319,7 +2316,8 @@ async def _read_changes(
 
     head_cursor = ops.journal.api_head()
     ctx = _attempt_context(ops, principal, workspace_id, attempt_id)
-    rec_data = pm_attempt_results.receipts(ops.db, workspace_id, attempt_id, limit=1)
+    rec_data = pm_attempt_results.receipts(ops.db, workspace_id, attempt_id, limit=1,
+                                           own_operation_id=ctx["execution_op_id"] or "")
     latest_row = rec_data["receipts"][0] if rec_data["receipts"] else None
 
     ok_reg, reg_reason, _ = _check_managed_session_registry(ops, ctx)
