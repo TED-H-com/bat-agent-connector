@@ -12,7 +12,22 @@
   from which the existing planner produces only explicit drafts, without adopting
   scope or starting work. A withdrawn source makes everything derived from it
   unavailable, overflow is refused instead of trimmed, and existing requests keep
-  their exact responses. The Dashboard is not changed yet.
+  their exact responses.
+
+- Let Dashboard users run that guided Sprint Review from the selected Sprint, or
+  resume it from its meeting. Six steps, worked out from the server's records
+  rather than a separate client workflow, fix the Review context, inspect exact
+  Results with their original assessments, hear attributed feedback, record
+  direction through the existing governance forms, complete the Review as the
+  actual responsible owner, and optionally choose a completed decision as an
+  input to a Planning draft marked "Draft only; scope not adopted; work not
+  started". Opening and selecting change nothing and call no model, and
+  contributors see that the owner's decision is awaited instead of controls the
+  server would refuse. When a Review source is refused or withdrawn, every view
+  derived from it is withdrawn, while ordinary discussions that only cite it keep
+  their content. Saved drafts keep only what people typed and exact source IDs,
+  never source content. Without the server capability, existing meetings,
+  governance and Planning are unchanged.
 
 - Let API and MCP clients preview, for selected Work in one saved plan snapshot,
   which retained packages, Attempts, handoffs and issue mappings connect to the
