@@ -154,7 +154,7 @@ def test_lineage_action_inventory(daemon):
         pm_source_lineage.DERIVED_ACTIONS
         | pm_delivery_lineage.ACTIONS
         | {a for a in daemon.ops.actions if a.startswith("pm.")}
-        | {"repository.continue"}
+        | pm_source_lineage.HANDOFF_ACTIONS
     )
     print("LINEAGE_INVENTORY", json.dumps(sorted(inventory)))
     assert set(pm_wip_count.LINEAGE_ACTIONS) == inventory

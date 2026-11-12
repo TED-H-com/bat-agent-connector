@@ -222,7 +222,7 @@ check. Enforcement would require a separate product decision and contract.
 
 Admission sources are `pm_source_lineage.DERIVED_ACTIONS`,
 `pm_delivery_lineage.ACTIONS`, all registered `pm.*` actions, and
-`repository.continue` with `pm_handoff`. `LINEAGE_ACTIONS` is an explicit table;
+`pm_source_lineage.HANDOFF_ACTIONS` (currently `repository.continue`) with `pm_handoff`. `LINEAGE_ACTIONS` is an explicit table;
 its inventory test derives the expected set from those four admission sources.
 Every source is authorized and charged regardless of its classification.
 
