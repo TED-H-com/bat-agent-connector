@@ -77,8 +77,14 @@ requests, writes, transactions, tasks or event-loop turns. Cycle and budget
 refusals retain the existing guarded-cache rules. Collection readers start an
 independent traversal budget and recursion state for each top-level record while
 sharing their snapshot and completed memo results. A nested read inside an active
-traversal keeps its original guards; page grouping cannot turn an independently
-readable record into a hidden one. Response-wide work limits and transport
+traversal keeps its budget through every open scope, including intervening
+principal changes; only the live-traversal fact and budget are inherited, never
+another principal's grants or partial answers. Every independently visible row
+remains visible on the page, and every visible row has complete source
+authorization under the unchanged rules. Completed proofs can save traversal
+work: a row refused alone only by the 2,048-node computational guard may become
+visible with a warm page cache. Universal equality of computational refusals is
+not required. Response-wide work limits and transport
 finalization are still part of the pending public integration.
 
 The private freeze stays for the journal's lifetime, following spec materialization.

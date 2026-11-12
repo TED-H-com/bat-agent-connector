@@ -338,3 +338,27 @@ def test_record_boundary_keeps_live_guard_and_rejects_changed_page(db):
         with pytest.raises(OperationError, match='PM_SOURCE_READ_CHANGED'):
             with reads.record(db, OWNER):
                 pytest.fail('Changed page must not start a new traversal')
+
+
+def test_completed_proofs_save_budget_but_never_replace_source_authorization(db):
+    db.execute("INSERT INTO original_source VALUES('hidden',0)")
+    denied = Principal(OWNER.actor, OWNER.scopes, credential_id='denied-credential')
+    def leaf(principal, index):
+        return reads.check(db, principal, 'original_root', str(index),
+                           lambda: principal.credential_id == OWNER.credential_id)
+    def big(principal):
+        return reads.check(db, principal, 'original_root', 'big',
+                           lambda: all(leaf(principal, i) for i in range(reads.MAX_NODES)))
+    assert not big(OWNER)  # Root plus 2,048 leaves exceeds the unchanged cold guard.
+    with reads.scope(db, OWNER):
+        with reads.record(db, OWNER):
+            assert leaf(OWNER, 0)
+        with reads.record(db, OWNER) as state:
+            assert big(OWNER)
+            assert state['budget']['nodes'] == reads.MAX_NODES
+        with reads.record(db, denied):
+            assert not big(denied)  # No completed grant crosses credentials.
+        with reads.record(db, OWNER):
+            assert not reads.check(db, OWNER, 'original_root', 'hidden-root', lambda:
+                big(OWNER) and reads.check(db, OWNER, 'original_root', 'hidden', lambda:
+                    bool(db.execute("SELECT visible FROM original_source WHERE id='hidden'").fetchone()[0])))

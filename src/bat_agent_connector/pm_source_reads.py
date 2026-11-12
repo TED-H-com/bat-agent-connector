@@ -70,8 +70,12 @@ write belongs inside this scope. A loop turn, mutation, closed transaction or
 copied asynchronous context invalidates reuse rather than granting access.
 """
     parent, identity = _parent_scope(db, principal)
+    # A different principal opens a private state with no active nodes of its
+    # own. Carry the enclosing walk through every such frame, not its grants.
+    inherited_live = bool(parent and parent['open'] and (
+        parent['inherited_live'] or parent['active'] or parent['remembering'] or pm_read_cache.is_guarded()))
     if parent is not None and parent['open']:
-        _record = _record and not (parent['active'] or parent['remembering'] or pm_read_cache.is_guarded())
+        _record = _record and not inherited_live
         if parent['identity'] == identity and not _record:
             yield parent
             if not _valid(parent):
@@ -96,6 +100,7 @@ copied asynchronous context invalidates reuse rather than granting access.
             'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
             'guard_contexts': {}, 'partial_sources': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
             'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
+            'inherited_live': inherited_live,
             'budget': parent['budget'] if parent and parent['open'] and not _record else {'nodes': 0}}
         token = _READ.set(state)
         # Establish the WAL read point before any nested source predicate.
@@ -161,7 +166,8 @@ def record(db, principal):
     """Start a collection row's traversal, sharing only snapshot/completed cache.
 
     Lists call this at each row boundary. Nested lists inside a live traversal
-    keep that traversal's budget and guards; they cannot reset an active walk.
+    keep its budget across the whole scope chain, even through principal changes.
+    Principal-specific guards and partial answers remain in their own states.
     Fresh states keep refused/partial answers private to their original record.
     """
     return scope(db, principal, _record=True)
