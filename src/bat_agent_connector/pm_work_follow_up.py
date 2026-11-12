@@ -373,8 +373,8 @@ TURN_RECEIPTS_SQL = """SELECT source_position, document FROM session_results
     WHERE workspace_id=? AND attempt_id=? ORDER BY sequence DESC"""
 
 
-def terminal_receipt_markers(row) -> frozenset[str]:
-    """The existing row-level boundary predicate, shared without new authority."""
+def _receipt_markers_and_boundary(row):
+    """Decode one row without interpreting an unrelated boundary."""
     from . import pm_attempt_results
 
     parsed_pos = pm_attempt_results.parse_source_position(row["source_position"] or "")
@@ -386,10 +386,17 @@ def terminal_receipt_markers(row) -> frozenset[str]:
         doc = {}
     turn_prog = doc.get("turn_progress") if isinstance(doc.get("turn_progress"), dict) else {}
     boundary = doc.get("boundary") or turn_prog.get("boundary")
-    if boundary not in {"turn_done", "agent_error"}:
+    markers = frozenset(marker for marker in (parsed_pos.get("turn_marker"), doc.get("turn_marker"))
+                        if isinstance(marker, str) and marker)
+    return markers, boundary
+
+
+def terminal_receipt_markers(row) -> frozenset[str]:
+    """Project valid terminal evidence; malformed boundaries prove no marker."""
+    markers, boundary = _receipt_markers_and_boundary(row)
+    if not isinstance(boundary, str) or boundary not in {"turn_done", "agent_error"}:
         return frozenset()
-    return frozenset(marker for marker in (parsed_pos.get("turn_marker"), doc.get("turn_marker"))
-                     if isinstance(marker, str) and marker)
+    return markers
 
 
 def _has_turn_boundary_receipt(
@@ -401,7 +408,13 @@ def _has_turn_boundary_receipt(
     if not turn_marker or not _has_table(db, "session_results"):
         return False
     rows = db.execute(TURN_RECEIPTS_SQL, (workspace_id, attempt_id)).fetchall()
-    return any(turn_marker in terminal_receipt_markers(row) for row in rows)
+    for row in rows:
+        markers, boundary = _receipt_markers_and_boundary(row)
+        # Preserve the original predicate's ordering, including its error for an
+        # unhashable relevant boundary. An unrelated row is never interpreted.
+        if turn_marker in markers and boundary in {"turn_done", "agent_error"}:
+            return True
+    return False
 
 
 def _initial_attempt_turn_marker(db, attempt_id: str, fallback: str | None = None) -> str | None:

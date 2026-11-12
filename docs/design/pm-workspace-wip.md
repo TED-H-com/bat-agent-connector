@@ -348,3 +348,9 @@ Attempt. The initial marker already has its own terminal receipt before a direct
 step can run. Either send order keeps the own Result; WIP accepts the same original
 terminal evidence for both holds. At most 500 unique-index seeks per direct pass
 are added; no input-history scan, admission change or extra send is introduced.
+
+Malformed unrelated receipt boundaries do not affect follow-up admission: the
+original marker relevance check still precedes boundary interpretation. The
+single-marker predicate retains its existing error on an unhashable relevant
+boundary; the all-marker WIP/collector projection ignores non-string boundaries
+as no terminal proof. Neither path invents release evidence from malformed rows.
