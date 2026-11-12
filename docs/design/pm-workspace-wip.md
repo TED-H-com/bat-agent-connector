@@ -355,14 +355,28 @@ queue wake and source/generation/attribution requirements do not change.
 ### Shared direct / Work-input markers
 
 The direct step reserves an existing Work-input marker for its own collector step,
-including queued inputs, unless its original operation is failed or cancelled and
-the existing Work-input `receipt_state` proves pre-transport failure/cancellation.
-The original Work `send_sent` fence must not be true. This uses the same saved
-evidence as `unsent()` and `latest_sent_turn`; a never-entered send step has no
-fence, while an entered step writes false before any frame. `NOT_ACCEPTED` after
-a true fence remains reserved. Uncertain or possibly dispatched owners stay
-reserved, as do all nonterminal owners: false alone can still take the existing
-`unsent()` → `RERUN` path. No new release authority or history mutation is added.
+including queued inputs, except for either of these terminal owners:
+
+- Failed/cancelled with a non-true original Work `send_sent` fence and a
+  failed/cancelled `receipt_state`, following the existing Work-input authority.
+- Failed with BAT's explicit `NOT_ACCEPTED` classification, using the same
+  `rejected_turn` predicate as `latest_sent_turn`. This owner cannot resume or
+  produce an own Work turn, even though its rejected frame crossed transport.
+
+A never-entered send step has no fence; an entered current step writes false
+before any frame. An absent fence follows `receipt_state`'s compatibility
+semantics, not physical proof of no transport on every historical build.
+The intermediate `ce53d7ed` admitted Work-target sends without the fenced body;
+`ae30f2e1` connected that body. Available release tags containing the former all
+also contain the latter (13 tags, from `v0.2.6-preview.20261017` through `v0.2.18`).
+No release tag in that inventory exposes this intermediate unfenced Work producer;
+this does not establish what untagged builds were installed.
+
+Uncertain, possibly dispatched, accepted or succeeded owners remain reserved,
+including true-fence `REFUSED` and all failures other than the explicit terminal
+BAT rejection. Missing owners and all nonterminal owners remain reserved: false
+alone can still take the existing `unsent()` → `RERUN` path. No new release
+authority or history mutation is added.
 
 The indexed message-ID lookup is scoped to workspace and Attempt and left-joins
 the original operation and its unique send step. Missing owner evidence retains
@@ -370,7 +384,7 @@ the reservation. At most 500 single-row lookups, each with at most three existin
 unique-index seeks, are added per direct pass; no input-history scan is introduced.
 The initial marker already has its own terminal receipt before a direct step runs.
 Both normal send orders keep the own Result, and WIP accepts the same terminal
-evidence for both holds. Once a skipped owner becomes terminal-unsent, a later
+evidence for both holds. Once a skipped owner becomes terminal-unsent or terminal-rejected, a later
 ordinary eligible pass records the direct receipt under the direct operation;
 that receipt remains excluded from the own Result. Cancellation before/after the
 direct ACK and a pre-frame reused-ID refusal require neither resend nor deletion.
