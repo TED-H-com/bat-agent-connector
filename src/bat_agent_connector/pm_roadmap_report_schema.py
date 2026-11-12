@@ -93,7 +93,7 @@ BASE_MILESTONE = obj(milestone_id=REF, title=TEXT, plan_revision_id=REF, plan_do
     scope_revision=REF, requirement_ids=REFS, work_binding_ids=REFS, baseline_date=nullable(TEXT),
     original_baseline_date=nullable(TEXT), depends_on=REFS)
 BASELINE = obj(title=TEXT, rationale=TEXT, milestones=array(BASE_MILESTONE), changes=JSON)
-FORECAST = obj(milestones=array(obj(milestone_id=REF, forecast_date=nullable(TEXT))))
+FORECAST = obj(baseline_revision_id=REF, milestones=array(obj(milestone_id=REF, forecast_date=nullable(TEXT))))
 QUALITY_CONTEXT = obj(profile=TEXT, plan_revision_id=REF, plan_document_digest=REF,
                       scope_revision=REF, requirement_ids=REFS)
 MATCH = obj(work_item_id=REF, match_status=TEXT, work_binding_id=REF, capture_id=nullable(REF), requirement_ids=REFS)
