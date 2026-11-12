@@ -369,6 +369,29 @@ def _session_kind(
     return None
 
 
+TURN_RECEIPTS_SQL = """SELECT source_position, document FROM session_results
+    WHERE workspace_id=? AND attempt_id=? ORDER BY sequence DESC"""
+
+
+def terminal_receipt_markers(row) -> frozenset[str]:
+    """The existing row-level boundary predicate, shared without new authority."""
+    from . import pm_attempt_results
+
+    parsed_pos = pm_attempt_results.parse_source_position(row["source_position"] or "")
+    try:
+        doc = json.loads(row["document"] or "{}")
+    except (TypeError, ValueError):
+        doc = {}
+    if not isinstance(doc, dict):
+        doc = {}
+    turn_prog = doc.get("turn_progress") if isinstance(doc.get("turn_progress"), dict) else {}
+    boundary = doc.get("boundary") or turn_prog.get("boundary")
+    if boundary not in {"turn_done", "agent_error"}:
+        return frozenset()
+    return frozenset(marker for marker in (parsed_pos.get("turn_marker"), doc.get("turn_marker"))
+                     if isinstance(marker, str) and marker)
+
+
 def _has_turn_boundary_receipt(
     db,
     workspace_id: str,
@@ -377,32 +400,8 @@ def _has_turn_boundary_receipt(
 ) -> bool:
     if not turn_marker or not _has_table(db, "session_results"):
         return False
-    from . import pm_attempt_results
-
-    rows = db.execute(
-        """SELECT source_position, document FROM session_results
-           WHERE workspace_id=? AND attempt_id=?
-           ORDER BY sequence DESC""",
-        (workspace_id, attempt_id),
-    ).fetchall()
-    for row in rows:
-        parsed_pos = pm_attempt_results.parse_source_position(row["source_position"] or "")
-        matched_marker = parsed_pos.get("turn_marker") == turn_marker
-        try:
-            doc = json.loads(row["document"] or "{}")
-        except (TypeError, ValueError):
-            doc = {}
-        if not isinstance(doc, dict):
-            doc = {}
-        if not matched_marker and doc.get("turn_marker") == turn_marker:
-            matched_marker = True
-        if not matched_marker:
-            continue
-        turn_prog = doc.get("turn_progress") if isinstance(doc.get("turn_progress"), dict) else {}
-        boundary = doc.get("boundary") or turn_prog.get("boundary")
-        if boundary in {"turn_done", "agent_error"}:
-            return True
-    return False
+    rows = db.execute(TURN_RECEIPTS_SQL, (workspace_id, attempt_id)).fetchall()
+    return any(turn_marker in terminal_receipt_markers(row) for row in rows)
 
 
 def _initial_attempt_turn_marker(db, attempt_id: str, fallback: str | None = None) -> str | None:

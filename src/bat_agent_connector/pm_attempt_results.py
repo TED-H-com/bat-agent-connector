@@ -1561,7 +1561,7 @@ class AttemptResultCollector:
     def _direct_candidate(self, cand: dict[str, Any]) -> dict[str, Any] | None:
         """Select at most one direct input after the unchanged existing step."""
         from . import pm_direct_inputs
-        from .pm_work_follow_up import _has_turn_boundary_receipt
+        from .pm_work_follow_up import TURN_RECEIPTS_SQL, terminal_receipt_markers
 
         # No receipt queries or check writes when no eligible direct input exists.
         inputs = pm_direct_inputs.eligible(self.ops.db, cand["handoff_operation_id"],
@@ -1571,13 +1571,14 @@ class AttemptResultCollector:
             return None
         if not inputs:
             return None
-        if not _has_turn_boundary_receipt(self.ops.db, cand["workspace_id"],
-                cand["attempt_id"], cand["turn_marker"]):
+        terminal = set()
+        for row in self.ops.db.execute(TURN_RECEIPTS_SQL, (cand["workspace_id"], cand["attempt_id"])):
+            terminal.update(terminal_receipt_markers(row))
+        if cand["turn_marker"] not in terminal:
             self._record_direct_check(cand["attempt_id"], "existing_turn_not_collected")
             return None
         for value in inputs:
-            if not _has_turn_boundary_receipt(self.ops.db, cand["workspace_id"],
-                    cand["attempt_id"], value["marker"]):
+            if value["marker"] not in terminal:
                 return {**cand, "turn_marker": value["marker"],
                         "receipt_operation_id": value["operation_id"], "direct_marker": value}
         self._record_direct_check(cand["attempt_id"], "unchanged")

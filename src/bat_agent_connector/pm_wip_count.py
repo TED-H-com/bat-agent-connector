@@ -371,9 +371,10 @@ class _Collector:
         receipts = self.rows("SELECT * FROM session_results WHERE workspace_id=? AND attempt_id=? ORDER BY sequence DESC LIMIT ?",
                              (self.wid, aid))
         required = later_markers | {marker}
-        matched = set()
+        matched, terminal = set(), set()
         for row in receipts:
             self.source(row["operation_id"])
+            terminal.update(pm_work_follow_up.terminal_receipt_markers(row))
             doc = pm_evidence._body(row["document"])
             pos = pm_attempt_results.parse_source_position(row["source_position"])
             result_marker = pos.get("turn_marker") or doc.get("turn_marker")
@@ -386,8 +387,7 @@ class _Collector:
                 return False
             matched.add(result_marker)
         # Existing terminal boundary predicate, after exact original-source checks.
-        return required <= matched and all(pm_work_follow_up._has_turn_boundary_receipt(self.db, self.wid, aid, turn)
-                                           for turn in required)
+        return required <= matched and required <= terminal
 
     def start(self, op, attempt=None):
         intent = pm_work_start._intent(op)

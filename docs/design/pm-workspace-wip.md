@@ -322,3 +322,15 @@ recover an exact transcript echo or its durable accepted-turn registry record
 without resending. An unobserved lost ACK (notably Codex without that registry
 record) can exhaust retries without proof; this remains an inherited unresolved
 hold, not a new release authority. Unknown evidence never becomes zero.
+
+
+### Receipt work is charged once
+
+The original follow-up terminal-boundary predicate is shared at row level.
+`_has_turn_boundary_receipt` retains its behavior (either stored position or
+receipt-document marker, terminal `turn_done`/`agent_error`). WIP applies that
+predicate once to its already authorized, record-budget-charged receipt rows;
+it never performs an uncharged receipt query per required marker. The additive
+collector step likewise reads the Attempt receipt range once, builds its terminal
+marker set, then chooses the earliest eligible missing marker. Existing selection,
+queue wake and source/generation/attribution requirements do not change.
