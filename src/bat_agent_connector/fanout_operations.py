@@ -251,6 +251,7 @@ async def stop_planner(ctx, plan):
             base = {'actor': ctx.actor, 'tool': 'api:fanout.start', 'host': host, 'session_id': sid + '#stop'}
             audit.record(**base, channel='claude:stop-session', phase='attempt')
             sent = False
+            reply_outcome = None
             ctx.set_refs(fanout_stop_sent=False)
             def fence():
                 nonlocal sent
@@ -259,14 +260,15 @@ async def stop_planner(ctx, plan):
             try:
                 result = await client.invoke('claude:stop-session', {'sessionId': sid}, grant=grant, retry_on_disconnect=False,
                     before_frame=lambda: _idle(ctx, plan, client.guard_read), before_send=lambda: _stop_guard(ctx, plan), on_transport=fence)
+                reply_outcome = 'error' if isinstance(result, dict) and result.get('ok') is False else 'unknown'
                 if not isinstance(result, dict) or result.get('ok') is not True:
                     raise AmbiguousOutcome('planner stop reply did not prove acceptance')
             except (BatError, OSError, asyncio.TimeoutError) as exc:
-                audit.record_after_effect(effect_outcome=audit_error_outcome(exc), effect_sent=sent, **base, channel='claude:stop-session', phase='result', ok=False)
+                audit.record_after_effect(effect_outcome=reply_outcome or audit_error_outcome(exc), effect_sent=sent, **base, channel='claude:stop-session', phase='result', ok=False)
                 if sent:
                     raise AmbiguousOutcome('planner stop was sent without a proven reply') from exc
                 raise StepFailed('FANOUT_STOP_NOT_SENT', 'planner stop was not sent; retained for review') from exc
-            audit.record_after_effect(effect_outcome="accepted", **base, channel='claude:stop-session', phase='result', ok=True)
+            audit.record_after_effect(effect_sent=sent, effect_outcome="accepted", **base, channel='claude:stop-session', phase='result', ok=True)
             return {'stopped': True, 'result': result}
     async def recover(_):
         # Only read. No unknown stop intent ever authorizes a resend.

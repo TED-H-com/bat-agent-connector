@@ -679,12 +679,27 @@ rows；不能宣稱 event bytes 或游標不變。False 與 true 各經一次 re
 ## Post-effect audit append failures
 
 `Audit.record` remains strict for intent records before an effect.
-`Audit.record_after_effect(effect_outcome=..., **fields)` is the single reviewed
+`Audit.record_after_effect(effect_sent=..., effect_outcome=..., **fields)` is the single reviewed
 post-effect entry point for `result`, `append-terminal`, `rollback` and `record`.
-A broad exception handler that also covers pre-dispatch guards passes its existing
-`effect_sent` fence: false retains strict append behavior and cannot create a
-post-effect warning.
-`OpContext.step` binds an execution-local warning sink. Append failures at mkdir,
+`effect_sent` is required at every call site. A frame's audit flag is set by its
+existing `on_transport` callback after preceding callback work completes. A helper
+may forward that callback to its exact frame (for example `workspace:save` in tab
+registration); it must not move guards, change `_roundtrip` or add a context side
+channel. Conservative recovery fences retain their original positions and meaning;
+they are not audit transport proof. A broad handler uses the frame's audit flag:
+false retains strict append behavior and creates no warning/event. Local testimony
+writes and rollback verified by absence use the completion evidence already present.
+
+`accepted` requires the path's own positive boolean acknowledgement or a completed
+local effect. Negative acknowledgement is `error`; a reply missing the required
+boolean is `unknown`. Preserve primary statuses/codes, including conservative
+uncertainty after a negative ACK.
+`OpContext.step` binds an execution-local warning sink with a shared open-scope
+lifetime. On scope exit it is invalidated before the ContextVar is reset, including
+copies inherited by child tasks. A live child can contribute to the enclosing step;
+a deferred child after exit is unbound and its append failure raises. Sibling and
+nested scopes retain independent lifetimes. This creates no pending audit obligation.
+Append failures at mkdir,
 open, write, flush or close cannot replace the effect's reply or exception. The
 sink buffers bounded warnings; step settlement writes `external_refs.audit_results`
 and one allowlisted `operation.audit_result_failed` event per stable effect ID in

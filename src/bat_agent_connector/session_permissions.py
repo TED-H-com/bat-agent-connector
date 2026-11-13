@@ -309,6 +309,7 @@ async def execute(ctx, fleet, host, sid, mode, guard):
                 nonlocal rate_checked
                 live = None
                 sent = False
+                audit_sent = False
 
                 def check():
                     from .bulk_approval import check_child
@@ -349,7 +350,7 @@ async def execute(ctx, fleet, host, sid, mode, guard):
                     check()
 
                 def transported():
-                    nonlocal sent, rate_checked
+                    nonlocal sent, audit_sent, rate_checked
                     if not rate_checked:
                         audit.check_rate(host, sid + "#perm", permission_operation_id=ctx.operation_id)
                         rate_checked = True
@@ -357,18 +358,19 @@ async def execute(ctx, fleet, host, sid, mode, guard):
                     sent = True
                     if guard:
                         guard.frames.append(True)
+                    audit_sent = True
                 try:
                     result = await client.invoke(call["channel"], call["params"], grant=grant,
                         before_frame=before_frame, before_send=check, on_transport=transported)
                 except (BatError, OSError, asyncio.TimeoutError) as exc:
                     if sent:
-                        audit.record_after_effect(effect_outcome=audit_error_outcome(exc), **audit_base, channel=call["channel"], phase="result", ok=False,
+                        audit.record_after_effect(effect_sent=audit_sent, effect_outcome=audit_error_outcome(exc), **audit_base, channel=call["channel"], phase="result", ok=False,
                                      error="permission ACK unproven")
                         raise AmbiguousOutcome("permission frame was sent without a proven ACK") from exc
                     if isinstance(exc, ConnectionLost | InvokeTimeout | OSError | asyncio.TimeoutError):
                         raise StepFailed("PERMISSIONS_NOT_SENT", "permission frame was not sent; submit a new operation key after connectivity recovers") from exc
                     raise
-                audit.record_after_effect(effect_outcome="accepted" if result is True else "unknown", **audit_base, channel=call["channel"], phase="result", ok=result is True)
+                audit.record_after_effect(effect_sent=audit_sent, effect_outcome="accepted" if result is True else "error" if result is False else "unknown", **audit_base, channel=call["channel"], phase="result", ok=result is True)
                 if result is not True:
                     raise AmbiguousOutcome("permission frame did not return a literal true ACK")
                 return {"channel": call["channel"], "result": True}

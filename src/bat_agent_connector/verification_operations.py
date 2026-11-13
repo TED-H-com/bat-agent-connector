@@ -130,7 +130,7 @@ async def run(ctx):
             _guard(ctx)
             row = verification.record(**plan["record"], operation_id=ctx.operation_id)
         fleet = ctx.service.context["fleet"]
-        Audit(fleet.config.safety).record_after_effect(effect_outcome="accepted", actor=ctx.actor, tool=ACTION, host=row["host"],
+        Audit(fleet.config.safety).record_after_effect(effect_sent=True, effect_outcome="accepted", actor=ctx.actor, tool=ACTION, host=row["host"],
             session_id=row["session_id"], phase="record", operation_id=ctx.operation_id,
             candidate_commit=row["candidate_commit"], exit_code=row["exit_code"])
         return row

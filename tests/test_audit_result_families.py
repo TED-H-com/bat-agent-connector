@@ -10,6 +10,7 @@ from bat_agent_connector import lifecycle, safety
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.operations import ActionDef
 from tests import test_api_v1 as api
+from tests import test_cleanup as cleanup_tests
 from tests import test_failover_operations as failover
 from tests import test_fanout_operations as fanout
 from tests import test_operations_unification as task_tests
@@ -17,12 +18,238 @@ from tests import test_session_start_operations as starts
 from tests import test_verification_operations as verification
 from tests import test_worktree_merge_operations as merge
 from tests.conftest import adopt
-from tests.operation_helpers import settle_operations
+from tests.operation_helpers import settle_operations, stop_workers
 from tests.test_audit_result_warnings import inject_append_fault
 from tests.test_lifecycle import _add_wt_claude
 
 daemon, owned = api.daemon, task_tests.owned
 carriers, host_git_context = merge.carriers, merge.host_git_context
+human = cleanup_tests.human
+
+
+@pytest.fixture
+def cleanup_daemon(mock, human, tmp_path):
+    # Keep cleanup's live-terminal setup local to these tests, not autouse for
+    # the rest of the family matrix.
+    cleanup_tests.known_live_terminals.__wrapped__(mock)
+    yield from cleanup_tests.daemon.__wrapped__(mock, human, tmp_path)
+
+
+@pytest.mark.parametrize('fault', [False, True])
+async def test_negative_cleanup_ack_keeps_primary_outcome(cleanup_daemon, mock, monkeypatch, fault):
+    """R1-S2: fault=True fails on 70de7942; the no-fault outcome is unchanged."""
+    from bat_agent_connector import cleanup
+    d = cleanup_daemon
+    try:
+        cp, created = await cleanup_tests.setup_work(d, mock)
+        sid = created['result']['session_id']
+        doc = await cleanup.preview(d.ops, cleanup_tests.CLEANER,
+                                    {'kind': 'checkpoint', 'checkpoint_id': cp['checkpoint_id']})
+        mock.handlers['claude:stop-session'] = lambda _: {'ok': False}
+        if fault:
+            fail_result(monkeypatch, d, mock, 'claude:stop-session', 'accepted', 'open', True)
+        done = await cleanup_tests.apply(d, doc)
+        assert (done['status'], done['error_code']) == ('uncertain', 'UNCERTAIN')
+        assert sum(f['channel'] == 'claude:stop-session' and f['params']['sessionId'] == sid
+                   for f in mock.invokes) == 1
+        if fault:
+            assert_warning(d, done, 'error', 'open')
+        else:
+            assert not done['external_refs'].get('audit_results')
+    finally:
+        await stop_workers(d.ops)
+        await d.fleet.close()
+        await d.inventory.close()
+
+
+@pytest.mark.parametrize('case', ['guard', 'load', 'grant', 'lost-reply'])
+async def test_append_terminal_transport_boundary(cleanup_daemon, mock, monkeypatch, case):
+    """A17: pre-save cases fail on 70de7942; lost-reply already keeps its outcome."""
+    from bat_agent_connector import client as client_module
+    from bat_agent_connector.errors import WriteRefused
+    d = cleanup_daemon
+    c = d.fleet.client('h1')
+    try:
+        cp = await cleanup_tests.make_checkpoint(d)
+        d.fleet.config.host('h1').orchestrate_register_tabs = True
+        in_tab = False
+        append, checked, grant = c.append_workspace_terminal, c._invoke_checked, client_module.check_grant
+
+        async def tab(*args, **kw):
+            nonlocal in_tab
+            in_tab = True
+            try:
+                return await append(*args, **kw)
+            finally:
+                in_tab = False
+
+        async def invoke(channel, *args, **kw):
+            if in_tab and case == 'load' and channel == 'workspace:load':
+                raise WriteRefused('synthetic tab load refused')
+            if in_tab and case == 'guard' and channel == 'workspace:save':
+                async def refuse():
+                    raise WriteRefused('synthetic save guard refused')
+                kw['before_frame'] = refuse
+            return await checked(channel, *args, **kw)
+
+        def check_grant(g, host, channel, params):
+            grant(g, host, channel, params)
+            if in_tab and case == 'grant' and channel == 'workspace:save':
+                raise WriteRefused('synthetic save grant refused')
+
+        monkeypatch.setattr(c, 'append_workspace_terminal', tab)
+        monkeypatch.setattr(c, '_invoke_checked', invoke)
+        monkeypatch.setattr(client_module, 'check_grant', check_grant)
+        calls = fail_result(monkeypatch, d, mock, 'workspace:save',
+                            'unknown' if case == 'lost-reply' else 'accepted', 'open', True)
+        done = await cleanup_tests.run(d, 'checkpoint.continue', {'checkpoint_id': cp['checkpoint_id']},
+                                       {'instructions': 'synthetic tab boundary'}, key='tab-boundary')
+        assert calls
+        assert mock.channels().count('workspace:save') == (1 if case == 'lost-reply' else 0)
+        if case == 'lost-reply':
+            assert done['status'] == 'succeeded'
+            assert_warning(d, done, 'unknown', 'open')
+            assert next(iter(done['external_refs']['audit_results'].values()))['phase'] == 'append-terminal'
+        else:
+            assert (done['status'], done['error_code']) == ('failed', 'REFUSED')
+            assert not done['external_refs'].get('audit_results')
+            assert not [e for e in d.journal.api_events(0, 500, resource_id=done['operation_id'])['events']
+                        if e['kind'] == 'operation.audit_result_failed']
+        before = list(mock.invokes)
+        again = await cleanup_tests.run(d, 'checkpoint.continue', {'checkpoint_id': cp['checkpoint_id']},
+                                        {'instructions': 'synthetic tab boundary'}, key='tab-boundary')
+        assert again == done and mock.invokes == before
+    finally:
+        await stop_workers(d.ops)
+        await d.fleet.close()
+        await d.inventory.close()
+
+
+@pytest.mark.parametrize('reply,outcome', [({'ok': True}, 'accepted'), ({'ok': False}, 'error'),
+    ({}, 'unknown'), ({'accepted': True}, 'unknown'), ({'ok': 'yes'}, 'unknown')])
+async def test_stop_warning_requires_its_own_boolean(daemon, mock, monkeypatch, reply, outcome):
+    """Non-positive cases fail on 70de7942; _stop's primary result is unchanged."""
+    d = daemon
+    adopt(api.MANUAL)
+    mock.handlers['claude:stop-session'] = lambda _: reply
+    fail_result(monkeypatch, d, mock, 'claude:stop-session', 'accepted', 'open', True)
+
+    async def run(ctx):
+        return await ctx.step('stop', lambda: lifecycle._stop(d.fleet, 'h1', api.MANUAL,
+                              safety.Audit(d.fleet.config.safety), cleanup=True))
+    d.ops.register(ActionDef('test.stop', 'operate', 'test', run))
+    try:
+        op, _ = d.ops.create(api.dashboard_principal(), action='test.stop', idempotency_key='stop-ack')
+        await settle_operations(d.ops)
+        done = d.ops.get(op['operation_id'])
+        assert done['status'] == 'succeeded'
+        assert done['result'] == {'stopped': True, 'result': reply}
+        assert_warning(d, done, outcome, 'open')
+        assert mock.channels().count('claude:stop-session') == 1
+    finally:
+        await stop_workers(d.ops)
+        await d.fleet.close()
+        await d.inventory.close()
+
+
+async def test_failover_recovery_fence_is_not_audit_transport(daemon, mock, monkeypatch):
+    """Fails on 70de7942: its conservative sent flag precedes registry writes."""
+    from bat_agent_connector import failover_operations
+    from bat_agent_connector.errors import WriteRefused
+    d = daemon
+    _add_wt_claude(mock, failover.SID)
+    mock.handlers['git:log'] = lambda _: [{'hash': starts.SHA}]
+    update = failover_operations.registry.update
+
+    def refused(host, sid, **fields):
+        if fields.get('start_sent') is True:
+            raise WriteRefused('synthetic recovery-fence storage refusal')
+        return update(host, sid, **fields)
+
+    monkeypatch.setattr(failover_operations.registry, 'update', refused)
+    fail_result(monkeypatch, d, mock, 'claude:start-session', 'accepted', 'open', True)
+    try:
+        done = await failover.create(d)
+        assert (done['status'], done['error_code']) == ('failed', 'REFUSED')
+        assert not done['external_refs'].get('audit_results')
+        assert 'claude:start-session' not in mock.channels()
+        assert not [e for e in d.journal.api_events(0, 500)['events']
+                    if e['kind'] == 'operation.audit_result_failed']
+    finally:
+        await stop_workers(d.ops)
+        await d.fleet.close()
+        await d.inventory.close()
+
+
+@pytest.mark.parametrize('kind,channel,key', [
+    ('permission', 'claude:set-permission-mode', None),
+    ('start', 'claude:start-session', 'ok'),
+    ('prompt', 'claude:send-message', 'accepted'),
+    ('create', 'worktree:create', 'success'),
+])
+@pytest.mark.parametrize('ack', [False, None], ids=['negative', 'missing'])
+@pytest.mark.parametrize('fault', [False, True])
+async def test_legacy_ack_warning_preserves_primary(daemon, mock, monkeypatch, kind, channel, key, ack, fault):
+    """70de7942 fails negative permission/prompt and all missing-ACK warnings.
+
+    No-fault controls and negative create/start already pass there.
+    """
+    from bat_agent_connector import orchestrate
+    d = daemon
+    adopt(api.MANUAL)
+    mock.handlers['git:log'] = lambda _: [{'hash': starts.SHA}]
+    c = d.fleet.client('h1')
+    roundtrip = c._roundtrip
+
+    async def reply(frame, *args, **kw):
+        result = await roundtrip(frame, *args, **kw)
+        if frame.get('channel') == channel:
+            result = dict(result)
+            if key is None:
+                result['result'] = ack
+            else:
+                payload = dict(result['result'])
+                if ack is None:
+                    payload.pop(key, None)
+                    if key == "accepted":
+                        payload.pop("ok", None)
+                else:
+                    payload[key] = ack
+                result['result'] = payload
+        return result
+
+    monkeypatch.setattr(c, '_roundtrip', reply)
+    if fault:
+        fail_result(monkeypatch, d, mock, channel, 'accepted', 'open', True)
+
+    async def run(ctx):
+        async def effect():
+            if kind == 'permission':
+                return await lifecycle.session_set_permissions(d.fleet, 'h1', api.MANUAL, 'default', confirm=True)
+            return await orchestrate.session_start(d.fleet, 'h1', 'demo-project', confirm=True,
+                use_worktree=kind == 'create', prompt='synthetic initial prompt' if kind == 'prompt' else None)
+        return await ctx.step('legacy-ack', effect)
+    d.ops.register(ActionDef('test.legacy-ack', 'operate', 'test', run))
+    try:
+        op, _ = d.ops.create(api.dashboard_principal(), action='test.legacy-ack', idempotency_key='legacy-ack')
+        await settle_operations(d.ops)
+        done = d.ops.get(op['operation_id'])
+        expected = ('failed', 'REFUSED') if ack is False and kind in {'start', 'create'} else ('succeeded', None)
+        assert (done['status'], done['error_code']) == expected
+        assert mock.channels().count(channel) == 1
+        warnings = done['external_refs'].get('audit_results', {})
+        if fault:
+            assert len(warnings) == 1
+            assert next(iter(warnings.values()))['effect_outcome'] == ('error' if ack is False else 'unknown')
+            events = [e for e in d.journal.api_events(0, 500, resource_id=op['operation_id'])['events']
+                      if e['kind'] == 'operation.audit_result_failed']
+            assert len(events) == 1
+        else:
+            assert not warnings
+    finally:
+        await stop_workers(d.ops)
+        await d.fleet.close()
+        await d.inventory.close()
 
 FAMILIES = [
     ('A01-resume', 'claude:client-resume'), ('A02-send', 'claude:send-message'),

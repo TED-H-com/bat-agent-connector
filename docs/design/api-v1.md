@@ -432,6 +432,20 @@ are described in [host deployment status](host-deploy-status.md).
 
 ### Post-effect audit warnings
 
+Every post-effect audit call explicitly supplies `effect_sent`. For a BAT frame this
+is the existing `on_transport` signal for that frame, after preceding callback work
+has completed; a conservative recovery fence such as `direct_send_dispatch` is not
+proof of transport. Guards still run in their original order. Completed local effects
+use their existing completion evidence. If the frame was not sent, append failure
+remains strict and produces no post-effect warning or event.
+
+A bound warning sink is valid only while its operation step scope is open. Child
+tasks can contribute while that scope is open; a copied context after scope exit is
+unbound and append failure raises. `accepted` requires the path's own positive
+boolean acknowledgement (or a proven completed local effect); an explicit negative
+acknowledgement is `error`, and a missing required boolean is `unknown`. These
+classifications describe the warning and do not change the primary outcome.
+
 An audit append failure after an effect does not change the operation's outcome.
 A known success keeps its receipt, a known error keeps its original classification,
 and an unknown result continues the original sent-effect reconciliation. The API,

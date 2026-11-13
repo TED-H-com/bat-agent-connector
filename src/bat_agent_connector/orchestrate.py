@@ -33,7 +33,7 @@ from . import confinement, registry, resource_policy, task_control
 from .errors import BatError, ResourceReadOnly, WriteRefused
 from .fleet import Fleet
 from .resource_policy import WriteGrant
-from .safety import Audit, audit_error_outcome
+from .safety import Audit, audit_error_outcome, audit_reply_outcome
 from .service import _err, _meta, _resolve_session, _workspace, _write_lock, agent_kind
 
 MERGED_KINDS = {"ancestor", "patch-equivalent"}
@@ -330,8 +330,14 @@ async def session_start(
         base = {"actor": fleet.actor, "tool": "session_start", "host": host, "session_id": sid}
         wt: dict = {}
         worktree_created = False
+        create_transported = False
+        retained_worktree = False
+        def create_transport():
+            nonlocal create_transported
+            create_transported = True
         base_commit = None
         start_confirmed = False
+        start_outcome = None
         start_frame = confinement.StartFrame(host, sid, journal=getattr(fleet, "confinement_journal", None),
                                              task_id=task_id)
         meta = None
@@ -348,7 +354,7 @@ async def session_start(
             registry.update(host, sid, cwd=folder, worktree_path=None, branch=None,
                             worktree_rolled_back=True, rolled_back_worktree_path=wt.get("worktreePath"),
                             rolled_back_branch=wt.get("branchName"))
-            audit.record_after_effect(effect_outcome="accepted", **base, channel="worktree:remove", phase="rollback", ok=True,
+            audit.record_after_effect(effect_sent=True, effect_outcome="accepted", **base, channel="worktree:remove", phase="rollback", ok=True,
                          worktree_path=wt.get("worktreePath"), branch=wt.get("branchName"))
 
         try:
@@ -358,24 +364,27 @@ async def session_start(
                     if (not isinstance(wt, dict) or wt.get("worktreePath") != previous["worktree_path"]
                             or wt.get("branchName") != previous.get("branch")):
                         raise WriteRefused("unsent start's worktree identity is unavailable or changed")
+                    # This result describes an earlier creation, confirmed by readback.
+                    # No current frame signal can prove that historical effect unsent.
+                    retained_worktree = True
                 else:
                     audit.record(**base, channel="worktree:create", phase="attempt")
                     wt = await c.invoke(
                         "worktree:create", {"sessionId": sid, "cwd": folder, "installPnpm": False,
                                              **({"baseBranch": base_branch} if base_branch else {})},
-                        grant=grant, before_send=_task_start_guard,
+                        grant=grant, before_send=_task_start_guard, on_transport=create_transport,
                     )
                     worktree_created = True
                 if not isinstance(wt, dict) or wt.get("success") is False or not wt.get("worktreePath"):
                     err = (wt or {}).get("error") if isinstance(wt, dict) else "unexpected reply"
-                    audit.record_after_effect(effect_outcome="error", **base, channel="worktree:create", phase="result", ok=False, error=str(err))
+                    audit.record_after_effect(effect_sent=create_transported or retained_worktree, effect_outcome="error" if isinstance(wt, dict) and wt.get("success") is False else "unknown", **base, channel="worktree:create", phase="result", ok=False, error=str(err))
                     raise WriteRefused(f"worktree:create failed: {err}")
                 if base_branch and wt.get("sourceBranch") != base_branch:
-                    audit.record_after_effect(effect_outcome="error", **base, channel="worktree:create", phase="result", ok=False,
+                    audit.record_after_effect(effect_sent=create_transported or retained_worktree, effect_outcome="error", **base, channel="worktree:create", phase="result", ok=False,
                                  error="host ignored requested base branch", requested_base_branch=base_branch,
                                  source_branch=wt.get("sourceBranch"))
                     raise WriteRefused("worktree:create did not honor requested base branch")
-                audit.record_after_effect(effect_outcome="accepted",
+                audit.record_after_effect(effect_sent=create_transported or retained_worktree, effect_outcome=audit_reply_outcome(wt, key="success"),
                     **base, channel="worktree:create", phase="result", ok=True, branch=wt.get("branchName"),
                     source_branch=wt.get("sourceBranch"), requested_base_branch=base_branch
                 )
@@ -420,6 +429,9 @@ async def session_start(
                 started = await c.invoke("claude:start-session", {"sessionId": sid, "options": opts}, grant=grant,
                                          before_frame=before_start_frame, before_send=_task_start_guard,
                                          on_transport=start_frame.on_transport)
+                start_outcome = audit_reply_outcome(started, key="ok")
+                if start_outcome == "accepted" and started.get("sessionId") != sid:
+                    start_outcome = "unknown"
                 if (not isinstance(started, dict) or started.get("ok") is False or
                         started.get("sessionId") != sid):
                     raise WriteRefused("BAT start reply did not confirm the reserved session ID")
@@ -441,11 +453,11 @@ async def session_start(
             except BatError as e:
                 if start_confirmed or start_frame.sent:
                     retain_on_error = True  # Even invoke-error may follow creation of the BAT session.
-                audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:start-session", phase="result", ok=False, error=_err(e))
+                audit.record_after_effect(effect_sent=start_frame.sent, effect_outcome=start_outcome or audit_error_outcome(e), **base, channel="claude:start-session", phase="result", ok=False, error=_err(e))
                 if worktree_created and not retain_on_error:  # may have reached BAT on timeout
                     await rollback_worktree()
                 raise
-            audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:start-session", phase="result", ok=True)
+            audit.record_after_effect(effect_sent=start_frame.sent, effect_outcome=audit_reply_outcome(started, key="ok"), **base, channel="claude:start-session", phase="result", ok=True)
         except BaseException as e:
             unsent = not start_frame.sent and not start_confirmed
             retain_on_error = retain_on_error or start_confirmed or start_frame.sent
@@ -490,15 +502,22 @@ async def session_start(
             if use_worktree:
                 term.update(worktreePath=wt["worktreePath"], worktreeBranch=wt.get("branchName"))
             tab_outcome = "unknown"
+            tab_transported = False
+            def tab_transport():
+                nonlocal tab_transported
+                tab_transported = True
             try:
                 tab = await c.append_workspace_terminal(hc.profile_id, term,
                                                         grant=resource_policy.authorize_register_tab(host, sid),
                                                         before_send=_task_start_guard if _start_frame_check else None,
-                                                        before_frame=_start_frame_check)
+                                                        before_frame=_start_frame_check,
+                                                        on_transport=tab_transport)
+                tab_outcome = ("accepted" if tab.get("appended") is True and tab.get("saved") is True else
+                               "error" if tab.get("saved") is False else "unknown")
             except BatError as e:
                 tab = {"appended": False, "error": _err(e)}
                 tab_outcome = audit_error_outcome(e)
-            audit.record_after_effect(effect_outcome="accepted" if bool(tab.get("appended")) else tab_outcome,
+            audit.record_after_effect(effect_sent=tab_transported, effect_outcome=tab_outcome,
                 **base,
                 channel="workspace:save",
                 phase="append-terminal",
@@ -510,17 +529,23 @@ async def session_start(
         if prompt:
             mid = f"batc-{uuid.uuid4()}"
             audit.record(**base, channel="claude:send-message", phase="attempt", message_id=mid, text=prompt)
+            prompt_transported = False
+            prompt_outcome = None
+            def prompt_transport():
+                nonlocal prompt_transported
+                prompt_transported = True
             try:
                 ack = await c.invoke(
                     "claude:send-message", {"sessionId": sid, "prompt": prompt, "clientMessageId": mid},
                     retry_on_disconnect=agent == "claude", grant=grant,
-                    before_frame=lambda: confinement.guard_frame(c, host, sid),
+                    before_frame=lambda: confinement.guard_frame(c, host, sid), on_transport=prompt_transport,
                 )
+                prompt_outcome = audit_reply_outcome(ack.get("accepted", ack.get("ok")) if isinstance(ack, dict) else None)
                 if not isinstance(ack, dict) or not (ack.get("accepted") or ack.get("ok")):
                     raise WriteRefused("initial prompt was not accepted by BAT")
-                audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:send-message", phase="result", ok=True, message_id=mid)
+                audit.record_after_effect(effect_sent=prompt_transported, effect_outcome=audit_reply_outcome(ack.get("accepted", ack.get("ok"))), **base, channel="claude:send-message", phase="result", ok=True, message_id=mid)
             except BatError as e:
-                audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:send-message", phase="result", ok=False, error=_err(e))
+                audit.record_after_effect(effect_sent=prompt_transported, effect_outcome=prompt_outcome or audit_error_outcome(e), **base, channel="claude:send-message", phase="result", ok=False, error=_err(e))
                 return {
                     "host": host,
                     "session_id": sid,
@@ -620,9 +645,14 @@ async def worktree_merge(fleet: Fleet, host: str, session_id: str, confirm: bool
             }
         base = {"actor": fleet.actor, "tool": "worktree_merge", "host": host, "session_id": sid + "#merge"}
         audit.record(**base, channel="worktree:merge", phase="attempt", branch=st.get("branchName"))
-        r = await c.invoke("worktree:merge", {"sessionId": sid, "strategy": "merge"}, grant=grant)
+        merge_transported = False
+        def merge_transport():
+            nonlocal merge_transported
+            merge_transported = True
+        r = await c.invoke("worktree:merge", {"sessionId": sid, "strategy": "merge"}, grant=grant,
+                           on_transport=merge_transport)
         ok = isinstance(r, dict) and r.get("success") is True
-        audit.record_after_effect(effect_outcome="accepted" if ok else "error",
+        audit.record_after_effect(effect_sent=merge_transported, effect_outcome=audit_reply_outcome(r, key="success"),
             **base,
             channel="worktree:merge",
             phase="result",

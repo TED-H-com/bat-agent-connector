@@ -24,13 +24,21 @@ AUDIT_EFFECT_OUTCOMES = frozenset({"accepted", "error", "unknown"})
 _result_sink = ContextVar("audit_result_sink", default=None)
 
 
+class _ResultAuditSink:
+    def __init__(self, collect):
+        self.collect = collect
+        self.active = True
+
+
 @contextmanager
 def result_audit_sink(sink):
     """Bind an execution-local sink; it buffers warnings, never performs an external effect."""
-    token = _result_sink.set(sink)
+    binding = _ResultAuditSink(sink)
+    token = _result_sink.set(binding)
     try:
         yield
     finally:
+        binding.active = False
         _result_sink.reset(token)
 
 
@@ -42,9 +50,11 @@ def audit_error_outcome(error: BaseException) -> str:
                                            asyncio.CancelledError, AmbiguousOutcome)) else "error"
 
 
-def audit_reply_outcome(reply: Any) -> str:
+def audit_reply_outcome(reply: Any, *, key: str | None = None) -> str:
     """Classify explicit remote acceptance, without treating a malformed ACK as success."""
-    if isinstance(reply, dict):
+    if key is not None:
+        reply = reply.get(key) if isinstance(reply, dict) else None
+    elif isinstance(reply, dict):
         reply = next((reply[key] for key in ("accepted", "ok", "success") if key in reply), None)
     return "accepted" if reply is True else "error" if reply is False else "unknown"
 
@@ -127,7 +137,7 @@ class Audit:
     def record(self, **fields: Any) -> None:
         self._record(fields)
 
-    def record_after_effect(self, *, effect_outcome: str, effect_sent: bool = True, **fields: Any) -> None:
+    def record_after_effect(self, *, effect_outcome: str, effect_sent: bool, **fields: Any) -> None:
         """Account for an append failure without replacing an already sent effect's result.
 
         Only explicitly reviewed post-effect sites use this entry point. Without
@@ -136,7 +146,9 @@ class Audit:
         """
         if fields.get("phase") not in POST_EFFECT_PHASES or effect_outcome not in AUDIT_EFFECT_OUTCOMES:
             raise ValueError("invalid post-effect audit classification")
-        self._record(fields, sink=_result_sink.get() if effect_sent else None, effect_outcome=effect_outcome)
+        binding = _result_sink.get()
+        sink = binding.collect if effect_sent and binding is not None and binding.active else None
+        self._record(fields, sink=sink, effect_outcome=effect_outcome)
 
     def _record(self, fields: dict, *, sink=None, effect_outcome=None) -> None:
         text = fields.pop("text", None)

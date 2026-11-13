@@ -106,7 +106,7 @@ async def test_shared_effect_boundary(daemon, monkeypatch, tmp_path, family, cha
             # Two observations of the same effect deliberately exercise warning
             # deduplication, even when the append failure itself is persistent.
             for _ in range(2):
-                audit.record_after_effect(effect_outcome=outcome, phase=phase, tool=family,
+                audit.record_after_effect(effect_sent=True, effect_outcome=outcome, phase=phase, tool=family,
                     host='h1', session_id='synthetic-session', channel=channel,
                     text='synthetic private prompt', error='synthetic private error')
             if outcome == 'error':
@@ -159,7 +159,7 @@ def test_intent_always_strict_and_unbound_result_strict(daemon, monkeypatch, tmp
             with safety.result_audit_sink(lambda *args: warnings.append(args)):
                 audit.record(phase='attempt')
         else:
-            audit.record_after_effect(effect_outcome='accepted', phase='result')
+            audit.record_after_effect(effect_sent=True, effect_outcome='accepted', phase='result')
     assert not warnings
 
 
@@ -189,7 +189,7 @@ async def test_warning_and_step_receipt_rollback_together(daemon, monkeypatch, t
 
     async def run(ctx):
         async def effect():
-            audit.record_after_effect(effect_outcome='accepted', phase='result')
+            audit.record_after_effect(effect_sent=True, effect_outcome='accepted', phase='result')
             return {'accepted': True}
         return await ctx.step('effect', effect)
 
@@ -236,7 +236,7 @@ async def test_warning_contexts_are_isolated_between_workers(daemon, monkeypatch
             if len(arrived) == 2:
                 both.set()
             await asyncio.wait_for(both.wait(), 5)
-            audit.record_after_effect(effect_outcome='accepted', phase=ctx.params['phase'])
+            audit.record_after_effect(effect_sent=True, effect_outcome='accepted', phase=ctx.params['phase'])
             return {'accepted': True}
         return await ctx.step('effect', effect)
     ops.register(ActionDef('test.audit', 'operate', 'test', run))
@@ -249,4 +249,4 @@ async def test_warning_contexts_are_isolated_between_workers(daemon, monkeypatch
         warnings = op['external_refs']['audit_results']
         assert len(warnings) == 1 and next(iter(warnings.values()))['phase'] == phase
     with pytest.raises(WriteRefused):
-        audit.record_after_effect(effect_outcome='accepted', phase='result')
+        audit.record_after_effect(effect_sent=True, effect_outcome='accepted', phase='result')

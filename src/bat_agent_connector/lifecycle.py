@@ -46,7 +46,7 @@ from .orchestrate import (
     _guard as _orch_guard,
 )
 from .relay import build_relay, parse_fanout, parse_status, status_footer
-from .safety import Audit, audit_error_outcome
+from .safety import Audit, audit_error_outcome, audit_reply_outcome
 from .service import (
     _err,
     _meta,
@@ -107,7 +107,7 @@ async def session_record_verification(
         _task_guard.check()
     row = verification.record(host, sid, candidate_commit=head, command=command, exit_code=exit_code,
                               environment=environment, log_ref=log_ref, actor=fleet.actor)
-    Audit(fleet.config.safety).record_after_effect(effect_outcome="accepted", actor=fleet.actor, tool="session_record_verification", host=host,
+    Audit(fleet.config.safety).record_after_effect(effect_sent=True, effect_outcome="accepted", actor=fleet.actor, tool="session_record_verification", host=host,
                                       session_id=sid, phase="record", candidate_commit=head,
                                       command=command, exit_code=exit_code, log_ref=log_ref)
     return {**row, "verified_candidate": exit_code == 0}
@@ -176,15 +176,19 @@ async def session_set_permissions(
             "session_id": sid + "#perm",
         }
         for ch, params in calls:
+            transported = False
+            def on_transport():
+                nonlocal transported
+                transported = True
             audit.record(**base, channel=ch, phase="attempt", mode=mode)
             try:
                 r = await c.invoke(ch, params, grant=grant, before_send=_task_guard, frame_guard=lambda _: (
                     confinement.guard_raise(host, sid) if mode == "allow_all" else
-                    confinement.guard_permissions(host, sid, o)))
+                    confinement.guard_permissions(host, sid, o)), on_transport=on_transport)
             except BatError as e:
-                audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel=ch, phase="result", ok=False, error=_err(e))
+                audit.record_after_effect(effect_sent=transported, effect_outcome=audit_error_outcome(e), **base, channel=ch, phase="result", ok=False, error=_err(e))
                 raise
-            audit.record_after_effect(effect_outcome="accepted", **base, channel=ch, phase="result", ok=True)
+            audit.record_after_effect(effect_sent=transported, effect_outcome=audit_reply_outcome(r if isinstance(r, bool) else None), **base, channel=ch, phase="result", ok=True)
             results.append({"channel": ch, "result": r})
         if registry.get(host, sid):
             pf = registry_permission_fields(o)
@@ -736,6 +740,7 @@ async def _failover_one(
         if not resume_entry:
             audit.record(**base, channel="claude:start-session", phase="attempt", preset=preset, failover_of=sid)
             start_confirmed = False
+            start_outcome = None
             start_frame = confinement.StartFrame(host, new_sid)
             meta = None
 
@@ -753,6 +758,9 @@ async def _failover_one(
                                          grant=grant, before_send=task_authority.check if owner_id else None,
                                          before_frame=check_start_frame,
                                          on_transport=start_frame.on_transport)
+                start_outcome = audit_reply_outcome(started, key="ok")
+                if start_outcome == "accepted" and started.get("sessionId") != new_sid:
+                    start_outcome = "unknown"
                 if (not isinstance(started, dict) or started.get("ok") is False or
                         started.get("sessionId") != new_sid):
                     raise WriteRefused("BAT failover start did not confirm the reserved session ID")
@@ -766,7 +774,7 @@ async def _failover_one(
                 confinement.ensure_confirmed(confinement_record, meta, allow_unknown=not confined)
                 confinement_record = confinement.confirm(confinement_record, meta)
             except BaseException as e:
-                audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:start-session", phase="result", ok=False, error=_err(e))
+                audit.record_after_effect(effect_sent=start_frame.sent, effect_outcome=start_outcome or audit_error_outcome(e), **base, channel="claude:start-session", phase="result", ok=False, error=_err(e))
                 if not start_frame.sent and not start_confirmed:
                     registry.fail_reservation(host, new_sid, replaces)
                     registry.update(host, new_sid, start_sent=False, start_uncertain=False,
@@ -777,7 +785,7 @@ async def _failover_one(
                                     **({"confinement": confinement.confirm(confinement_record, meta)}
                                        if start_confirmed else {}))
                 raise
-            audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:start-session", phase="result", ok=True)
+            audit.record_after_effect(effect_sent=start_frame.sent, effect_outcome=audit_reply_outcome(started, key="ok"), **base, channel="claude:start-session", phase="result", ok=True)
             registry.update(
                 host,
                 new_sid,
@@ -798,6 +806,11 @@ async def _failover_one(
             before_handoff_invoke()
         audit.record(**base, channel="claude:send-message", phase="attempt", message_id=mid, text=prompt)
         sent, err = True, None
+        handoff_transported = False
+        handoff_outcome = None
+        def handoff_transport():
+            nonlocal handoff_transported
+            handoff_transported = True
         async def check_handoff_frame() -> None:
             await confinement.guard_frame(c, host, new_sid)
             if verify_handoff_at_frame:
@@ -819,26 +832,28 @@ async def _failover_one(
                 before_send=before_handoff_invoke,
                 before_frame=check_handoff_frame,
                 frame_guard=fence_handoff_frame,
+                on_transport=handoff_transport,
                 grant=grant,
             )
+            handoff_outcome = audit_reply_outcome(ack.get("accepted", ack.get("ok")) if isinstance(ack, dict) else None)
             if not isinstance(ack, dict) or not (ack.get("accepted") or ack.get("ok")):
                 raise WriteRefused("handoff prompt was not accepted by BAT")
             registry.update(host, new_sid, handoff_status="sent")
-            audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:send-message", phase="result", ok=True, message_id=mid)
+            audit.record_after_effect(effect_sent=handoff_transported, effect_outcome=audit_reply_outcome(ack.get("accepted", ack.get("ok"))), **base, channel="claude:send-message", phase="result", ok=True, message_id=mid)
         except TaskDispatchCancelled:
             registry.update(host, new_sid, handoff_status="uncertain")
-            audit.record_after_effect(effect_outcome="error", **base, channel="claude:send-message", phase="result", ok=False,
+            audit.record_after_effect(effect_sent=handoff_transported, effect_outcome="error", **base, channel="claude:send-message", phase="result", ok=False,
                          error="task control changed before handoff submission")
             raise
         except TaskIdentityMismatch:
             registry.update(host, new_sid, handoff_status="uncertain")
-            audit.record_after_effect(effect_outcome="error", **base, channel="claude:send-message", phase="result", ok=False,
+            audit.record_after_effect(effect_sent=handoff_transported, effect_outcome="error", **base, channel="claude:send-message", phase="result", ok=False,
                          error="handoff frame does not match reserved task identity")
             raise
         except BatError as e:
             sent, err = False, _err(e)
             registry.update(host, new_sid, handoff_status="uncertain")
-            audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:send-message", phase="result", ok=False, error=err)
+            audit.record_after_effect(effect_sent=handoff_transported, effect_outcome=handoff_outcome or audit_error_outcome(e), **base, channel="claude:send-message", phase="result", ok=False, error=err)
     return {
         **plan,
         "new_session_id": new_sid,
@@ -1444,21 +1459,21 @@ async def _stop(fleet: Fleet, host: str, sid: str, audit: Audit, *, cleanup: boo
     def transported():
         nonlocal sent
         sent = True
-    kwargs = {"before_frame": lambda: _task_cleanup.before_frame(fleet, host, sid),
-              "on_transport": transported} if _task_cleanup is not None else {}
+    kwargs = {"before_frame": lambda: _task_cleanup.before_frame(fleet, host, sid)} if _task_cleanup is not None else {}
     try:
         r = await c.invoke("claude:stop-session", {"sessionId": sid}, grant=grant, retry_on_disconnect=not cleanup,
                            before_send=lambda: (_task_cleanup.check(fleet, host, sid) if _task_cleanup is not None
-                                                else task_control.refuse_owned(fleet, host, sid)), **kwargs)
+                                                else task_control.refuse_owned(fleet, host, sid)),
+                           on_transport=transported, **kwargs)
     except BatError as e:
         if _task_cleanup is not None and not sent:
             from .operations import OperationError
             raise OperationError("TASK_CLEANUP_STOP_NOT_SENT", "task stop was refused before transport", 409) from e
         if cleanup:
             raise
-        audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:stop-session", phase="result", ok=False, error=_err(e))
+        audit.record_after_effect(effect_sent=sent, effect_outcome=audit_error_outcome(e), **base, channel="claude:stop-session", phase="result", ok=False, error=_err(e))
         return {"stopped": False, "error": _err(e)}
-    audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:stop-session", phase="result", ok=True)
+    audit.record_after_effect(effect_sent=sent, effect_outcome=audit_reply_outcome(r, key="ok"), **base, channel="claude:stop-session", phase="result", ok=True)
     return {"stopped": True, "result": r}
 
 

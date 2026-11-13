@@ -226,7 +226,12 @@ async def _invoke(ctx, plan, name, client, channel, params, grant, *, before_fra
     try:
         result = await client.invoke(channel, params, grant=grant, before_send=lambda: _guard(ctx, plan),
                                      before_frame=before_frame, on_transport=fence)
-        audit.record_after_effect(effect_outcome=audit_reply_outcome(result), **base, channel=channel, phase='result', ok=True)
+        outcome = (audit_reply_outcome(result, key='success') if channel == 'worktree:create' else
+                   audit_reply_outcome(result, key='ok') if channel == 'claude:start-session' else
+                   audit_reply_outcome(result.get('accepted', result.get('ok')) if isinstance(result, dict) else None))
+        if channel == 'claude:start-session' and outcome == 'accepted' and result.get('sessionId') != params['sessionId']:
+            outcome = 'unknown'
+        audit.record_after_effect(effect_sent=sent, effect_outcome=outcome, **base, channel=channel, phase='result', ok=True)
         return result
     except Cancelled:
         raise StepFailed('CANCELLED', 'cancelled before the next transport frame') from None
