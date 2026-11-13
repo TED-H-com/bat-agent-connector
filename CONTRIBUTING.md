@@ -14,6 +14,7 @@ Thanks for helping! This is an unofficial companion to Better Agent Terminal; pl
   signal, after prior callbacks complete, rather than a conservative recovery fence. Local effects
   must already have been performed. Keep recovery fences and guard ordering unchanged.
   A sink is valid only while its scope is open; inherited child contexts become unbound when it closes.
+  Post-effect audit calls run on the event-loop thread of their operation step; from another thread the append stays strict.
   Classify `accepted` only from the effect's required positive boolean acknowledgement (or completed
   local effect); a negative acknowledgement is `error`, a missing boolean is `unknown`.
   Preserve the actual result and the original operation. Without a live bound operation sink the append

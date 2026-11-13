@@ -3,8 +3,11 @@
 Baseline d62093b8: nine post-send cases fail; three intent cases already pass.
 """
 import asyncio
+import contextvars
 import json
 import os
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import pytest
 
@@ -18,6 +21,93 @@ from tests.operation_helpers import settle_operations, stop_workers
 from tests.test_interrupt_operations import mcp_result
 
 daemon, served = api.daemon, api.served
+
+
+@pytest.mark.parametrize('runner', ['thread', 'executor'])
+@pytest.mark.parametrize('delayed', [False, True], ids=['open-scope', 'append-crosses-scope-exit'])
+async def test_copied_audit_context_is_strict_in_worker_threads(daemon, mock, monkeypatch, runner, delayed):
+    """Fails on 0c83349d: copied threads could absorb failures, even after settlement."""
+    d = daemon
+    adopt(api.MANUAL)
+    owner = threading.current_thread()
+    loop = asyncio.get_running_loop()
+    entered = asyncio.Event()
+    release = threading.Event()
+    pool = ThreadPoolExecutor(max_workers=1)
+    threads, futures = [], []
+    real_open = safety.open_private
+    invoke = d.fleet.client('h1').invoke
+
+    def opened(path, flags, *args, **kw):
+        if flags & os.O_APPEND and threading.current_thread() is not owner:
+            loop.call_soon_threadsafe(entered.set)
+            if delayed and not release.wait(5):
+                raise RuntimeError('test did not release the delayed audit append')
+            raise OSError('synthetic worker audit fault')
+        return real_open(path, flags, *args, **kw)
+
+    async def after(channel, params=None, **kw):
+        result = await invoke(channel, params, **kw)
+        if channel == 'claude:send-message':
+            copied = contextvars.copy_context()
+
+            def record():
+                safety.Audit(d.fleet.config.safety).record_after_effect(
+                    effect_sent=True, effect_outcome='accepted', phase='result',
+                    tool='synthetic-worker', channel=channel, message_id=params['clientMessageId'])
+
+            if runner == 'executor':
+                future = pool.submit(copied.run, record)
+            else:
+                future = Future()
+
+                def worker():
+                    try:
+                        future.set_result(copied.run(record))
+                    except BaseException as exc:
+                        future.set_exception(exc)
+
+                thread = threading.Thread(target=worker)
+                threads.append(thread)
+                thread.start()
+            futures.append(future)
+            await asyncio.wait_for(entered.wait(), 5)
+            if not delayed:
+                try:
+                    await asyncio.wrap_future(future)
+                except WriteRefused:
+                    pass
+        return result
+
+    monkeypatch.setattr(safety, 'open_private', opened)
+    monkeypatch.setattr(d.fleet.client('h1'), 'invoke', after)
+    try:
+        op, _ = d.ops.create(api.dashboard_principal(), action='session.send',
+            target={'host': 'h1', 'session_id': api.MANUAL}, params={'text': 'synthetic thread context'},
+            idempotency_key='copied-thread')
+        await settle_operations(d.ops)
+        done = d.ops.get(op['operation_id'])
+        assert (done['status'], done['error_code']) == ('succeeded', None)
+        assert len(futures) == 1
+        if delayed:
+            # The append entered while the step was open and fails only after
+            # its result transaction and scope exit have completed.
+            release.set()
+        with pytest.raises(WriteRefused, match='cannot open audit file'):
+            await asyncio.wrap_future(futures[0])
+        assert not d.ops.get(op['operation_id'])['external_refs'].get('audit_results')
+        events = d.journal.api_events(0, 500, resource_id=op['operation_id'])['events']
+        assert not any(e['kind'] == 'operation.audit_result_failed' for e in events)
+        assert len(api.write_frames(mock)) == 1
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(timeout=5)
+            assert not thread.is_alive()
+        pool.shutdown(wait=True)
+        await stop_workers(d.ops)
+        await d.fleet.close()
+        await d.inventory.close()
 
 
 @pytest.mark.parametrize('siblings', [False, True])

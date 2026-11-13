@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from os import fdopen
 from pathlib import Path
+from threading import current_thread
 from typing import Any
 
 from ._private_files import mkdir_private, open_private
@@ -28,6 +29,7 @@ class _ResultAuditSink:
     def __init__(self, collect):
         self.collect = collect
         self.active = True
+        self.thread = current_thread()
 
 
 @contextmanager
@@ -147,7 +149,8 @@ class Audit:
         if fields.get("phase") not in POST_EFFECT_PHASES or effect_outcome not in AUDIT_EFFECT_OUTCOMES:
             raise ValueError("invalid post-effect audit classification")
         binding = _result_sink.get()
-        sink = binding.collect if effect_sent and binding is not None and binding.active else None
+        sink = (binding.collect if effect_sent and binding is not None and binding.active
+                and binding.thread is current_thread() else None)
         self._record(fields, sink=sink, effect_outcome=effect_outcome)
 
     def _record(self, fields: dict, *, sink=None, effect_outcome=None) -> None:

@@ -439,8 +439,9 @@ proof of transport. Guards still run in their original order. Completed local ef
 use their existing completion evidence. If the frame was not sent, append failure
 remains strict and produces no post-effect warning or event.
 
-A bound warning sink is valid only while its operation step scope is open. Child
-tasks can contribute while that scope is open; a copied context after scope exit is
+A bound warning sink is valid only while its operation step scope is open.
+Post-effect audit calls run on the event-loop thread of their operation step; from another thread the append stays strict.
+Child tasks can contribute while that scope is open; a copied context after scope exit is
 unbound and append failure raises. `accepted` requires the path's own positive
 boolean acknowledgement (or a proven completed local effect); an explicit negative
 acknowledgement is `error`, and a missing required boolean is `unknown`. These
