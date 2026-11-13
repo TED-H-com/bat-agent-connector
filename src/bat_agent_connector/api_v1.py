@@ -179,6 +179,7 @@ class ApiV1:
             pm_quality_reviews,
             pm_release_baselines,
             pm_roadmap,
+            pm_roadmap_report_materialization,
             pm_run_operations,
             pm_snapshots,
             pm_spec_materialization,
@@ -217,6 +218,8 @@ class ApiV1:
         pm_overview_assessments.install(daemon.ops)
         pm_work_packages.install(daemon.ops)
         pm_spec_materialization.install(daemon.ops)
+        # Install the ledger without exposing the pending report-save action.
+        pm_roadmap_report_materialization.schema(daemon.ops.journal)
         pm_work_batches.install(daemon.ops)
         pm_lifecycle.install(daemon.ops)
         pm_issue_mappings.install(daemon.ops)

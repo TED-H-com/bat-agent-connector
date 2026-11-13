@@ -128,8 +128,7 @@ async def test_no_report_preserves_legacy_parent(fixed):
     ops, wid = fixed['d'].ops, fixed['workspace_id']
     before = pm_plans.latest_git_receipt(ops.db, wid)
     assert before == pm_plans.original_git_receipt(ops.db, wid)
-    ops.db.execute('DROP TABLE pm_roadmap_report_materializations')
-    assert pm_plans.latest_git_receipt(ops.db, wid) == before
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_roadmap_report_materializations').fetchone()[0] == 0
     ops.db.execute('DROP TABLE pm_spec_materializations')
     assert pm_plans.latest_git_receipt(ops.db, wid) == before
     reports.schema(ops.journal)

@@ -1,7 +1,9 @@
 # Roadmap report materialization core
 
 This contract covers the private core for `pm.roadmap.report.materialize`. The
-installer is used explicitly by tests only. There is no public action installation,
+action installer is used explicitly by tests only. Every daemon installs the empty
+receipt table, index and immutability triggers through `schema`; this does not
+register the action. There is no public action installation,
 receipt route or capability advertisement in this increment. The authorized
 read-only [report contract](pm-roadmap-report.md) still applies to rendering.
 
