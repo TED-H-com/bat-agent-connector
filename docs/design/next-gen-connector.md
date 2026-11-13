@@ -116,6 +116,12 @@ an external BAT worktree.
 
 ## Stage 4: safe takeover and proposed BAT upstream work
 
+> 2026-11-13: the owner decided to implement these host-side contracts in the product's own
+> BAT-compatible fork instead of proposing them upstream; see the
+> [single-product direction](../product/suite-direction-2026-11-13.md). "This repository does
+> not modify BAT" below records the earlier premise. Connector must still work against
+> unmodified upstream BAT hosts with the limits described here.
+
 Use owner-only admission before generating prompts, and handle stop/takeover
 as deterministic commands. Keep automation in separate BAT sessions where
 possible until BAT enforces control versions. Propose upstream BAT changes;
