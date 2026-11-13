@@ -2,8 +2,8 @@
 
 Every matrix case fails on d62093b8 (no post-effect API or durable warning).
 Unbound and intent behavior is the unchanged baseline contract. The family labels
-cover table A's audit boundaries; transport integration lives in
- test_audit_result_operations.py, not in this synthetic effect harness.
+cover the reviewed effect boundaries; transport integration lives in
+test_audit_result_operations.py, not in this synthetic effect harness.
 """
 import json
 
@@ -20,31 +20,31 @@ daemon = api.daemon
 # Stable selectors for distinct effects, including composed callers that inherit
 # the enclosing operation step's context and legacy callers that remain unbound.
 FAMILIES = [
-    ('A01-resume', 'claude:client-resume', 'result'),
-    ('A02-send', 'claude:send-message', 'result'),
-    ('A03-interrupt', 'claude:interrupt-turn', 'result'),
-    ('A04-answer', 'claude:resolve-ask-user', 'result'),
-    ('A05-permissions', 'claude:set-permission-mode', 'result'),
-    ('A06-create', 'worktree:create', 'result'),
-    ('A07-start', 'claude:start-session', 'result'),
-    ('A08-prompt', 'claude:send-message', 'result'),
-    ('A09-rehydrate', 'worktree:rehydrate', 'result'),
-    ('A10-merge', 'worktree:merge', 'result'),
-    ('A11-successor', 'claude:start-session', 'result'),
-    ('A12-handoff', 'claude:send-message', 'result'),
-    ('A13-planner-stop', 'claude:stop-session', 'result'),
-    ('A14-legacy-permissions', 'claude:set-permission-mode', 'result'),
-    ('A15-legacy-create', 'worktree:create', 'result'),
-    ('A16-legacy-start', 'claude:start-session', 'result'),
-    ('A17-append-terminal', 'workspace:save', 'append-terminal'),
-    ('A18-legacy-prompt', 'claude:send-message', 'result'),
-    ('A19-rollback', 'worktree:remove', 'rollback'),
-    ('A20-legacy-merge', 'worktree:merge', 'result'),
-    ('A21-legacy-successor', 'claude:start-session', 'result'),
-    ('A22-legacy-handoff', 'claude:send-message', 'result'),
-    ('A23-cleanup-stop', 'claude:stop-session', 'result'),
-    ('A24-verification', None, 'record'),
-    ('A25-legacy-verification', None, 'record'),
+    ('resume', 'claude:client-resume', 'result'),
+    ('send', 'claude:send-message', 'result'),
+    ('interrupt', 'claude:interrupt-turn', 'result'),
+    ('answer', 'claude:resolve-ask-user', 'result'),
+    ('permissions', 'claude:set-permission-mode', 'result'),
+    ('create', 'worktree:create', 'result'),
+    ('start', 'claude:start-session', 'result'),
+    ('prompt', 'claude:send-message', 'result'),
+    ('rehydrate', 'worktree:rehydrate', 'result'),
+    ('merge', 'worktree:merge', 'result'),
+    ('successor', 'claude:start-session', 'result'),
+    ('handoff', 'claude:send-message', 'result'),
+    ('planner-stop', 'claude:stop-session', 'result'),
+    ('legacy-permissions', 'claude:set-permission-mode', 'result'),
+    ('legacy-create', 'worktree:create', 'result'),
+    ('legacy-start', 'claude:start-session', 'result'),
+    ('append-terminal', 'workspace:save', 'append-terminal'),
+    ('legacy-prompt', 'claude:send-message', 'result'),
+    ('rollback', 'worktree:remove', 'rollback'),
+    ('legacy-merge', 'worktree:merge', 'result'),
+    ('legacy-successor', 'claude:start-session', 'result'),
+    ('legacy-handoff', 'claude:send-message', 'result'),
+    ('cleanup-stop', 'claude:stop-session', 'result'),
+    ('verification', None, 'record'),
+    ('legacy-verification', None, 'record'),
 ]
 
 
@@ -173,7 +173,7 @@ def test_observation_rejects_unbounded_warning_fields():
 
 
 async def test_warning_and_step_receipt_rollback_together(daemon, monkeypatch, tmp_path):
-    """New behavior: no independently committed warning if settlement fails (B01)."""
+    """A settlement failure must roll back the result, warning and event together."""
     import sqlite3
     ops = daemon.ops
     audit = safety.Audit(daemon.fleet.config.safety, tmp_path / 'audit.jsonl')

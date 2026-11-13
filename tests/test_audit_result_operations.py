@@ -325,7 +325,7 @@ async def test_audit_after_transport(served, mock, monkeypatch, tmp_path, door, 
         await fleet.close()
 
 
-# R1-F1 / R1-S1: these seven regressions fail on 70de7942.
+# Pre-frame refusals and expired sinks stay strict; these seven cases fail on 70de7942.
 @pytest.mark.parametrize('channel,action,params', [
     ('claude:send-message', 'session.send', {'text': 'synthetic probe'}),
     ('claude:interrupt-turn', 'session.interrupt', {'mode': 'soft'}),

@@ -97,7 +97,7 @@ async def test_planner_stop_records_unproven_ack(daemon, mock, monkeypatch, repl
 
 @pytest.mark.parametrize('fault', [False, True])
 async def test_negative_cleanup_ack_keeps_primary_outcome(cleanup_daemon, mock, monkeypatch, fault):
-    """R1-S2: fault=True fails on 70de7942; the no-fault outcome is unchanged."""
+    """A negative cleanup ACK keeps its outcome; the fault case fails on 70de7942."""
     from bat_agent_connector import cleanup
     d = cleanup_daemon
     try:
@@ -124,7 +124,7 @@ async def test_negative_cleanup_ack_keeps_primary_outcome(cleanup_daemon, mock, 
 
 @pytest.mark.parametrize('case', ['guard', 'load', 'grant', 'lost-reply'])
 async def test_append_terminal_transport_boundary(cleanup_daemon, mock, monkeypatch, case):
-    """A17: pre-save cases fail on 70de7942; lost-reply already keeps its outcome."""
+    """Workspace save requires its own transport signal; pre-save cases fail on 70de7942."""
     from bat_agent_connector import client as client_module
     from bat_agent_connector.errors import WriteRefused
     d = cleanup_daemon
@@ -312,13 +312,13 @@ async def test_legacy_ack_warning_preserves_primary(daemon, mock, monkeypatch, k
         await d.inventory.close()
 
 FAMILIES = [
-    ('A01-resume', 'claude:client-resume'), ('A02-send', 'claude:send-message'),
-    ('A03-interrupt', 'claude:interrupt-turn'), ('A04-answer', 'claude:resolve-ask-user'),
-    ('A05-permissions', 'claude:set-permission-mode'), ('A06-create', 'worktree:create'),
-    ('A07-start', 'claude:start-session'), ('A08-prompt', 'claude:send-message'),
-    ('A11-successor', 'claude:start-session'), ('A12-handoff', 'claude:send-message'),
-    ('A13-planner-stop', 'claude:stop-session'), ('A23-cleanup-stop', 'claude:stop-session'),
-    ('A24-verification', None),
+    ('resume', 'claude:client-resume'), ('send', 'claude:send-message'),
+    ('interrupt', 'claude:interrupt-turn'), ('answer', 'claude:resolve-ask-user'),
+    ('permissions', 'claude:set-permission-mode'), ('create', 'worktree:create'),
+    ('start', 'claude:start-session'), ('prompt', 'claude:send-message'),
+    ('successor', 'claude:start-session'), ('handoff', 'claude:send-message'),
+    ('planner-stop', 'claude:stop-session'), ('cleanup-stop', 'claude:stop-session'),
+    ('verification', None),
 ]
 
 
@@ -368,37 +368,37 @@ def assert_warning(d, out, outcome, stage):
 @pytest.mark.parametrize('stage', ['mkdir', 'open', 'write', 'flush', 'close'])
 @pytest.mark.parametrize('persistent', [False, True], ids=['one-shot', 'persistent'])
 async def test_real_family(daemon, mock, monkeypatch, family, channel, outcome, stage, persistent):
-    if (family == 'A01-resume' and outcome == 'accepted'
-            or family == 'A04-answer' and outcome == 'unknown'
-            or family in {'A23-cleanup-stop', 'A24-verification'} and outcome != 'accepted'):
+    if (family == 'resume' and outcome == 'accepted'
+            or family == 'answer' and outcome == 'unknown'
+            or family in {'cleanup-stop', 'verification'} and outcome != 'accepted'):
         pytest.skip('This branch has no post-effect audit append; no new audit obligation in this change')
     d = daemon
     mock.echo_sends = True
-    if family.startswith(('A06', 'A07', 'A08', 'A11', 'A12', 'A13')):
+    if family.startswith(('create', 'start', 'prompt', 'successor', 'handoff', 'planner-stop')):
         mock.handlers['git:log'] = lambda _: [{'hash': starts.SHA}]
-    if family.startswith(('A11', 'A12')):
+    if family.startswith(('successor', 'handoff')):
         _add_wt_claude(mock, failover.SID)
-    elif not family.startswith(('A06', 'A07', 'A08', 'A24')):
-        adopt(api.MANUAL, **({'role': 'planner'} if family.startswith('A13') else {}))
-    if family == 'A01-resume':
+    elif not family.startswith(('create', 'start', 'prompt', 'verification')):
+        adopt(api.MANUAL, **({'role': 'planner'} if family.startswith('planner-stop') else {}))
+    if family == 'resume':
         mock.metas[api.MANUAL] = None
-    if family == 'A04-answer':
+    if family == 'answer':
         mock.states[api.MANUAL]['pendingAskUser'] = {'toolUseId': 'ask-1', 'questions': [{'question': 'Choice?'}]}
-    if family == 'A13-planner-stop':
+    if family == 'planner-stop':
         d.fleet.config.host('h1').orchestrate_max_sessions = 3
         fanout.replies(mock)
     calls = fail_result(monkeypatch, d, mock, channel, outcome, stage, persistent)
     try:
-        if family.startswith(('A06', 'A07', 'A08')):
+        if family.startswith(('create', 'start', 'prompt')):
             out = await starts.create(d, params={'prompt': 'synthetic initial prompt'})
-        elif family.startswith(('A11', 'A12')):
+        elif family.startswith(('successor', 'handoff')):
             out = await failover.create(d)
-        elif family == 'A13-planner-stop':
+        elif family == 'planner-stop':
             out = await fanout.create(d, target={'host': 'h1', 'session_id': api.MANUAL}, params={})
-        elif family == 'A24-verification':
+        elif family == 'verification':
             out = await verification.submit(d)
         else:
-            if family == 'A23-cleanup-stop':
+            if family == 'cleanup-stop':
                 async def run(ctx):
                     return await ctx.step('stop', lambda: lifecycle._stop(d.fleet, 'h1', api.MANUAL,
                         safety.Audit(d.fleet.config.safety), cleanup=True))
@@ -406,11 +406,11 @@ async def test_real_family(daemon, mock, monkeypatch, family, channel, outcome, 
                 action, params = 'test.stop', {}
             else:
                 action, params = {
-                    'A01-resume': ('session.send', {'text': 'synthetic prompt'}),
-                    'A02-send': ('session.send', {'text': 'synthetic prompt'}),
-                    'A03-interrupt': ('session.interrupt', {'mode': 'soft'}),
-                    'A04-answer': ('session.answer', {'answers': ['yes'], 'tool_use_id': 'ask-1'}),
-                    'A05-permissions': ('session.permissions', {'mode': 'default'}),
+                    'resume': ('session.send', {'text': 'synthetic prompt'}),
+                    'send': ('session.send', {'text': 'synthetic prompt'}),
+                    'interrupt': ('session.interrupt', {'mode': 'soft'}),
+                    'answer': ('session.answer', {'answers': ['yes'], 'tool_use_id': 'ask-1'}),
+                    'permissions': ('session.permissions', {'mode': 'default'}),
                 }[family]
             op, _ = d.ops.create(api.dashboard_principal(), action=action,
                 target={'host': 'h1', 'session_id': api.MANUAL}, params=params, idempotency_key='family-once')
@@ -432,7 +432,7 @@ async def test_real_family(daemon, mock, monkeypatch, family, channel, outcome, 
         await d.inventory.close()
 
 
-@pytest.mark.parametrize('channel', ['worktree:rehydrate', 'worktree:merge'], ids=['A09', 'A10'])
+@pytest.mark.parametrize('channel', ['worktree:rehydrate', 'worktree:merge'], ids=['rehydrate', 'merge'])
 @pytest.mark.parametrize('outcome', ['accepted', 'error', 'unknown'])
 @pytest.mark.parametrize('stage', ['mkdir', 'open', 'write', 'flush', 'close'])
 @pytest.mark.parametrize('persistent', [False, True])
