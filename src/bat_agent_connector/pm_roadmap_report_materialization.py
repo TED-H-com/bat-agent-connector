@@ -33,6 +33,8 @@ from .pm_release_baselines import _snapshot_read
 ACTION = 'pm.roadmap.report.materialize'
 MATERIALIZATION = re.compile(r'pmrpt_[0-9a-f]{32}')
 TABLE = 'pm_roadmap_report_materializations'
+MAX_READ_BYTES = 2_000_000
+MAX_CURSOR = 2**63 - 1
 canonical = pm_roadmap_report_files.canonical
 FIELDS = ('workspace_id', 'observation_revision_id', 'source_set_digest', 'view_digest',
           'renderer_version', 'format', 'locale', 'output_digest', 'byte_length')
@@ -184,13 +186,24 @@ def _record(db, wid, identity):
                 'observation_revision_id', 'format', 'locale', 'renderer_version'))
             or receipt['revision_id'] != identity):
         raise OperationError('PM_GIT_RECEIPT_INVALID', 'The original report receipt is unproven', 409)
-    return value
+    return {'kind': 'roadmap_report_materialization', **value}
 
 
 def _read(ops, principal, wid):
     if not principal.allows('observe'):
         raise OperationError('FORBIDDEN', 'Report receipt reads require observe scope', 403)
     pm_workspace.require_member(ops.db, principal, wid)
+
+
+def _read_size(value):
+    return len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode('utf-8'))
+
+
+def _bounded(value):
+    if _read_size(value) > MAX_READ_BYTES:
+        raise OperationError('PM_REPORT_MATERIALIZATION_READ_TOO_LARGE',
+            'The complete report receipt response exceeds 2,000,000 UTF-8 bytes', 413)
+    return value
 
 
 @_snapshot_read
@@ -202,26 +215,40 @@ def get_materialization(ops, principal, workspace_id, materialization_id):
                          (workspace_id, materialization_id)).fetchone()
     if not row or not source_visible(ops.db, principal, dict(row)):
         raise OperationError('NOT_FOUND', 'Report materialization not found', 404)
-    return {'version': 1, 'workspace_id': workspace_id, 'materialization': _record(ops.db, workspace_id, materialization_id)}
+    return _bounded({'version': 1, 'workspace_id': workspace_id,
+        'materialization': _record(ops.db, workspace_id, materialization_id)})
 
 
 @_snapshot_read
 def list_materializations(ops, principal, workspace_id, *, after=0, limit=20):
     _read(ops, principal, workspace_id)
-    if type(after) is not int or not 0 <= after <= 2**63 - 1 or type(limit) is not int or not 1 <= limit <= 50:
+    if type(after) is not int or not 0 <= after <= MAX_CURSOR or type(limit) is not int or not 1 <= limit <= 50:
         raise OperationError('INVALID_PARAMS', 'Select a signed 64-bit cursor and a limit of 1–50', 422)
     with pm_source_reads.scope(ops.db, principal):
         rows = ops.db.execute('SELECT * FROM pm_roadmap_report_materializations WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT ?',
             (workspace_id, after, limit + 1)).fetchall()
-        values = []
+        result = {'version': 1, 'workspace_id': workspace_id, 'materializations': [],
+            'next_after': None, 'source_visibility_filtered': False}
+        scanned = after
         for row in rows[:limit]:
             with pm_source_reads.record(ops.db, principal):
-                if source_visible(ops.db, principal, dict(row)):
-                    values.append(row)
-        return {'version': 1, 'workspace_id': workspace_id,
-            'materializations': [_record(ops.db, workspace_id, row['materialization_id']) for row in values],
-            'next_after': rows[limit - 1]['sequence'] if len(rows) > limit else None,
-            'source_visibility_filtered': len(values) != len(rows[:limit])}
+                visible = source_visible(ops.db, principal, dict(row))
+            if not visible:
+                scanned = row['sequence']
+                result['source_visibility_filtered'] = True
+                continue
+            value = _record(ops.db, workspace_id, row['materialization_id'])
+            candidate = {**result, 'materializations': [*result['materializations'], value],
+                'next_after': MAX_CURSOR}
+            if _read_size(candidate) > MAX_READ_BYTES:
+                if scanned == after:
+                    return _bounded(candidate)
+                result['next_after'] = scanned
+                return _bounded(result)
+            result['materializations'].append(value)
+            scanned = row['sequence']
+        result['next_after'] = scanned if len(rows) > limit else None
+        return _bounded(result)
 
 
 def _result(record):

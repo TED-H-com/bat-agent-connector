@@ -79,6 +79,7 @@ async def test_frozen_bytes_original_thread_and_same_key(fixed, format, locale):
     roadmap = pm_roadmap.head(ops.db, w['workspace_id'])
     op = await materialize(w, envelope)
     saved = record(w, op)
+    assert saved['kind'] == 'roadmap_report_materialization'
     step = ops.db.execute("SELECT request,response FROM operation_steps WHERE operation_id=? AND name='pm.roadmap.report.freeze'", (op['operation_id'],)).fetchone()
     frozen = json.loads(step['response'])
     assert json.loads(step['request']) == {}

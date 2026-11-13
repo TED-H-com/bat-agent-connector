@@ -84,6 +84,16 @@ IDs, event head/scan cursors, run scan counts and visibility-filtered flags. Thi
 contract does not promise to conceal that a record exists. Existing thread content
 keeps its own authorization; materialization adds no thread message or report title.
 
+Each receipt record has `kind: "roadmap_report_materialization"`. Receipt lists
+default to 20 records and permit at most 50, following spec materialization;
+this is the accepted deviation from DESIGN-B's proposed 50/100. Get and list
+bound the complete UTF-8 JSON read document, including the envelope and cursor,
+at 2,000,000 bytes. Source access is decided before size diagnostics. Pagination
+reserves the largest signed 64-bit cursor. A visible row that does not fit is
+not consumed and is encountered again on the next page; if the first examined
+row cannot fit, `PM_REPORT_MATERIALIZATION_READ_TOO_LARGE` returns status 413.
+Hidden rows advance the scan cursor without exposing their receipt metadata.
+
 Visibility uses the existing source-lineage hook and request-scoped read cache.
 Within one synchronous snapshot, the same observation's full `load_fixed` closure
 is authorized at most once for a principal. No permission cache persists between
