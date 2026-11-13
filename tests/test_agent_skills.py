@@ -162,7 +162,7 @@ async def test_skill_tool_references_and_recovery_parameters_match_discovered_sc
             "pm_issue_mapping_get": {"workspace_id", "mapping_id"},
             "work_status": {"task_id"},
             "work_item_get": {"work_item_id"},
-            "operations_list": {"statuses", "action"},
+            "operations_list": {"statuses", "action", "before", "before_id"},
             "operation_get": {"operation_id"},
             "operation_submit": {"action", "idempotency_key", "target", "params", "preconditions", "confirm"},
             "checkpoint_preview": {"host", "session_id"},
@@ -225,3 +225,11 @@ def test_skill_thread_actions_and_context_failures_match_the_current_workflow():
     assert "PM_WORK_START_AUTHORITY_UNAVAILABLE" in text
     assert "uncertain child" in text
     assert "waiting in `needs_attention` is not rewritten" in text
+
+
+@pytest.mark.parametrize("relative", [generator.SOURCE, *generator.render(ROOT)])
+def test_operation_lookup_guidance_preserves_paired_cursor(relative):
+    text = (ROOT / relative).read_text()
+    assert "follow `next_before` together with `next_before_id` until both are null" in text
+    assert "a short or empty page is not the end" in text
+    assert "Look up the original operation this way after a lost reply" in text
