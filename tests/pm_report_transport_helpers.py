@@ -97,13 +97,13 @@ async def report_rows(w, *, distinct, count):
 
 
 @asynccontextmanager
-async def transports(w, monkeypatch):
+async def transports(w, monkeypatch, *, read_only=True):
     """Use the registered HTTP/RPC/MCP reads and both real transport barriers."""
     d, wid = w['d'], w['workspace_id']
     listener = await asyncio.start_server(d._handle, '127.0.0.1', int(os.environ.get('BATC_UI_TEST_PORT', '0')))
     port = listener.sockets[0].getsockname()[1]
     monkeypatch.setenv('BATC_TASK_URL', f'http://127.0.0.1:{port}/rpc')
-    server, fleet = mcp_server.build_server(d.fleet.config, read_only=True, principal_only=True)
+    server, fleet = mcp_server.build_server(d.fleet.config, read_only=read_only, principal_only=True)
     paths = {'operations': '/api/v1/operations', 'events': '/api/v1/events',
         'runs': f'/api/v1/pm/workspaces/{wid}/runs', 'receipts': f'/api/v1/pm/workspaces/{wid}/roadmap-report-materializations'}
     methods = {'operations': ('op_list', 'operations_list'), 'events': ('api_events', 'events_list'),
