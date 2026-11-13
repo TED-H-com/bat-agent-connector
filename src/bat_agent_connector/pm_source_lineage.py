@@ -181,11 +181,11 @@ def references(value, *, inherited_host=None, depth=0):
     return refs
 
 
-def document_roots(db, value):
+def document_roots(db, value, *, inherited_host=None, depth=0):
     if not installed(db) or db.execute("SELECT 1 FROM pm_source_lineage LIMIT 1").fetchone() is None:
         return set()
     result = set()
-    for kind, identity in references(value):
+    for kind, identity in references(value, inherited_host=inherited_host, depth=depth):
         result.update(roots(db, kind, identity))
     if len(result) > MAX_ROOTS:
         raise OperationError("PM_SOURCE_LINEAGE_LIMIT", "Too many original sources for one document", 409)
@@ -490,14 +490,21 @@ def _require_frame(ops, operation_id):
         guard(OpContext(ops, ops._row(original_id)))
 
 
-def filter_page(db, principal, page, keys):
+def filter_page(db, principal, page, keys, *, inherited_host=None, depth=0):
     """Filter whole records, preserving the upstream scan cursor and source truth."""
     result = dict(page)
     changed = False
     for key in keys:
         if isinstance(result.get(key), list):
             rows = result[key]
-            result[key] = [row for row in rows if visible_roots(db, principal, document_roots(db, row))]
+            result[key] = []
+            for row in rows:
+                if visible_roots(db, principal, document_roots(db, row, inherited_host=inherited_host)):
+                    # The old whole-response depth check only saw retained
+                    # rows. Preserve that ordering for already-hidden rows.
+                    if depth:
+                        references(row, inherited_host=inherited_host, depth=depth)
+                    result[key].append(row)
             changed |= len(rows) != len(result[key])
     if changed:
         result["source_visibility_filtered"] = True
@@ -518,19 +525,53 @@ Only established collection fields may drop whole rows. Singular records and
 unknown response shapes are refused as a whole if they contain hidden sources;
 fixed PM documents are not rewritten into misleading partial descriptions.
 """
-    if not installed(db) or not isinstance(value, dict):
+    if (not installed(db) or not isinstance(value, dict)
+            or db.execute("SELECT 1 FROM pm_source_lineage LIMIT 1").fetchone() is None):
         require_document(db, principal, value)
         return value
-    result = filter_page(db, principal, value, _COLLECTIONS)
+    result, envelope = _response_page(db, principal, value)
+    require_document(db, principal, envelope)
+    return result
+
+
+def _response_page(db, principal, value, *, inherited_host=None, depth=0):
+    """Partition only registered pages; retain the entire non-row document.
+
+    No source scope spans rows. Each row has the host and depth it had in the
+    original response. Empty lists retain their position for depth validation.
+    Bootstrap parts contribute their envelopes to the outer document, not their
+    rows; a reference elsewhere in snapshot/sync/capabilities is still checked.
+    """
+    host = value.get("host", inherited_host)
+    result = filter_page(db, principal, value, _COLLECTIONS, inherited_host=host, depth=depth + 2)
+    keys = set(_COLLECTIONS)
     if ("next_cursor" in result and isinstance(result.get("items"), list)
             and all(isinstance(item, dict) and "deployment_id" in item for item in result["items"])):
-        result = filter_page(db, principal, result, {"items"})
+        result = filter_page(db, principal, result, {"items"}, inherited_host=host, depth=depth + 2)
+        keys.add("items")
+    if (isinstance(result.get("workspace_id"), str) and "next_cursor" in result
+            and isinstance(result.get("coverage"), dict)
+            and type(result["coverage"].get("scanned")) is int
+            and type(result["coverage"].get("visibility_filtered")) is bool
+            and isinstance(result.get("runs"), list)
+            and all(isinstance(row, dict) and isinstance(row.get("run_id"), str)
+                    and isinstance(row.get("operation_id"), str)
+                    and row.get("workspace_id") == result["workspace_id"] for row in result["runs"])):
+        result = filter_page(db, principal, result, {"runs"}, inherited_host=host, depth=depth + 2)
+        keys.add("runs")
+    envelope = {key: [] if key in keys and isinstance(child, list) else child for key, child in result.items()}
     if (isinstance(result.get("snapshot"), dict) and isinstance(result.get("sync"), dict)
             and isinstance(result.get("capabilities"), dict) and "pagination" in result):
-        result["snapshot"] = {key: read_response(db, principal, part) if isinstance(part, dict) else part
-                              for key, part in result["snapshot"].items()}
-    require_document(db, principal, result)
-    return result
+        snapshot, remainder = {}, {}
+        snapshot_host = result["snapshot"].get("host", host)
+        for key, part in result["snapshot"].items():
+            if isinstance(part, dict):
+                snapshot[key], remainder[key] = _response_page(db, principal, part,
+                    inherited_host=snapshot_host, depth=depth + 2)
+            else:
+                snapshot[key] = remainder[key] = part
+        result["snapshot"], envelope["snapshot"] = snapshot, remainder
+    return result, envelope
 
 
 def read_request(db, principal, selection):

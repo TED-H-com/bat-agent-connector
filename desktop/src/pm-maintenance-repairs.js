@@ -1,3 +1,4 @@
+import {operationPage} from './operation-page.js';
 import {button, disclosure, iconButton, skeleton, statusPill} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
@@ -93,9 +94,9 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
     throw Error(t('pmr_limit'));
   }
   async function verifierOperations(ticket){const result=[];let before=null;
-    for(let page=0;page<20;page++){const data=await api('GET',`/operations?action=pm.execution.verify&limit=50${before===null?'':'&before='+before}`);if(!valid(ticket))return null;
-      const next=data.next_before;if(!Array.isArray(data.operations)||next!==null&&(!Number.isSafeInteger(next)||next<=0||before!==null&&next>=before))throw invalid();
-      result.push(...data.operations);if(next===null)return result;before=next;}throw Error(t('pmr_limit'));
+    for(let page=0;page<20;page++){const data=await api('GET',`/operations?action=pm.execution.verify&limit=50${before===null?'':`&before=${before.time}${before.id===null?'':`&before_id=${encodeURIComponent(before.id)}`}`}`);if(!valid(ticket))return null;
+      const parsed=operationPage(data,before);if(!parsed)throw invalid();
+      result.push(...parsed.operations);if(parsed.next===null)return result;before=parsed.next;}throw Error(t('pmr_limit'));
   }
   function validate(row){if(row?.workspace_id!==workspaceId||!/^pmrp_[0-9a-f]{32}$/.test(row.repair_id)||!op.test(row.operation_id)||!Number.isSafeInteger(row.version)
     ||!row.context?.rule||!row.context.finding_ref||!Array.isArray(row.evidence))throw invalid();return row;}

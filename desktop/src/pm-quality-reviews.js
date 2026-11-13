@@ -1,3 +1,4 @@
+import {operationPage} from './operation-page.js';
 import {assessmentSourceRefused} from './pm-assessment-source-fence.js';
 import {iconButton, skeleton} from './ui/components.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
@@ -45,12 +46,15 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   async function pages(path,key,ticket,{cursor='next_cursor',wid=true,descending=false}={}){
     let after=descending?null:0;const rows=[],seen=new Set();
     for(let page=0;page<20;page++){
-      const query=`${path.includes('?')?'&':'?'}limit=50${after===null?'':`&${descending?'before':'after'}=${after}`}`;
+      const query=`${path.includes('?')?'&':'?'}limit=50${after===null?'':descending
+        ?`&before=${after.time}${after.id===null?'':`&before_id=${encodeURIComponent(after.id)}`}`:`&after=${after}`}`;
       const value=await request('GET',path+query);if(!valid(ticket))return null;
       if(value.visibility_filtered||value.source_visibility_filtered||value.coverage?.visibility_filtered||value.coverage?.inaccessible_sources)filtered=true;
-      if(wid&&value.workspace_id!==workspaceId||!Array.isArray(value[key])||value[cursor]!==null&&(!Number.isFinite(value[cursor])||(!descending&&!Number.isSafeInteger(value[cursor]))||value[cursor]<=0||after!==null&&(descending?value[cursor]>=after:value[cursor]<=after)))throw error();
+      const parsed=descending?operationPage(value,after):null;
+      if(wid&&value.workspace_id!==workspaceId||descending&&!parsed||!descending&&(!Array.isArray(value[key])||value[cursor]!==null&&(!Number.isSafeInteger(value[cursor])||value[cursor]<=after)))throw error();
       for(const row of value[key]){const id=row.review_id||row.package_id||row.revision_id||row.observation_id||row.evidence_id||row.operation_id;if(!id||seen.has(id))throw error();seen.add(id);rows.push(row);}
-      if(value[cursor]===null)return rows;after=value[cursor];
+      const next=descending?parsed.next:value[cursor];
+      if(next===null)return rows;after=next;
     }throw Error(t('pmq_history_bound'));
   }
   function checkReview(row){
