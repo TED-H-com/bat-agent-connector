@@ -88,3 +88,16 @@ Do not reimplement the merged Work loop. Separate real BAT/model and physical-mo
 acceptance from fixtures. The owner additionally requested Connector automatic updates;
 use the [update contract](docs/design/connector-updates.md). This supersedes the prior
 Connector auto-update scope exclusion, while preserving desktop signing/lifecycle gates.
+
+## November 13 single-product direction
+
+The owner decided to ship one product on a compatible fork of upstream BAT
+(`TED-H-com/better-agent-terminal`): the Dashboard embedded in the BAT desktop app, BAT
+profiles and Fleet connections unified, and additive host contracts for Connector. Read the
+[decision and compatibility rules](docs/product/suite-direction-2026-11-13.md) before changing
+desktop shell, Fleet/profile, BAT protocol or host-contract behavior. It supersedes "this
+repository does not modify BAT" and the standalone desktop app as the end state. Python
+Connector / Task Service stays the central authority, manual BAT resources stay read-only,
+and Connector must keep working against unmodified upstream BAT hosts. Report phases P0–P4
+separately from v1.2/v1.3 items; nothing in that document is a build, installation or
+acceptance claim.

@@ -1,5 +1,7 @@
 # Better Agent Dashboard：共用產品與 Tauri 介面方向
 
+2026-11-13：產品負責人決定以上游 BAT 的相容分支整合為單一產品，見[單一產品方向](suite-direction-2026-11-13.md)。該頁更新 R00 第 1 項的終點（獨立桌面程式日後退場）並取代「不修改 BAT」的前提；中央權威、人工唯讀與查回不重送等決策保留。
+
 2026-10-17：owner 的 [EC-1.1 體驗收斂決議](experience-convergence.md)統一既有
 v1.3／Work-Centric 的 UI 與交付順序；保留本頁核心架構及 PM 生命週期要求。
 日常開工與差額見 [v1.3 handoff](v1.3-agent-handoff.md)，不另立 v1.4。
