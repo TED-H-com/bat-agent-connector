@@ -29,7 +29,7 @@ from typing import Any
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
-from . import PROTOCOL, __version__
+from . import PROTOCOL, __version__, bac
 from .channels import check_allowed, is_write, timeout_for
 from .config import HostConfig
 from .errlog import log_error
@@ -213,6 +213,8 @@ class BatClient:
         self._conn_lock = asyncio.Lock()
         self._sem = asyncio.Semaphore(max_concurrency)
         self.auth_info: dict[str, Any] = {}
+        self.bac: bac.BacState | None = None
+        self._bac_host_id: str | None = None
         self.connect_ms: float | None = None
         self.auth_ms: float | None = None
         self.last_used = time.monotonic()
@@ -312,6 +314,31 @@ class BatClient:
             }
             self.closed_reason = None
             self._reader = asyncio.create_task(self._read_loop(ws), name=f"bat-reader-{self.host.name}")
+            advertised = bac.advertisement_status(self.auth_info["capabilities"])
+            if advertised == "supported":
+                try:
+                    reply = await self._roundtrip(
+                        bac.hello_request(self._bac_host_id), min(self._connect_timeout, 10.0)
+                    )
+                    state = bac.hello_state(reply, self._bac_host_id)
+                except InvokeTimeout:
+                    state = bac.BacState("unavailable", reason="hello_timeout")
+                if not self.connected:
+                    raise ConnectionLost(f"{self.host.name}: connection closed during BAC hello")
+                self.bac = state
+                if state.status == "negotiated" and self._bac_host_id is None:
+                    self._bac_host_id = state.host_id
+                elif state.status == "unavailable":
+                    code = ("connector.bac.host_mismatch" if state.reason == "HOST_MISMATCH"
+                            else "connector.bac.hello_unavailable")
+                    context = {"reason": state.reason}
+                    if state.storage_reason is not None:
+                        context["storage_reason"] = state.storage_reason
+                    log_error("bat-connector", code, "BAC hello unavailable", level="warn",
+                              context=context)
+            else:
+                reason = "not_advertised" if advertised == "absent" else "unsupported_advertisement"
+                self.bac = bac.BacState(advertised, reason=reason)
         except BaseException:
             await self.close()
             raise
@@ -371,6 +398,8 @@ class BatClient:
             reason = f"reader error: {type(e).__name__}"
             log_error("bat-connector", "connector.reader.failed", e)
         finally:
+            if self._ws is ws:
+                self.bac = None
             self.closed_reason = reason
             err = ConnectionLost(f"{self.host.name}: {reason}")
             for fut in self._pending.values():
@@ -381,6 +410,7 @@ class BatClient:
                 sub.close(err)
 
     async def close(self) -> None:
+        self.bac = None
         ws, self._ws = self._ws, None
         if ws is not None:
             try:
