@@ -492,8 +492,9 @@ def adopt_revision(ctx):
 def latest_git_receipt(db, workspace_id):
     """Internal previous Git fact, including commits not yet adopted in SQLite."""
     spec = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_spec_materializations'").fetchone()
+    report_table = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_roadmap_report_materializations'").fetchone()
     reports = [json.loads(row[0]) for row in db.execute(
-        "SELECT git_receipt FROM pm_roadmap_report_materializations WHERE workspace_id=?", (workspace_id,))]
+        "SELECT git_receipt FROM pm_roadmap_report_materializations WHERE workspace_id=?", (workspace_id,))] if report_table else []
     # Preserve the exact legacy fallback when this workspace has no report.
     if not spec and not reports:
         return original_git_receipt(db, workspace_id)

@@ -2,6 +2,8 @@
 import asyncio
 import contextvars
 import sqlite3
+from contextlib import ExitStack
+from dataclasses import replace
 
 import pytest
 
@@ -362,3 +364,75 @@ def test_completed_proofs_save_budget_but_never_replace_source_authorization(db)
             assert not reads.check(db, OWNER, 'original_root', 'hidden-root', lambda:
                 big(OWNER) and reads.check(db, OWNER, 'original_root', 'hidden', lambda:
                     bool(db.execute("SELECT visible FROM original_source WHERE id='hidden'").fetchone()[0])))
+
+
+@pytest.mark.parametrize('closed_frames', [0, 1, 3])
+def test_copied_context_preserves_live_ancestor_budget_then_becomes_independent(db, closed_frames):
+    other = replace(OWNER, credential_id='copied-reader')
+    saved = []
+    with reads.scope(db, OWNER) as outer:
+        def nested():
+            for index in range(reads.MAX_NODES - 1):
+                assert reads.check(db, OWNER, 'leaf', str(index), lambda: True)
+            assert outer['budget']['nodes'] == reads.MAX_NODES
+
+            def child():
+                with reads.record(db, other) as row:
+                    assert row['budget'] is outer['budget']
+                    assert row['inherited_live']
+                    assert not reads.check(db, other, 'new-proof', 'new', lambda: True)
+
+            with ExitStack() as stack:
+                for index in range(max(1, closed_frames)):
+                    stack.enter_context(reads.scope(db, replace(other, credential_id=f'middle-{index}')))
+                copied = contextvars.copy_context()
+                if not closed_frames:
+                    copied.run(child)  # Ordinary open-middle control.
+            if closed_frames:
+                copied.run(child)
+            saved.append(copied)
+            return True
+        assert reads.check(db, OWNER, 'root', 'outer', nested)
+    assert not outer['open']
+
+    def independent():
+        with reads.record(db, other) as row:
+            assert not row['inherited_live']
+            assert row['budget'] is not outer['budget'] and row['budget']['nodes'] == 0
+            assert reads.check(db, other, 'new-proof', 'new', lambda: True)
+    saved[0].run(independent)  # Exactly the same copy after the ancestor closes.
+
+
+@pytest.mark.parametrize('switch', ['actor', 'credential'])
+def test_copied_closed_scope_shares_live_budget_without_principal_grants(db, switch):
+    other = replace(OWNER, **({'actor': 'other-reader'} if switch == 'actor' else {'credential_id': 'other-key'}))
+    with reads.scope(db, OWNER) as outer:
+        def nested():
+            assert reads.check(db, OWNER, 'permission', 'source', lambda: True)
+            outer['visibility']['sentinel'] = True
+            with reads.scope(db, replace(OWNER, credential_id='closed-middle')):
+                copied = contextvars.copy_context()
+            def child():
+                with reads.record(db, other) as row:
+                    assert row['budget'] is outer['budget'] and row['inherited_live']
+                    assert row['memo'] is not outer['memo'] and ('permission', 'source') not in row['memo']
+                    assert row['visibility'] is not outer['visibility'] and not row['visibility']
+                    assert not reads.check(db, other, 'permission', 'source', lambda: False)
+            copied.run(child)
+            assert reads.check(db, OWNER, 'permission', 'source', lambda: False)
+            return True
+        assert reads.check(db, OWNER, 'root', 'outer', nested)
+
+
+def test_nested_idle_records_each_allocate_an_independent_budget(db):
+    charged = []
+    with reads.scope(db, OWNER), reads.record(db, OWNER) as outer:
+        for index in range(2):
+            who = replace(OWNER, credential_id=f'independent-nested-{index}')
+            with reads.scope(db, who), reads.record(db, who) as inner:
+                assert inner['budget'] is not outer['budget']
+                for node in range(reads.MAX_NODES):
+                    assert reads.check(db, who, 'bound-probe', str(node), lambda: True)
+                charged.append(inner['budget']['nodes'])
+        assert outer['budget']['nodes'] == 0
+    assert sum(charged) == 2 * reads.MAX_NODES

@@ -40,6 +40,8 @@ Growth beyond that budget requires equal savings elsewhere in the helper or a
 separate transport decision. It must not consume previously valid request capacity,
 select code by revision kind, change frozen intent or enlarge the command limit.
 Normalized block indentation uses tabs, with irregular indentation preserved.
+If tokenization raises `TokenError` or `SyntaxError` (including indentation and
+tab errors), the complete source is returned unchanged on every service version.
 The helper executes on the host's own `python3`, not the central service's venv.
 Host execution and normalization are tested on Python 3.10 and 3.13.
 The wider Python 3.7+ evidence is syntax only, not runtime certification or a new
@@ -60,6 +62,9 @@ Plan, spec and report writers use `pm_plans.latest_git_receipt` to prove one cha
 from parent links. A workspace without report receipts retains its prior parent
 selection behavior, including the legacy fallback without a spec table. An earlier
 unknown effect keeps the original writer reserved and blocks another writer.
+A standalone plan-only journal without the report table has no report receipts;
+an explicit schema lookup preserves that same fallback. Normal daemon startup
+continues to install the report ledger unconditionally.
 
 Recovery first returns a completed local receipt. Otherwise the saved freeze is
 reused. Started or uncertain Git steps read back the original intent. A fully
@@ -86,8 +91,11 @@ requests, writes, transactions, tasks or event-loop turns. Cycle and budget
 refusals retain the existing guarded-cache rules. Collection readers start an
 independent traversal budget and recursion state for each top-level record while
 sharing their snapshot and completed memo results. A nested read inside an active
-traversal keeps its budget through every open scope, including intervening
-principal changes; only the live-traversal fact and budget are inherited, never
+traversal keeps its budget through the whole synchronous scope chain, including
+principal changes and closed frames retained by a copied context. A new scope
+finds and validates the nearest still-open ancestor; once every ancestor closes,
+the same copied context permits independent records again. Only the live-traversal
+fact and budget are inherited, never
 another principal's grants or partial answers. Every independently visible row
 remains visible on the page, and every visible row has complete source
 authorization under the unchanged rules. Completed proofs can save traversal
@@ -95,6 +103,15 @@ work: a row refused alone only by the 2,048-node computational guard may become
 visible with a warm page cache. Universal equality of computational refusals is
 not required. Response-wide work limits and transport
 finalization are still part of the pending public integration.
+
+For proof-entry accounting, R counts every independently allocated record budget
+at every nesting level, not only outer-page rows. Nesting inside an active
+traversal allocates no additional budget; an ordinary nested list under an idle
+outer record may allocate its own record budgets. With D counting every direct
+report-proof entry, including nested lists, `2,048 × R + D` is a conservative
+proof-entry envelope. It does not bound cache lookups, SQL, graph edges,
+serialization or arbitrary callback work. Callbacks can invoke arbitrarily many
+lists, so no finite universal execution-time or VM-instruction bound follows.
 
 The private freeze stays for the journal's lifetime, following spec materialization.
 Frozen bytes can exist without a receipt, including after a failed or uncertain

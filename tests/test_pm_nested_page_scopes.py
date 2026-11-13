@@ -1,5 +1,6 @@
 """Real collection readers must not replenish an enclosing source traversal."""
 from contextlib import ExitStack, contextmanager, nullcontext
+from contextvars import copy_context
 from dataclasses import replace
 
 import pytest
@@ -92,3 +93,26 @@ async def test_real_pages_preserve_live_scope_chain(fixed, monkeypatch, switch, 
     # exhaustion is not an unconditional denial. Preserve the complete legacy result.
     assert selected_counts(actual, op)[:3] == ([0] * 3 if exhausted else [1] * 3)
     assert observed and all(observed)
+
+
+async def test_operations_list_through_closed_copy_keeps_live_budget_then_recovers(fixed):
+    op = await materialize(fixed)
+    ops, db = fixed['d'].ops, fixed['d'].ops.db
+    parent = replace(OWNER, credential_id='copy-parent')
+    other = replace(OWNER, credential_id='copy-other')
+    saved = []
+    def page():
+        return ops.list(principal=other, action=reports.ACTION, limit=1)['operations']
+    with reads.scope(db, parent) as outer:
+        def nested():
+            for index in range(reads.MAX_NODES - 1):
+                assert reads.check(db, parent, 'copy-leaf', str(index), lambda: True)
+            with reads.scope(db, other) as middle:
+                copied = copy_context()
+            assert not middle['open'] and outer['active']
+            assert copied.run(page) == []
+            assert outer['budget']['nodes'] == reads.MAX_NODES
+            saved.append(copied)
+            return True
+        assert reads.check(db, parent, 'copy-root', 'outer', nested)
+    assert [row['operation_id'] for row in saved[0].run(page)] == [op['operation_id']]

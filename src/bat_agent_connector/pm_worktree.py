@@ -128,7 +128,12 @@ def _normalize_host_source(source: str) -> str:
     Cache only immutable code, keyed by the exact assembled source; no request
     or authority enters this one-entry cache. Source edits cannot reuse old code.
     """
-    tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, SyntaxError):
+        # Tokenizer versions disagree on when invalid indentation is rejected.
+        # Preserve unprocessable input exactly; the host compiler still rejects it.
+        return source
     protected = set()
     comments = set()
     fstrings = []

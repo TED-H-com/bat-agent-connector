@@ -48,7 +48,12 @@ def _changed():
 
 def _parent_scope(db, principal):
     parent, identity = _READ.get(), _identity(db, principal)
-    if parent is not None and parent['open']:
+    # A synchronous copied context can retain a closed middle frame while its
+    # ancestor is still traversing. Recover that ancestor before validating or
+    # allocating a record budget; closed frames never revive their own grants.
+    while parent is not None and not parent['open']:
+        parent = parent['parent']
+    if parent is not None:
         if not _valid(parent):
             raise _changed()
         if parent['identity'] != identity and parent['scope_depth'] >= MAX_DEPTH:
@@ -95,7 +100,7 @@ copied asynchronous context invalidates reuse rather than granting access.
         if owned:
             db.execute('BEGIN')
         db.execute('SAVEPOINT ' + anchor)
-        state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True,
+        state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True, 'parent': parent,
             'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {}, 'history': history,
             'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
             'guard_contexts': {}, 'partial_sources': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
@@ -167,6 +172,7 @@ def record(db, principal):
 
     Lists call this at each row boundary. Nested lists inside a live traversal
     keep its budget across the whole scope chain, even through principal changes.
+    Copied closed frames retain ancestry, not liveness after every ancestor ends.
     Principal-specific guards and partial answers remain in their own states.
     Fresh states keep refused/partial answers private to their original record.
     """

@@ -107,3 +107,14 @@ def test_host_script_caches_only_exact_assembled_source(monkeypatch):
         assert normalize.cache_info().hits == 1
     finally:
         normalize.cache_clear()
+
+
+@pytest.mark.parametrize('source,error', [
+    ('if True:\n\tvalue = 1\n        value = 2\n', TabError),
+    ('if True:\n    value = 1\n  value = 2\n', IndentationError),
+    ('value = (\n    1\n', SyntaxError),
+])
+def test_untokenizable_source_is_returned_unchanged_on_every_interpreter(source, error):
+    assert pm_worktree._normalize_host_source(source) == source
+    with pytest.raises(error):
+        compile(source, '<invalid-carrier>', 'exec')

@@ -90,6 +90,19 @@ def adopt(ctx):
     return pm_plans.adopt_revision(ctx)
 
 
+async def test_plan_only_journal_keeps_legacy_git_parent_without_report_ledger(ops):
+    assert not ops.db.execute("SELECT 1 FROM sqlite_master WHERE name='pm_roadmap_report_materializations'").fetchone()
+    assert not ops.db.execute("SELECT 1 FROM sqlite_master WHERE name='pm_spec_materializations'").fetchone()
+    target, _, _, _ = await planning(ops)
+    wid = target['workspace_id']
+    assert pm_plans.latest_git_receipt(ops.db, wid) is None
+    saved = await draft(ops, target)
+    ctx = adoption(ops, target, saved['revision_id'])
+    expected = receipt(ctx)
+    pm_plans.record_git_receipt(ctx, expected)
+    assert pm_plans.latest_git_receipt(ops.db, wid) == pm_plans.original_git_receipt(ops.db, wid) == expected
+
+
 async def test_professional_draft_preserves_all_domains_and_source_truth(ops):
     target, confirmed, assumption, acceptance = await planning(ops)
     saved = await draft(ops, target, requirements=[{"id": "membership.login", "source_input_id": confirmed,
