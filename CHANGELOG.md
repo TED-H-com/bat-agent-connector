@@ -31,6 +31,12 @@
   identities and bilingual refusal reasons without creating Work or attributing
   the commit to the external CLI; continuation remains unavailable.
 
+### Fixed
+
+- Check RPC and MCP method scopes before reading resource lineage, so a token
+  without the required scope receives the same refusal for existing, missing or
+  extra resource IDs.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API

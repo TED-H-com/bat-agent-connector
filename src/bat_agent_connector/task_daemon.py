@@ -342,6 +342,14 @@ class TaskDaemon:
 
     async def call_api(self, method: str, params: dict, principal: api_auth.Principal,
                        *, _observation_transport: dict | None = None) -> dict:
+        # Scope refusals must precede all resource/lineage reads, even when
+        # unvalidated parameters contain existing protected resource IDs.
+        scope = API_RPC.get(method, "?")
+        if method == "pm_history_continuation_preview":
+            from .pm_history_continuation import require_observe
+            require_observe(principal)
+        if scope != "?" and not principal.allows(scope):
+            raise OperationError("FORBIDDEN", f"{method} needs the {scope!r} scope", 403)
         from . import controller_authority
         from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard, cleanup_read_scopes
         cleanup_guard = nullcontext()
