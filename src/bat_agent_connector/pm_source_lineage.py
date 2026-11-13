@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from functools import wraps
 
@@ -217,7 +217,8 @@ def visible_roots(db, principal, original_ids):
                 visible = _visible_roots(db, principal, (identity,))
             else:
                 visible = check(db, principal, 'original_root', identity,
-                    lambda identity=identity: _visible_roots(db, principal, (identity,)))
+                    lambda identity=identity: pm_read_cache.remember(_visible_roots, (principal, identity),
+                        lambda: _visible_roots(db, principal, (identity,)), cache_errors=False, db=db))
             if not visible:
                 return False
         return True
@@ -492,6 +493,7 @@ def _require_frame(ops, operation_id):
 
 def filter_page(db, principal, page, keys, *, inherited_host=None, depth=0):
     """Filter whole records, preserving the upstream scan cursor and source truth."""
+    from .pm_source_reads import record
     result = dict(page)
     changed = False
     for key in keys:
@@ -499,7 +501,9 @@ def filter_page(db, principal, page, keys, *, inherited_host=None, depth=0):
             rows = result[key]
             result[key] = []
             for row in rows:
-                if visible_roots(db, principal, document_roots(db, row, inherited_host=inherited_host)):
+                with record(db, principal) if principal is not None else nullcontext():
+                    visible = visible_roots(db, principal, document_roots(db, row, inherited_host=inherited_host))
+                if visible:
                     # The old whole-response depth check only saw retained
                     # rows. Preserve that ordering for already-hidden rows.
                     if depth:
@@ -525,6 +529,12 @@ Only established collection fields may drop whole rows. Singular records and
 unknown response shapes are refused as a whole if they contain hidden sources;
 fixed PM documents are not rewritten into misleading partial descriptions.
 """
+    from .pm_source_reads import scope
+    with scope(db, principal) if principal is not None else nullcontext():
+        return _read_response(db, principal, value)
+
+
+def _read_response(db, principal, value):
     if (not installed(db) or not isinstance(value, dict)
             or db.execute("SELECT 1 FROM pm_source_lineage LIMIT 1").fetchone() is None):
         require_document(db, principal, value)
@@ -537,7 +547,8 @@ fixed PM documents are not rewritten into misleading partial descriptions.
 def _response_page(db, principal, value, *, inherited_host=None, depth=0):
     """Partition only registered pages; retain the entire non-row document.
 
-    No source scope spans rows. Each row has the host and depth it had in the
+    One snapshot shares completed proofs; each row owns its traversal budget.
+    Each row has the host and depth it had in the
     original response. Empty lists retain their position for depth validation.
     Bootstrap parts contribute their envelopes to the outer document, not their
     rows; a reference elsewhere in snapshot/sync/capabilities is still checked.
@@ -559,6 +570,17 @@ def _response_page(db, principal, value, *, inherited_host=None, depth=0):
                     and row.get("workspace_id") == result["workspace_id"] for row in result["runs"])):
         result = filter_page(db, principal, result, {"runs"}, inherited_host=host, depth=depth + 2)
         keys.add("runs")
+    if (type(result.get('version')) is int and result['version'] == 1
+            and isinstance(result.get('workspace_id'), str)
+            and 'next_after' in result and (result['next_after'] is None
+                or type(result['next_after']) is int and 0 <= result['next_after'] <= 2**63 - 1)
+            and type(result.get('source_visibility_filtered')) is bool
+            and isinstance(result.get('materializations'), list)
+            and all(isinstance(row, dict) and row.get('kind') == 'roadmap_report_materialization'
+                and isinstance(row.get('materialization_id'), str) and isinstance(row.get('operation_id'), str)
+                and row.get('workspace_id') == result['workspace_id'] for row in result['materializations'])):
+        result = filter_page(db, principal, result, {'materializations'}, inherited_host=host, depth=depth + 2)
+        keys.add('materializations')
     envelope = {key: [] if key in keys and isinstance(child, list) else child for key, child in result.items()}
     if (isinstance(result.get("snapshot"), dict) and isinstance(result.get("sync"), dict)
             and isinstance(result.get("capabilities"), dict) and "pagination" in result):

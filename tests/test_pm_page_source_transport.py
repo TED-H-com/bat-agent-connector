@@ -219,6 +219,7 @@ async def test_bootstrap_first_part_refusal_cost(pages, monkeypatch, transport, 
     assert status == 200, body
     assert body == supplied[0]  # Every readable row and all metadata survive.
     assert {item['work_item_id'] for item in body['snapshot']['work_items']['work_items']} == set(work)
-    assert (before, len(roots)) == (89, 178)
+    # Handler 23 + barrier 66 distinct roots, formerly 23 + 155 row-root occurrences.
+    assert (before, len(roots)) == (89, 89)
     assert len(checks) <= len(list(page_rows(supplied[0]))) + 1
     assert all(len(ids) <= 64 for ids in checks)
