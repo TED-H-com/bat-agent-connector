@@ -1,12 +1,25 @@
-"""Consumer-driven access inventory; wrappers exist only in tests."""
+"""Consumer-driven inventory of exercised accesses; wrappers exist only in tests.
+
+Normal subscription/get/contains/iteration/items/values/copy/deepcopy are tracked.
+keys(), dict(value), and mapping unpacking fail closed: plain dict copies cannot
+retain tracking of later absent-key reads. Explicit dict base-class calls (such as
+dict.get(value, key)) and C-extension accesses bypass this dynamic guard; they are
+not claimed as covered. The existing snapshot envelope's two unpack expressions
+are an explicit exception: its complete source is pinned, its source reads are recorded,
+and its returned root/coverage copies regain their wrappers before other consumers
+can read them. This is not a static proof for arbitrary consumer code.
+"""
 from __future__ import annotations
 
 import copy
+import hashlib
+import inspect
 import sys
+from contextlib import contextmanager
 
 import pytest
 
-from bat_agent_connector import pm_roadmap
+from bat_agent_connector import pm_roadmap, pm_snapshots
 from bat_agent_connector import pm_roadmap_report_schema as schema
 from bat_agent_connector import pm_roadmap_report_sources as sources
 from bat_agent_connector import pm_roadmap_reports as reports
@@ -23,6 +36,9 @@ ops = simple_ops
 
 
 # These accepted-baseline members are copied to JSON by blocks(), never interpreted.
+ENVELOPE_CODE = None
+ENVELOPE_PATHS = {('snapshot',), ('snapshot', 'coverage')}
+
 SERIALIZED_ONLY = {('snapshot', 'baseline', 'status'), ('snapshot', 'baseline', 'plan_head_version')}
 SERIALIZED_ONLY.update(('snapshot', 'evidence', 0, key) for key in (
     'captured_at', 'cost', 'dod', 'journal_cursor', 'sequence', 'server_id', 'source_id',
@@ -43,16 +59,52 @@ class Access(dict):
 
     def record(self, key, *, serialized=False):
         path = self.path + (key,)
-        generated = key in self and key not in self.original_keys
+        generated = dict.__contains__(self, key) and key not in self.original_keys
         self.reads.add((path, generated or key in self.spec.get('fields', {}) or serialized and path in SERIALIZED_ONLY))
 
     def __getitem__(self, key):
+        if sys._getframe(1).f_code is ENVELOPE_CODE and self.path in ENVELOPE_PATHS:
+            return dict.__getitem__(self, key)
         self.record(key)
         return dict.__getitem__(self, key)
 
     def get(self, key, default=None):
         self.record(key)
         return dict.get(self, key, default)
+
+    def __contains__(self, key):
+        self.record(key)
+        return dict.__contains__(self, key)
+
+    def __iter__(self):
+        # Also disables CPython's dict-subclass fast copy that bypasses keys().
+        for key in dict.__iter__(self):
+            self.record(key)
+            yield key
+
+    def keys(self):
+        if sys._getframe(1).f_code is ENVELOPE_CODE and self.path in ENVELOPE_PATHS:
+            self.reads.add((self.path + ('<serialized-envelope-copy>',), True))
+            return dict.keys(self)
+        raise AssertionError(f'untracked mapping copy/keys at {self.path}')
+
+    def values(self):
+        for key, value in dict.items(self):
+            self.record(key)
+            yield value
+
+    def copy(self):
+        result = dict.__new__(Access)
+        dict.__init__(result)
+        result.spec, result.path, result.reads = self.spec, self.path, self.reads
+        result.original_keys = self.original_keys
+        for key, value in dict.items(self):
+            self.record(key)
+            dict.__setitem__(result, key, value)
+        return result
+
+    def __copy__(self):
+        return self.copy()
 
     def items(self):
         # JSON encoding consumes arbitrary opaque members without interpreting them.
@@ -85,6 +137,43 @@ def wrap(value, spec, path, reads):
     return value
 
 
+
+@contextmanager
+def tracked_snapshot_envelope():
+    """Execute the real, audited envelope builder and restore copy provenance.
+
+    Any change to this small copy-only builder requires explicit re-audit. No
+    arbitrary consumer copy is permitted and no production function is skipped.
+    """
+    global ENVELOPE_CODE
+    original = pm_snapshots._response
+    assert hashlib.sha256(inspect.getsource(original).encode()).hexdigest() == '9e2fb28110e08086c574ebb42a8e8091d2d6d7a27416629d7a23fd61d9e516e1', 'Re-audit the snapshot envelope copies'
+    previous = ENVELOPE_CODE
+    ENVELOPE_CODE = original.__code__
+    def derived(parent, values):
+        value = dict.__new__(Access)
+        dict.__init__(value)
+        value.spec, value.path, value.reads = parent.spec, parent.path, parent.reads
+        value.original_keys = parent.original_keys
+        dict.update(value, values)
+        return value
+    def response(document, *args, **kwargs):
+        # These are the only original fields read by the pinned builder outside
+        # _brief(document), whose reads remain dynamically instrumented.
+        document.record('workspace_id')
+        document.record('coverage')
+        result = original(document, *args, **kwargs)
+        out = result['snapshot']
+        out['coverage'] = derived(dict.__getitem__(document, 'coverage'), out['coverage'])
+        result['snapshot'] = derived(document, out)
+        return result
+    try:
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(pm_snapshots, '_response', response)
+            yield
+    finally:
+        ENVELOPE_CODE = previous
+
 def check(closure, label):
     sources._verify(closure)
     closure = copy.deepcopy(closure)
@@ -96,7 +185,8 @@ def check(closure, label):
         row['document'] = wrap(row['document'], schema.PLAN, ('plan',), reads)
     for row in closure[-1].values():
         row['result'] = wrap(row['result'], schema.ADOPTION_RESULT, ('adoption',), reads)
-    projected = sources.project(closure)
+    with tracked_snapshot_envelope():
+        projected = sources.project(closure)
     for format in reports.FORMATS:
         for locale in ('en', 'zh-TW'):
             try:

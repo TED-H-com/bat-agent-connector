@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import json
 import sys
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 import pytest
 
@@ -164,6 +164,52 @@ def inject(ops, original, candidate, source, depth, kind):
 @pytest.mark.parametrize('kind', KINDS)
 @pytest.mark.parametrize('source', DOCUMENTS)
 async def test_complete_document_depth_through_routes(ops, served, monkeypatch, source, kind):  # noqa: F811
+    """Keep every source/shape/depth/format/locale on the real HTTP route."""
+    d, port = served
+    wid, rid, candidate, original = await fixture_closure(ops, source)
+    monkeypatch.setattr(d, 'ops', ops)
+    path = f'/api/v1/pm/workspaces/{wid}/roadmap/revisions/{rid}/report'
+    auth = token(d, READER.actor, 'observe')
+    for depth in (127, 128, 500):
+        with fault(ops):
+            inject(ops, original, candidate, source, depth, kind)
+            closure = sources._Closure(ops, READER, wid).collect(rid)
+            if depth > 127:
+                for gate in (schema.validate_v1, sources._verify):
+                    with pytest.raises(OperationError, match='PM_REPORT_SOURCE_CHANGED'):
+                        gate(closure)
+            else:
+                schema.validate_v1(closure)
+                sources._verify(closure)
+                fixed = sources.project(closure)
+                sources.canonical(fixed)
+                assert sources.load_fixed(ops, READER, wid, rid) == fixed
+            for format in reports.FORMATS:
+                for locale in ('en', 'zh-TW'):
+                    if depth > 127:
+                        with pytest.raises(OperationError, match='PM_REPORT_SOURCE_CHANGED'):
+                            reports.get_report(ops, READER, wid, rid, format=format, locale=locale)
+                    else:
+                        expected = reports.render_fixed(fixed, format=format, locale=locale)
+                    status, body = await raw_http(port, path + f'?format={format}&locale={locale}', auth)
+                    if depth > 127:
+                        assert status == 409, body
+                        assert b'PM_REPORT_SOURCE_CHANGED' in body
+                    else:
+                        assert status == 200, body
+                        assert json.loads(body) == expected
+    print('DEPTH_CASE', source, kind, '3 depths, 18 HTTP outputs')
+
+
+@pytest.mark.parametrize('kind', KINDS)
+@pytest.mark.parametrize('source', ('observation', 'forecast'))
+async def test_worst_path_stack_and_all_route_bytes(ops, served, monkeypatch, source, kind):  # noqa: F811
+    """Profile deepcopy and pretty JSON once per route/shape, not flat SVG layout.
+
+    All six byte comparisons remain on every route for mixed observation/forecast;
+    the separate 21-case HTTP matrix preserves all seven document boundaries.
+    HTML/en exercises both shared block construction and recursive JSON formatting.
+    """
     d, port = served
     wid, rid, candidate, original = await fixture_closure(ops, source)
     monkeypatch.setattr(d, 'ops', ops)
@@ -173,51 +219,41 @@ async def test_complete_document_depth_through_routes(ops, served, monkeypatch, 
     server, fleet = server_for(d, port, monkeypatch, auth)
     frames = Frames()
     try:
-        for depth in (127, 128, 500):
-            with fault(ops):
-                inject(ops, original, candidate, source, depth, kind)
+        with fault(ops):
+            inject(ops, original, candidate, source, 127, kind)
+            with frames.route('pipeline'):
                 closure = sources._Closure(ops, READER, wid).collect(rid)
-                if depth > 127:
-                    for gate in (schema.validate_v1, sources._verify):
-                        with pytest.raises(OperationError, match='PM_REPORT_SOURCE_CHANGED'):
-                            gate(closure)
-                    for format in reports.FORMATS:
-                        for locale in ('en', 'zh-TW'):
-                            with pytest.raises(OperationError, match='PM_REPORT_SOURCE_CHANGED'):
-                                reports.get_report(ops, READER, wid, rid, format=format, locale=locale)
-                            status, body = await raw_http(port, path + f'?format={format}&locale={locale}', auth)
-                            assert status == 409, body
-                            assert b'PM_REPORT_SOURCE_CHANGED' in body
-                    continue
-                with frames.route('pipeline'):
-                    schema.validate_v1(closure)
-                    sources._verify(closure)
-                    fixed = sources.project(closure)
-                    sources.canonical(fixed)
-                with frames.route('load_fixed'):
-                    assert sources.load_fixed(ops, READER, wid, rid) == fixed
-                for format in reports.FORMATS:
-                    for locale in ('en', 'zh-TW'):
-                        params = fields | {'format': format, 'locale': locale}
-                        with frames.route('render_fixed'):
-                            expected = reports.render_fixed(fixed, format=format, locale=locale)
-                        with frames.route('get_report'):
-                            assert reports.get_report(ops, READER, **params) == expected
-                        with frames.route('pm_reads.read'):
-                            assert pm_reads.read(ops, READER, READ, params.copy()) == expected
-                        with frames.route('TaskDaemon.call_api'):
-                            assert await d.call_api(READ, params.copy(), READER) == expected
-                        with frames.route('HTTP GET'):
-                            status, body = await raw_http(port, path + f'?format={format}&locale={locale}', auth)
-                            assert status == 200, body
-                            assert json.loads(body) == expected
-                        with frames.route('RPC POST'):
-                            status, body = await http(port, 'POST', '/rpc', body={'method': READ, 'params': params}, tok=auth)
-                            assert status == 200, body
-                            assert body['result'] == expected
-                        with frames.route('MCP tool via RPC'):
-                            assert unpack(await server.call_tool(READ, params)) == expected
-        print('DEPTH_CASE', source, kind, '3 depths, 18 HTTP outputs')
+                schema.validate_v1(closure)
+                sources._verify(closure)
+                fixed = sources.project(closure)
+                sources.canonical(fixed)
+            with frames.route('load_fixed'):
+                assert sources.load_fixed(ops, READER, wid, rid) == fixed
+            selectors = ([(format, locale) for format in reports.FORMATS for locale in ('en', 'zh-TW')]
+                         if kind == 'mixed' else [('html', 'en')])
+            for format, locale in selectors:
+                def measure(route):
+                    return frames.route(route) if (format, locale) == ('html', 'en') else nullcontext()
+                params = fields | {'format': format, 'locale': locale}
+                with measure('render_fixed'):
+                    expected = reports.render_fixed(fixed, format=format, locale=locale)
+                with measure('get_report'):
+                    assert reports.get_report(ops, READER, **params) == expected
+                with measure('pm_reads.read'):
+                    assert pm_reads.read(ops, READER, READ, params.copy()) == expected
+                with measure('TaskDaemon.call_api'):
+                    assert await d.call_api(READ, params.copy(), READER) == expected
+                with measure('HTTP GET'):
+                    status, body = await raw_http(port, path + f'?format={format}&locale={locale}', auth)
+                    assert status == 200, body
+                    assert json.loads(body) == expected
+                with measure('RPC POST'):
+                    status, body = await http(port, 'POST', '/rpc', body={'method': READ, 'params': params}, tok=auth)
+                    assert status == 200, body
+                    assert body['result'] == expected
+                with measure('MCP tool via RPC'):
+                    assert unpack(await server.call_tool(READ, params)) == expected
+        print('PROFILE_CASE', source, kind, len(selectors), 'all-route output comparisons')
         frames.check()
     finally:
         await fleet.close()

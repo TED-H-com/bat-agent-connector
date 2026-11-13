@@ -82,11 +82,12 @@ async def test_deep_json_real_http_and_all_downstream_stages(ops, served, monkey
                 for locale in ('en', 'zh-TW'):
                     if depth == getattr(schema, 'MAX_CONTAINER_DEPTH', 12):
                         expected = reports.render_fixed(sources.project(closure), format=format, locale=locale)
+                    previous_profile = sys.getprofile()
                     sys.setprofile(profile)
                     try:
                         status, body = await raw_http(port, path + f'?format={format}&locale={locale}', auth)
                     finally:
-                        sys.setprofile(None)
+                        sys.setprofile(previous_profile)
                     if depth > getattr(schema, 'MAX_CONTAINER_DEPTH', 12):
                         assert status == 409, body
                         assert b'PM_REPORT_SOURCE_CHANGED' in body
@@ -183,24 +184,50 @@ def literals(expression):
     pytest.fail('A producer added a kind/basis that is not statically recognizable')
 
 
+def emitter_calls(tree, *, maintenance=False):
+    """Fail closed on emitter/receiver escapes rather than infer Python aliases.
+
+    Scope is these two producer modules. Reflection entry points are rejected;
+    this is a syntactic drift guard, not whole-program Python data-flow analysis.
+    """
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    owners = {'self', 'collector', '_Collector'}
+    reflection = {'getattr', 'setattr', 'delattr', 'vars', 'globals', 'locals', 'eval', 'exec'}
+    for node in ast.walk(tree):
+        parent = parents.get(node)
+        if isinstance(node, ast.Attribute) and node.attr in reflection | {'__dict__', '__getattribute__', '__getattr__', '__class__'}:
+            pytest.fail('Producer reflection is not statically classifiable')
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            if node.id in reflection:
+                pytest.fail('Producer reflection is not statically classifiable')
+            if not maintenance and node.id in owners:
+                constructor = node.id == '_Collector' and isinstance(parent, ast.Call) and parent.func is node
+                if not constructor and not (isinstance(parent, ast.Attribute) and parent.value is node):
+                    pytest.fail('Producer emitter receiver escapes a direct attribute access')
+        emitter = (isinstance(node, ast.Name) and node.id == 'ref' and isinstance(node.ctx, ast.Load)
+                   if maintenance else isinstance(node, ast.Attribute) and node.attr == 'add'
+                   and isinstance(node.value, ast.Name) and node.value.id in owners)
+        if emitter:
+            if not isinstance(parent, ast.Call) or parent.func is not node:
+                pytest.fail('Producer emitter escapes a direct call')
+            if not parent.args or any(isinstance(arg, ast.Starred) for arg in parent.args) or any(
+                    kw.arg is None for kw in parent.keywords):
+                pytest.fail('Producer emitter arguments are not statically classifiable')
+            yield parent
+
+
 def test_producer_enumerations_do_not_drift():
     evidence = ast.parse(Path('src/bat_agent_connector/pm_evidence.py').read_text())
     kinds = set()
-    for node in ast.walk(evidence):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'add'
-                and isinstance(node.func.value, ast.Name) and node.func.value.id == 'collector'):
-            kinds |= literals(node.args[0])
-        elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'add'
-                and isinstance(node.func.value, ast.Name) and node.func.value.id == 'self'):
-            kinds |= literals(node.args[0])
+    for call in emitter_calls(evidence):
+        kinds |= literals(call.args[0])
     assert kinds == set(schema.EVIDENCE_KINDS)
     maintenance = ast.parse(Path('src/bat_agent_connector/pm_maintenance_review_sources.py').read_text())
     kinds, basis = set(), set()
-    for node in ast.walk(maintenance):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'ref':
-            kinds |= literals(node.args[0])
-            for kw in node.keywords:
-                if kw.arg == 'basis':
-                    basis |= literals(kw.value)
+    for call in emitter_calls(maintenance, maintenance=True):
+        kinds |= literals(call.args[0])
+        for kw in call.keywords:
+            if kw.arg == 'basis':
+                basis |= literals(kw.value)
     assert kinds == set(schema.MAINTENANCE_KINDS)
     assert basis == set(schema.ACCESS_REF['fields']['basis']['values'])

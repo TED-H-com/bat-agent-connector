@@ -111,11 +111,30 @@ within the depth budget; depth acceptance is not a promise of unbounded output.
 Field enumeration alone does not prove downstream safety. Test-only recording
 mappings audit actual projection and all renderer accesses for ordinary, legacy,
 quality matrix, maintenance, forecast and empty-baseline closures. Explicit opaque
-metadata is only copied to serialized JSON. Boundary tests measure stack headroom
+metadata is only copied to serialized JSON. The dynamic test wrapper records normal
+membership, iteration, values, subscription, get and items, and preserves paths through
+copy/deepcopy. `keys()`, `dict(value)` and mapping unpacking fail the guard because
+plain copies cannot track later absent-key reads. The existing snapshot envelope's
+two unpack operations are an explicit audited exception: its complete function
+source is pinned (a change fails the guard), its source reads are recorded, and
+its returned root/coverage mappings regain wrappers before further consumers run.
+A negative control checks this restoration, unchanged bytes, and pin invalidation.
+Explicit dict base-class calls
+(such as `dict.get(value, key)`) and C-extension accesses bypass this dynamic guard
+and are not covered; it is an inventory of exercised access paths, not a whole-program
+proof. Negative controls demonstrate both tracked reads and refused copies.
+Boundary tests measure stack headroom
 through the service, shared read, daemon, HTTP, RPC and MCP paths, including deepcopy,
 canonical JSON and all six outputs.
 The peak must leave at least half the default recursion budget free; over-depth input
-never reaches projection. Producer literal enumeration drift is checked separately.
+never reaches projection. Profiling covers observation deepcopy and forecast pretty
+JSON for all three shapes, once per route in HTML/en; a smaller mixed-shape matrix
+compares every route's six outputs. The complete seven-document/three-shape HTTP
+matrix still checks 127, 128 and 500 for all six outputs without profiling overhead.
+Producer literal enumeration drift is checked separately: emitter and receiver
+escapes and reflection entry points fail the test, rather than attempting alias
+inference. This syntactic guard is scoped to the two audited producer modules;
+it is not whole-program Python data-flow analysis.
 
 Schema-generated tests enumerate every field and container element using all eight
 required mutation types, plus empty and over-bound Unicode strings. Type-compatible
