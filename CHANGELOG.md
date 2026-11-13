@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Let workspace members with observe access read a fixed Scope and roadmap report
+  through the API or MCP. One exact Roadmap observation identifies the report,
+  showing accepted requirements, baseline and forecast dates, dependencies,
+  quality and coverage. Every original source must remain readable. Reports are
+  available in English and Traditional Chinese as Markdown, HTML or SVG; actual
+  dates remain unknown. Reading a report changes nothing and calls no model.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API
