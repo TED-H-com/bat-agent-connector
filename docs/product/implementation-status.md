@@ -1,5 +1,29 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-13：Connector 0.2.20／Desktop 0.1.16 發布準備
+
+分支 `release/0.2.20-desktop-0.1.16` 準備套件、技能及身分 golden 的版本。
+主線已合併 #533、#538、#539、#540、#543 與 #547，涵蓋固定 Scope／roadmap
+報告讀取、私有狀態並行讀寫、原操作歷史 cursor、跨來源分頁，以及 audit 寫入
+失敗時保留原操作結果與雙語警告。最新穩定版升級 fixture 使用已發布的 0.2.19，
+保留 0.2.12 較早基準。這是發布準備，尚不代表發布、安裝或驗收；簽章、公證、
+signed updater feed、owner／真 BAT／模型及 R0–R5 驗收不因此完成。
+Native lock 仍記錄 0.1.15；必須完成版本對齊後才能進行 locked native build。
+已發布下載文件與網站仍指向 0.2.19／0.1.15，待發布後另行更新。
+E00–E11、R0–R5、A01–A40、未修訂的 PM v1.2 生命週期待辦與 P0–P4 保持各自狀態。
+
+This branch prepares Connector 0.2.20 / Desktop 0.1.16 package, skill and identity
+golden versions. Main has merged #533, #538, #539, #540, #543 and #547: fixed
+Scope/roadmap report reads, concurrent private-state reads and writes, original
+operation-history cursors, cross-source pagination and preserved operation outcomes
+with bilingual warnings when later audit writes fail. The latest-stable upgrade
+fixture uses published 0.2.19 alongside the earlier 0.2.12 baseline. Publication,
+installation, signing, notarization, a signed updater feed and owner/live acceptance
+remain separate gates. The native lock still records 0.1.15 and must be aligned
+before a locked native build. Published download documentation and the site retain
+0.2.19 / 0.1.15 until publication. E00–E11, R0–R5, A01–A40, unrevised PM v1.2
+lifecycle requirements and P0–P4 retain their separate status.
+
 ## Connector 0.2.19／Desktop 0.1.15 交付
 
 分支：`release/0.2.19-desktop-0.1.15` 的版本準備已整合；合併：#536 納入套件、
