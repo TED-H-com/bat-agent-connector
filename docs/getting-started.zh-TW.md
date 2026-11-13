@@ -21,7 +21,7 @@ Connector 0.2.19／Desktop 0.1.15 在共用 Dashboard 加入引導式 Sprint Rev
 
 Windows 請下載 `better-agent-dashboard_0.1.15_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
 
-目前候選版檢查分別由 Connector 0.2.12 與 0.2.18 的固定發布來源建置舊核心，再升級至候選版，核對原身分、資料與操作保留。候選版的 Connector 版本必須較高；同版本比較會被拒絕。已發布的 0.2.18 使用 0.2.12 與 0.2.17 基準。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
+目前候選版檢查分別由 Connector 0.2.12 與 0.2.19 的固定發布來源建置舊核心，再升級至候選版，核對原身分、資料與操作保留。候選版的 Connector 版本必須較高；同版本比較會被拒絕。已發布的 0.2.19 使用 0.2.12 與 0.2.18 基準。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
 
 ## 首次啟動：你的本機 Connector
 

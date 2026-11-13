@@ -469,8 +469,8 @@ parts.append(
         "p",
     )
     + bi(
-        "On Windows, quit Dashboard from its tray menu and install the 0.1.15 package while preserving application data. Existing unsigned test packages cannot use in-app signed updates. Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.18 sources; old-installer upgrades are separate. CI does not establish recovery on your computer or real BAT/model acceptance.",
-        "Windows 請從系統匣退出 Dashboard，再安裝 0.1.15 套件並保留應用程式資料。既有未簽章測試包不能使用內建簽章更新。目前候選版的升級 fixture 使用由 0.2.12 與 0.2.18 固定發布來源建出的核心，舊安裝器的完整升級另有範圍；CI 不代表已修復你的電腦或通過真 BAT／模型驗收。",
+        "On Windows, quit Dashboard from its tray menu and install the 0.1.15 package while preserving application data. Existing unsigned test packages cannot use in-app signed updates. Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.19 sources; old-installer upgrades are separate. CI does not establish recovery on your computer or real BAT/model acceptance.",
+        "Windows 請從系統匣退出 Dashboard，再安裝 0.1.15 套件並保留應用程式資料。既有未簽章測試包不能使用內建簽章更新。目前候選版的升級 fixture 使用由 0.2.12 與 0.2.19 固定發布來源建出的核心，舊安裝器的完整升級另有範圍；CI 不代表已修復你的電腦或通過真 BAT／模型驗收。",
         "p",
     )
     + bi(
