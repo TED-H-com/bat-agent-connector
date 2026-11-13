@@ -185,3 +185,51 @@ Frozen bytes can exist without a receipt, including after a failed or uncertain
 effect. Withdrawal stops future disclosure and new effects; it neither erases the
 private freeze nor rewrites Git. No cleanup removes a freeze beneath an uncertain
 operation. Finite retention or erasure is a later owner policy question.
+
+## Known limits: other registered pages carrying report roots
+
+The four budgeted readers above are not the whole public read surface. A report
+operation is an original lineage root; existing named operation/resource references
+can carry it into another registered page. This does not authorize a new derivative
+write: `pm_source_lineage.inherit` still applies the existing action and workspace
+gates (`src/bat_agent_connector/pm_source_lineage.py:330`). The save itself creates
+an operation, event, run and receipt, not an artifact or session. The following
+inventory describes reference-bearing shapes, including inherited references,
+not a claim that a report save directly creates every resource listed.
+
+All paths below are under `src/bat_agent_connector/`. Registration is the complete
+`pm_source_lineage.py:520` collection set and the additional tests at `:559`,
+`:564`, `:575` and `:585`; reference extraction is at `:136`, including nested
+named IDs and inherited host identity. The final barrier walks only registered
+rows, never arbitrary nested dictionaries as independent pages.
+
+| Registered shape outside the four budgeted lists | How a report root can reach its rows; producer anchors | What bounds work here |
+| --- | --- | --- |
+| `sessions`, `known_sessions`, `work` | Session/resource lineage or operation IDs in execution projections; `api_v1.py:1594`, `execution_sources.py:161`, `:193` | Producer-selected rows (project work defaults to 50; worktree session bindings select at most 100), then the per-row bounds below. No report-work early stop. |
+| `work_items`, `children`, `archived` | Work lineage and nested child/source references; `work_items.py:1125`, `:1227`, `:1061`; `work_item_results.py:104` | Ordinary Work lists clamp to 200; archived lists use `LIST_MAX=200`; child/result projections keep their own limits. Tree/detail projections do not acquire a new aggregate report budget. Pure project metadata has no report root. |
+| `artifacts`, `result_artifacts`, `checkpoints` | Historical capture/operation references and resource lineage; `artifacts.py:156`, `work_item_results.py:74`, `checkpoints.py:179`; root expansion at `pm_source_lineage.py:115` | Artifact pages at most 200; result sources at most 20; checkpoint producer limits remain unchanged. Entire nested row content counts toward that row's source limit. |
+| `links`, `relations` | Named operation/owner/source/resource references; `work_item_results.py:58`, `pm_external_history_links.py:148`, `:388`, `observation.py:1061` | Existing producer pagination/truncation only; ordinary result links cap at 20. No report-aware work continuation is added to these handlers. A source-free external-history association adds no report closure. |
+| `candidates`, `integrations` | Candidate resources, saved operation and receipt references; `integration.py:1422`, `:1431`, `pm_maintenance_review.py:200` | Integration lists clamp to 100, integration source candidates to 200; fixed review/preview documents retain their existing byte bounds and whole-envelope check. |
+| `retained`, `tombstones` | Preserved resource/operation identities; `cleanup.py:2167`, `:2195` | Existing pages clamp to 200. A bare string/ref without a recognized identity causes no report authorization. |
+| `instructions` | Session instruction operation lineage; `session_instructions.py:77` | At most 100 selected instruction receipts, then per-row authorization. No report-specific work stop. |
+| `events` outside the global event reader, and embedded `operations` pages | History/review operation references; `pm_maintenance_review.py:575`, `observation.py:977` history projections; registered by `pm_source_lineage.py:520` | These field names do not imply use of the four budgeted handlers. Their own producer row/byte limits apply, followed by the same final barrier. |
+| Deployment `items` with `next_cursor` and a `deployment_id` in every row | Deployment operation, recipe and delivery ancestry; `deployment.py:692`, `pm_source_lineage.py:109`, `:559` | At most 200 deployment rows; exact shape test and per-row source bound. No new cursor-aware report budget. |
+| Bootstrap `{snapshot,sync,capabilities,pagination}` | Registered pages inside snapshot parts; `api_v1.py:1586`, `pm_source_lineage.py:585` | Each producer keeps its own limits; the barrier shares completed proofs across all parts and checks the combined non-row envelope whole. Only a part actually using a budgeted reader gets that handler's work stop. There is no new bootstrap-wide report budget. |
+
+For these other shapes, `filter_page` (`pm_source_lineage.py:498`) starts a fresh
+source record for every row. `document_roots` (`:184`) enforces 64 original roots
+per row, not per response; root expansion has its existing 256-resource guard
+(`:75`) and document references retain depth 32 (`:138`). Recursive authorization
+retains depth 64 and 2,048 charged nodes per independently allocated record
+(`pm_source_reads.py:22`, `:243`). Each report closure retains its own 2,000-record
+and 16,000,000-byte guards (`pm_roadmap_report_sources.py:30`, `:75`). Completed
+proofs are reused within this barrier's fresh snapshot; incomplete work is not.
+
+There is no 20-observation response cap for these other handlers. Their aggregate
+work scales with the rows supplied by their producers, distinct reachable roots,
+and any independently allocated nested records, using the R/D accounting above.
+These guards do not bound SQL scans, edges, serialization, or the bytes of an
+arbitrarily corrupt stored value. They imply no universal response-time bound.
+A hidden row is removed without changing the producer's cursor; no work stop or
+permission decision is invented by the barrier. Singular/unknown shapes and the
+non-row envelope remain whole-document checks, including the 64-root limit.
