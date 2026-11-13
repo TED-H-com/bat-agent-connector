@@ -130,6 +130,7 @@ READ_TOOLS = [
     "pm_overview_assessments_list", "pm_overview_assessment_get",
     "pm_conversation_proposals_list", "pm_conversation_proposal_get",
     "pm_brief_export_get",
+    "pm_roadmap_report_get",
     "pm_lifecycle_get", "pm_lifecycle_transitions_list", "pm_lifecycle_transition_get", "pm_lifecycle_inflight_list",
     "pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get",
     "pm_kanban_get", "pm_kanban_card_get", "pm_meetings_list", "pm_meeting_get", "pm_meeting_history_list",
@@ -1098,6 +1099,12 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Page original in-flight operations with current source access; retained or unknown does not mean completed."""
         return await pm_daemon("pm_lifecycle_inflight_list", workspace_id=workspace_id, transition_id=transition_id, after=after, limit=limit)
 
+    async def pm_roadmap_report_get(workspace_id: str, observation_revision_id: str, format: str = "markdown",
+                                    locale: str = "en", renderer_version: StrictInt = 1) -> dict[str, Any]:
+        """Read a fixed scope and roadmap report anchored by an original roadmap observation."""
+        return await pm_daemon("pm_roadmap_report_get", workspace_id=workspace_id, observation_revision_id=observation_revision_id,
+                               format=format, locale=locale, renderer_version=renderer_version)
+
     async def pm_brief_export_get(workspace_id: str, snapshot_id: str, format: str = "markdown", locale: str = "en") -> dict[str, Any]:
         """Render a fixed authorized Project Brief as passive markdown/html/svg in JSON; does not save or publish a file."""
         return await pm_daemon("pm_brief_export_get", workspace_id=workspace_id, snapshot_id=snapshot_id, format=format, locale=locale)
@@ -1333,7 +1340,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_follow_up_assessments_list, pm_follow_up_assessment_get,
                pm_overview_assessments_list, pm_overview_assessment_get,
                pm_conversation_proposals_list, pm_conversation_proposal_get,
-               pm_brief_export_get,
+               pm_brief_export_get, pm_roadmap_report_get,
                pm_lifecycle_get, pm_lifecycle_transitions_list, pm_lifecycle_transition_get, pm_lifecycle_inflight_list,
                pm_follow_up_list, pm_follow_up_get, pm_follow_up_latest_get,
                pm_kanban_get, pm_kanban_card_get, pm_meetings_list, pm_meeting_get, pm_meeting_history_list,
@@ -1343,6 +1350,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 
+    _strict_tool_arguments(mcp, "pm_roadmap_report_get",
+        string_parameters=frozenset({"workspace_id", "observation_revision_id", "format", "locale"}))
     _strict_tool_arguments(mcp, "pm_workspace_wip_get",
         string_parameters=frozenset({"workspace_id", "policy_revision"}))
     _strict_tool_arguments(mcp, "pm_plan_impact_preview",

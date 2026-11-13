@@ -1,5 +1,7 @@
 # Explicit Roadmap baselines, forecasts and observed results
 
+See [Scope and roadmap report](pm-roadmap-report.md) for the separate fixed observation renderer and shared reads.
+
 This is the W13 scope and milestone foundation from [PM v1.2](../product/pm-v1.2-plan.md)
 sections 8–11. It uses [adopted plans](pm-plans.md), [explicit work bindings](pm-evidence.md)
 and [fixed project snapshots](pm-snapshots.md). No plan input is automatically

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Let workspace members with observe access read a fixed Scope and roadmap report
+  through the API or MCP. One exact Roadmap observation identifies the report,
+  showing accepted requirements, baseline and forecast dates, dependencies,
+  quality and coverage. Every original source must remain readable. Reports are
+  available in English and Traditional Chinese as Markdown, HTML or SVG; actual
+  dates remain unknown. Reading a report changes nothing and calls no model.
+
 - Preserve paired operation-history cursors in MCP, RPC, CLI and Dashboard readers,
   including equal timestamps and empty continuing pages. Keep Attention's next-page
   control available with English and Traditional Chinese guidance, and document
