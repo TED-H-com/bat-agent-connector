@@ -1,0 +1,251 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="6496" viewBox="0 0 960 6496" xml:lang="zh-TW" role="img">
+<title>範圍與路線圖報告</title>
+<g id="page-1" transform="translate(0 0)">
+<rect width="960" height="1280" fill="#fff" stroke="#dfe3ea"/>
+<g font-family="system-ui, Segoe UI, Noto Sans TC, sans-serif" fill="#1d2330">
+<text x="40" y="36" font-size="14">pmro_11111111111111111111111111111111</text>
+<text x="40" y="88" font-size="20" xml:space="preserve" data-block="0" data-start="0" data-end="8">範圍與路線圖報告</text>
+<text x="40" y="120" font-size="14" xml:space="preserve" data-block="1" data-start="0" data-end="13">歷史快照 · 固定來源選取</text>
+<text x="40" y="146" font-size="14" xml:space="preserve" data-block="2" data-start="0" data-end="32">快照 ID 本身無法識別這份報告：觀察紀錄也固定了其基準與預測。</text>
+<text x="40" y="172" font-size="14" xml:space="preserve" data-block="3" data-start="0" data-end="35">這份報告用於準備討論；不代表 Review 已完成、工作已授權、品質已</text>
+<text x="40" y="194" font-size="14" xml:space="preserve" data-block="3" data-start="35" data-end="48">驗證，也不會發布任何內容。</text>
+<text x="40" y="220" font-size="14" xml:space="preserve" data-block="4" data-start="0" data-end="31">彙整時間不代表已重新查證每個來源；各筆已保存的觀察仍保留原本時</text>
+<text x="40" y="242" font-size="14" xml:space="preserve" data-block="4" data-start="31" data-end="33">間。</text>
+<text x="40" y="268" font-size="14" xml:space="preserve" data-block="5" data-start="0" data-end="34">實際完成日期皆為未知：目前尚無實際日期紀錄。Commit、合併、審查</text>
+<text x="40" y="290" font-size="14" xml:space="preserve" data-block="5" data-start="34" data-end="48">與驗收時間不是實際完成日期。</text>
+<text x="40" y="316" font-size="14" xml:space="preserve" data-block="6" data-start="0" data-end="33">需求 ID 屬於其確切計畫版本；共用工作與重複里程碑不會增加交付物</text>
+<text x="40" y="338" font-size="14" xml:space="preserve" data-block="6" data-start="33" data-end="50">數量。依賴不會推算日期或關鍵路徑。</text>
+<text x="40" y="364" font-size="14" xml:space="preserve" data-block="7" data-start="0" data-end="31">預測日期是這筆觀察選定的版本，並非目前預測。品質呈現原始選定評</text>
+<text x="40" y="386" font-size="14" xml:space="preserve" data-block="7" data-start="31" data-end="43">估，目前適用性尚未評估。</text>
+<text x="40" y="420" font-size="16" xml:space="preserve" data-block="8" data-start="0" data-end="9">固定身分與涵蓋範圍</text>
+<text x="40" y="448" font-size="14" xml:space="preserve" data-block="9" data-start="0" data-end="1">{</text>
+<text x="40" y="470" font-size="14" xml:space="preserve" data-block="9" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="492" font-size="14" xml:space="preserve" data-block="9" data-start="2" data-end="64">  &quot;baseline_digest&quot;: &quot;8888888888888888888888888888888888888888</text>
+<text x="40" y="514" font-size="14" xml:space="preserve" data-block="9" data-start="64" data-end="90">888888888888888888888888&quot;,</text>
+<text x="40" y="536" font-size="14" xml:space="preserve" data-block="9" data-start="90" data-end="91">&#10;</text>
+<text x="40" y="558" font-size="14" xml:space="preserve" data-block="9" data-start="91" data-end="153">  &quot;baseline_revision_id&quot;: &quot;pmrb_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</text>
+<text x="40" y="580" font-size="14" xml:space="preserve" data-block="9" data-start="153" data-end="157">aa&quot;,</text>
+<text x="40" y="602" font-size="14" xml:space="preserve" data-block="9" data-start="157" data-end="158">&#10;</text>
+<text x="40" y="624" font-size="14" xml:space="preserve" data-block="9" data-start="158" data-end="184">  &quot;forecast_digest&quot;: null,</text>
+<text x="40" y="646" font-size="14" xml:space="preserve" data-block="9" data-start="184" data-end="185">&#10;</text>
+<text x="40" y="668" font-size="14" xml:space="preserve" data-block="9" data-start="185" data-end="216">  &quot;forecast_revision_id&quot;: null,</text>
+<text x="40" y="690" font-size="14" xml:space="preserve" data-block="9" data-start="216" data-end="217">&#10;</text>
+<text x="40" y="712" font-size="14" xml:space="preserve" data-block="9" data-start="217" data-end="279">  &quot;observation_digest&quot;: &quot;8e212ab6b672589d179422a716dfd462e8246</text>
+<text x="40" y="734" font-size="14" xml:space="preserve" data-block="9" data-start="279" data-end="308">513e6cfbc9e77a7a2f24b659701&quot;,</text>
+<text x="40" y="756" font-size="14" xml:space="preserve" data-block="9" data-start="308" data-end="309">&#10;</text>
+<text x="40" y="778" font-size="14" xml:space="preserve" data-block="9" data-start="309" data-end="371">  &quot;observation_revision_id&quot;: &quot;pmro_111111111111111111111111111</text>
+<text x="40" y="800" font-size="14" xml:space="preserve" data-block="9" data-start="371" data-end="378">11111&quot;,</text>
+<text x="40" y="822" font-size="14" xml:space="preserve" data-block="9" data-start="378" data-end="379">&#10;</text>
+<text x="40" y="844" font-size="14" xml:space="preserve" data-block="9" data-start="379" data-end="441">  &quot;snapshot_digest&quot;: &quot;335caf623fcc0b71ac5f804cc8a2c26b35dba266</text>
+<text x="40" y="866" font-size="14" xml:space="preserve" data-block="9" data-start="441" data-end="467">3d7fd198679f4e6f1cd7c7cd&quot;,</text>
+<text x="40" y="888" font-size="14" xml:space="preserve" data-block="9" data-start="467" data-end="468">&#10;</text>
+<text x="40" y="910" font-size="14" xml:space="preserve" data-block="9" data-start="468" data-end="527">  &quot;snapshot_id&quot;: &quot;pmsnap_22222222222222222222222222222222&quot;,</text>
+<text x="40" y="932" font-size="14" xml:space="preserve" data-block="9" data-start="527" data-end="528">&#10;</text>
+<text x="40" y="954" font-size="14" xml:space="preserve" data-block="9" data-start="528" data-end="590">  &quot;snapshot_view_digest&quot;: &quot;77777777777777777777777777777777777</text>
+<text x="40" y="976" font-size="14" xml:space="preserve" data-block="9" data-start="590" data-end="621">77777777777777777777777777777&quot;,</text>
+<text x="40" y="998" font-size="14" xml:space="preserve" data-block="9" data-start="621" data-end="622">&#10;</text>
+<text x="40" y="1020" font-size="14" xml:space="preserve" data-block="9" data-start="622" data-end="684">  &quot;source_set_digest&quot;: &quot;99999999999999999999999999999999999999</text>
+<text x="40" y="1042" font-size="14" xml:space="preserve" data-block="9" data-start="684" data-end="712">99999999999999999999999999&quot;,</text>
+<text x="40" y="1064" font-size="14" xml:space="preserve" data-block="9" data-start="712" data-end="713">&#10;</text>
+<text x="40" y="1086" font-size="14" xml:space="preserve" data-block="9" data-start="713" data-end="775">  &quot;view_digest&quot;: &quot;6a4f04cc51c3d75a8030c53c1cc4f5a3bcd60cfc21fa</text>
+<text x="40" y="1108" font-size="14" xml:space="preserve" data-block="9" data-start="775" data-end="797">686477090a0aa2163b09&quot;,</text>
+<text x="40" y="1130" font-size="14" xml:space="preserve" data-block="9" data-start="797" data-end="798">&#10;</text>
+<text x="40" y="1152" font-size="14" xml:space="preserve" data-block="9" data-start="798" data-end="853">  &quot;workspace_id&quot;: &quot;ws_66666666666666666666666666666666&quot;</text>
+<text x="40" y="1174" font-size="14" xml:space="preserve" data-block="9" data-start="853" data-end="854">&#10;</text>
+<text x="40" y="1196" font-size="14" xml:space="preserve" data-block="9" data-start="854" data-end="855">}</text>
+<text x="40" y="1256" font-size="14">頁 1 / 5</text>
+</g></g>
+<g id="page-2" transform="translate(0 1304)">
+<rect width="960" height="1280" fill="#fff" stroke="#dfe3ea"/>
+<g font-family="system-ui, Segoe UI, Noto Sans TC, sans-serif" fill="#1d2330">
+<text x="40" y="36" font-size="14">pmro_11111111111111111111111111111111</text>
+<text x="40" y="76" font-size="15" xml:space="preserve" data-block="10" data-start="0" data-end="21">工作區: Synthetic report</text>
+<text x="40" y="103" font-size="15" xml:space="preserve" data-block="11" data-start="0" data-end="31">快照彙整時間: 2026-11-12T12:00:00 UTC</text>
+<text x="40" y="130" font-size="15" xml:space="preserve" data-block="12" data-start="0" data-end="10">中央紀錄游標: 42</text>
+<text x="40" y="165" font-size="16" xml:space="preserve" data-block="13" data-start="0" data-end="7">快照當時的基準</text>
+<text x="40" y="193" font-size="15" xml:space="preserve" data-block="14" data-start="0" data-end="5">已採用計畫</text>
+<text x="40" y="220" font-size="14" xml:space="preserve" data-block="15" data-start="0" data-end="1">{</text>
+<text x="40" y="242" font-size="14" xml:space="preserve" data-block="15" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="264" font-size="14" xml:space="preserve" data-block="15" data-start="2" data-end="64">  &quot;document_revision&quot;: &quot;pmrev_33333333333333333333333333333333</text>
+<text x="40" y="286" font-size="14" xml:space="preserve" data-block="15" data-start="64" data-end="66">&quot;,</text>
+<text x="40" y="308" font-size="14" xml:space="preserve" data-block="15" data-start="66" data-end="67">&#10;</text>
+<text x="40" y="330" font-size="14" xml:space="preserve" data-block="15" data-start="67" data-end="129">  &quot;scope_revision&quot;: &quot;pmscope_55555555555555555555555555555555&quot;</text>
+<text x="40" y="352" font-size="14" xml:space="preserve" data-block="15" data-start="129" data-end="130">,</text>
+<text x="40" y="374" font-size="14" xml:space="preserve" data-block="15" data-start="130" data-end="131">&#10;</text>
+<text x="40" y="396" font-size="14" xml:space="preserve" data-block="15" data-start="131" data-end="153">  &quot;status&quot;: &quot;accepted&quot;</text>
+<text x="40" y="418" font-size="14" xml:space="preserve" data-block="15" data-start="153" data-end="154">&#10;</text>
+<text x="40" y="440" font-size="14" xml:space="preserve" data-block="15" data-start="154" data-end="155">}</text>
+<text x="40" y="466" font-size="15" xml:space="preserve" data-block="16" data-start="0" data-end="22">Login 登入 é 👩‍💻 🇹🇼 🫨 𞓬</text>
+<text x="40" y="501" font-size="16" xml:space="preserve" data-block="17" data-start="0" data-end="5">已採用需求</text>
+<text x="40" y="537" font-size="15" xml:space="preserve" data-block="18" data-start="0" data-end="15">需求: login.exact</text>
+<text x="40" y="564" font-size="15" xml:space="preserve" data-block="19" data-start="0" data-end="1">{</text>
+<text x="40" y="587" font-size="15" xml:space="preserve" data-block="19" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="610" font-size="15" xml:space="preserve" data-block="19" data-start="2" data-end="29">  &quot;acceptance_input_ids&quot;: [</text>
+<text x="40" y="633" font-size="15" xml:space="preserve" data-block="19" data-start="29" data-end="30">&#10;</text>
+<text x="40" y="656" font-size="15" xml:space="preserve" data-block="19" data-start="30" data-end="45">    &quot;criterion&quot;</text>
+<text x="40" y="679" font-size="15" xml:space="preserve" data-block="19" data-start="45" data-end="46">&#10;</text>
+<text x="40" y="702" font-size="15" xml:space="preserve" data-block="19" data-start="46" data-end="50">  ],</text>
+<text x="40" y="725" font-size="15" xml:space="preserve" data-block="19" data-start="50" data-end="51">&#10;</text>
+<text x="40" y="748" font-size="15" xml:space="preserve" data-block="19" data-start="51" data-end="72">  &quot;id&quot;: &quot;login.exact&quot;</text>
+<text x="40" y="771" font-size="15" xml:space="preserve" data-block="19" data-start="72" data-end="73">&#10;</text>
+<text x="40" y="794" font-size="15" xml:space="preserve" data-block="19" data-start="73" data-end="74">}</text>
+<text x="40" y="829" font-size="15" xml:space="preserve" data-block="20" data-start="0" data-end="6">原始範圍輸入</text>
+<text x="40" y="856" font-size="14" xml:space="preserve" data-block="21" data-start="0" data-end="1">[</text>
+<text x="40" y="878" font-size="14" xml:space="preserve" data-block="21" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="900" font-size="14" xml:space="preserve" data-block="21" data-start="2" data-end="5">  {</text>
+<text x="40" y="922" font-size="14" xml:space="preserve" data-block="21" data-start="5" data-end="6">&#10;</text>
+<text x="40" y="944" font-size="14" xml:space="preserve" data-block="21" data-start="6" data-end="34">    &quot;input_id&quot;: &quot;criterion&quot;,</text>
+<text x="40" y="966" font-size="14" xml:space="preserve" data-block="21" data-start="34" data-end="35">&#10;</text>
+<text x="40" y="988" font-size="14" xml:space="preserve" data-block="21" data-start="35" data-end="66">    &quot;status&quot;: &quot;user_confirmed&quot;,</text>
+<text x="40" y="1010" font-size="14" xml:space="preserve" data-block="21" data-start="66" data-end="67">&#10;</text>
+<text x="40" y="1032" font-size="14" xml:space="preserve" data-block="21" data-start="67" data-end="129">    &quot;text&quot;: &quot;Reject &lt;script&gt; and ``` delimiters; https://examp</text>
+<text x="40" y="1054" font-size="14" xml:space="preserve" data-block="21" data-start="129" data-end="151">le.invalid stays text&quot;</text>
+<text x="40" y="1076" font-size="14" xml:space="preserve" data-block="21" data-start="151" data-end="152">&#10;</text>
+<text x="40" y="1098" font-size="14" xml:space="preserve" data-block="21" data-start="152" data-end="155">  }</text>
+<text x="40" y="1120" font-size="14" xml:space="preserve" data-block="21" data-start="155" data-end="156">&#10;</text>
+<text x="40" y="1142" font-size="14" xml:space="preserve" data-block="21" data-start="156" data-end="157">]</text>
+<text x="40" y="1168" font-size="14" xml:space="preserve" data-block="22" data-start="0" data-end="1">{</text>
+<text x="40" y="1190" font-size="14" xml:space="preserve" data-block="22" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="1256" font-size="14">頁 2 / 5</text>
+</g></g>
+<g id="page-3" transform="translate(0 2608)">
+<rect width="960" height="1280" fill="#fff" stroke="#dfe3ea"/>
+<g font-family="system-ui, Segoe UI, Noto Sans TC, sans-serif" fill="#1d2330">
+<text x="40" y="36" font-size="14">pmro_11111111111111111111111111111111</text>
+<text x="40" y="76" font-size="14" xml:space="preserve" data-block="22" data-start="2" data-end="14">  &quot;scope&quot;: [</text>
+<text x="40" y="98" font-size="14" xml:space="preserve" data-block="22" data-start="14" data-end="15">&#10;</text>
+<text x="40" y="120" font-size="14" xml:space="preserve" data-block="22" data-start="15" data-end="47">    &quot;Login only; other scope 未知&quot;</text>
+<text x="40" y="142" font-size="14" xml:space="preserve" data-block="22" data-start="47" data-end="48">&#10;</text>
+<text x="40" y="164" font-size="14" xml:space="preserve" data-block="22" data-start="48" data-end="51">  ]</text>
+<text x="40" y="186" font-size="14" xml:space="preserve" data-block="22" data-start="51" data-end="52">&#10;</text>
+<text x="40" y="208" font-size="14" xml:space="preserve" data-block="22" data-start="52" data-end="53">}</text>
+<text x="40" y="242" font-size="16" xml:space="preserve" data-block="23" data-start="0" data-end="6">所選排程基準</text>
+<text x="40" y="270" font-size="15" xml:space="preserve" data-block="24" data-start="0" data-end="13">Fixed roadmap</text>
+<text x="40" y="297" font-size="15" xml:space="preserve" data-block="25" data-start="0" data-end="17">No inferred dates</text>
+<text x="40" y="324" font-size="14" xml:space="preserve" data-block="26" data-start="0" data-end="37">pmrb_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</text>
+<text x="40" y="358" font-size="15" xml:space="preserve" data-block="27" data-start="0" data-end="35">里程碑: ready · Login 登入 é 👩‍💻 🇹🇼 🫨 𞓬</text>
+<text x="40" y="385" font-size="15" xml:space="preserve" data-block="28" data-start="0" data-end="10">原始基準日期: 未知</text>
+<text x="40" y="412" font-size="15" xml:space="preserve" data-block="29" data-start="0" data-end="18">所選基準日期: 2026-11-12</text>
+<text x="40" y="439" font-size="15" xml:space="preserve" data-block="30" data-start="0" data-end="8">預測日期: 未知</text>
+<text x="40" y="466" font-size="15" xml:space="preserve" data-block="31" data-start="0" data-end="10">實際完成日期: 未知</text>
+<text x="40" y="493" font-size="15" xml:space="preserve" data-block="32" data-start="0" data-end="6">依賴: []</text>
+<text x="40" y="520" font-size="14" xml:space="preserve" data-block="33" data-start="0" data-end="1">{</text>
+<text x="40" y="542" font-size="14" xml:space="preserve" data-block="33" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="564" font-size="14" xml:space="preserve" data-block="33" data-start="2" data-end="34">  &quot;baseline_date&quot;: &quot;2026-11-12&quot;,</text>
+<text x="40" y="586" font-size="14" xml:space="preserve" data-block="33" data-start="34" data-end="35">&#10;</text>
+<text x="40" y="608" font-size="14" xml:space="preserve" data-block="33" data-start="35" data-end="54">  &quot;depends_on&quot;: [],</text>
+<text x="40" y="630" font-size="14" xml:space="preserve" data-block="33" data-start="54" data-end="55">&#10;</text>
+<text x="40" y="652" font-size="14" xml:space="preserve" data-block="33" data-start="55" data-end="81">  &quot;milestone_id&quot;: &quot;ready&quot;,</text>
+<text x="40" y="674" font-size="14" xml:space="preserve" data-block="33" data-start="81" data-end="82">&#10;</text>
+<text x="40" y="696" font-size="14" xml:space="preserve" data-block="33" data-start="82" data-end="115">  &quot;original_baseline_date&quot;: null,</text>
+<text x="40" y="718" font-size="14" xml:space="preserve" data-block="33" data-start="115" data-end="116">&#10;</text>
+<text x="40" y="740" font-size="14" xml:space="preserve" data-block="33" data-start="116" data-end="178">  &quot;plan_document_digest&quot;: &quot;44444444444444444444444444444444444</text>
+<text x="40" y="762" font-size="14" xml:space="preserve" data-block="33" data-start="178" data-end="209">44444444444444444444444444444&quot;,</text>
+<text x="40" y="784" font-size="14" xml:space="preserve" data-block="33" data-start="209" data-end="210">&#10;</text>
+<text x="40" y="806" font-size="14" xml:space="preserve" data-block="33" data-start="210" data-end="272">  &quot;plan_revision_id&quot;: &quot;pmrev_33333333333333333333333333333333&quot;</text>
+<text x="40" y="828" font-size="14" xml:space="preserve" data-block="33" data-start="272" data-end="273">,</text>
+<text x="40" y="850" font-size="14" xml:space="preserve" data-block="33" data-start="273" data-end="274">&#10;</text>
+<text x="40" y="872" font-size="14" xml:space="preserve" data-block="33" data-start="274" data-end="296">  &quot;requirement_ids&quot;: [</text>
+<text x="40" y="894" font-size="14" xml:space="preserve" data-block="33" data-start="296" data-end="297">&#10;</text>
+<text x="40" y="916" font-size="14" xml:space="preserve" data-block="33" data-start="297" data-end="314">    &quot;login.exact&quot;</text>
+<text x="40" y="938" font-size="14" xml:space="preserve" data-block="33" data-start="314" data-end="315">&#10;</text>
+<text x="40" y="960" font-size="14" xml:space="preserve" data-block="33" data-start="315" data-end="319">  ],</text>
+<text x="40" y="982" font-size="14" xml:space="preserve" data-block="33" data-start="319" data-end="320">&#10;</text>
+<text x="40" y="1004" font-size="14" xml:space="preserve" data-block="33" data-start="320" data-end="382">  &quot;scope_revision&quot;: &quot;pmscope_55555555555555555555555555555555&quot;</text>
+<text x="40" y="1026" font-size="14" xml:space="preserve" data-block="33" data-start="382" data-end="383">,</text>
+<text x="40" y="1048" font-size="14" xml:space="preserve" data-block="33" data-start="383" data-end="384">&#10;</text>
+<text x="40" y="1070" font-size="14" xml:space="preserve" data-block="33" data-start="384" data-end="420">  &quot;title&quot;: &quot;Login 登入 é 👩‍💻 🇹🇼 🫨 𞓬&quot;,</text>
+<text x="40" y="1092" font-size="14" xml:space="preserve" data-block="33" data-start="420" data-end="421">&#10;</text>
+<text x="40" y="1114" font-size="14" xml:space="preserve" data-block="33" data-start="421" data-end="445">  &quot;work_binding_ids&quot;: []</text>
+<text x="40" y="1136" font-size="14" xml:space="preserve" data-block="33" data-start="445" data-end="446">&#10;</text>
+<text x="40" y="1158" font-size="14" xml:space="preserve" data-block="33" data-start="446" data-end="447">}</text>
+<text x="40" y="1184" font-size="15" xml:space="preserve" data-block="34" data-start="0" data-end="9">原始品質與涵蓋範圍</text>
+<text x="40" y="1256" font-size="14">頁 3 / 5</text>
+</g></g>
+<g id="page-4" transform="translate(0 3912)">
+<rect width="960" height="1280" fill="#fff" stroke="#dfe3ea"/>
+<g font-family="system-ui, Segoe UI, Noto Sans TC, sans-serif" fill="#1d2330">
+<text x="40" y="36" font-size="14">pmro_11111111111111111111111111111111</text>
+<text x="40" y="76" font-size="14" xml:space="preserve" data-block="35" data-start="0" data-end="1">{</text>
+<text x="40" y="98" font-size="14" xml:space="preserve" data-block="35" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="120" font-size="14" xml:space="preserve" data-block="35" data-start="2" data-end="15">  &quot;actual&quot;: {</text>
+<text x="40" y="142" font-size="14" xml:space="preserve" data-block="35" data-start="15" data-end="16">&#10;</text>
+<text x="40" y="164" font-size="14" xml:space="preserve" data-block="35" data-start="16" data-end="47">    &quot;actual_finish_date&quot;: null,</text>
+<text x="40" y="186" font-size="14" xml:space="preserve" data-block="35" data-start="47" data-end="48">&#10;</text>
+<text x="40" y="208" font-size="14" xml:space="preserve" data-block="35" data-start="48" data-end="79">    &quot;completion&quot;: &quot;unassessed&quot;,</text>
+<text x="40" y="230" font-size="14" xml:space="preserve" data-block="35" data-start="79" data-end="80">&#10;</text>
+<text x="40" y="252" font-size="14" xml:space="preserve" data-block="35" data-start="80" data-end="104">    &quot;dod&quot;: &quot;unassessed&quot;,</text>
+<text x="40" y="274" font-size="14" xml:space="preserve" data-block="35" data-start="104" data-end="105">&#10;</text>
+<text x="40" y="296" font-size="14" xml:space="preserve" data-block="35" data-start="105" data-end="120">    &quot;facts&quot;: []</text>
+<text x="40" y="318" font-size="14" xml:space="preserve" data-block="35" data-start="120" data-end="121">&#10;</text>
+<text x="40" y="340" font-size="14" xml:space="preserve" data-block="35" data-start="121" data-end="125">  },</text>
+<text x="40" y="362" font-size="14" xml:space="preserve" data-block="35" data-start="125" data-end="126">&#10;</text>
+<text x="40" y="384" font-size="14" xml:space="preserve" data-block="35" data-start="126" data-end="141">  &quot;coverage&quot;: {</text>
+<text x="40" y="406" font-size="14" xml:space="preserve" data-block="35" data-start="141" data-end="142">&#10;</text>
+<text x="40" y="428" font-size="14" xml:space="preserve" data-block="35" data-start="142" data-end="172">    &quot;work_mapping&quot;: &quot;unmapped&quot;</text>
+<text x="40" y="450" font-size="14" xml:space="preserve" data-block="35" data-start="172" data-end="173">&#10;</text>
+<text x="40" y="472" font-size="14" xml:space="preserve" data-block="35" data-start="173" data-end="177">  },</text>
+<text x="40" y="494" font-size="14" xml:space="preserve" data-block="35" data-start="177" data-end="178">&#10;</text>
+<text x="40" y="516" font-size="14" xml:space="preserve" data-block="35" data-start="178" data-end="199">  &quot;evidence_ids&quot;: [],</text>
+<text x="40" y="538" font-size="14" xml:space="preserve" data-block="35" data-start="199" data-end="200">&#10;</text>
+<text x="40" y="560" font-size="14" xml:space="preserve" data-block="35" data-start="200" data-end="225">  &quot;milestone_id&quot;: &quot;ready&quot;</text>
+<text x="40" y="582" font-size="14" xml:space="preserve" data-block="35" data-start="225" data-end="226">&#10;</text>
+<text x="40" y="604" font-size="14" xml:space="preserve" data-block="35" data-start="226" data-end="227">}</text>
+<text x="40" y="630" font-size="14" xml:space="preserve" data-block="36" data-start="0" data-end="1">{</text>
+<text x="40" y="652" font-size="14" xml:space="preserve" data-block="36" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="674" font-size="14" xml:space="preserve" data-block="36" data-start="2" data-end="18">  &quot;changes&quot;: {},</text>
+<text x="40" y="696" font-size="14" xml:space="preserve" data-block="36" data-start="18" data-end="19">&#10;</text>
+<text x="40" y="718" font-size="14" xml:space="preserve" data-block="36" data-start="19" data-end="37">  &quot;forecast&quot;: null</text>
+<text x="40" y="740" font-size="14" xml:space="preserve" data-block="36" data-start="37" data-end="38">&#10;</text>
+<text x="40" y="762" font-size="14" xml:space="preserve" data-block="36" data-start="38" data-end="39">}</text>
+<text x="40" y="796" font-size="16" xml:space="preserve" data-block="37" data-start="0" data-end="9">原始品質與涵蓋範圍</text>
+<text x="40" y="824" font-size="14" xml:space="preserve" data-block="38" data-start="0" data-end="2">未知</text>
+<text x="40" y="850" font-size="14" xml:space="preserve" data-block="39" data-start="0" data-end="31">這些具責任歸屬的評估由整理證據時明確選取；不會替換成後來的結論</text>
+<text x="40" y="872" font-size="14" xml:space="preserve" data-block="39" data-start="31" data-end="45">，也不代表已重查目前適用性。</text>
+<text x="40" y="898" font-size="14" xml:space="preserve" data-block="40" data-start="0" data-end="1">{</text>
+<text x="40" y="920" font-size="14" xml:space="preserve" data-block="40" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="942" font-size="14" xml:space="preserve" data-block="40" data-start="2" data-end="31">  &quot;content_truncated&quot;: false,</text>
+<text x="40" y="964" font-size="14" xml:space="preserve" data-block="40" data-start="31" data-end="32">&#10;</text>
+<text x="40" y="986" font-size="14" xml:space="preserve" data-block="40" data-start="32" data-end="65">  &quot;projection&quot;: &quot;roadmap_report&quot;,</text>
+<text x="40" y="1008" font-size="14" xml:space="preserve" data-block="40" data-start="65" data-end="66">&#10;</text>
+<text x="40" y="1030" font-size="14" xml:space="preserve" data-block="40" data-start="66" data-end="81">  &quot;snapshot&quot;: {</text>
+<text x="40" y="1052" font-size="14" xml:space="preserve" data-block="40" data-start="81" data-end="82">&#10;</text>
+<text x="40" y="1074" font-size="14" xml:space="preserve" data-block="40" data-start="82" data-end="124">    &quot;freshness&quot;: &quot;per_source_saved_times&quot;,</text>
+<text x="40" y="1096" font-size="14" xml:space="preserve" data-block="40" data-start="124" data-end="125">&#10;</text>
+<text x="40" y="1118" font-size="14" xml:space="preserve" data-block="40" data-start="125" data-end="152">    &quot;work_truncated&quot;: false</text>
+<text x="40" y="1140" font-size="14" xml:space="preserve" data-block="40" data-start="152" data-end="153">&#10;</text>
+<text x="40" y="1162" font-size="14" xml:space="preserve" data-block="40" data-start="153" data-end="157">  },</text>
+<text x="40" y="1184" font-size="14" xml:space="preserve" data-block="40" data-start="157" data-end="158">&#10;</text>
+<text x="40" y="1206" font-size="14" xml:space="preserve" data-block="40" data-start="158" data-end="175">  &quot;visibility&quot;: {</text>
+<text x="40" y="1256" font-size="14">頁 4 / 5</text>
+</g></g>
+<g id="page-5" transform="translate(0 5216)">
+<rect width="960" height="1280" fill="#fff" stroke="#dfe3ea"/>
+<g font-family="system-ui, Segoe UI, Noto Sans TC, sans-serif" fill="#1d2330">
+<text x="40" y="36" font-size="14">pmro_11111111111111111111111111111111</text>
+<text x="40" y="76" font-size="14" xml:space="preserve" data-block="40" data-start="175" data-end="176">&#10;</text>
+<text x="40" y="98" font-size="14" xml:space="preserve" data-block="40" data-start="176" data-end="198">    &quot;filtered&quot;: false,</text>
+<text x="40" y="120" font-size="14" xml:space="preserve" data-block="40" data-start="198" data-end="199">&#10;</text>
+<text x="40" y="142" font-size="14" xml:space="preserve" data-block="40" data-start="199" data-end="244">    &quot;source_policy&quot;: &quot;whole_original_closure&quot;</text>
+<text x="40" y="164" font-size="14" xml:space="preserve" data-block="40" data-start="244" data-end="245">&#10;</text>
+<text x="40" y="186" font-size="14" xml:space="preserve" data-block="40" data-start="245" data-end="248">  }</text>
+<text x="40" y="208" font-size="14" xml:space="preserve" data-block="40" data-start="248" data-end="249">&#10;</text>
+<text x="40" y="230" font-size="14" xml:space="preserve" data-block="40" data-start="249" data-end="250">}</text>
+<text x="40" y="264" font-size="16" xml:space="preserve" data-block="41" data-start="0" data-end="10">來源引用與已記錄事實</text>
+<text x="40" y="292" font-size="14" xml:space="preserve" data-block="42" data-start="0" data-end="2">[]</text>
+<text x="40" y="318" font-size="14" xml:space="preserve" data-block="43" data-start="0" data-end="1">{</text>
+<text x="40" y="340" font-size="14" xml:space="preserve" data-block="43" data-start="1" data-end="2">&#10;</text>
+<text x="40" y="362" font-size="14" xml:space="preserve" data-block="43" data-start="2" data-end="17">  &quot;coverage&quot;: {</text>
+<text x="40" y="384" font-size="14" xml:space="preserve" data-block="43" data-start="17" data-end="18">&#10;</text>
+<text x="40" y="406" font-size="14" xml:space="preserve" data-block="43" data-start="18" data-end="60">    &quot;freshness&quot;: &quot;per_source_saved_times&quot;,</text>
+<text x="40" y="428" font-size="14" xml:space="preserve" data-block="43" data-start="60" data-end="61">&#10;</text>
+<text x="40" y="450" font-size="14" xml:space="preserve" data-block="43" data-start="61" data-end="88">    &quot;work_truncated&quot;: false</text>
+<text x="40" y="472" font-size="14" xml:space="preserve" data-block="43" data-start="88" data-end="89">&#10;</text>
+<text x="40" y="494" font-size="14" xml:space="preserve" data-block="43" data-start="89" data-end="93">  },</text>
+<text x="40" y="516" font-size="14" xml:space="preserve" data-block="43" data-start="93" data-end="94">&#10;</text>
+<text x="40" y="538" font-size="14" xml:space="preserve" data-block="43" data-start="94" data-end="106">  &quot;work&quot;: []</text>
+<text x="40" y="560" font-size="14" xml:space="preserve" data-block="43" data-start="106" data-end="107">&#10;</text>
+<text x="40" y="582" font-size="14" xml:space="preserve" data-block="43" data-start="107" data-end="108">}</text>
+<text x="40" y="1256" font-size="14">頁 5 / 5</text>
+</g></g>
+</svg>
