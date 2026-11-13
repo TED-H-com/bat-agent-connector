@@ -236,6 +236,9 @@ transport/withdrawal tests and envelope-metadata decision before registration.
 | `pm_evidence.list_work`: `bindings` | Yes | Yes | No | Work-binding projection has no per-row source filter |
 | `pm_evidence.list_evidence`: `evidence` | Yes | Yes | Yes | Eligible; preserve its inaccessible-source coverage until registered |
 | `pm_snapshots.list_snapshots`: `snapshots` | Yes | Yes | Yes | Eligible but unregistered |
+| `pm_roadmap_report_get`: Markdown/HTML/SVG report wrapper (HTTP, RPC, MCP) | No row collection | No | No | Fixed report; whole original closure is authorized, never row-filtered. Content is a string; identity/digest/coverage metadata retains the whole-document rule |
+| Capabilities: `features.pm_workspaces.roadmap_report` | No | No | No | Nested format/locale/version lists are capability metadata, not source records; no new top-level collection |
+| Bootstrap capability addition: `capabilities.features.pm_workspaces.roadmap_report` | No new row collection | No | No | Existing bootstrap shape still matches intentionally; this metadata remains in its remainder, and snapshot page shapes are unchanged |
 | `pm_roadmap.list_revisions`: `revisions` | Yes | Yes | No | Includes a shared head and unfiltered revision records |
 | `pm_governance.list_records`: `records` | Yes | Yes | Yes | Eligible; coverage and selected context remain whole |
 | Governance history: `revisions` | Yes | No | No | One record's history and shared original context; parent access gate |
@@ -284,6 +287,11 @@ transport/withdrawal tests and envelope-metadata decision before registration.
 The registered collections still cover maintenance review `events`, external
 history associations/cleanup `links`, ordinary Work/result links, deployment environment history `items`, retained/tombstone pages and existing
 session/observation lists wherever their established top-level fields appear.
+The merge of `e35a71a3` was audited against `447da212`: the only new domain read
+is `pm_roadmap_report_get`, shared by HTTP, RPC and MCP. Across all six outputs,
+its top-level keys match none of `_COLLECTIONS`, deployment `items`, PM runs or
+bootstrap. The existing capabilities read and bootstrap only gain the nested
+capability metadata listed above; no new shape is registered accidentally.
 This inventory does not grant a new capability or authorize any write.
 
 ## Supported derivatives and limits

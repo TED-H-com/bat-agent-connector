@@ -124,6 +124,7 @@ FIELDS = {
     "pm_snapshots_list": ("workspace_id", "after", "limit"),
     "pm_snapshot_get": ("workspace_id", "snapshot_id"),
     "pm_snapshot_latest_get": ("workspace_id",),
+    "pm_roadmap_report_get": ("workspace_id", "observation_revision_id", "format", "locale", "renderer_version"),
     "pm_brief_export_get": ("workspace_id", "snapshot_id", "format", "locale"),
 }
 
@@ -303,6 +304,11 @@ def read(ops, principal, method, params):
             return pm_release_baselines.get_baseline(ops, principal, workspace_id, params.get("baseline_id"))
         return pm_release_baselines.list_baselines(ops, principal, workspace_id,
             after=params.get("after", 0), limit=params.get("limit", 20))
+    if method == "pm_roadmap_report_get":
+        from .pm_roadmap_reports import get_report
+        return get_report(ops, principal, workspace_id, params.get("observation_revision_id"),
+                          format=params.get("format", "markdown"), locale=params.get("locale", "en"),
+                          renderer_version=params.get("renderer_version", 1))
     if method == "pm_brief_export_get":
         from .pm_brief_exports import render_brief
         return render_brief(ops, principal, workspace_id, params.get("snapshot_id"),
