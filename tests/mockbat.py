@@ -6,6 +6,7 @@ import asyncio
 import copy
 import inspect
 import json
+import re
 import ssl
 from collections.abc import Callable
 from typing import Any
@@ -18,8 +19,135 @@ from bat_agent_connector.client import cert_fingerprint
 TOKEN = "tok-SECRET-0123456789abcdef"  # gitleaks:allow (fake test token for the mock server)
 
 
+# ---------------------------------------------------- opt-in BAC handshake mock
+# Independent wire oracle: deliberately does not import the Connector BAC parser.
+_BAC_DEFAULT = object()
+_BAC_MISSING = object()
+
+
+class MockBac:
+    """Handshake-only synthetic host; never dispatches a BAC call to legacy handlers."""
+
+    MISSING = _BAC_MISSING
+    CHANNELS = {
+        "bac:workspace-read": "workspaceRead",
+        "bac:workspace-add-terminal": "workspaceAddTerminal",
+        "bac:session-locate": "sessionLocate",
+        "bac:git-observe": "gitObserve",
+    }
+
+    def __init__(self):
+        self.advertisement = {"protocol": "bac/1", "minor": 0}
+        self.host_id = "h_0123456789abcdef0123456789abcdef"
+        self.build = {"product": "bac", "revision": "unknown", "release": "dev", "dirty": None}
+        self.features = dict.fromkeys(self.CHANNELS.values(), False)
+        self.limits = {"requestBytes": 65536, "resultBytes": 524288}
+        self.storage_error = None
+        self.drop_hello = False
+        self.close_hello = False
+        self.invoke_error = None
+        self.hello_result = _BAC_DEFAULT
+        self.hello_received = asyncio.Event()
+        self.frames = []
+
+    @staticmethod
+    def error(code, **details):
+        messages = {
+            "INVALID_REQUEST": "Invalid BAC request",
+            "PAYLOAD_TOO_LARGE": "BAC request exceeds limit",
+            "CONTEXT_NOT_SUPPORTED": "BAC requires a direct host connection",
+            "UNSUPPORTED_VERSION": "Unsupported BAC protocol version",
+            "HOST_MISMATCH": "Host identity changed",
+            "STORAGE_UNAVAILABLE": "BAC identity storage is unavailable",
+            "STORAGE_CORRUPT": "BAC identity storage is invalid",
+            "INTERNAL_ERROR": "BAC request failed",
+            "NOT_OPTED_IN": "Call bac:hello first",
+            "UNSUPPORTED_FEATURE": "BAC feature is unavailable",
+            "UNKNOWN_CHANNEL": "Unknown BAC channel",
+        }
+        return {"ok": False, "error": {"code": code, "message": messages[code],
+                                       "retryable": False, "details": details}}
+
+    def hello_value(self):
+        return copy.deepcopy({"protocol": "bac/1", "minor": 0, "hostId": self.host_id,
+                              "build": self.build, "features": self.features, "limits": self.limits})
+
+    def reply(self, frame, negotiated):
+        """Return (envelope, new connection state) in host validation order."""
+        channel = frame.get("channel")
+
+        def fail(code, **details):
+            return self.error(code, **details), negotiated
+
+        if channel != "bac:hello" and not negotiated:
+            return fail("NOT_OPTED_IN")
+        if set(frame) - {"type", "id", "channel", "params", "contextId"}:
+            return fail("INVALID_REQUEST", field="frame")
+        if frame.get("type") != "invoke":
+            return fail("INVALID_REQUEST", field="type")
+        mid = frame.get("id")
+        if not isinstance(mid, str) or "\0" in mid or not 1 <= len(mid.encode()) <= 128:
+            return fail("INVALID_REQUEST", field="id")
+        params = frame.get("params")
+        if not isinstance(params, dict):
+            return fail("INVALID_REQUEST", field="params")
+        if channel == "bac:hello":
+            if set(params) - {"protocol", "minor", "expectedHostId"}:
+                return fail("INVALID_REQUEST", field="params")
+            if not isinstance(params.get("protocol"), str) or "\0" in params["protocol"]:
+                return fail("INVALID_REQUEST", field="protocol")
+            if type(params.get("minor")) is not int or params["minor"] < 0:
+                return fail("INVALID_REQUEST", field="minor")
+            if "expectedHostId" in params and (
+                not isinstance(params["expectedHostId"], str)
+                or not re.fullmatch(r"h_[0-9a-f]{32}", params["expectedHostId"])
+            ):
+                return fail("INVALID_REQUEST", field="expectedHostId")
+        size = len(json.dumps(frame, ensure_ascii=False, separators=(",", ":")).encode())
+        if size > 65536:
+            return fail("PAYLOAD_TOO_LARGE", maxBytes=65536)
+        if "contextId" in frame:
+            return fail("CONTEXT_NOT_SUPPORTED")
+        if channel == "bac:hello":
+            if self.storage_error:
+                return fail(self.storage_error)
+            if params["protocol"] != "bac/1" or params["minor"] != 0:
+                return fail("UNSUPPORTED_VERSION", protocol="bac/1", minor=0)
+            if "expectedHostId" in params and params["expectedHostId"] != self.host_id:
+                return fail("HOST_MISMATCH", hostId=self.host_id)
+            return {"ok": True, "value": self.hello_value()}, True
+        feature = self.CHANNELS.get(channel)
+        if feature is None:
+            return fail("UNKNOWN_CHANNEL")
+        if not self.features[feature]:
+            return fail("UNSUPPORTED_FEATURE", feature=feature)
+        # No feature implementation in this handshake-only mock.
+        return fail("INTERNAL_ERROR")
+
+    async def handle(self, ws, frame, negotiated):
+        self.frames.append(copy.deepcopy(frame))
+        result, negotiated = self.reply(frame, negotiated)
+        if frame["channel"] == "bac:hello":
+            self.hello_received.set()
+            if self.close_hello:
+                await ws.close()
+                return negotiated
+            if self.drop_hello:
+                return negotiated
+            if self.invoke_error is not None:
+                await ws.send(json.dumps({"type": "invoke-error", "id": frame["id"],
+                                          "error": self.invoke_error}))
+                return negotiated
+            if self.hello_result is not _BAC_DEFAULT:
+                result = self.hello_result
+        await ws.send(json.dumps({"type": "invoke-result", "id": frame["id"], "result": result}))
+        return negotiated
+
+
 class MockBat:
-    def __init__(self, token: str = TOKEN, protocol: str = "bat-remote/v2") -> None:
+    def __init__(self, token: str = TOKEN, protocol: str = "bat-remote/v2",
+                 *, bac: bool = False) -> None:
+        self.bac = MockBac() if bac else None
         self.token = token
         self.protocol = protocol
         self.frames: list[dict] = []
@@ -188,6 +316,10 @@ class MockBat:
             await ws.close()
             return
         proto = self.protocol if "bat-remote/v2" in (first.get("protocols") or []) else "bat-remote/legacy-v1"
+        capabilities = {}
+        if self.bac is not None and self.bac.advertisement is not _BAC_MISSING:
+            capabilities["bac"] = copy.deepcopy(self.bac.advertisement)
+        negotiated = False
         await ws.send(
             json.dumps(
                 {
@@ -197,7 +329,7 @@ class MockBat:
                     "protocol": proto,
                     "compression": "none",
                     "serverVersion": "9.9.9",
-                    "capabilities": {},
+                    "capabilities": capabilities,
                 }
             )
         )
@@ -222,6 +354,9 @@ class MockBat:
                             }
                         )
                     )
+                if self.bac is not None and f.get("channel", "").startswith("bac:"):
+                    negotiated = await self.bac.handle(ws, f, negotiated)
+                    continue
                 try:
                     res = self.dispatch(f["channel"], f.get("params") or {})
                     if inspect.isawaitable(res):
