@@ -196,7 +196,10 @@ fn validate_history_continuation_preview(
             .is_match(&doc.project_id)
         || doc.requirement_ids.is_empty()
         || doc.requirement_ids.len() > 50
-        || doc.requirement_ids.iter().any(|id| !requirement_id.is_match(id))
+        || doc
+            .requirement_ids
+            .iter()
+            .any(|id| !requirement_id.is_match(id))
         || doc
             .requirement_ids
             .iter()
@@ -3667,7 +3670,8 @@ mod tests {
         for case in corpus["cases"].as_array().unwrap() {
             let mut body = corpus["body"].clone();
             let keys = case["path"].as_array().unwrap();
-            let mut value = if let Some(encoded) = case.get("encoded_value").and_then(Value::as_str) {
+            let mut value = if let Some(encoded) = case.get("encoded_value").and_then(Value::as_str)
+            {
                 match serde_json::from_str::<Value>(encoded) {
                     Ok(value) => value,
                     Err(_) => {
