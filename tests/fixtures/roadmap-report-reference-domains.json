@@ -1,0 +1,1567 @@
+[
+  {
+    "phase": "authority",
+    "source": "observation",
+    "path": [
+      "baseline_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "observation",
+    "path": [
+      "forecast_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "observation",
+    "path": [
+      "snapshot_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "plan_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "scope_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "adoption",
+      "decision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "adoption",
+      "commit_operation_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "candidate_document",
+      "revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "evidence_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "maintenance",
+      "access_refs",
+      0,
+      "id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "snapshot",
+    "path": [
+      "maintenance",
+      "access_refs",
+      0,
+      "digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "plan",
+    "path": [
+      "selected_inputs",
+      0,
+      "operation_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "adoption",
+    "path": [
+      "commit_operation_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "operation",
+    "path": [],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "maintenance_reference",
+    "path": [
+      "id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "maintenance_reference",
+    "path": [
+      "digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "evidence_facts",
+    "path": [
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "evidence_facts",
+    "path": [
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "evidence_facts",
+    "path": [
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "authority",
+    "source": "evidence_facts",
+    "path": [
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "evidence_facts",
+    "path": [
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "evidence_facts",
+    "path": [
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "evidence_facts",
+    "path": [
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "authority",
+    "source": "evidence_facts",
+    "path": [
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "baseline_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "forecast_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "snapshot_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "snapshot_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "milestone_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "evidence_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "work",
+      0,
+      "work_item_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "work",
+      0,
+      "work_binding_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "work",
+      0,
+      "capture_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "work",
+      0,
+      "requirement_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "quality_context",
+      "plan_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "quality_context",
+      "plan_document_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "quality_context",
+      "scope_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "observation",
+    "path": [
+      "milestones",
+      0,
+      "quality_context",
+      "requirement_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "milestone_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "plan_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "plan_document_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "scope_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "requirement_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "work_binding_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "baseline",
+    "path": [
+      "milestones",
+      0,
+      "depends_on",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "forecast",
+    "path": [
+      "baseline_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "forecast",
+    "path": [
+      "milestones",
+      0,
+      "milestone_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "snapshot_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "workspace_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "scope_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document",
+      "workspace_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document",
+      "requirements",
+      0,
+      "id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document",
+      "selected_inputs",
+      0,
+      "input_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document",
+      "selected_inputs",
+      0,
+      "operation_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document",
+      "sections",
+      "governance",
+      "source_input_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document",
+      "sections",
+      "scope",
+      "source_input_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "adoption",
+      "decision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "adoption",
+      "commit_operation_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "document_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "baseline",
+      "structured_scope_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "candidate_document",
+      "revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "candidate_document",
+      "document_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "evidence_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "fact_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "evidence",
+      0,
+      "document",
+      "facts",
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "work",
+      0,
+      "work_item_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "work",
+      0,
+      "binding",
+      "binding_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "work",
+      0,
+      "binding",
+      "requirement_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "work",
+      0,
+      "evidence_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "work",
+      0,
+      "capture",
+      "capture_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "work",
+      0,
+      "capture",
+      "binding_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "maintenance",
+      "access_refs",
+      0,
+      "id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "snapshot",
+    "path": [
+      "maintenance",
+      "access_refs",
+      0,
+      "digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "plan",
+    "path": [
+      "workspace_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "plan",
+    "path": [
+      "requirements",
+      0,
+      "id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "plan",
+    "path": [
+      "selected_inputs",
+      0,
+      "input_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "plan",
+    "path": [
+      "selected_inputs",
+      0,
+      "operation_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "plan",
+    "path": [
+      "sections",
+      "governance",
+      "source_input_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "plan",
+    "path": [
+      "sections",
+      "scope",
+      "source_input_ids",
+      0
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "workspace_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "document_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "scope_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "decision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "document_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "structured_scope_digest"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "commit_operation_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "adoption",
+    "path": [
+      "previous_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "work_item_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "binding_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "scope_revision"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "plan_revision_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "requirements",
+      0,
+      "requirement_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "criterion_assessments",
+      "criteria",
+      0,
+      "criterion",
+      "requirement_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.quality_assessment",
+    "path": [
+      "criterion_assessments",
+      "assessment",
+      "criteria",
+      0,
+      "criterion",
+      "requirement_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.observed_verification",
+    "path": [
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.observed_verification",
+    "path": [
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.observed_verification",
+    "path": [
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.observed_verification",
+    "path": [
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.observed_verification",
+    "path": [
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.observed_verification",
+    "path": [
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.observed_verification",
+    "path": [
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.observed_verification",
+    "path": [
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.pr_merge",
+    "path": [
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.pr_merge",
+    "path": [
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.pr_merge",
+    "path": [
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.pr_merge",
+    "path": [
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.pr_merge",
+    "path": [
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.pr_merge",
+    "path": [
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.pr_merge",
+    "path": [
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.pr_merge",
+    "path": [
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.deployment",
+    "path": [
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.deployment",
+    "path": [
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.deployment",
+    "path": [
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.deployment",
+    "path": [
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.deployment",
+    "path": [
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.deployment",
+    "path": [
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.deployment",
+    "path": [
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.deployment",
+    "path": [
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.integration_delivery",
+    "path": [
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.integration_delivery",
+    "path": [
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.integration_delivery",
+    "path": [
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.integration_delivery",
+    "path": [
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.integration_delivery",
+    "path": [
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.integration_delivery",
+    "path": [
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.integration_delivery",
+    "path": [
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.integration_delivery",
+    "path": [
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_state",
+    "path": [
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_state",
+    "path": [
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_state",
+    "path": [
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_state",
+    "path": [
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_state",
+    "path": [
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_state",
+    "path": [
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_state",
+    "path": [
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_state",
+    "path": [
+      "resource_type"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_command",
+    "path": [
+      "task_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_command",
+    "path": [
+      "command_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_command",
+    "path": [
+      "execution_id"
+    ],
+    "domain": "ref"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_command",
+    "path": [
+      "session_resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_command",
+    "path": [
+      "resource_id"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_command",
+    "path": [
+      "ref"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_command",
+    "path": [
+      "kind"
+    ],
+    "domain": "external"
+  },
+  {
+    "phase": "post",
+    "source": "facts.execution_command",
+    "path": [
+      "resource_type"
+    ],
+    "domain": "external"
+  }
+]

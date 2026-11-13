@@ -153,6 +153,7 @@ async def test_skill_tool_references_and_recovery_parameters_match_discovered_sc
             "capabilities_get": set(),
             "pm_plan_impact_preview": {"workspace_id", "snapshot_id", "from_revision_id", "to_revision_id", "binding_ids"},
             "pm_quality_assessment_get": {"workspace_id", "review_id", "operation_id", "version", "document_digest"},
+            "pm_workspace_wip_get": {"workspace_id", "policy_revision"},
             "pm_history_cleanup_list": {"workspace_id", "work_item_id", "after", "limit"},
             "pm_follow_up_assessments_list": {"workspace_id", "intake_id", "after", "limit"},
             "pm_follow_up_assessment_get": {"workspace_id", "assessment_id"},

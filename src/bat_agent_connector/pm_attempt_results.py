@@ -861,17 +861,39 @@ def record_receipt(
         return _decode_row(stored), True
 
 
-def receipts(db, workspace_id: str, attempt_id: str, limit: int = 20) -> dict[str, Any]:
-    """Return receipts for ``(workspace_id, attempt_id)`` newest first, with ``has_more``."""
+# Own Result evidence is identified by immutable producer-operation membership.
+# A Work-input lookup is one seek through its operation_id unique index per row.
+# At most one row per eligible direct marker, through message_id's unique index.
+# Includes queued inputs; only a terminal proven-unsent or terminal rejected owner can relinquish it.
+# Both joined original records are unique-index seeks, never history scans.
+RESERVED_WORK_MARKER_SQL = """SELECT wi.operation_id, op.status, op.error_code,
+           op.external_refs, st.status AS step_status
+    FROM work_inputs wi
+    LEFT JOIN operations op ON op.operation_id=wi.operation_id
+    LEFT JOIN operation_steps st ON st.operation_id=wi.operation_id AND st.name='send'
+    WHERE wi.message_id=? AND wi.workspace_id=? AND wi.attempt_id=? LIMIT 1"""
+
+
+OWN_RECEIPT_PREDICATE = """(operation_id=? OR EXISTS (
+    SELECT 1 FROM work_inputs i WHERE i.operation_id=session_results.operation_id
+      AND i.attempt_id=session_results.attempt_id
+      AND i.workspace_id=session_results.workspace_id))"""
+OWN_RECEIPTS_SQL = """SELECT * FROM session_results  -- static own-receipt predicate
+    WHERE workspace_id=? AND attempt_id=? AND """ + OWN_RECEIPT_PREDICATE + """
+    ORDER BY sequence DESC LIMIT ?"""  # noqa: S608 - fixed SQL constants; values are bound
+
+
+def receipts(db, workspace_id: str, attempt_id: str, limit: int = 20, *,
+             own_operation_id: str | None = None) -> dict[str, Any]:
+    """Page raw evidence, or only own Result receipts when the handoff ID is supplied."""
     if not installed(db):
         return {"receipts": [], "results": [], "has_more": False}
     lim = max(1, min(200, int(limit)))
-    rows = db.execute(
-        """SELECT * FROM session_results
-           WHERE workspace_id=? AND attempt_id=?
-           ORDER BY sequence DESC LIMIT ?""",
-        (workspace_id, attempt_id, lim + 1),
-    ).fetchall()
+    sql = OWN_RECEIPTS_SQL if own_operation_id is not None else """SELECT * FROM session_results
+        WHERE workspace_id=? AND attempt_id=? ORDER BY sequence DESC LIMIT ?"""
+    args = ((workspace_id, attempt_id, own_operation_id, lim + 1) if own_operation_id is not None
+            else (workspace_id, attempt_id, lim + 1))
+    rows = db.execute(sql, args).fetchall()
     has_more = len(rows) > lim
     decoded = [_decode_row(r) for r in rows[:lim]]
     summary_list = [
@@ -1329,6 +1351,7 @@ class AttemptResultCollector:
         self._memo: dict[str, dict[str, Any]] = {}
         self._last_checked_at: dict[str, float] = {}
         self.last_check: dict[str, dict[str, Any]] = {}
+        self.direct_last_check: dict[str, dict[str, Any]] = {}
         self.last_digest_bytes: bytes | None = None
         self.digest_bytes_by_attempt: dict[str, bytes] = {}
 
@@ -1501,9 +1524,9 @@ class AttemptResultCollector:
                 and self.ops.db.execute(
                     """SELECT 1 FROM session_results
                        WHERE workspace_id=? AND attempt_id=?
-                         AND json_extract(document, '$.turn_marker') = ?
-                       LIMIT 1""",
-                    (workspace_id, attempt_id, cand_mid),
+                         AND json_extract(document, '$.turn_marker') = ? AND """ + OWN_RECEIPT_PREDICATE + " LIMIT 1",  # noqa: S608 - fixed predicate
+
+                    (workspace_id, attempt_id, cand_mid, handoff["operation_id"]),
                 ).fetchone()
                 is not None
             )
@@ -1543,6 +1566,58 @@ class AttemptResultCollector:
         candidates.sort(key=lambda c: (self._last_checked_at.get(c["attempt_id"], 0.0), c["sequence"]))
         return candidates[: max(0, self.max_per_pass)]
 
+    def _record_direct_check(self, attempt_id: str, outcome: str) -> None:
+        self.direct_last_check[attempt_id] = {"checked_at": time.time(), "outcome": outcome}
+
+    def _direct_candidate(self, cand: dict[str, Any]) -> dict[str, Any] | None:
+        """Select at most one direct input after the unchanged existing step."""
+        from . import pm_direct_inputs
+        from .pm_work_follow_up import (
+            TURN_RECEIPTS_SQL,
+            _fence_sent_from_row,
+            receipt_state,
+            rejected_turn,
+            terminal_receipt_markers,
+        )
+
+        # No receipt queries or check writes when no eligible direct input exists.
+        inputs = pm_direct_inputs.eligible(self.ops.db, cand["handoff_operation_id"],
+            {"host": cand["host"], "session_id": cand["session_id"]})
+        if len(inputs) > pm_direct_inputs.MAX_DIRECT_INPUTS:
+            self._record_direct_check(cand["attempt_id"], "direct_input_limit")
+            return None
+        if not inputs:
+            return None
+        terminal = set()
+        for row in self.ops.db.execute(TURN_RECEIPTS_SQL, (cand["workspace_id"], cand["attempt_id"])):
+            terminal.update(terminal_receipt_markers(row))
+        if cand["turn_marker"] not in terminal:
+            self._record_direct_check(cand["attempt_id"], "existing_turn_not_collected")
+            return None
+        for value in inputs:
+            if value["marker"] not in terminal:
+                reserved = self.ops.db.execute(RESERVED_WORK_MARKER_SQL,
+                    (value["marker"], cand["workspace_id"], cand["attempt_id"])).fetchone()
+                if reserved is not None:
+                    owner = dict(reserved)
+                    owner["send_sent"] = _fence_sent_from_row(owner)
+                    # Reuse the Work-input receipt authority. A false fence alone
+                    # is insufficient: a nonterminal original may still RERUN.
+                    terminal_unsent = (
+                        owner["status"] in {"failed", "cancelled"}
+                        and owner["send_sent"] is not True
+                        and receipt_state(owner, owner["step_status"]) in {"failed", "cancelled"}
+                    )
+                    # A terminal BAT rejection is also excluded by the original
+                    # latest_sent_turn selector: it cannot own a Work receipt.
+                    terminal_rejected = owner["status"] == "failed" and rejected_turn(owner)
+                    if not (terminal_unsent or terminal_rejected):
+                        continue
+                return {**cand, "turn_marker": value["marker"],
+                        "receipt_operation_id": value["operation_id"], "direct_marker": value}
+        self._record_direct_check(cand["attempt_id"], "unchanged")
+        return None
+
     async def _collect_candidate(self, cand: dict[str, Any], *, budget_s: float) -> dict[str, Any] | None:
         attempt_id = cand["attempt_id"]
         workspace_id = cand["workspace_id"]
@@ -1554,7 +1629,10 @@ class AttemptResultCollector:
         obs_row = cand["obs_row"]
         obs_tuple = cand["obs_tuple"]
 
-        self._last_checked_at[attempt_id] = time.monotonic()
+        direct = "direct_marker" in cand
+        check = self._record_direct_check if direct else self._record_check
+        if not direct:
+            self._last_checked_at[attempt_id] = time.monotonic()
 
         # Re-verify registry ownership right before reading
         current_reg = registry.get(host, session_id)
@@ -1567,7 +1645,7 @@ class AttemptResultCollector:
                 and not controller_authority.same_controller(current_reg.get("controller_authority"), handoff_ctrl)
             )
         ):
-            self._record_check(attempt_id, "registry_mismatch")
+            check(attempt_id, "registry_mismatch")
             return None
 
         read_res = await service.session_read(
@@ -1583,13 +1661,18 @@ class AttemptResultCollector:
 
         # 0.1 If user echo is not visible, write no receipt
         raw_attr = read_res.get("turn_attribution")
-        if raw_attr != "correlated":
-            self._record_check(attempt_id, "turn_marker_not_visible")
+        queued_direct_done = (
+            bool((cand.get("direct_marker") or {}).get("queued"))
+            and raw_attr == "correlated_after_prior_turn"
+            and read_res.get("turn_done") is True and read_res.get("pending") is None
+        )
+        if raw_attr != "correlated" and not queued_direct_done:
+            check(attempt_id, "turn_marker_not_visible")
             return None
 
         # Boundary rule (§2.2 and r3): never write mid-turn
         if bool(read_res.get("streaming")):
-            self._record_check(attempt_id, "mid_turn")
+            check(attempt_id, "mid_turn")
             return None
 
         obs_body: dict[str, Any] = {}
@@ -1628,7 +1711,13 @@ class AttemptResultCollector:
         elif turn_done_ready:
             boundary = "turn_done"
         else:
-            self._record_check(attempt_id, "no_boundary")
+            check(attempt_id, "no_boundary")
+            return None
+
+        if direct and boundary == "process_ended":
+            # Direct rows are release evidence only. Repeated process-ended
+            # observations must not append an unbounded nonterminal history.
+            check(attempt_id, "direct_boundary_not_terminal")
             return None
 
         last_message_id = ""
@@ -1652,17 +1741,19 @@ class AttemptResultCollector:
         digest = "sha256:" + hashlib.sha256(digest_bytes).hexdigest()
 
         # Skip when the latest receipt already has this position and digest
-        latest = self.ops.db.execute(
-            """SELECT source_position, digest FROM session_results
-               WHERE workspace_id=? AND attempt_id=?
-               ORDER BY sequence DESC LIMIT 1""",
-            (workspace_id, attempt_id),
-        ).fetchone()
+        latest_sql = """SELECT source_position, digest FROM session_results
+            WHERE workspace_id=? AND attempt_id=?"""
+        latest_args = (workspace_id, attempt_id)
+        if not direct:
+            latest_sql += " AND " + OWN_RECEIPT_PREDICATE
+            latest_args += (cand["handoff_operation_id"],)
+        latest = self.ops.db.execute(latest_sql + " ORDER BY sequence DESC LIMIT 1", latest_args).fetchone()
         if latest is not None and latest["source_position"] == source_position and latest["digest"] == digest:
-            if obs_tuple is not None:
+            if obs_tuple is not None and not direct:
                 self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
-            self._record_check(attempt_id, "unchanged")
-            self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
+            check(attempt_id, "unchanged")
+            if not direct:
+                self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
             return None
 
         rid = new_result_id()
@@ -1737,13 +1828,14 @@ class AttemptResultCollector:
             start_operation_id=cand["start_operation_id"],
             session={"host": host, "session_id": session_id},
         )
-        if obs_tuple is not None:
+        if obs_tuple is not None and not direct:
             self._memo[attempt_id] = {"obs_tuple": obs_tuple, "checked_at": time.monotonic()}
-        self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
+        if not direct:
+            self._wake_follow_up_if_idle(host, session_id, boundary=boundary, read_res=read_res)
         if inserted:
-            self._record_check(attempt_id, "recorded")
+            check(attempt_id, "recorded")
             return stored
-        self._record_check(attempt_id, "unchanged")
+        check(attempt_id, "unchanged")
         return None
 
     def _wake_follow_up_if_idle(self, host: str, session_id: str, *, boundary: str, read_res: dict) -> None:
@@ -1780,6 +1872,22 @@ class AttemptResultCollector:
                 except (BatError, ConnectionLost, InvokeTimeout, asyncio.TimeoutError):
                     self._record_check(cand["attempt_id"], "bat_error")
                     continue
+                # Only candidates surviving the existing memo short-circuit reach
+                # this point. The direct step neither uses that memo nor wakes a queue.
+                rem = self.pass_budget_s - (time.monotonic() - started)
+                if rem <= 0:
+                    break
+                direct = self._direct_candidate(cand)
+                rem = self.pass_budget_s - (time.monotonic() - started)
+                if direct is None or rem <= 0:
+                    continue
+                try:
+                    row = await asyncio.wait_for(
+                        self._collect_candidate(direct, budget_s=rem), timeout=rem)
+                    if row is not None:
+                        collected.append(row)
+                except (BatError, ConnectionLost, InvokeTimeout, asyncio.TimeoutError):
+                    self._record_direct_check(cand["attempt_id"], "bat_error")
             return collected
 
 

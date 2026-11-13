@@ -130,6 +130,7 @@ const ACTIONS = {
   'pm.thread.plan': 'action_pm_thread_plan',
   'pm.thread.plan.revise': 'action_pm_thread_plan_revise',
   'pm.thread.rename': 'action_pm_thread_rename',
+  'pm.wip_policy.save': 'action_pm_wip_policy_save',
   'pm.work.bind': 'action_pm_work_bind',
   'pm.work_batch.evidence.record': 'action_pm_work_batch_evidence_record',
   'pm.work_batch.start': 'action_pm_work_batch_start',

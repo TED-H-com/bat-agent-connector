@@ -4,24 +4,24 @@
 
 ## Choose the matching package
 
-As checked on November 11, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18) is Connector **0.2.18** / desktop **0.1.14**, with its exact source recorded in `release-manifest.json`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
+As checked on November 13, 2026, the latest [stable download](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19) is Connector **0.2.19** / desktop **0.1.15**, with its exact source recorded in `release-manifest.json`. The [published prerelease](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022) is Connector **0.2.13** / desktop **0.1.9**, from `437ee6a7143a82e32eae1d6a008203b2df072aaf`. Download the selected version's platform asset with its `release-manifest.json` and `SHA256SUMS`. Each release has eight assets: wheel, sdist, deb, two DMGs, Windows installer, manifest and checksums. CI and installation fixtures are separate from native or live acceptance.
 
-Connector 0.2.18 adds Workbench list resizing, quote copying from completed messages and original requirement evidence in Result and Live Overview. It keeps credential-bearing repository URLs and staged credential handles out of setup drafts, preserves original-request recovery, tightens operation-history cursor and loopback validation, and lets readers save readable relationship IDs for later cleanup. Desktop 0.1.14 updates the updater plugin to 2.14.1 with ZIP handling through zip 9.5.1. Earlier external-history relationships and saved conversations remain available. See [delivery status](product/implementation-status.md) for separate branch, merged, released, installed and live-tested records. The first-launch steps below describe 0.2.18; downloading a package does not establish installation or live acceptance.
+Connector 0.2.19 / Desktop 0.1.15 adds guided Sprint Review, review of exact original assessments from Result and Overview, and discovery of withdrawable external-conversation relationships for a selected Work in the shared Dashboard. Review completion records direction and ownership; quality acceptance remains separate. Planning outputs remain drafts without adopting scope or starting work. API and MCP clients also gain advisory workspace WIP and read-only scope-impact previews; these two features have no Dashboard UI. Existing permissions, drafts and original operation keys are preserved. Earlier external-history relationships and saved conversations remain available. See [delivery status](product/implementation-status.md) for separate branch, merged, released, installed and live-tested records. The first-launch steps below describe 0.2.19; downloading a package does not establish installation or live acceptance.
 
-| Platform | Stable 0.1.14 asset | Preview 0.1.9 asset | Package |
+| Platform | Stable 0.1.15 asset | Preview 0.1.9 asset | Package |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.14_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.14_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.14_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.14_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.15_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.15_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.15_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.15_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 Use the platform asset on the release page. Separate GitHub Actions candidates may require sign-in and expire. Linux and Windows packages are unsigned; macOS uses ad-hoc signing without notarization. There is no signed updater feed. This release adds no owner installation, physical-device or real BAT/model acceptance evidence. A Linux persistent native credential vault remains outside this delivery; a GitHub release label does not establish real-device stability.
 
 ### Update an existing desktop
 
-For Windows, download `better-agent-dashboard_0.1.14_windows_x64.exe`, quit Dashboard through its tray menu, then run the installer. Preserve the existing application data; do not delete the Connector journal or credentials. Existing unsigned test packages cannot use the in-app signed update path. Other platforms use their matching package above.
+For Windows, download `better-agent-dashboard_0.1.15_windows_x64.exe`, quit Dashboard through its tray menu, then run the installer. Preserve the existing application data; do not delete the Connector journal or credentials. Existing unsigned test packages cannot use the in-app signed update path. Other platforms use their matching package above.
 
-Current candidate checks build older Connector cores from pinned published 0.2.12 and 0.2.17 sources, then exercise the upgrade to the candidate while checking retained identity, data and original operations. The candidate must have a higher Connector version; same-version comparisons are refused. The published 0.2.17 release used the 0.2.12 and 0.2.16 baselines. These core fixtures do not exercise an old desktop installer upgrading to a new installer or establish recovery on your machine. Final source and passed CI evidence are recorded in [delivery status](product/implementation-status.md).
+Current candidate checks build older Connector cores from pinned published 0.2.12 and 0.2.18 sources, then exercise the upgrade to the candidate while checking retained identity, data and original operations. The candidate must have a higher Connector version; same-version comparisons are refused. The published 0.2.18 release used the 0.2.12 and 0.2.17 baselines. These core fixtures do not exercise an old desktop installer upgrading to a new installer or establish recovery on your machine. Final source and passed CI evidence are recorded in [delivery status](product/implementation-status.md).
 
 ## First launch: your local Connector
 
@@ -283,10 +283,10 @@ It creates a private version directory under
 For an existing uv tool installation, see [adoption and restoration](connector-updates.md#adopting-an-existing-uv-tool-installation).
 
 Both published versions include the installer. Pin the same tag for the bootstrap
-and installation. For stable **v0.2.18**:
+and installation. For stable **v0.2.19**:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.18/scripts/install.sh | sh -s -- --tag v0.2.18 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.19/scripts/install.sh | sh -s -- --tag v0.2.19 --channel-check stable
 ```
 
 For prerelease **v0.2.13-preview.20261022**:

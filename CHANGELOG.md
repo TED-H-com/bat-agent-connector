@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Let workspace members with observe access read a fixed Scope and roadmap report
+  through the API or MCP. One exact Roadmap observation identifies the report,
+  showing accepted requirements, baseline and forecast dates, dependencies,
+  quality and coverage. Every original source must remain readable. Reports are
+  available in English and Traditional Chinese as Markdown, HTML or SVG; actual
+  dates remain unknown. Reading a report changes nothing and calls no model.
+
+## 0.2.19 / Desktop 0.1.15 (2026-11-12)
+
+- Let workspace owners set an advisory WIP limit for a PM workspace, and let API
+  and MCP clients read how much committed Work the workspace holds against it.
+  Each Work counts once, from original evidence: Kanban work in progress,
+  unresolved executions and accepted selections. A Work is released only after
+  management closure, terminal execution evidence and no later input that starts
+  agent work. An acknowledgement, idle time or elapsed time never releases it, and
+  a later direct session input holds it until that input's own terminal receipt.
+  An unreadable source or an exceeded bound gives one generic unknown instead of
+  partial counts. The limit is advisory: no action is refused because of it, and
+  existing Kanban metrics are unchanged. There is no Dashboard view yet.
+
+- Record `direct_send_dispatch` in the `external_refs` of a direct `session.send`
+  operation: `false` before the BAT call and `true` just before the frame is
+  written, so `true` means only that the message may have been sent. Each write
+  also appears as a `resource.bound` operation event. Operation status, retries
+  and reconciliation are unchanged.
+
 - Let API and MCP clients run a guided Sprint Review. A guided meeting draft
   freezes an exact, bounded Review basis: selected Results with their original
   assessments, attributed feedback, governance revisions and one Follow-up
@@ -12,7 +38,23 @@
   from which the existing planner produces only explicit drafts, without adopting
   scope or starting work. A withdrawn source makes everything derived from it
   unavailable, overflow is refused instead of trimmed, and existing requests keep
-  their exact responses. The Dashboard is not changed yet.
+  their exact responses.
+
+- Let Dashboard users run that guided Sprint Review from the selected Sprint, or
+  resume it from its meeting. Six steps, worked out from the server's records
+  rather than a separate client workflow, fix the Review context, inspect exact
+  Results with their original assessments, hear attributed feedback, record
+  direction through the existing governance forms, complete the Review as the
+  actual responsible owner, and optionally choose a completed decision as an
+  input to a Planning draft marked "Draft only; scope not adopted; work not
+  started". Opening and selecting change nothing and call no model, and
+  contributors see that the owner's decision is awaited instead of controls the
+  server would refuse. When a Review source is refused or withdrawn, every view
+  derived from it is withdrawn, while ordinary discussions that only cite it keep
+  their content; a temporary network or server error keeps the open discussion
+  and its unsent draft and only reports the error. Saved drafts keep only what
+  people typed and exact source IDs, never source content. Without the server
+  capability, existing meetings, governance and Planning are unchanged.
 
 - Let API and MCP clients preview, for selected Work in one saved plan snapshot,
   which retained packages, Attempts, handoffs and issue mappings connect to the
@@ -48,6 +90,11 @@
 
 - Give each browser UI test shard a 30-minute job limit so a slow package mirror
   no longer cancels an otherwise passing run; per-test time limits are unchanged.
+
+- Advance both package versions and move the latest-stable core upgrade fixture
+  to published 0.2.18, retaining the earlier 0.2.12 baseline and existing identity,
+  workspace and history checks. Release preparation does not imply publication
+  or owner, native-installation or live BAT/model acceptance.
 
 ## 0.2.18 / Desktop 0.1.14 (2026-11-11)
 

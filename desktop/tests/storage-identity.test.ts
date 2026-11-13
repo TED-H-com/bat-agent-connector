@@ -287,3 +287,16 @@ test('new_assessment_pin_is_not_written_to_local_storage', () => {
     else delete (globalThis as any).localStorage;
   }
 });
+
+test('guided Review uses existing durable action keys with exact references and original replay identity',()=>{
+  const {local,session}=stores(old());
+  const request={action:'pm.meeting.draft',target:{workspace_id:'ws_'+'1'.repeat(32),meeting_id:'pmmeet_'+'2'.repeat(32)},
+    params:{review_basis:{version:1,results:[{attempt_id:'att_'+'3'.repeat(32),result_id:'res_'+'4'.repeat(32),digest:'sha256:'+'a'.repeat(64),assessment_ref:null}],
+      feedback_items:[{id:'feedback',source_ref:{kind:'meeting_note',note_id:'pmmnote_'+'5'.repeat(32)}}],governance_revision_ids:[],follow_up_ref:null}},preconditions:{expected_version:2}};
+  const key=`batc.pm.${old()}.${request.action}.${JSON.stringify(request.target)}`;
+  const raw=JSON.stringify({version:1,values:{goal_review:'My authored observation',review_basis:JSON.stringify(request.params.review_basis)},
+    intent:{key:'original-review-key',request,operation_id:'op_'+'6'.repeat(32)}});
+  local.setItem(key,raw);migrateManagedStorage(identity,local,session);
+  assert.equal(local.getItem(key.replace(old(),target)),raw);
+  assert(![...local.values.keys()].some(key=>/sprint-review|review-progress|review-selection/.test(key)));
+});

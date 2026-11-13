@@ -282,6 +282,7 @@ JOURNAL_ONLY_ACTIONS = frozenset({
     "pm.thread.plan",
     "pm.thread.plan.revise",
     "pm.thread.rename",
+    "pm.wip_policy.save",
     "pm.work.bind",
     "pm.work_batch.evidence.record",
     "pm.work_batch.start",

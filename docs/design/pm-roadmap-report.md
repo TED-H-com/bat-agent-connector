@@ -19,9 +19,16 @@ current heads or latest records. The snapshot fixes the accepted document and
 candidate metadata; candidates are labelled separately and contribute no accepted
 requirements. Milestone requirements retain their exact plan revision and IDs,
 including a historically adopted plan different from the snapshot's accepted plan.
-The first recorded adoption matching that historical revision and scope proves its
-adoption; later readoption cannot replace that proof. Work, capture, evidence,
-criterion and quality references stay those originally selected.
+Every adoption row matching that historical plan revision and scope is included,
+authorized with its original commit operation, charged against the traversal budget,
+and listed in canonical manifest order. The current adoption CAS produces one match;
+legacy duplicates are all required. Physical rowids and rebuild order are never
+selection criteria. The snapshot's accepted-adoption decision is also resolved
+exactly, including when the scheduling baseline has no milestones. Compared with
+reports before that existence proof, an ordinary single-adoption/empty-baseline report
+now includes the accepted decision in its manifest. Its source-set, view and output
+digests and source appendix intentionally change; no source authority fix is rolled back.
+Work, capture, evidence, criterion and quality references stay those originally selected.
 
 All accepted requirements, original scope inputs/statuses, baseline milestones,
 dependencies, original/selected baseline dates, forecast dates, quality and coverage
@@ -46,12 +53,94 @@ access to the entire original source closure. Authority lookups may check curren
 grants; they never supply replacement report facts or inherit creator authority.
 
 The loader first establishes membership and an exact observation identity. It
-then authorizes roadmap operations, snapshot/plan/adoption lineage, every saved
+then requires existence of each named operation before its existing lineage gate,
+and authorizes roadmap operations, snapshot/plan/adoption lineage, every saved
 evidence source (including quality proofs and evidence not expanded), original
 maintenance ancestors, and selected historical plans. Existing source traversal
 and request-snapshot caches are reused; no permission cache crosses requests.
-Only after **all** sources are authorized does it check digest/relationship proof,
-source/output byte limits, template compatibility, and project the report.
+Collection validates containers and reference types needed to enumerate authority
+at each source load. Unenumerable authority is unavailable, even for a future template.
+Only after **all** sources are authorized does it check identity/digest proofs, then
+snapshot template compatibility, before any version-1-specific proof or projection.
+Version 1 proves observation evidence is a subset of authorized snapshot evidence,
+milestone IDs equal the baseline, selected quality contexts agree, and adoption
+results agree with their rows. It never silently filters an inconsistent observation.
+Source/output bounds and rendering follow these proofs.
+
+`pm_roadmap_report_schema.py` is the single consumed-field inventory. Immediately
+after the template check, its version-1 validator covers observation/baseline/forecast,
+the snapshot (accepted/candidate plan, work, capture, evidence and coverage), plan
+inputs/sections/requirements, adoption results, and each consumed evidence/quality
+variant, including criterion matrices. Container elements are validated too. Capture
+coverage uses original boolean flags and nonnegative integer source counters. Optional
+legacy quality context may be absent; a present incompatible context refuses. Fields
+only passed through canonical JSON are explicitly opaque JSON leaves, not silently
+assumed mappings. Required map references are proven before shared projections index
+them. Unknown extra fields retain their original canonical representation.
+
+Before complete authorization, Connector-owned fixed IDs and digests passed by
+this loader to SQL or a reader remain nonempty UTF-8 strings of at most 512 bytes.
+External session/resource IDs and externally sourced kind/type strings instead
+accept nonempty UTF-8 scalars within the existing source budget. Work-link `ref`
+uses its producer's 300-character bound, not a 512-byte bound. The committed
+reference-domain inventory classifies all 168 paths; producer admission is unchanged; maintenance kinds and
+optional basis values must belong to their declared sets. Shared readers are unchanged.
+The collection boundary alone conceals OperationError, KeyError, TypeError, ValueError,
+RecursionError, AttributeError, IndexError, sqlite3.ProgrammingError,
+sqlite3.InterfaceError and OverflowError. Other SQLite failures (including locked,
+I/O and corruption errors) retain their existing behavior. No catch surrounds the
+v1 validator, proofs, projection or renderer. Digest-consistent malformed v1 structures
+refuse with PM_REPORT_SOURCE_CHANGED/409 after authorization, never a transport 422.
+Immediately after the template check, an iterative whole-document walk includes
+opaque JSON leaves and unknown members. The downstream safety bound is the native
+JSON budget of **127 nested containers**, matching `connection_sources._native_json_values`
+and serde_json. Each complete document's root dict/list counts as container one;
+each nested dict/list adds one; scalars add zero. Journal row envelopes do not count.
+The 128th container gives the same controlled 409 after authorization. The production
+walk is iterative and checks depth only; it does not call the recursive native checker.
+This generous safety bound is not a contract on current producer shapes. The real
+maintenance repair fixture currently reaches 12 containers, leaving 115 containers
+of margin. Its test requires producer depth to remain at most one quarter of the
+budget, so producer growth is detected long before the read boundary. It prints the
+deepest path (currently the repair child's confinement/evidence/host_check/protected_roots).
+No interpreter recursion limit or post-authorization catch changes. Collection's
+existing concealment still applies if decoding or authorization cannot complete.
+The separate content-byte and SVG-page limits still apply to authorized documents
+within the depth budget; depth acceptance is not a promise of unbounded output.
+
+Field enumeration alone does not prove downstream safety. Test-only recording
+mappings audit actual projection and all renderer accesses for ordinary, legacy,
+quality matrix, maintenance, forecast and empty-baseline closures. Explicit opaque
+metadata is only copied to serialized JSON. The dynamic test wrapper records normal
+membership, iteration, values, subscription, get and items, and preserves paths through
+copy/deepcopy. `keys()`, `dict(value)` and mapping unpacking fail the guard because
+plain copies cannot track later absent-key reads. The existing snapshot envelope's
+two unpack operations are an explicit audited exception: its complete function
+source is pinned (a change fails the guard), its source reads are recorded, and
+its returned root/coverage mappings regain wrappers before further consumers run.
+A negative control checks this restoration, unchanged bytes, and pin invalidation.
+Explicit dict base-class calls
+(such as `dict.get(value, key)`) and C-extension accesses bypass this dynamic guard
+and are not covered; it is an inventory of exercised access paths, not a whole-program
+proof. Negative controls demonstrate both tracked reads and refused copies.
+Boundary tests measure stack headroom
+through the service, shared read, daemon, HTTP, RPC and MCP paths, including deepcopy,
+canonical JSON and all six outputs.
+The peak must leave at least half the default recursion budget free; over-depth input
+never reaches projection. Profiling covers observation deepcopy and forecast pretty
+JSON for all three shapes, once per route in HTML/en; a smaller mixed-shape matrix
+compares every route's six outputs. The complete seven-document/three-shape HTTP
+matrix still checks 127, 128 and 500 for all six outputs without profiling overhead.
+Producer literal enumeration drift is checked separately: emitter and receiver
+escapes and reflection entry points fail the test, rather than attempting alias
+inference. This syntactic guard is scoped to the two audited producer modules;
+it is not whole-program Python data-flow analysis.
+
+Schema-generated tests enumerate every field and container element using all eight
+required mutation types, plus empty and over-bound Unicode strings. Type-compatible
+values (for example a legitimately nullable field) are distinguished from malformed
+ones; invalid authority shapes are compared as raw HTTP bytes in ordinary, oversized
+and hidden-later contexts.
 
 - Bad selectors return `INVALID_PARAMS`/422; absent same-workspace observation is
   `PM_ROADMAP_NOT_FOUND`/404. Missing scope is `FORBIDDEN`/403; workspace access uses
@@ -86,9 +175,16 @@ and source-reference sets are sorted by Unicode scalar order. JSON uses UTF-8,
 sorted keys, `ensure_ascii=False`, `allow_nan=False`; digests use compact separators.
 
 Report text has LF newlines, tabs expanded at four-column stops, no BOM and no
-NFC/NFKC normalization. Illegal XML controls, surrogate/noncharacters and bidi
-controls are shown as visible code-point escapes, not discarded. Markdown uses
-literal variable-length fences; HTML/SVG escape inserted content. HTML uses the
+NFC/NFKC normalization. After newline/tab normalization, the complete escape set
+is C0 U+0000–U+001F
+except LF, DEL U+007F, C1 U+0080–U+009F, bidi controls U+061C/U+200E/U+200F/
+U+202A–U+202E/U+2066–U+2069, all 66 noncharacters (U+FDD0–U+FDEF and
+U+nFFFE/U+nFFFF for planes 0–16), and lone surrogates U+D800–U+DFFF.
+They are shown as visible code-point escapes, not discarded. These sets are pinned
+in the generated table. Public operation admission rejects decoded JSON lone
+surrogates before persistence; original canonical digests are unchanged. A malformed
+stored authority document that cannot be encoded is concealed during collection.
+Markdown uses literal variable-length fences; HTML/SVG escape inserted content. HTML uses the
 Brief passive markup/CSP/style helpers. Brief renderers 1–4 and their existing
 wrapper are unchanged; the new report never calls that Unicode-dependent wrapper.
 No script, external asset/font, URL-bearing link, foreignObject or executable
@@ -169,6 +265,8 @@ identical bytes on every authorized read; withdrawal produces refusal instead.
 scope, template/renderer versions, formats/locales, source/withdrawal policy,
 byte/page bounds and Unicode version. `materialization:false` and
 `native_save:false` distinguish renderer availability from those later features.
+It is omitted unless all existing `roadmap`, `brief_snapshots`, and `plan_drafting`
+availability flags are true; no additional availability predicate is introduced.
 No `roadmap_report_materialization` capability is added here.
 
 ## Validation and remaining work

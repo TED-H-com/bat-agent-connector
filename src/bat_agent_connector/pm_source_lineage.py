@@ -18,6 +18,7 @@ from .operations import OperationError
 MAX_ROOTS = 64
 _EXECUTION = ContextVar("pm_source_execution", default=None)
 # Other derived writes must first implement fixed lineage and original recovery.
+HANDOFF_ACTIONS = frozenset({"repository.continue"})
 DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept", "github.pr.publish", "pm.execution.verify",
     "session.send", "session.answer", "session.interrupt", "session.read", "session.position",
     "session.labels.set", "session.record_verification", "work.start", "work.adopt_and_start", "work_item.update", "work_item.pin",
@@ -337,7 +338,7 @@ def inherit(ops, principal, action, target, params, binding):
         return binding
     if not visible_roots(ops.db, principal, original_ids):
         raise OperationError("NOT_FOUND", "Original resource sources are unavailable", 404)
-    if action not in DERIVED_ACTIONS | pm_delivery_lineage.ACTIONS and not action.startswith("pm.") and not (action == "repository.continue" and (binding or {}).get("pm_handoff")):
+    if action not in DERIVED_ACTIONS | pm_delivery_lineage.ACTIONS and not action.startswith("pm.") and not (action in HANDOFF_ACTIONS and (binding or {}).get("pm_handoff")):
         raise OperationError("PM_DERIVED_ACTION_UNAVAILABLE", "This action has no fixed PM source handoff contract yet", 409)
     workspaces = set()
     for root in original_ids:

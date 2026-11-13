@@ -52,7 +52,7 @@ async function checkLayout(page, lang, width) {
     const center = element => (bounds(element).left + bounds(element).right) / 2;
     const steps = [...document.querySelectorAll('.install-steps li')].map(element => bounds(element).width);
     const commandBlocks = [...document.querySelectorAll('#start pre code')];
-    const expectedCommands = ['--tag v0.2.18 --channel-check stable', '--tag v0.2.13-preview.20261022 --channel-check preview'];
+    const expectedCommands = ['--tag v0.2.19 --channel-check stable', '--tag v0.2.13-preview.20261022 --channel-check preview'];
     const tokensUnbroken = commandBlocks.every(code => {
       const text = code.firstChild;
       return text?.nodeType === Node.TEXT_NODE && [...text.textContent.matchAll(/\S+/g)].every(match => {
@@ -88,13 +88,13 @@ async function checkLayout(page, lang, width) {
       fullSourceCopy: visibleText('.install-steps').includes('437ee6a7143a82e32eae1d6a008203b2df072aaf'),
       commandCopy: JSON.stringify(commandBlocks.map(code => code.textContent)) === JSON.stringify(expectedCommands),
       releaseVersion: visibleText('.install-steps').includes(lang === 'en'
-        ? 'Stable: Connector 0.2.18 / desktop 0.1.14'
-        : '穩定版：Connector 0.2.18／desktop 0.1.14')
+        ? 'Stable: Connector 0.2.19 / desktop 0.1.15'
+        : '穩定版：Connector 0.2.19／desktop 0.1.15')
         && visibleText('.install-current').includes(lang === 'en'
-          ? 'install the 0.1.14 package' : '安裝 0.1.14 套件')
+          ? 'install the 0.1.15 package' : '安裝 0.1.15 套件')
         && visibleText('.install-current').includes(lang === 'en'
-          ? 'Download stable 0.2.18' : '下載穩定版 0.2.18')
-        && !!document.querySelector('#start a[href="https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.18"]'),
+          ? 'Download stable 0.2.19' : '下載穩定版 0.2.19')
+        && !!document.querySelector('#start a[href="https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19"]'),
       releaseLimits: visibleText('.install-current').includes(lang === 'en'
         ? 'Linux and Windows packages are unsigned' : 'Linux 與 Windows 套件未簽章')
         && visibleText('.install-current').includes(lang === 'en'
@@ -102,8 +102,8 @@ async function checkLayout(page, lang, width) {
         && visibleText('.install-current').includes(lang === 'en'
           ? 'There is no signed updater feed' : '沒有 signed updater feed'),
       upgradeBaselines: visibleText('.install-current').includes(lang === 'en'
-        ? 'Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.17 sources'
-        : '目前候選版的升級 fixture 使用由 0.2.12 與 0.2.17 固定發布來源建出的核心'),
+        ? 'Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.18 sources'
+        : '目前候選版的升級 fixture 使用由 0.2.12 與 0.2.18 固定發布來源建出的核心'),
       commandWrapping: commandBlocks.length === 2 && tokensUnbroken && inlineFlagsUnbroken,
       faqHangingIndent: faqAligned,
       updateScope: platformNote.includes(lang === 'en' ? 'Connector automatic updates' : 'Connector 自動更新')

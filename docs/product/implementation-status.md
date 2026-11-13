@@ -1,5 +1,53 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## Connector 0.2.19／Desktop 0.1.15 交付
+
+分支：`release/0.2.19-desktop-0.1.15` 的版本準備已整合；合併：#536 納入套件、
+技能、身分 golden 與 native lock 版本。#524、#525、#526、#527、#528、#529、
+#530、#531 與 #532 已先行合併於主線；各分支舊紀錄保留於下方。
+
+發布：[Connector 0.2.19／Desktop 0.1.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19)。
+套件來源及 fixture 回執以發布附件 `release-manifest.json` 為準，校驗碼見 `SHA256SUMS`。
+已於 2026-11-13 00:52 UTC 發布，固定來源為 `447da212da12b27f1d36f9e58b03053d706688b7`。
+該來源的 [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43272366878)
+與 [desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43272367065) main/push 均通過；
+desktop CI 的 Windows 建置於第二次執行通過，第一次因偶發的 UI Automation 逾時而停止。
+八個公開資產的名稱、大小與 SHA-256 已與發布清單及本機檔案核對一致。
+升級 fixture 使用固定發布的 0.2.12 與 0.2.18 核心，保留原身分、工作區與操作；
+這不等於舊桌面安裝器到新安裝器的完整升級驗收。
+
+Connector 0.2.19／Desktop 0.1.15 在共用 Dashboard 加入引導式 Sprint Review、從 Result 與 Overview 檢視並審查精確的原始評估，以及為選定 Work 尋找可撤回的外部對話關聯。完成 Review 記錄方向與責任歸屬，品質驗收仍須另行進行；Planning 產出維持草稿，不採納範圍，也不啟動工作。API／MCP 用戶端另可使用 workspace WIP 建議上限及唯讀的範圍影響預覽，這兩項功能目前沒有 Dashboard UI。既有權限、草稿及原 operation key 均保留。
+
+安裝：本輪沒有新增 owner 主機安裝證據。實機：沒有新增真 BAT／模型、原生
+使用者操作或實體裝置驗收。Linux／Windows 套件未簽章；macOS 採 ad-hoc 簽章，
+未公證；沒有 signed updater feed。歷史圖庫仍為 0.2.13／0.1.9，Desktop／site-demo
+離線 producer receipts 仍不齊全，不宣稱完整離線組裝資格。
+E00–E11、R0–R5、A01–A40 與未修訂的 PM v1.2 生命週期待辦保持開放；
+持續開發授權不等於 R0／R1 接受。
+
+Branch: `release/0.2.19-desktop-0.1.15` version preparation is integrated.
+Merged: #536 includes package, skill, identity golden and native lock versions;
+#524, #525, #526, #527, #528, #529, #530, #531 and #532 were merged to main earlier.
+Released: Connector 0.2.19 / Desktop 0.1.15 is linked above; the manifest and
+checksums record package source and fixture provenance.
+Published on 2026-11-13 at 00:52 UTC from `447da212da12b27f1d36f9e58b03053d706688b7`. The fixed-source
+[backend](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43272366878)
+and [desktop](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43272367065) main/push runs passed;
+the desktop run's Windows build passed on its second attempt, after an intermittent UI Automation timeout.
+All eight public asset names, sizes and SHA-256 digests match the verified release manifest and local files.
+The core-upgrade baselines are 0.2.12 and 0.2.18; they do not prove old-to-new desktop
+installer acceptance.
+
+Connector 0.2.19 / Desktop 0.1.15 adds guided Sprint Review, review of exact original assessments from Result and Overview, and discovery of withdrawable external-conversation relationships for a selected Work in the shared Dashboard. Review completion records direction and ownership; quality acceptance remains separate. Planning outputs remain drafts without adopting scope or starting work. API and MCP clients also gain advisory workspace WIP and read-only scope-impact previews; these two features have no Dashboard UI. Existing permissions, drafts and original operation keys are preserved.
+
+Installed: no new owner installation evidence. Live-tested: no new real BAT/model,
+native user-operation or physical-device acceptance. Linux/Windows remain unsigned;
+macOS is ad-hoc signed, not notarized; there is no signed updater feed. The historical
+0.2.13 / 0.1.9 gallery and incomplete offline producer receipts remain explicit.
+Open E00–E11, R0–R5, A01–A40 and unrevised PM lifecycle requirements remain open;
+continued development authorization does not constitute R0/R1 acceptance.
+Entries below retain their historical branch, candidate and release states.
+
 ## Connector 0.2.18／Desktop 0.1.14 交付
 
 分支：`release/upgrade-baseline-0.2.17` 的版本準備已整合；合併：#521 納入

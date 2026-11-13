@@ -241,6 +241,8 @@ class ApiV1:
         pm_work_profiles.install(daemon.ops)
         pm_work_start.install(daemon.ops)
         pm_work_adopt_and_start.install(daemon.ops)
+        from . import pm_workspace_wip
+        pm_workspace_wip.install(daemon.ops)
         pm_attempt_results.install(daemon.ops)
         from . import pm_work_input_idea
         pm_work_input_idea.install(daemon.ops)
@@ -296,6 +298,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans", self.pm_plans, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/projects", self.pm_projects, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plan-comparison", self.pm_plan_comparison, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/wip", self.pm_workspace_wip, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plan-impact", self.pm_plan_impact_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban", self.pm_kanban, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban/(?P<work_item_id>wi_[0-9a-f]{20})", self.pm_kanban_card, "observe"),
@@ -619,7 +622,7 @@ class ApiV1:
                               check_authorization=authorizer(self.daemon, token, principal, browser_session=browser_session))
             if fn in {self.host_deploy_status, self.connections, self.operation, self.project, self.repair_evidence, self.work_item_repair, self.session_instructions,
                       self.host_preferences, self.project_skills, self.work_item_results,
-                      self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
+                      self.pm_workspace_wip, self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
                       self.pm_overview_assessments, self.pm_overview_assessment,
@@ -649,6 +652,9 @@ class ApiV1:
                       self.pm_plan_impact_preview, self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
+            if fn == self.pm_workspace_wip and ('transfer-encoding' in headers
+                    or not re.fullmatch(r'0+', headers.get('content-length', '0').strip())):
+                raise ApiError(422, "INVALID_PARAMS", "Workspace WIP read does not accept a body")
             if fn == self.pm_plan_impact_preview:
                 if parts.path != path:
                     raise ApiError(404, 'NOT_FOUND', 'route not found')
@@ -844,6 +850,8 @@ class ApiV1:
             if not isinstance(params['quality_refs'], dict):
                 raise OperationError('INVALID_PARAMS', 'Original quality selectors must be a JSON object', 422)
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
+        if method == "pm_workspace_wip_get":
+            integer_fields.add("policy_revision")
         if method == "pm_work_profiles_list":
             integer_fields.add("cursor")
         if method == "pm_roadmap_report_get":
@@ -858,7 +866,7 @@ class ApiV1:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
             value = params[key]
-            pattern = r"[0-9]{1,19}" if wide_cursor and key == "after" else r"[0-9]{1,9}"
+            pattern = r"[0-9]{1,19}" if (wide_cursor and key == "after") or key == "policy_revision" else r"[0-9]{1,9}"
             if not re.fullmatch(pattern, value):
                 raise OperationError("INVALID_PARAMS", f"{key} must be a positive integer", 422)
             params[key] = int(value)
@@ -884,6 +892,9 @@ class ApiV1:
 
     async def pm_spec_source_capabilities(self, principal, query, workspace_id, **_):
         return await self._pm_spec_read(principal, "pm_spec_source_capabilities_get", query, workspace_id)
+
+    async def pm_workspace_wip(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_workspace_wip_get", query, workspace_id=workspace_id)
 
     async def pm_workspace(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_workspace_get", query, workspace_id=workspace_id)
@@ -1334,6 +1345,7 @@ class ApiV1:
             pm_register,
             pm_resources,
             pm_schedule,
+            pm_workspace_wip,
             session_history,
         )
         fleet = self.daemon.fleet
@@ -1390,7 +1402,7 @@ class ApiV1:
                             "runtime_version": managed["runtime_version"], "background": True},
                           "desktop_identity": dashboard_sync.identity(self.daemon.journal, principal)} if managed else {}
         build = build_identity()
-        return 200, {**managed_fields, "actor": principal.actor, "scopes": sorted(principal.scopes), "api_version": API_VERSION,
+        result = {**managed_fields, "actor": principal.actor, "scopes": sorted(principal.scopes), "api_version": API_VERSION,
                      "contract_version": CONTRACT_VERSION, "connector": __version__, "build": build,
                      "connector_update": connector_update_status(build), "hosts": hosts,
                      "frontend": {"digest": _dashboard_snapshot()[1]},
@@ -1453,6 +1465,7 @@ class ApiV1:
                                                     "work_batches": pm_work_batches.capabilities(self.daemon.ops),
                                                     "work_start": pm_work_start.capabilities(self.daemon.ops),
                                                     "work_adopt_and_start": pm_work_adopt_and_start.capabilities(self.daemon.ops),
+                                                    **({"workspace_wip": wip_capability} if (wip_capability := pm_workspace_wip.capabilities(self.daemon.ops)) is not None else {}),
                                                     "work_profiles": pm_work_profiles.capabilities(self.daemon.ops),
                                                     "work_attempt_results": pm_attempt_result_reads.capabilities(self.daemon.ops),
                                                     "operation_loop": {"version": 1},
@@ -1469,7 +1482,6 @@ class ApiV1:
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,
                                                     "overview_assessment": "pm.overview.assess" in self.daemon.ops.actions,
                                                     "conversation_proposals": pm_conversation_proposals.capabilities(),
-                                                    "roadmap_report": pm_roadmap_reports.capabilities(),
                                                     "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 4},
                                                     "follow_up_prepare": "pm.follow_up.prepare" in self.daemon.ops.actions,
                                                     **pm_sprint_review.capabilities(self.daemon.ops),
@@ -1509,6 +1521,11 @@ class ApiV1:
                                                            "health_required": r.verification.health_required} if r.verification else None,
                                          "rollback": {"supported": r.rollback.supported, "identity": r.rollback.identity,
                                                       "not_undone": list(r.rollback.not_undone)}} for r in gh_cfg.recipes.values()]}
+
+        pm_features = result['features']['pm_workspaces']
+        if all(pm_features[name] for name in ('roadmap', 'brief_snapshots', 'plan_drafting')):
+            pm_features['roadmap_report'] = pm_roadmap_reports.capabilities()
+        return 200, result
 
     async def repository_preview(self, principal, body, **_):
         return 200, {"preview": await repository_sync.preview(self.daemon.ops, principal, body)}
