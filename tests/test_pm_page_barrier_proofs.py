@@ -1,8 +1,4 @@
 """Phase accounting for the real bootstrap handler and its fresh final barrier."""
-import json
-import os
-from pathlib import Path
-
 import pytest
 
 from bat_agent_connector import api_auth
@@ -52,8 +48,3 @@ async def test_bootstrap_barrier_reuses_only_its_own_completed_proofs(pages, mon
     assert set(evaluations['barrier']) == set(occurrences)
     # Handler-time authorization must never replace the fresh final proof.
     assert set(evaluations['handler']) & set(evaluations['barrier'])
-    if os.environ.get('BAC_EVIDENCE'):
-        target = Path(os.environ['BAC_EVIDENCE']) / f'bootstrap-phases-{transport}-{role}.json'
-        target.write_text(json.dumps({'handler': 23, 'barrier': 66, 'occurrences': 155,
-            'distinct': 66, 'rechecked_handler_roots': len(set(evaluations['handler']) & set(evaluations['barrier'])),
-            'status': status, 'body_equal': body == supplied[0]}, indent=2) + '\n')
