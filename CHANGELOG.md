@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve paired operation-history cursors in MCP, RPC, CLI and Dashboard readers,
+  including equal timestamps and empty continuing pages. Keep Attention's next-page
+  control available with English and Traditional Chinese guidance, and document
+  original-operation lookup after a lost reply in all agent skills.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API

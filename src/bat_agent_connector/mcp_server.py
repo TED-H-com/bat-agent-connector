@@ -510,9 +510,13 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         return await pm_daemon("op_get", operation_id=operation_id)
 
     async def operations_list(statuses: list[str] | None = None, action: str | None = None,
-                              limit: int = 50) -> dict[str, Any]:
-        """Recent operations, newest first, optionally filtered by status or action."""
-        return await pm_daemon("op_list", statuses=statuses, action=action, limit=limit)
+                              limit: int = 50, before: Any = None, before_id: Any = None) -> dict[str, Any]:
+        """Recent operations, newest first. Pass next_before (timestamp) and next_before_id (operation ID)
+        together as before and before_id until both are null; a short or empty page is not the end.
+        After a lost reply, look up the original operation this way instead of submitting a new request.
+        Cursor values are validated by the central OperationService."""
+        return await pm_daemon("op_list", statuses=statuses, action=action, limit=limit,
+                               before=before, before_id=before_id)
 
     async def github_pr_preview(repository: str, pull_number: int, method: str | None = None) -> dict[str, Any]:
         """Read title/body digest and save a complete immutable merge_preview: fixed head/base, all commits,

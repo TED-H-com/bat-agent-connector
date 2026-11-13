@@ -35,7 +35,7 @@ async function fixture(page:Page,native:boolean,options:any={}) {
   if(path==='/sessions/demo/managed-session'){if(state.holdSource){state.holdSource=false;await new Promise(resolve=>{state.releaseSource=resolve;});}return state.sourceGone?{status:404,data:{error:{code:'NOT_FOUND',message:'Source removed'}}}:{status:200,data:{session:{host:'demo',session_id:'managed-session',provenance:state.manual?'manual':'connector_managed',api_access:state.manual||state.foreign?'read_only':'managed',...(state.foreign?{read_only_code:'FOREIGN_CONTROLLER'}:{})},relations_summary:[]}};}
   if(path==='/operations/'+captureId||path==='/operations/'+acceptId){if(state.failRead)return {status:503,data:{error:{code:'READ_FAILED',message:'Read unavailable'}}};if(state.holdRead){state.holdRead=false;await new Promise(resolve=>{state.releaseRead=resolve;});}return {status:200,data:{operation:operation(path.endsWith(captureId)?'capture':'accept')}};}
   if(path==='/operations/'+executionId)return {status:200,data:{operation:execution()}};
-  if(path==='/operations'){const action=url.searchParams.get('action'),before=url.searchParams.get('before'),mine=action===(state.executionAction||'checkpoint.continue');if(state.executionCursor&&mine){if(before&&state.holdExecutions){state.holdExecutions=false;await new Promise(resolve=>{state.releaseExecutions=resolve;});}return {status:200,data:{operations:before?[]:[execution()],next_before:before?null:state.executionCursor}};}return {status:200,data:{operations:mine?[execution()]:[],next_before:null}};}
+  if(path==='/operations'){const action=url.searchParams.get('action'),before=url.searchParams.get('before'),mine=action===(state.executionAction||'checkpoint.continue');if(state.executionCursor&&mine){if(before&&state.holdExecutions){state.holdExecutions=false;await new Promise(resolve=>{state.releaseExecutions=resolve;});}return {status:200,data:{operations:before?[]:[execution()],next_before:before?null:state.executionCursor,next_before_id:before?null:executionId}};}return {status:200,data:{operations:mine?[execution()]:[],next_before:null}};}
   if(path==='/tasks/'+taskId)return {status:200,data:{task:{task_id:taskId,host:'demo',session_id:'managed-session',commands:[{task_id:taskId,session_id:'managed-session',command_id:'cmd-accepted',kind:'send',status:'accepted'},{task_id:taskId,session_id:'managed-session',command_id:'cmd-unknown',kind:'send',status:'uncertain'}]}}};
   if(path.startsWith('/artifacts/'))return state.artifactMissing?{status:404,data:{error:{code:'ARTIFACT_NOT_FOUND',message:'Artifact unavailable'}}}:{status:200,data:{artifact:state.changedArtifactRevision?{...(state.row||row),revision:2}:state.badArtifact?{...(state.row||row),source:{...(state.row||row).source,fingerprint:'0'.repeat(64)}}:(state.row||row)}};
   if(path==='/artifacts'){if(state.holdCatalog){state.holdCatalog=false;await new Promise(resolve=>{state.releaseCatalog=resolve;});}if(state.catalogFail)return{status:503,data:{error:{code:'READ_FAILED',message:'Catalog read unavailable'}}};const i=url.searchParams.get('cursor')==='second'?1:0;return {status:200,data:{artifacts:(state.catalogPages?.[i]||[state.row||row]).map((revision:any)=>({revision})),next_cursor:state.catalogPages?.[i+1]?'second':null}};}
@@ -582,11 +582,11 @@ test('focus moved elsewhere stays on reload', async ({page}) => {
 });
 
 test('more executions ignores a second press', async ({page}) => {
-  const state = await fixture(page, false, {executionCursor: 'page-2', holdExecutions: true});
+  const state = await fixture(page, false, {executionCursor: 42.5, holdExecutions: true});
   await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');
   const more = page.locator('[data-managed-capture]').getByRole('button', {name: 'More executions', exact: true});
   await expect(more).toBeVisible();
-  const before = state.reads.filter(path => path.includes('before=page-2')).length;
+  const before = state.reads.filter(path => path.includes(`before=42.5&before_id=${executionId}`)).length;
   await more.focus();
   await page.keyboard.press('Enter');
   await expect.poll(() => typeof state.releaseExecutions).toBe('function');
@@ -594,11 +594,11 @@ test('more executions ignores a second press', async ({page}) => {
   await expect(more).toHaveAttribute('aria-disabled', 'true');
   expect(await more.evaluate(el => (el as HTMLButtonElement).disabled)).toBe(false);
   await refuseSecond(page, more);
-  expect(state.reads.filter(path => path.includes('before=page-2')).length).toBe(before + 1);
+  expect(state.reads.filter(path => path.includes(`before=42.5&before_id=${executionId}`)).length).toBe(before + 1);
   state.releaseExecutions();
   await expect(more).toBeHidden();
   await page.evaluate(() => new Promise(requestAnimationFrame));
-  expect(state.reads.filter(path => path.includes('before=page-2')).length).toBe(before + 1);
+  expect(state.reads.filter(path => path.includes(`before=42.5&before_id=${executionId}`)).length).toBe(before + 1);
   await expect(notice(page)).toBeFocused();
   expect(state.errors).toEqual([]);
 });

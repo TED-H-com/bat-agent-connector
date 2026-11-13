@@ -472,6 +472,7 @@ class TaskDaemon:
             statuses = params.get("statuses")
             return self.ops.list(statuses=statuses if isinstance(statuses, list) else None,
                                  actor=params.get("actor"), action=params.get("action"),
+                                 before=params.get("before"), before_id=params.get("before_id"),
                                  limit=int(params.get("limit") or 50), principal=principal)
         if method == "op_cancel":
             from . import pm_work_follow_up
