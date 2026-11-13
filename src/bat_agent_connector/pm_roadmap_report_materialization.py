@@ -14,6 +14,7 @@ from . import (
     pm_lifecycle_gates,
     pm_plans,
     pm_read_cache,
+    pm_report_read_work,
     pm_revision_git,
     pm_revision_paths,
     pm_roadmap_report_files,
@@ -224,14 +225,17 @@ def list_materializations(ops, principal, workspace_id, *, after=0, limit=20):
     _read(ops, principal, workspace_id)
     if type(after) is not int or not 0 <= after <= MAX_CURSOR or type(limit) is not int or not 1 <= limit <= 50:
         raise OperationError('INVALID_PARAMS', 'Select a signed 64-bit cursor and a limit of 1–50', 422)
-    with pm_source_reads.scope(ops.db, principal):
+    with pm_source_reads.scope(ops.db, principal), pm_report_read_work.scope(ops.db) as work:
         rows = ops.db.execute('SELECT * FROM pm_roadmap_report_materializations WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT ?',
             (workspace_id, after, limit + 1)).fetchall()
         result = {'version': 1, 'workspace_id': workspace_id, 'materializations': [],
             'next_after': None, 'source_visibility_filtered': False}
         scanned = after
         for row in rows[:limit]:
-            with pm_source_reads.record(ops.db, principal):
+            if scanned != after and work.stopped:
+                result['next_after'] = scanned
+                return _bounded(result)
+            with work.record(), pm_source_reads.record(ops.db, principal):
                 visible = source_visible(ops.db, principal, dict(row))
             if not visible:
                 scanned = row['sequence']

@@ -465,13 +465,20 @@ class OperationService:
         next_before = ops[-1]["created_at"] if len(rows) > limit else None
         next_before_id = ops[-1]["operation_id"] if len(rows) > limit else None
         if principal is not None:
+            from . import pm_report_read_work
             from .pm_access import visible
             from .pm_source_reads import record
             selected = []
-            for op in ops:
-                with record(self.db, principal):
-                    if visible(self.db, principal, op):
-                        selected.append(op)
+            with pm_report_read_work.scope(self.db) as work:
+                examined = None
+                for op in ops:
+                    if examined is not None and work.stopped:
+                        next_before, next_before_id = examined['created_at'], examined['operation_id']
+                        break
+                    with work.record(), record(self.db, principal):
+                        if visible(self.db, principal, op):
+                            selected.append(op)
+                    examined = op
             ops = selected
         return {"operations": ops, "next_before": next_before, "next_before_id": next_before_id}
 

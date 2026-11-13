@@ -287,11 +287,16 @@ def event_visible(db, principal, event):
 
 
 def filter_events(db, principal, page):
+    from . import pm_report_read_work
     from .pm_source_reads import record, scope
-    with scope(db, principal):
+    with scope(db, principal), pm_report_read_work.scope(db) as work:
         events = []
+        examined = None
         for event in page["events"]:
-            with record(db, principal):
+            if examined is not None and work.stopped:
+                return {**page, 'events': events, 'next_cursor': examined['seq'], 'has_more': True}
+            with work.record(), record(db, principal):
                 if event_visible(db, principal, event):
                     events.append(event)
+            examined = event
         return {**page, "events": events}

@@ -132,8 +132,9 @@ def get_by_operation(db, operation_id):
 
 
 def list_runs(ops, principal, workspace_id, *, thread_id=None, limit=50, after=None):
+    from . import pm_report_read_work
     from .pm_source_reads import record, scope
-    with ops.journal.tx(), scope(ops.db, principal):
+    with ops.journal.tx(), scope(ops.db, principal), pm_report_read_work.scope(ops.db) as work:
         pm_discussions._read(ops, principal, workspace_id)
         pm_discussions._limit(limit)
         if thread_id is not None:
@@ -147,8 +148,11 @@ def list_runs(ops, principal, workspace_id, *, thread_id=None, limit=50, after=N
                   "coverage": {"visibility_filtered": False, "scanned": 0}}
         cursor = after
         for row in rows[:limit]:
+            if cursor != after and work.stopped:
+                result['next_cursor'] = cursor
+                return _read_bound(result)
             run = get(ops.db, row[0])
-            with record(ops.db, principal):
+            with work.record(), record(ops.db, principal):
                 visible = source_visible(ops.db, principal, run)
             candidate = {**result, "runs": result["runs"] + ([_summary(run)] if visible else []),
                 "next_cursor": row[0],  # Budget continuation and filtered-row metadata too.

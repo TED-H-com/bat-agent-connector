@@ -111,8 +111,33 @@ remains visible on the page, and every visible row has complete source
 authorization under the unchanged rules. Completed proofs can save traversal
 work: a row refused alone only by the 2,048-node computational guard may become
 visible with a warm page cache. Universal equality of computational refusals is
-not required. Response-wide work limits and transport
-finalization are still part of the pending public integration.
+not required.
+
+Operations, events, runs and receipt lists count only report-closure work in the
+original loader, including hidden and failed traversals. At record boundaries
+they stop after 20 newly examined observation identities, 2,000 charged source
+records, or 16,000,000 charged source bytes. A record is atomic: its complete
+authorization, including nested lists, finishes before another boundary tests
+the thresholds. There is no new per-record refusal. Completed same-observation
+cache hits add no loader work. A response that examines no report closure keeps
+the original reader's exact fields, rows and cursor semantics.
+
+A work stop returns a successful shorter page, possibly empty, with continuation
+after the last fully examined record. SQL-prefetched but unexamined rows are not
+consumed, authorized, cached, or marked hidden. Existing paired operation cursors,
+event seq/head/has-more, run coverage and receipt sequence cursors remain the
+only continuation mechanisms; clients must follow an empty continuing page.
+Byte-deferred receipts remain unconsumed even though their source proof finished.
+
+For ordinary records selecting one new observation each, and closures within
+their individual loader limits, one response authorizes at most 20 observations,
+fewer than 4,000 source records and fewer than 32,000,000 source bytes. The last
+atomic record may cross a threshold, including the first row. A multi-root record
+can cost the threshold plus up to 2,049 full closures (2,048 guarded roots plus
+a direct selection); this conservative envelope is not a time bound. Charges
+include the failed 2,001st loader record and the bytes of a rejected value.
+An arbitrarily corrupt oversized stored value is not bounded by the ordinary
+within-limit byte envelope. No universal latency bound follows.
 
 For proof-entry accounting, R counts every independently allocated record budget
 at every nesting level, not only outer-page rows. Nesting inside an active
