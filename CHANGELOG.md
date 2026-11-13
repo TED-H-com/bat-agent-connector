@@ -8,6 +8,9 @@
   quality and coverage. Every original source must remain readable. Reports are
   available in English and Traditional Chinese as Markdown, HTML or SVG; actual
   dates remain unknown. Reading a report changes nothing and calls no model.
+- Reading the Connector's private local state no longer fails as "not private"
+  when the Connector replaces that file at the same moment, for example while
+  the desktop app checks a service that is starting.
 
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
