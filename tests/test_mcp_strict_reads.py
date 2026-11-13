@@ -22,7 +22,8 @@ async def test_strict_reads_leave_other_schemas_and_argument_handling_unchanged(
         after = {t.name: t.input_schema for t in await server.list_tools()}
         assert before.keys() == after.keys()
         strict = {'pm_quality_assessment_get', 'pm_history_cleanup_list', 'pm_plan_impact_preview',
-                  'pm_roadmap_report_get', 'pm_workspace_wip_get'}
+                  'pm_roadmap_report_get', 'pm_workspace_wip_get',
+                  'pm_roadmap_report_materializations_list', 'pm_roadmap_report_materialization_get'}
         for name in before.keys() - strict:
             assert after[name] == before[name], name
         for name in strict:

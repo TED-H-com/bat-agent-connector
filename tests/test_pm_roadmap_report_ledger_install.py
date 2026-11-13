@@ -1,4 +1,4 @@
-"""Daemon upgrades install only the private report ledger, without an action."""
+"""Daemon upgrades install the report ledger and action without changing stored facts."""
 from bat_agent_connector import pm_plans
 from bat_agent_connector import pm_roadmap_report_materialization as reports
 from bat_agent_connector.task_daemon import TaskDaemon
@@ -6,13 +6,13 @@ from tests.conftest import make_config
 from tests.test_pm_plan_operations import OWNER
 
 
-async def test_daemon_upgrades_pre_report_journal_twice_without_exposing_action(mock, tmp_path, monkeypatch):
+async def test_daemon_upgrades_pre_report_journal_twice_without_rewriting_facts(mock, tmp_path, monkeypatch):
     path = tmp_path / 'tasks.db'
     config = make_config(mock, writes=True, orchestrate=True, managed_roots=['/srv'])
     # Reproduce the prior daemon's complete schema: its API never called this
     # schema installer. Do not depend on Git history in shallow CI checkouts.
     with monkeypatch.context() as patch:
-        patch.setattr(reports, 'schema', lambda journal: None)
+        patch.setattr(reports, 'install', lambda ops: None)
         old = TaskDaemon(config, path)
         db = old.ops.db  # The daemon initializes lazily, while the old installer is active.
     try:
@@ -43,12 +43,12 @@ async def test_daemon_upgrades_pre_report_journal_twice_without_exposing_action(
                 reports.TABLE + '_update_immutable': 'trigger',
                 reports.TABLE + '_delete_immutable': 'trigger',
             }
-            assert reports.ACTION not in daemon.ops.actions
+            assert reports.ACTION in daemon.ops.actions
             status, capabilities = await daemon.api.capabilities(OWNER)
             assert status == 200
             features = capabilities['features']['pm_workspaces']
-            assert features['roadmap_report']['materialization'] is False
-            assert 'roadmap_report_materialization' not in features
+            assert features['roadmap_report']['materialization'] is True
+            assert features['roadmap_report_materialization'] == reports.capabilities()
             assert pm_plans.latest_git_receipt(db, 'ws_' + '0' * 32) is None
         finally:
             await daemon.fleet.close()

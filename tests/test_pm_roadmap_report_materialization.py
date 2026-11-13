@@ -1,4 +1,4 @@
-"""Explicit fixture-only report action, owned Git chains and immutable facts."""
+"""Registered report action, owned Git chains and immutable facts."""
 import copy
 import json
 import sqlite3
@@ -29,7 +29,7 @@ spec_fixed = spec_fixed_fixture
 async def fixed(spec_fixed):
     w = spec_fixed
     ops, wid = w['d'].ops, w['workspace_id']
-    assert reports.ACTION not in ops.actions
+    assert reports.ACTION in ops.actions
     version = ops.db.execute('PRAGMA user_version').fetchone()[0]
     reports.install(ops)
     reports.install(ops)

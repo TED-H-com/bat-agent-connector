@@ -1,11 +1,36 @@
 # Roadmap report materialization core
 
-This contract covers the private core for `pm.roadmap.report.materialize`. The
-action installer is used explicitly by tests only. Every daemon installs the empty
-receipt table, index and immutability triggers through `schema`; this does not
-register the action. There is no public action installation,
-receipt route or capability advertisement in this increment. The authorized
-read-only [report contract](pm-roadmap-report.md) still applies to rendering.
+This contract covers `pm.roadmap.report.materialize` and its source-authorized
+receipt reads over HTTP, RPC and MCP. The daemon installs the action and its
+existing idempotent ledger. The authorized read-only
+[report contract](pm-roadmap-report.md) still applies to rendering.
+
+Submit the registered action through the ordinary OperationService with target
+`{workspace_id, observation_revision_id}`, params `{format, locale,
+renderer_version}`, and preconditions `{expected_source_set_digest,
+expected_view_digest, expected_output_digest}` from that exact rendered read.
+Use one stable idempotency key. The action remains an investment, requires the
+existing contributor/owner role and all three scopes, and creates no new
+confirmation or transport channel.
+
+Receipt reads require `observe` and current workspace/source access:
+
+- HTTP `GET /api/v1/pm/workspaces/{workspace_id}/roadmap-report-materializations`
+  accepts only `after` and `limit`; append `/{materialization_id}` for one receipt,
+  with no query selectors.
+- RPC/MCP `pm_roadmap_report_materializations_list(workspace_id, after=0, limit=20)`
+  and `pm_roadmap_report_materialization_get(workspace_id, materialization_id)`
+  share the exact central readers. The signed cursor is 0 through `2**63 - 1`.
+  Unknown, repeated, blank and wrongly typed selectors are refused; no coercion
+  of booleans, strings or floats to cursor/limit integers in MCP or RPC.
+
+`ACTION in ops.actions` is the only registration authority. It supplies both
+`features.pm_workspaces.roadmap_report.materialization` and the presence of
+`features.pm_workspaces.roadmap_report_materialization`; capability metadata
+adds no independently configurable enabled flag. Per-principal `actions[].allowed`
+also requires observe/manage/start. Membership, lifecycle, carrier, writer and
+current source facts remain admission-time gates, not installation promises.
+Native save, Dashboard save and publication remain outside this surface.
 
 A contributor or owner with `observe`, `manage` and `start` selects an exact
 workspace observation, format (`markdown`, `html`, `svg`), locale (`en`, `zh-TW`),

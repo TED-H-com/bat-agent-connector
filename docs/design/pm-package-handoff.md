@@ -150,6 +150,9 @@ Only these shapes are registered:
   `scanned` and boolean `visibility_filtered`, and a `runs` list whose rows have
   string `run_id` and `operation_id` and the same `workspace_id`. Maintenance
   check runs and arbitrary dictionaries with a `runs` key do not match.
+- Report receipts: exact version-1 workspace/list/signed-cursor/visibility-flag
+  shape described below, with matching workspace and typed receipt identity on
+  every row. Spec receipts and arbitrary `materializations` keys do not match.
 - Bootstrap: dictionary `snapshot`, `sync`, and `capabilities`, plus `pagination`.
   Dictionary snapshot parts recursively use the same page rules. Only their
   registered row lists are excluded from the outer document check; all other
@@ -237,15 +240,15 @@ The following inventory follows the HTTP dispatcher, daemon read branches and
 exceed 64 original roots; it does not assert that a typical fixture does so.
 `Independent` describes the row records, not aggregate counts in their envelope.
 `Filtered` means the producer already performs source visibility filtering, not
-merely a workspace-membership or request-scope check. Except for the explicitly registered PM runs row, shapes in this table
+merely a workspace-membership or request-scope check. Except for the explicitly registered PM runs and report receipt rows, shapes in this table
 remain **unregistered** and retain the whole-document 64-root limit. Eligibility
-alone does not establish a new shape contract: this change registers only the
-PM runs projection above. Other eligible pages need their own explicit shape,
+alone does not establish a new shape contract. Other eligible pages need their own explicit shape,
 transport/withdrawal tests and envelope-metadata decision before registration.
 
 | Producer / response lists | >64 | Independent | Filtered | Known limit / reason to retain the document rule |
 | --- | --- | --- | --- | --- |
 | `pm_runs.list_runs`: `{workspace_id,runs,next_cursor,coverage}` | Yes | Yes | Yes | **Registered** by the complete shape above; handler calls `source_visible` on each run |
+| `pm_roadmap_report_materialization.list_materializations`: `materializations` | Yes | Yes | Yes | **Registered** by the exact report-receipt shape; report-only work thresholds and byte/cursor bounds apply in the handler |
 | `pm_discussions._list_threads`: `threads` | Yes | Yes | Yes | Also carries context, capabilities and catalog metadata; unregistered |
 | `pm_discussions.get_thread` / context: `messages`, inputs and context groups | Yes | No | Yes | One discussion/context document, with its own coverage and ordering |
 | `pm_plans.list_plans`: `revisions` | No | Yes | Yes | Summary SELECT omits operation/resource references; revision IDs are not lineage selectors |

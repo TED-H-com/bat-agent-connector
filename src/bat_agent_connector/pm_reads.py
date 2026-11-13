@@ -38,6 +38,8 @@ FIELDS = {
     "pm_maintenance_findings_current_get": ("workspace_id",),
     "pm_spec_materializations_list": ("workspace_id", "package_id", "after", "limit"),
     "pm_spec_materialization_get": ("workspace_id", "materialization_id"),
+    "pm_roadmap_report_materializations_list": ("workspace_id", "after", "limit"),
+    "pm_roadmap_report_materialization_get": ("workspace_id", "materialization_id"),
     "pm_maintenance_reviews_list": ("workspace_id", "after", "limit"),
     "pm_maintenance_review_current_get": ("workspace_id", "history_limit"),
     "pm_maintenance_review_get": ("workspace_id", "review_id", "history_limit"),
@@ -230,6 +232,12 @@ def read(ops, principal, method, params):
             return pm_work_batches.get_batch(ops, principal, workspace_id, params.get("batch_id"))
         return pm_work_batches.list_batches(ops, principal, workspace_id,
                                            after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_roadmap_report_materializations_list", "pm_roadmap_report_materialization_get"}:
+        from . import pm_roadmap_report_materialization as reports
+        if method == "pm_roadmap_report_materialization_get":
+            return reports.get_materialization(ops, principal, workspace_id, params.get("materialization_id"))
+        return reports.list_materializations(ops, principal, workspace_id,
+            after=params.get("after", 0), limit=params.get("limit", 20))
     if method in {"pm_spec_materializations_list", "pm_spec_materialization_get"}:
         from . import pm_spec_materialization as specs
         if method == "pm_spec_materialization_get":

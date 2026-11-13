@@ -1,4 +1,4 @@
-"""Private durable report writer; installed explicitly until public integration."""
+"""Durable report saves and source-authorized original Git receipts."""
 from __future__ import annotations
 
 import json
@@ -39,6 +39,14 @@ MAX_CURSOR = 2**63 - 1
 canonical = pm_roadmap_report_files.canonical
 FIELDS = ('workspace_id', 'observation_revision_id', 'source_set_digest', 'view_digest',
           'renderer_version', 'format', 'locale', 'output_digest', 'byte_length')
+
+
+def capabilities():
+    return {'version': 1, 'action': ACTION, 'kind': 'roadmap_report_materialization',
+        'reads': ['pm_roadmap_report_materializations_list', 'pm_roadmap_report_materialization_get'],
+        'required_scopes': ['observe', 'manage', 'start'], 'immutable': True, 'owned_git_chain': True,
+        'max_generated_bytes': 512_000, 'max_response_bytes': MAX_READ_BYTES,
+        'default_limit': 20, 'max_limit': 50, 'execution_authorized': False}
 
 
 def schema(journal):

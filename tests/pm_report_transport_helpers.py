@@ -8,7 +8,7 @@ import os
 from contextlib import asynccontextmanager
 from urllib.parse import urlencode
 
-from bat_agent_connector import mcp_server, pm_reads, pm_source_lineage, task_daemon
+from bat_agent_connector import mcp_server, pm_source_lineage
 from bat_agent_connector import pm_roadmap_report_materialization as reports
 from tests.test_api_v1 import http
 from tests.test_pm_plan_operations import OWNER
@@ -98,38 +98,14 @@ async def report_rows(w, *, distinct, count):
 
 @asynccontextmanager
 async def transports(w, monkeypatch):
-    """Use actual HTTP/RPC/MCP; install the still-private receipt read in fixtures.
-
-    Existing handlers and both transport barriers remain intact. Remove the
-    fixture adapters when the production receipt routes and tools are installed.
-    """
+    """Use the registered HTTP/RPC/MCP reads and both real transport barriers."""
     d, wid = w['d'], w['workspace_id']
-    original_read = pm_reads.read
-    def fixture_read(ops, principal, method, params):
-        if method == RECEIPTS:
-            return reports.list_materializations(ops, principal, params['workspace_id'],
-                after=params.get('after', 0), limit=params.get('limit', 20))
-        return original_read(ops, principal, method, params)
-    monkeypatch.setattr(pm_reads, 'read', fixture_read)
-    monkeypatch.setitem(task_daemon.API_RPC, RECEIPTS, 'observe')
-    async def receipt_page(principal, query, **_):
-        return 200, reports.list_materializations(d.ops, principal, wid,
-            after=int(query.get('after', ['0'])[0]), limit=int(query.get('limit', ['20'])[0]))
-    monkeypatch.setattr(d.api, 'routes', [*d.api.routes,
-        ('GET', r'/api/v1/fixture-report-receipts', receipt_page, 'observe')])
     listener = await asyncio.start_server(d._handle, '127.0.0.1', int(os.environ.get('BATC_UI_TEST_PORT', '0')))
     port = listener.sockets[0].getsockname()[1]
     monkeypatch.setenv('BATC_TASK_URL', f'http://127.0.0.1:{port}/rpc')
     server, fleet = mcp_server.build_server(d.fleet.config, read_only=True, principal_only=True)
-    async def fixture_receipts(workspace_id: str, after: int = 0, limit: int = 20) -> dict:
-        # This adapter travels through the same daemon RPC as production tools.
-        from bat_agent_connector.task_daemon import request as task_request
-        return await asyncio.to_thread(task_request, RECEIPTS,
-            _auth_token=os.environ['BATC_API_TOKEN'], entry='mcp',
-            workspace_id=workspace_id, after=after, limit=limit)
-    server.add_tool(fixture_receipts, name=RECEIPTS)
     paths = {'operations': '/api/v1/operations', 'events': '/api/v1/events',
-        'runs': f'/api/v1/pm/workspaces/{wid}/runs', 'receipts': '/api/v1/fixture-report-receipts'}
+        'runs': f'/api/v1/pm/workspaces/{wid}/runs', 'receipts': f'/api/v1/pm/workspaces/{wid}/roadmap-report-materializations'}
     methods = {'operations': ('op_list', 'operations_list'), 'events': ('api_events', 'events_list'),
         'runs': ('pm_runs_list', 'pm_runs_list'), 'receipts': (RECEIPTS, RECEIPTS)}
     async def read(transport, reader, auth, params):
@@ -150,6 +126,8 @@ async def transports(w, monkeypatch):
                 raise
             return 1, {'error': str(error)}
         return (1 if 'error' in result else 0), result
+    read.server = server
+    read.port = port
     try:
         yield read
     finally:

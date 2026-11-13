@@ -26,6 +26,11 @@
   A row whose hidden source is identified through the page's host is now omitted
   instead of making the whole page fail with 404.
 
+- Let workspace contributors and owners save one exact rendered roadmap report to
+  the owned PM Git carrier through a durable operation. Read its original receipt
+  over HTTP, RPC or MCP with current source access; bounded pages preserve cursor
+  progress, and recovery keeps the original operation and frozen bytes.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API
