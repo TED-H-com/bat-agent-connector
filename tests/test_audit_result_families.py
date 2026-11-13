@@ -4,6 +4,8 @@ Every reachable warning assertion fails on d62093b8. Explicit skips identify
 branches with no result append today; adding new audit obligations is outside
 this change. The synthetic boundary matrix covers all four phases separately.
 """
+import json
+
 import pytest
 
 from bat_agent_connector import lifecycle, safety
@@ -33,6 +35,64 @@ def cleanup_daemon(mock, human, tmp_path):
     # the rest of the family matrix.
     cleanup_tests.known_live_terminals.__wrapped__(mock)
     yield from cleanup_tests.daemon.__wrapped__(mock, human, tmp_path)
+
+
+@pytest.mark.parametrize('reply,outcome', [({'ok': False}, 'error'), ({}, 'unknown')])
+@pytest.mark.parametrize('fault', [False, True])
+async def test_planner_stop_records_unproven_ack(daemon, mock, monkeypatch, reply, outcome, fault):
+    """Fails on 0c83349d: a non-positive planner ACK had no result audit record."""
+    d = daemon
+    adopt(api.MANUAL, role='planner')
+    mock.handlers['git:log'] = lambda _: [{'hash': starts.SHA}]
+    fanout.replies(mock, tasks=fanout.ITEMS[:1])
+    mock.handlers['claude:stop-session'] = lambda _: reply
+    records = []
+    active = False
+    record = safety.Audit.record_after_effect
+    inject_append_fault(monkeypatch, 'open', True, active=lambda: active)
+
+    def recorded(self, **fields):
+        nonlocal active
+        selected = fields.get('channel') == 'claude:stop-session' and fields.get('phase') == 'result'
+        if selected:
+            records.append(fields)
+        active = selected and fault
+        try:
+            return record(self, **fields)
+        finally:
+            active = False
+
+    monkeypatch.setattr(safety.Audit, 'record_after_effect', recorded)
+    envelope = fanout.intent(target={'host': 'h1', 'session_id': api.MANUAL}, params={})
+    try:
+        op, _ = d.ops.create(fanout.P, **envelope)
+        for _ in range(4):
+            d.ops.db.execute('UPDATE operations SET next_run_at=0 WHERE operation_id=?', (op['operation_id'],))
+            await settle_operations(d.ops)
+            done = d.ops.get(op['operation_id'])
+            if done['status'] == 'uncertain':
+                break
+        assert (done['status'], done['error_code']) == ('uncertain', 'UNCERTAIN')
+        assert len(records) == 1
+        assert records[0]['effect_sent'] is True and records[0]['ok'] is False
+        assert records[0]['effect_outcome'] == outcome
+        if fault:
+            assert_warning(d, done, outcome, 'open')
+        else:
+            assert not done['external_refs'].get('audit_results')
+            events = d.journal.api_events(0, 500, resource_id=op['operation_id'])['events']
+            assert not any(e['kind'] == 'operation.audit_result_failed' for e in events)
+            lines = [json.loads(line) for line in safety.audit_path().read_text().splitlines()]
+            results = [r for r in lines if r.get('channel') == 'claude:stop-session' and r.get('phase') == 'result']
+            assert len(results) == 1 and results[0]['ok'] is False
+        replay, created = d.ops.create(fanout.P, **envelope)
+        assert not created and replay == d.ops.get(op['operation_id'], steps=False)
+        assert d.ops.get(op['operation_id']) == done
+        assert mock.channels().count('claude:stop-session') == 1
+    finally:
+        await stop_workers(d.ops)
+        await d.fleet.close()
+        await d.inventory.close()
 
 
 @pytest.mark.parametrize('fault', [False, True])
