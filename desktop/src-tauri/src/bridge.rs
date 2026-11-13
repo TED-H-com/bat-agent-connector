@@ -110,6 +110,107 @@ fn validate_repository_preview(body: Option<&Value>) -> Result<(), String> {
     Ok(())
 }
 
+// Read-only preview: Python remains the only authority for grants and proof.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HistoryContinuationPreview {
+    context_ref: HistoryContinuationRef,
+    code_target: Value,
+    expected_source_sha: String,
+    project_id: String,
+    requirement_ids: Vec<String>,
+    new_work: HistoryContinuationWork,
+    instruction: String,
+    agent: String,
+    delivery: String,
+    #[serde(default)]
+    model: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HistoryContinuationRef {
+    schema: String,
+    server_id: String,
+    workspace_id: String,
+    source_id: String,
+    entry_id: String,
+    source_digest: String,
+    content_digest: String,
+    selection: Value,
+    excerpt_digest: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HistoryContinuationWork {
+    title: String,
+    goal: String,
+    acceptance: String,
+}
+
+fn validate_history_continuation_preview(body: Option<&Value>, workspace: &str) -> Result<(), String> {
+    let invalid = "PM_EXTERNAL_CONTINUATION_UNSUPPORTED: Select retained context and an explicit published branch head. / 請選取保留的內容及明確已發布的分支頂端。";
+    let value = body.ok_or(invalid)?;
+    let doc: HistoryContinuationPreview = serde_json::from_value(value.clone()).map_err(|_| invalid)?;
+    let bounded = |s: &str, max: usize| !s.trim().is_empty() && s.chars().count() <= max;
+    let digest = |s: &str, n: usize| {
+        s.len() == n
+            && s.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    };
+    // Match existing Work field validation; retained context is never normalized.
+    let work_text = |s: &str, max: usize| {
+        let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
+        normalized.chars().count() <= max
+            && !normalized.chars().any(|c| {
+                matches!(c, '\0'..='\u{8}' | '\u{b}' | '\u{c}' | '\u{e}'..='\u{1f}' | '\u{7f}')
+            })
+    };
+    let r = doc.context_ref;
+    if r.schema != "external_history_ref/v1"
+        || r.workspace_id != workspace
+        || !bounded(&r.server_id, 128)
+        || !digest(&r.source_digest, 64)
+        || !digest(&r.content_digest, 64)
+        || !digest(&r.excerpt_digest, 64)
+        || !digest(&doc.expected_source_sha, 40)
+        || !Regex::new(r"^prj_[0-9a-f]{20}$")
+            .unwrap()
+            .is_match(&doc.project_id)
+        || doc.requirement_ids.is_empty()
+        || doc.requirement_ids.len() > 50
+        || doc.requirement_ids.iter().any(|id| !bounded(id, 128))
+        || doc
+            .requirement_ids
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            != doc.requirement_ids.len()
+        || !bounded(&doc.new_work.title, 120)
+        || doc.new_work.title.trim().chars().any(|c| {
+            matches!(c, '\0'..='\u{1f}' | '\u{7f}' | '\u{2028}' | '\u{2029}')
+        })
+        || !work_text(&doc.new_work.goal, 20000)
+        || !work_text(&doc.new_work.acceptance, 20000)
+        || !bounded(&doc.instruction, 4000)
+        || !work_text(&doc.instruction, 4000)
+        || !matches!(doc.agent.as_str(), "claude" | "codex")
+        || !matches!(doc.delivery.as_str(), "pull_request" | "reviewable_changes")
+        || (value.get("model").is_some()
+            && doc.model.as_deref().is_none_or(|s| !bounded(s, 256)))
+    {
+        return Err(invalid.into());
+    }
+    validate_repository_preview(Some(&doc.code_target)).map_err(|_| invalid)?;
+    validate_history_excerpt_preview(Some(&serde_json::json!({
+        "source_id": r.source_id, "entry_id": r.entry_id,
+        "expected_content_digest": r.content_digest, "selection": r.selection
+    })))
+    .map_err(|_| invalid)?;
+    Ok(())
+}
+
 // Retained selections are logical references only. The central service resolves
 // their bytes and rechecks source grants, membership and the original digest.
 #[derive(Deserialize)]
@@ -1924,7 +2025,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             r"delivery/previews/mpv_[0-9a-f]{32}|integrations/previews/ipv_[0-9a-f]{32}|integrations/op_[0-9a-f]{32})$")).unwrap())
     } else if input.method == "POST" {
         POST.get_or_init(|| {
-            Regex::new(r"^/(?:managed/setup/(?:secrets|preview|discover)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:history-excerpt-preview|work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
+            Regex::new(r"^/(?:managed/setup/(?:secrets|preview|discover)|repository-previews|approval-previews|artifact-capture-previews|artifact-managed-capture-previews|cleanup-previews|operations(?:/op_[0-9a-f]{32}/(?:cancel|resume))?|pm/workspaces/ws_[0-9a-f]{32}/(?:history-continuation-preview|history-excerpt-preview|work/wi_[0-9a-f]{20}/start-preview|threads/pmt_[0-9a-f]{32}/adopt-and-start-preview))$")
                 .unwrap()
         })
     } else {
@@ -1983,6 +2084,13 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Adopt-and-start preview accepts no query or operation key".into());
         }
         validate_adopt_start_preview(input.body.as_ref())?;
+    }
+    if input.method == "POST" && path.ends_with("/history-continuation-preview") {
+        if input.path != path || input.idempotency_key.is_some() {
+            return Err("PM_EXTERNAL_CONTINUATION_UNSUPPORTED: Preview accepts no query or operation key / 預覽不接受查詢參數或操作鍵".into());
+        }
+        let workspace = path.split('/').nth(3).ok_or("Missing PM workspace")?;
+        validate_history_continuation_preview(input.body.as_ref(), workspace)?;
     }
     if input.method == "POST" && path.ends_with("/history-excerpt-preview") {
         if input.path != path || input.idempotency_key.is_some() {
@@ -3520,6 +3628,67 @@ mod tests {
         // The existing Work list still accepts numeric cursors only.
         assert!(validate_request(&get(&format!("{work}?after=0&limit=50"))).is_ok());
         assert!(validate_request(&get(&format!("{work}?after={cursor}"))).is_err());
+    }
+
+    // These new route/body cases fail on 84c68e1c: the route is not allowed.
+    #[test]
+    fn history_continuation_preview_shared_wire_corpus() {
+        let corpus: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/history-continuation-preview.json"
+        ))
+        .unwrap();
+        let path = "/pm/workspaces/ws_11111111111111111111111111111111/history-continuation-preview";
+        for case in corpus["cases"].as_array().unwrap() {
+            let mut body = corpus["body"].clone();
+            let keys = case["path"].as_array().unwrap();
+            let mut value = case["value"].clone();
+            if let Some(repeat) = case.get("repeat").and_then(Value::as_u64) {
+                value = serde_json::json!(value.as_str().unwrap().repeat(repeat as usize));
+            }
+            if keys.is_empty() {
+                body = value;
+            } else {
+                let mut target = &mut body;
+                for key in &keys[..keys.len() - 1] {
+                    target = &mut target[key.as_str().unwrap()];
+                }
+                target[keys.last().unwrap().as_str().unwrap()] = value;
+            }
+            let mut request = get(path);
+            request.method = "POST".into();
+            request.body = Some(body);
+            let result = validate_request(&request);
+            assert_eq!(
+                result.is_ok(),
+                case["valid"].as_bool().unwrap(),
+                "{}: {:?}",
+                case["name"],
+                result
+            );
+            if !case["valid"].as_bool().unwrap() {
+                assert!(result
+                    .unwrap_err()
+                    .starts_with("PM_EXTERNAL_CONTINUATION_UNSUPPORTED"));
+            }
+        }
+        for method in ["GET", "PUT", "DELETE", "PATCH"] {
+            let mut request = get(path);
+            request.method = method.into();
+            request.body = Some(corpus["body"].clone());
+            assert!(validate_request(&request).is_err());
+        }
+        let mut request = get(path);
+        request.method = "POST".into();
+        request.body = Some(corpus["body"].clone());
+        request.path.push_str("?actor=other");
+        assert!(validate_request(&request).is_err());
+        request.path = path.into();
+        request.idempotency_key = Some("not-an-operation".into());
+        assert!(validate_request(&request).is_err());
+        request.idempotency_key = None;
+        request.body.as_mut().unwrap()["context_ref"]["workspace_id"] =
+            serde_json::json!(format!("ws_{}", "2".repeat(32)));
+        assert!(validate_request(&request).is_err());
     }
 
     #[test]

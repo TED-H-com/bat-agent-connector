@@ -74,6 +74,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "checkpoint_get": "observe", "checkpoint_preview": "observe", "integration_candidates": "observe",
            "integration_preview_get": "observe", "integration_get": "observe", "integrations_list": "observe",
            "pm_overview_get": "observe", "pm_dependencies_get": "observe", "pm_dependencies_revisions_list": "observe", "pm_dependencies_impact_get": "observe",
+           "pm_history_continuation_preview": "observe",
            "pm_history_excerpt_preview": "observe", "pm_history_excerpt_get": "observe",
            "pm_history_links_list": "observe", "pm_history_link_get": "observe", "pm_history_associations_list": "observe",
            "pm_history_cleanup_list": "observe",
@@ -360,6 +361,9 @@ class TaskDaemon:
                              *, _observation_transport: dict | None = None) -> dict:
         """/rpc doors into OperationService and the inventory for MCP and CLI (same rules as /api/v1)."""
         scope = API_RPC[method]
+        if method == "pm_history_continuation_preview":
+            from .pm_history_continuation import require_observe
+            require_observe(principal)
         if scope != "?" and not principal.allows(scope):
             raise OperationError("FORBIDDEN", f"{method} needs the {scope!r} scope", 403)
         entry = params.pop("entry", None)
@@ -386,6 +390,11 @@ class TaskDaemon:
             else:
                 body = params
             return await pm_work_adopt_and_start.preview(self.ops, principal, wid, thread_id, body)
+        if method == "pm_history_continuation_preview":
+            from .pm_history_continuation import preview
+            if set(params) != {"workspace_id", "body"}:
+                raise OperationError("INVALID_PARAMS", "Supply workspace_id and body", 422)
+            return await preview(self.ops, principal, params["workspace_id"], params["body"])
         if method == "pm_work_start_preview":
             from . import pm_work_start
             params = dict(params)

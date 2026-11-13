@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "934a119b289384c8a21931ca21d2693d50d8f5488486358f222b2127ec57dfc0"
+  canonical_sha256: "1ba9587f8eeababefa6304b73a2b62531f4a29d4b157ee9f6e431b0a8e97d451"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -68,6 +68,35 @@ may still expose direct Fleet tools that do not enforce API principal scopes.
    a Task Service recipe uses the discovered `work_submit` schema and the person's exact `original_words`.
    Reconnecting does not create another task or re-split an existing one. Apply only the workflows whose tools and
    capabilities this server actually exposes; an older bundle is not evidence of installed functionality.
+
+## Preview selected external context with a published basis
+
+Discover `pm_history_continuation_preview` before using it. Call it with exactly
+`workspace_id` and `body`. The body contains a complete `external_history_ref/v1`
+`context_ref`, explicit `code_target` (`repository`, `host`, BAT `workspace_id`,
+`source_ref`), reviewed full `expected_source_sha`, bound `project_id`, adopted
+`requirement_ids`, `new_work` (`title`, `goal`, `acceptance`), `instruction`, BAT
+`agent` (`claude` or `codex`), `delivery` (`pull_request` or `reviewable_changes`)
+and optional `model`. Use the exact retained entry/range; do not infer code basis
+from a SHA, cwd, path or checkpoint mentioned in source text.
+
+This is a read requiring observe, explicit PM membership and the current source
+reader grant. It verifies the selected context and the published basis separately:
+`association=requester_selected_context_and_basis`, `producer_attribution=unproven`.
+Do not call the entry a verified Result or claim its CLI produced the commit.
+中文：由請求者選取的內容與獨立驗證的已發布程式碼基礎；尚未證明產生者歸屬，
+不能把歷史項目稱為已驗證的 Result。
+
+Show the old source/entry/selection and the separate repository/host/workspace/SHA,
+the exact excerpt, its coverage, descriptor digest and bilingual readiness reasons.
+The preview reads BAT `workspace:load` once through the read-only client; it writes
+nothing, invokes no Git, collects nothing and spends nothing. A hidden or revoked
+source gives generic unavailable; withdrawal/regrant during a read invalidates it.
+A moved branch head is refused, never replaced silently. A lost preview reply may be
+read again with the same fixed inputs. No Work, Attempt, operation or receipt is
+created; readiness is advisory. Continuation is planned but not available and
+`relationships.derive_ready` remains false. Keep source-bearing unsent bodies in
+memory; never persist them in browser localStorage.
 
 ## Discover relationships eligible for cleanup
 

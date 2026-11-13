@@ -1,0 +1,291 @@
+{
+  "body": {
+    "context_ref": {
+      "schema": "external_history_ref/v1",
+      "server_id": "11111111-1111-4111-8111-111111111111",
+      "workspace_id": "ws_11111111111111111111111111111111",
+      "source_id": "synthetic-history",
+      "entry_id": "shi_22222222222222222222222222222222",
+      "source_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "selection": {
+        "kind": "entry"
+      },
+      "excerpt_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "code_target": {
+      "repository": "o/r",
+      "host": "h1",
+      "workspace_id": "w1",
+      "source_ref": "refs/heads/main"
+    },
+    "expected_source_sha": "dddddddddddddddddddddddddddddddddddddddd",
+    "project_id": "prj_33333333333333333333",
+    "requirement_ids": [
+      "login"
+    ],
+    "new_work": {
+      "title": "Continue selected context",
+      "goal": "Goal",
+      "acceptance": "Tests pass"
+    },
+    "instruction": "Implement login",
+    "agent": "claude",
+    "delivery": "reviewable_changes"
+  },
+  "cases": [
+    {
+      "name": "exact",
+      "path": [],
+      "value": {
+        "context_ref": {
+          "schema": "external_history_ref/v1",
+          "server_id": "11111111-1111-4111-8111-111111111111",
+          "workspace_id": "ws_11111111111111111111111111111111",
+          "source_id": "synthetic-history",
+          "entry_id": "shi_22222222222222222222222222222222",
+          "source_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "content_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "selection": {
+            "kind": "entry"
+          },
+          "excerpt_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "code_target": {
+          "repository": "o/r",
+          "host": "h1",
+          "workspace_id": "w1",
+          "source_ref": "refs/heads/main"
+        },
+        "expected_source_sha": "dddddddddddddddddddddddddddddddddddddddd",
+        "project_id": "prj_33333333333333333333",
+        "requirement_ids": [
+          "login"
+        ],
+        "new_work": {
+          "title": "Continue selected context",
+          "goal": "Goal",
+          "acceptance": "Tests pass"
+        },
+        "instruction": "Implement login",
+        "agent": "claude",
+        "delivery": "reviewable_changes"
+      },
+      "valid": true
+    },
+    {
+      "name": "unicode-range",
+      "path": [
+        "context_ref",
+        "selection"
+      ],
+      "value": {
+        "kind": "text",
+        "part_index": 0,
+        "start_codepoint": 0,
+        "end_codepoint": 9
+      },
+      "valid": true
+    },
+    {
+      "name": "empty-goal",
+      "path": [
+        "new_work",
+        "goal"
+      ],
+      "value": "",
+      "valid": true
+    },
+    {
+      "name": "extra-cwd",
+      "path": [
+        "cwd"
+      ],
+      "value": "/foreign",
+      "valid": false
+    },
+    {
+      "name": "extra-url",
+      "path": [
+        "code_target",
+        "url"
+      ],
+      "value": "https://example.invalid",
+      "valid": false
+    },
+    {
+      "name": "native",
+      "path": [
+        "context_ref",
+        "native_session_id"
+      ],
+      "value": "foreign",
+      "valid": false
+    },
+    {
+      "name": "sha",
+      "path": [
+        "expected_source_sha"
+      ],
+      "value": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      "valid": false
+    },
+    {
+      "name": "checkpoint",
+      "path": [
+        "context_ref",
+        "schema"
+      ],
+      "value": "checkpoint/v1",
+      "valid": false
+    },
+    {
+      "name": "digest",
+      "path": [
+        "context_ref",
+        "source_digest"
+      ],
+      "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "valid": false
+    },
+    {
+      "name": "boolean-index",
+      "path": [
+        "context_ref",
+        "selection"
+      ],
+      "value": {
+        "kind": "text",
+        "part_index": true,
+        "start_codepoint": 0,
+        "end_codepoint": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "empty-range",
+      "path": [
+        "context_ref",
+        "selection"
+      ],
+      "value": {
+        "kind": "text",
+        "part_index": 0,
+        "start_codepoint": 1,
+        "end_codepoint": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "large-range",
+      "path": [
+        "context_ref",
+        "selection"
+      ],
+      "value": {
+        "kind": "text",
+        "part_index": 0,
+        "start_codepoint": 0,
+        "end_codepoint": 16001
+      },
+      "valid": false
+    },
+    {
+      "name": "no-ids",
+      "path": [
+        "requirement_ids"
+      ],
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "duplicate-ids",
+      "path": [
+        "requirement_ids"
+      ],
+      "value": [
+        "login",
+        "login"
+      ],
+      "valid": false
+    },
+    {
+      "name": "native-agent",
+      "path": [
+        "agent"
+      ],
+      "value": "native_codex",
+      "valid": false
+    },
+    {
+      "name": "model-null",
+      "path": [
+        "model"
+      ],
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "extra-work",
+      "path": [
+        "new_work",
+        "derived_from"
+      ],
+      "value": "wi_ffffffffffffffffffff",
+      "valid": false
+    },
+    {
+      "name": "invalid-project",
+      "path": [
+        "project_id"
+      ],
+      "value": "other",
+      "valid": false
+    },
+    {
+      "name": "bad-title",
+      "path": [
+        "new_work",
+        "title"
+      ],
+      "value": "two\nlines",
+      "valid": false
+    },
+    {
+      "name": "goal-type",
+      "path": [
+        "new_work",
+        "goal"
+      ],
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "goal-control",
+      "path": [
+        "new_work",
+        "goal"
+      ],
+      "value": "bad\u0000",
+      "valid": false
+    },
+    {
+      "name": "instruction-control",
+      "path": [
+        "instruction"
+      ],
+      "value": "bad\u0000",
+      "valid": false
+    },
+    {
+      "name": "existing-work-crlf-bound",
+      "path": [
+        "new_work",
+        "goal"
+      ],
+      "value": "\r\n",
+      "repeat": 10001,
+      "valid": true
+    }
+  ]
+}

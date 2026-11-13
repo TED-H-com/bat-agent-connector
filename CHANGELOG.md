@@ -20,6 +20,11 @@
   control available with English and Traditional Chinese guidance, and document
   original-operation lookup after a lost reply in all agent skills.
 
+- Preview exact retained external context together with an independently verified
+  published branch head through HTTP, MCP and the desktop bridge. Preserve both
+  identities and bilingual refusal reasons without creating Work or attributing
+  the commit to the external CLI; continuation remains unavailable.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API
