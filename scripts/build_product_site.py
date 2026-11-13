@@ -459,8 +459,8 @@ parts.append(
     '</ol><div class="install-current">'
     + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
-        "Connector 0.2.19 / Desktop 0.1.15 release details are linked below. Check the exact source and package records in release-manifest.json and SHA256SUMS; publication, installation and live acceptance are separate records.",
-        "Connector 0.2.19／Desktop 0.1.15 的發布詳情見下方連結。請以 release-manifest.json 與 SHA256SUMS 核對完整來源及套件紀錄；發布、安裝與實機驗收分別記錄。",
+        "Stable 0.2.19 was published on November 13, 2026; its exact source is recorded in release-manifest.json. Its backend and desktop CI passed, and all eight public asset names, sizes and digests match the verified records. Source and validation details are linked below.",
+        "穩定版 0.2.19 於 2026 年 11 月 13 日發布，完整來源記錄於 release-manifest.json。該來源的 backend 與 desktop CI 均通過，八個公開資產的名稱、大小及 digest 亦核對相符；來源與驗證詳情見下方連結。",
         "p",
     )
     + bi(

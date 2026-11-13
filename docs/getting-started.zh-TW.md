@@ -4,7 +4,7 @@
 
 ## 選擇相符的安裝包
 
-最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19)為 Connector **0.2.19**／desktop **0.1.15**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
+2026 年 11 月 13 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19)為 Connector **0.2.19**／desktop **0.1.15**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
 Connector 0.2.19／Desktop 0.1.15 在共用 Dashboard 加入引導式 Sprint Review、從 Result 與 Overview 檢視並審查精確的原始評估，以及為選定 Work 尋找可撤回的外部對話關聯。完成 Review 記錄方向與責任歸屬，品質驗收仍須另行進行；Planning 產出維持草稿，不採納範圍，也不啟動工作。API／MCP 用戶端另可使用 workspace WIP 建議上限及唯讀的範圍影響預覽，這兩項功能目前沒有 Dashboard UI。既有權限、草稿及原 operation key 均保留。前版的外部對話關聯及對話保存仍保留。分支、合併、發布、安裝與實機驗證分別見[交付狀態](product/implementation-status.md)。下方首次啟動步驟描述 0.2.19；下載套件不代表已安裝或實機驗收。
 

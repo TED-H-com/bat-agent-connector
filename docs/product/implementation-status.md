@@ -8,6 +8,11 @@
 
 發布：[Connector 0.2.19／Desktop 0.1.15](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19)。
 套件來源及 fixture 回執以發布附件 `release-manifest.json` 為準，校驗碼見 `SHA256SUMS`。
+已於 2026-11-13 00:52 UTC 發布，固定來源為 `447da212da12b27f1d36f9e58b03053d706688b7`。
+該來源的 [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43272366878)
+與 [desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43272367065) main/push 均通過；
+desktop CI 的 Windows 建置於第二次執行通過，第一次因偶發的 UI Automation 逾時而停止。
+八個公開資產的名稱、大小與 SHA-256 已與發布清單及本機檔案核對一致。
 升級 fixture 使用固定發布的 0.2.12 與 0.2.18 核心，保留原身分、工作區與操作；
 這不等於舊桌面安裝器到新安裝器的完整升級驗收。
 
@@ -25,6 +30,11 @@ Merged: #536 includes package, skill, identity golden and native lock versions;
 #524, #525, #526, #527, #528, #529, #530, #531 and #532 were merged to main earlier.
 Released: Connector 0.2.19 / Desktop 0.1.15 is linked above; the manifest and
 checksums record package source and fixture provenance.
+Published on 2026-11-13 at 00:52 UTC from `447da212da12b27f1d36f9e58b03053d706688b7`. The fixed-source
+[backend](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43272366878)
+and [desktop](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43272367065) main/push runs passed;
+the desktop run's Windows build passed on its second attempt, after an intermittent UI Automation timeout.
+All eight public asset names, sizes and SHA-256 digests match the verified release manifest and local files.
 The core-upgrade baselines are 0.2.12 and 0.2.18; they do not prove old-to-new desktop
 installer acceptance.
 
