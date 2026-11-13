@@ -25,7 +25,7 @@ from .operations import (
     StepFailed,
 )
 from .orchestrate import registry_permission_fields
-from .safety import Audit
+from .safety import Audit, audit_error_outcome, audit_reply_outcome
 from .session_start_operations import NAMESPACE, _head, _tier
 
 ACTION = 'session.failover'
@@ -450,10 +450,10 @@ async def _invoke(ctx, plan, name, channel, params, *, handoff=False):
         grant = await resource_policy.authorize_shared_session(fleet, host, sid, plan['terminal'])
         result = await client.invoke(channel, params, grant=grant, retry_on_disconnect=False,
             before_frame=final, before_send=gate, on_transport=fence)
-        audit.record(**base, channel=channel, phase='result', ok=True)
+        audit.record_after_effect(effect_outcome=audit_reply_outcome(result), **base, channel=channel, phase='result', ok=True)
         return result
     except (Exception, asyncio.CancelledError) as exc:
-        audit.record(**base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
+        audit.record_after_effect(effect_outcome=audit_error_outcome(exc), effect_sent=sent, **base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
         if sent:
             raise AmbiguousOutcome('failover frame crossed its durable fence; retain and read the original receipt') from exc
         if isinstance(exc, Cancelled):

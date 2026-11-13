@@ -22,7 +22,7 @@ from .errors import BatError, ConnectionLost, InvokeError, InvokeTimeout, TaskCo
 from .fleet import Fleet
 from .iso_time import parse_datetime
 from .redact import redact
-from .safety import Audit
+from .safety import Audit, audit_error_outcome, audit_reply_outcome
 from .summarize import clip, iso_local, summarize_message, summarize_pending, ts_to_ms
 
 MAX_LAST_N = 100
@@ -1128,7 +1128,7 @@ async def session_send(
                                frame_guard=lambda frame: confinement.guard_resume_frame(host, sid, kind or "claude", frame))
             except BatError as e:
                 log_error("bat-session", "session.resume.failed", e)
-                audit.record(
+                audit.record_after_effect(effect_outcome=audit_error_outcome(e),
                     actor=fleet.actor,
                     tool=tool,
                     host=host,
@@ -1197,7 +1197,7 @@ async def session_send(
                 **({"on_transport": transported} if (relay or _on_transport is not None) else {}),
             )
         except BatError as e:
-            audit.record(
+            audit.record_after_effect(effect_outcome=audit_error_outcome(e),
                 actor=fleet.actor,
                 tool=tool,
                 host=host,
@@ -1212,7 +1212,7 @@ async def session_send(
         r = r if isinstance(r, dict) else {"result": r}
         if _task_guard and not isinstance(r.get("accepted", r.get("ok")), bool):
             raise ValueError("BAT send reply has no boolean acceptance result")
-        audit.record(
+        audit.record_after_effect(effect_outcome=audit_reply_outcome(r),
             actor=fleet.actor,
             tool=tool,
             host=host,
@@ -1306,7 +1306,7 @@ async def session_interrupt(
         try:
             r = await c.invoke(channel, {"sessionId": sid}, grant=grant, before_send=_task_guard)
         except BatError as e:
-            audit.record(
+            audit.record_after_effect(effect_outcome=audit_error_outcome(e),
                 actor=fleet.actor,
                 tool="session_interrupt",
                 host=host,
@@ -1317,7 +1317,7 @@ async def session_interrupt(
                 error=_err(e),
             )
             raise
-        audit.record(
+        audit.record_after_effect(effect_outcome=audit_reply_outcome(r),
             actor=fleet.actor,
             tool="session_interrupt",
             host=host,
@@ -1473,12 +1473,12 @@ async def session_answer(
                                    host, sid, detail.get("permission_tool"),
                                    dont_ask_again=dont_ask_again, allow=permission == "allow"))
             if bulk and r is not True:
-                audit.record(actor=_operation_context.actor, tool="session_answer", host=host,
+                audit.record_after_effect(effect_outcome="unknown", actor=_operation_context.actor, tool="session_answer", host=host,
                              session_id=sid + "#answer", outcome="uncertain", phase="result", **detail)
                 raise AmbiguousOutcome("bulk answer did not return a literal true ACK")
         except (BatError, OSError, asyncio.TimeoutError) as e:
             if bulk:
-                audit.record(actor=_operation_context.actor, tool="session_answer", host=host,
+                audit.record_after_effect(effect_outcome=audit_error_outcome(e), effect_sent=transported, actor=_operation_context.actor, tool="session_answer", host=host,
                              session_id=sid + "#answer", outcome="uncertain" if transported else "not_sent",
                              phase="result", **detail)
                 if transported:
@@ -1487,7 +1487,7 @@ async def session_answer(
                     raise StepFailed("BULK_NOT_SENT", "bulk answer was not sent; review connectivity before a new request") from e
             if not isinstance(e, InvokeError):
                 raise
-            audit.record(
+            audit.record_after_effect(effect_outcome=audit_error_outcome(e),
                 actor=_operation_context.actor if bulk else fleet.actor,
                 tool="session_answer",
                 host=host,
@@ -1498,7 +1498,7 @@ async def session_answer(
                 error=_err(e),
             )
             raise
-        audit.record(
+        audit.record_after_effect(effect_outcome=audit_reply_outcome(r),
             actor=_operation_context.actor if bulk else fleet.actor,
             tool="session_answer",
             host=host,

@@ -20,7 +20,7 @@ from .operations import (
     StepFailed,
 )
 from .orchestrate import PRESETS, registry_permission_fields
-from .safety import Audit
+from .safety import Audit, audit_error_outcome, audit_reply_outcome
 
 FIELDS = frozenset({'agent', 'prompt', 'model', 'use_worktree', 'title'})
 SHA = re.compile(r'[0-9a-f]{40}')
@@ -226,13 +226,13 @@ async def _invoke(ctx, plan, name, client, channel, params, grant, *, before_fra
     try:
         result = await client.invoke(channel, params, grant=grant, before_send=lambda: _guard(ctx, plan),
                                      before_frame=before_frame, on_transport=fence)
-        audit.record(**base, channel=channel, phase='result', ok=True)
+        audit.record_after_effect(effect_outcome=audit_reply_outcome(result), **base, channel=channel, phase='result', ok=True)
         return result
     except Cancelled:
         raise StepFailed('CANCELLED', 'cancelled before the next transport frame') from None
     except (BatError, OSError, asyncio.TimeoutError) as exc:
         log_error('bat-session', 'session.start.failed', exc)
-        audit.record(**base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
+        audit.record_after_effect(effect_outcome=audit_error_outcome(exc), effect_sent=sent, **base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
         if sent:
             raise AmbiguousOutcome(f'{channel} reached transport; outcome requires read-back') from exc
         raise StepFailed(getattr(exc, 'code', None) or 'START_NOT_SENT', f'{channel} was not sent ({type(exc).__name__})') from exc

@@ -20,7 +20,7 @@ from .operations import (
     Wait,
 )
 from .relay import build_relay, parse_fanout, status_footer
-from .safety import Audit
+from .safety import Audit, audit_error_outcome
 
 ACTIONS = frozenset({'fanout.plan', 'fanout.start'})
 PLANNER_FIELDS = {'message', 'channel', 'thread', 'earlier', 'brief', 'max_items'}
@@ -262,11 +262,11 @@ async def stop_planner(ctx, plan):
                 if not isinstance(result, dict) or result.get('ok') is not True:
                     raise AmbiguousOutcome('planner stop reply did not prove acceptance')
             except (BatError, OSError, asyncio.TimeoutError) as exc:
-                audit.record(**base, channel='claude:stop-session', phase='result', ok=False)
+                audit.record_after_effect(effect_outcome=audit_error_outcome(exc), effect_sent=sent, **base, channel='claude:stop-session', phase='result', ok=False)
                 if sent:
                     raise AmbiguousOutcome('planner stop was sent without a proven reply') from exc
                 raise StepFailed('FANOUT_STOP_NOT_SENT', 'planner stop was not sent; retained for review') from exc
-            audit.record(**base, channel='claude:stop-session', phase='result', ok=True)
+            audit.record_after_effect(effect_outcome="accepted", **base, channel='claude:stop-session', phase='result', ok=True)
             return {'stopped': True, 'result': result}
     async def recover(_):
         # Only read. No unknown stop intent ever authorizes a resend.

@@ -27,7 +27,7 @@ from .operations import (
 )
 from .orchestrate import MERGED_KINDS, _summ
 from .orchestration_operations import receipt, record
-from .safety import Audit
+from .safety import Audit, audit_error_outcome
 from .session_start_operations import _head, _tier
 
 ACTION = 'worktree.merge'
@@ -443,10 +443,10 @@ async def invoke(ctx, plan, name, channel, params):
                 or channel == 'worktree:merge' and any(result.get(k) != v for k, v in
                     {'strategy': 'merge', 'branchName': plan['worktree']['branchName'], 'sourceBranch': plan['worktree']['sourceBranch']}.items())):
             raise AmbiguousOutcome('BAT did not positively acknowledge the fixed effect')
-        audit.record(**base, channel=channel, phase='result', ok=True, operation_id=ctx.operation_id)
+        audit.record_after_effect(effect_outcome="accepted", **base, channel=channel, phase='result', ok=True, operation_id=ctx.operation_id)
         return {'channel': channel, 'params': params, 'ack': result}
     except (Exception, asyncio.CancelledError) as exc:
-        audit.record(**base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
+        audit.record_after_effect(effect_outcome=audit_error_outcome(exc), effect_sent=sent, **base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
         if sent:
             raise AmbiguousOutcome('sent merge effect is unproven; retain original receipts and both carriers') from exc
         if isinstance(exc, Cancelled):

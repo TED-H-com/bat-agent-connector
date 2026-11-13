@@ -2,17 +2,51 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
 import re
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
+from os import fdopen
 from pathlib import Path
 from typing import Any
 
 from ._private_files import mkdir_private, open_private
 from .config import SafetyConfig, state_dir
-from .errors import WriteRefused
+from .errors import ConnectionLost, InvokeTimeout, WriteRefused
+
+POST_EFFECT_PHASES = frozenset({"result", "append-terminal", "rollback", "record"})
+AUDIT_FAILURE_STAGES = frozenset({"mkdir", "open", "write", "flush", "close"})
+AUDIT_EFFECT_OUTCOMES = frozenset({"accepted", "error", "unknown"})
+_result_sink = ContextVar("audit_result_sink", default=None)
+
+
+@contextmanager
+def result_audit_sink(sink):
+    """Bind an execution-local sink; it buffers warnings, never performs an external effect."""
+    token = _result_sink.set(sink)
+    try:
+        yield
+    finally:
+        _result_sink.reset(token)
+
+
+def audit_error_outcome(error: BaseException) -> str:
+    """A transport/storage exception does not establish a remote outcome."""
+    from .operations import AmbiguousOutcome
+
+    return "unknown" if isinstance(error, (ConnectionLost, InvokeTimeout, OSError, asyncio.TimeoutError,
+                                           asyncio.CancelledError, AmbiguousOutcome)) else "error"
+
+
+def audit_reply_outcome(reply: Any) -> str:
+    """Classify explicit remote acceptance, without treating a malformed ACK as success."""
+    if isinstance(reply, dict):
+        reply = next((reply[key] for key in ("accepted", "ok", "success") if key in reply), None)
+    return "accepted" if reply is True else "error" if reply is False else "unknown"
 
 
 def audit_path() -> Path:
@@ -91,6 +125,20 @@ class Audit:
         return True
 
     def record(self, **fields: Any) -> None:
+        self._record(fields)
+
+    def record_after_effect(self, *, effect_outcome: str, effect_sent: bool = True, **fields: Any) -> None:
+        """Account for an append failure without replacing an already sent effect's result.
+
+        Only explicitly reviewed post-effect sites use this entry point. Without
+        an operation sink the original strict record behavior is retained.
+        Sink/journal failures are not audit append failures and are not swallowed.
+        """
+        if fields.get("phase") not in POST_EFFECT_PHASES or effect_outcome not in AUDIT_EFFECT_OUTCOMES:
+            raise ValueError("invalid post-effect audit classification")
+        self._record(fields, sink=_result_sink.get() if effect_sent else None, effect_outcome=effect_outcome)
+
+    def _record(self, fields: dict, *, sink=None, effect_outcome=None) -> None:
         text = fields.pop("text", None)
         if text is not None:
             fields["text_sha256_16"] = text_fingerprint(text)
@@ -100,14 +148,31 @@ class Audit:
                 fields["text_preview"] = _redact_preview(text)[:n]
         fields.setdefault("at", time.time())
         fields["at_iso"] = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(fields["at"]))
-        mkdir_private(self.path.parent)
         line = json.dumps(fields, ensure_ascii=False, default=str)
+        stage = "mkdir"
         try:
-            fd = open_private(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
-        except (OSError, ValueError):
-            raise WriteRefused("cannot open audit file: validate private file permissions and type") from None
-        with os.fdopen(fd, "a") as fh:
-            fh.write(line + "\n")
+            mkdir_private(self.path.parent)
+            stage = "open"
+            try:
+                fd = open_private(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+            except (OSError, ValueError):
+                raise WriteRefused("cannot open audit file: validate private file permissions and type") from None
+            with fdopen(fd, "a") as fh:
+                stage = "write"
+                fh.write(line + "\n")
+                stage = "flush"
+                fh.flush()
+                stage = "close"
+        except (OSError, ValueError, WriteRefused):
+            if sink is None:
+                raise
+            # Hash only stable effect selectors. Neither payload nor error text
+            # nor audit paths enter the warning, its identity, or an event.
+            identity = {key: fields.get(key) for key in
+                        ("tool", "host", "session_id", "channel", "message_id", "phase")}
+            sink(identity, {"state": "failed", "code": "AUDIT_RESULT_WRITE_FAILED",
+                            "phase": fields["phase"], "failure_stage": stage,
+                            "effect_outcome": effect_outcome})
 
 
 def _redact_preview(text: str) -> str:

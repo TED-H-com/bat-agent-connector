@@ -7,6 +7,11 @@ Thanks for helping! This is an unofficial companion to Better Agent Terminal; pl
   blocked when their tier is off. Destructive channels (stop/reset/kill, file ops, settings, installs, account changes)
   are not accepted.
 * Every write-capable tool needs `confirm=true`, rate limiting, and an audit record without message bodies.
+  The intent record is required before the effect and remains strict. Reviewed records after an effect
+  use `Audit.record_after_effect`: inside an operation step, append failure becomes the durable
+  `AUDIT_RESULT_WRITE_FAILED` warning, never a replacement refusal or an instruction to resend.
+  Preserve the actual result and the original operation. Without a bound operation sink the append
+  still raises; do not silently ignore storage failure. See [the operation contract](docs/design/operations-unification.md).
 * Tests: `uv run ruff check . && uv run pytest`. Unit tests must run against the mock server in `tests/mockbat.py`.
   Never write tests that send write channels to real hosts.
 * Never commit real hostnames, IPs, fingerprints, tokens, session ids, workspace names or emails. CI runs a secret

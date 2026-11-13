@@ -46,7 +46,7 @@ from .orchestrate import (
     _guard as _orch_guard,
 )
 from .relay import build_relay, parse_fanout, parse_status, status_footer
-from .safety import Audit
+from .safety import Audit, audit_error_outcome
 from .service import (
     _err,
     _meta,
@@ -107,7 +107,7 @@ async def session_record_verification(
         _task_guard.check()
     row = verification.record(host, sid, candidate_commit=head, command=command, exit_code=exit_code,
                               environment=environment, log_ref=log_ref, actor=fleet.actor)
-    Audit(fleet.config.safety).record(actor=fleet.actor, tool="session_record_verification", host=host,
+    Audit(fleet.config.safety).record_after_effect(effect_outcome="accepted", actor=fleet.actor, tool="session_record_verification", host=host,
                                       session_id=sid, phase="record", candidate_commit=head,
                                       command=command, exit_code=exit_code, log_ref=log_ref)
     return {**row, "verified_candidate": exit_code == 0}
@@ -182,9 +182,9 @@ async def session_set_permissions(
                     confinement.guard_raise(host, sid) if mode == "allow_all" else
                     confinement.guard_permissions(host, sid, o)))
             except BatError as e:
-                audit.record(**base, channel=ch, phase="result", ok=False, error=_err(e))
+                audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel=ch, phase="result", ok=False, error=_err(e))
                 raise
-            audit.record(**base, channel=ch, phase="result", ok=True)
+            audit.record_after_effect(effect_outcome="accepted", **base, channel=ch, phase="result", ok=True)
             results.append({"channel": ch, "result": r})
         if registry.get(host, sid):
             pf = registry_permission_fields(o)
@@ -766,7 +766,7 @@ async def _failover_one(
                 confinement.ensure_confirmed(confinement_record, meta, allow_unknown=not confined)
                 confinement_record = confinement.confirm(confinement_record, meta)
             except BaseException as e:
-                audit.record(**base, channel="claude:start-session", phase="result", ok=False, error=_err(e))
+                audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:start-session", phase="result", ok=False, error=_err(e))
                 if not start_frame.sent and not start_confirmed:
                     registry.fail_reservation(host, new_sid, replaces)
                     registry.update(host, new_sid, start_sent=False, start_uncertain=False,
@@ -777,7 +777,7 @@ async def _failover_one(
                                     **({"confinement": confinement.confirm(confinement_record, meta)}
                                        if start_confirmed else {}))
                 raise
-            audit.record(**base, channel="claude:start-session", phase="result", ok=True)
+            audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:start-session", phase="result", ok=True)
             registry.update(
                 host,
                 new_sid,
@@ -824,21 +824,21 @@ async def _failover_one(
             if not isinstance(ack, dict) or not (ack.get("accepted") or ack.get("ok")):
                 raise WriteRefused("handoff prompt was not accepted by BAT")
             registry.update(host, new_sid, handoff_status="sent")
-            audit.record(**base, channel="claude:send-message", phase="result", ok=True, message_id=mid)
+            audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:send-message", phase="result", ok=True, message_id=mid)
         except TaskDispatchCancelled:
             registry.update(host, new_sid, handoff_status="uncertain")
-            audit.record(**base, channel="claude:send-message", phase="result", ok=False,
+            audit.record_after_effect(effect_outcome="error", **base, channel="claude:send-message", phase="result", ok=False,
                          error="task control changed before handoff submission")
             raise
         except TaskIdentityMismatch:
             registry.update(host, new_sid, handoff_status="uncertain")
-            audit.record(**base, channel="claude:send-message", phase="result", ok=False,
+            audit.record_after_effect(effect_outcome="error", **base, channel="claude:send-message", phase="result", ok=False,
                          error="handoff frame does not match reserved task identity")
             raise
         except BatError as e:
             sent, err = False, _err(e)
             registry.update(host, new_sid, handoff_status="uncertain")
-            audit.record(**base, channel="claude:send-message", phase="result", ok=False, error=err)
+            audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:send-message", phase="result", ok=False, error=err)
     return {
         **plan,
         "new_session_id": new_sid,
@@ -1456,9 +1456,9 @@ async def _stop(fleet: Fleet, host: str, sid: str, audit: Audit, *, cleanup: boo
             raise OperationError("TASK_CLEANUP_STOP_NOT_SENT", "task stop was refused before transport", 409) from e
         if cleanup:
             raise
-        audit.record(**base, channel="claude:stop-session", phase="result", ok=False, error=_err(e))
+        audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:stop-session", phase="result", ok=False, error=_err(e))
         return {"stopped": False, "error": _err(e)}
-    audit.record(**base, channel="claude:stop-session", phase="result", ok=True)
+    audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:stop-session", phase="result", ok=True)
     return {"stopped": True, "result": r}
 
 

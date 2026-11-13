@@ -383,6 +383,27 @@ function h$1(tag, attrs = {}, ...children) {
 	return el;
 }
 //#endregion
+//#region src/operation-audit-strings.js
+var operationAuditStrings;
+var init_operation_audit_strings = __esmMin((() => {
+	operationAuditStrings = {
+		en: {
+			audit_result_title: "Audit result could not be saved",
+			audit_result_accepted: "This request was accepted. Its audit result could not be written; the original receipt is saved. Do not send it again.",
+			audit_result_error: "The request returned an error. The original error is saved, but its audit result could not be written. Read this operation before deciding what to do next.",
+			audit_result_unknown: "The request may have been sent. Its result was unknown when the audit result could not be written. Read this operation’s current receipt; do not resend.",
+			audit_result_repair: "Check the original operation and repair the audit storage."
+		},
+		"zh-TW": {
+			audit_result_title: "稽核結果未能儲存",
+			audit_result_accepted: "此請求已被接受，但稽核結果未能寫入；原回執已保留。請勿再次傳送。",
+			audit_result_error: "此請求已回覆錯誤。原錯誤已保留，但稽核結果未能寫入。請先查看此操作，再決定後續處理。",
+			audit_result_unknown: "請求可能已送出；稽核結果未能寫入時，結果尚未確定。請查看此操作目前的回執，勿重新傳送。",
+			audit_result_repair: "請查看原操作並修復稽核儲存。"
+		}
+	};
+}));
+//#endregion
 //#region src/health-strings.js
 var healthStrings;
 var init_health_strings = __esmMin((() => {
@@ -11231,6 +11252,7 @@ function t(key, vars = {}) {
 }
 var STRINGS, locale;
 var init_i18n = __esmMin((() => {
+	init_operation_audit_strings();
 	init_health_strings();
 	init_session_archive_strings();
 	init_connection_operation_strings();
@@ -11276,6 +11298,7 @@ var init_i18n = __esmMin((() => {
 	init_fleet_strings();
 	STRINGS = {
 		"zh-TW": {
+			...operationAuditStrings["zh-TW"],
 			...sessionArchiveStrings["zh-TW"],
 			deploy_field_engine: "引擎",
 			deploy_field_name: "名稱",
@@ -13093,6 +13116,7 @@ var init_i18n = __esmMin((() => {
 			integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 		},
 		en: {
+			...operationAuditStrings.en,
 			...sessionArchiveStrings.en,
 			deploy_field_engine: "engine",
 			deploy_field_name: "name",
@@ -71071,6 +71095,26 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 	};
 }
 //#endregion
+//#region src/operation-audit.js
+function operationAuditWarnings(op) {
+	return Object.entries(op.external_refs?.audit_results || {}).filter(([id, warning]) => /^[0-9a-f]{64}$/.test(id) && warning?.state === "failed" && warning.code === "AUDIT_RESULT_WRITE_FAILED" && [
+		"accepted",
+		"error",
+		"unknown"
+	].includes(warning.effect_outcome)).map(([id, warning]) => ({
+		id,
+		outcome: warning.effect_outcome
+	}));
+}
+function operationAuditNotice(op, { h, t }) {
+	const warnings = operationAuditWarnings(op);
+	if (!warnings.length) return null;
+	return h("section", {
+		class: "note",
+		"data-operation-audit": ""
+	}, h("h2", {}, t("audit_result_title")), ...warnings.map((warning) => h("p", { "data-audit-outcome": warning.outcome }, t("audit_result_" + warning.outcome))), h("p", {}, t("audit_result_repair")));
+}
+//#endregion
 //#region src/connection-operation.js
 function connectionOperationRecovery(op) {
 	if (!["setup.connection.apply", "connection.reference.detach"].includes(op.action)) return null;
@@ -81167,7 +81211,10 @@ async function viewOperation(main, id) {
 			fill(panel, pageHeader({
 				title: actionLabel$1(op.action),
 				pill: statusPill(operationStatusKey(op.status))
-			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), connectionOperationNotice(connectionRecovery, {
+			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), operationAuditNotice(op, {
+				h,
+				t
+			}), connectionOperationNotice(connectionRecovery, {
 				h,
 				t,
 				refresh: readOriginal,

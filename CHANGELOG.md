@@ -12,6 +12,10 @@
   when the Connector replaces that file at the same moment, for example while
   the desktop app checks a service that is starting.
 
+- Preserve the original operation result when its later audit record cannot be
+  written. Show a durable warning in English and Traditional Chinese without
+  inviting a duplicate send.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API

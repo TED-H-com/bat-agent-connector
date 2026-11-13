@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from . import confinement, registry, resource_policy, service, task_control
 from .errors import BatError, ConnectionLost, InvokeTimeout, TaskControlRefused, WriteRefused
 from .operations import AmbiguousOutcome, NeedsAttention, OperationError, StepFailed, Uncertain
-from .safety import Audit
+from .safety import Audit, audit_error_outcome
 
 PLAN = "permissions.plan"
 BINDING_FIELDS = ("created_at", "agent_preset", "task_id", "role", "cwd", "worktree_path", "write_scope",
@@ -362,13 +362,13 @@ async def execute(ctx, fleet, host, sid, mode, guard):
                         before_frame=before_frame, before_send=check, on_transport=transported)
                 except (BatError, OSError, asyncio.TimeoutError) as exc:
                     if sent:
-                        audit.record(**audit_base, channel=call["channel"], phase="result", ok=False,
+                        audit.record_after_effect(effect_outcome=audit_error_outcome(exc), **audit_base, channel=call["channel"], phase="result", ok=False,
                                      error="permission ACK unproven")
                         raise AmbiguousOutcome("permission frame was sent without a proven ACK") from exc
                     if isinstance(exc, ConnectionLost | InvokeTimeout | OSError | asyncio.TimeoutError):
                         raise StepFailed("PERMISSIONS_NOT_SENT", "permission frame was not sent; submit a new operation key after connectivity recovers") from exc
                     raise
-                audit.record(**audit_base, channel=call["channel"], phase="result", ok=result is True)
+                audit.record_after_effect(effect_outcome="accepted" if result is True else "unknown", **audit_base, channel=call["channel"], phase="result", ok=result is True)
                 if result is not True:
                     raise AmbiguousOutcome("permission frame did not return a literal true ACK")
                 return {"channel": call["channel"], "result": True}

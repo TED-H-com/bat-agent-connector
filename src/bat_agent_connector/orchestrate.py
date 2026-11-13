@@ -33,7 +33,7 @@ from . import confinement, registry, resource_policy, task_control
 from .errors import BatError, ResourceReadOnly, WriteRefused
 from .fleet import Fleet
 from .resource_policy import WriteGrant
-from .safety import Audit
+from .safety import Audit, audit_error_outcome
 from .service import _err, _meta, _resolve_session, _workspace, _write_lock, agent_kind
 
 MERGED_KINDS = {"ancestor", "patch-equivalent"}
@@ -348,7 +348,7 @@ async def session_start(
             registry.update(host, sid, cwd=folder, worktree_path=None, branch=None,
                             worktree_rolled_back=True, rolled_back_worktree_path=wt.get("worktreePath"),
                             rolled_back_branch=wt.get("branchName"))
-            audit.record(**base, channel="worktree:remove", phase="rollback", ok=True,
+            audit.record_after_effect(effect_outcome="accepted", **base, channel="worktree:remove", phase="rollback", ok=True,
                          worktree_path=wt.get("worktreePath"), branch=wt.get("branchName"))
 
         try:
@@ -368,14 +368,14 @@ async def session_start(
                     worktree_created = True
                 if not isinstance(wt, dict) or wt.get("success") is False or not wt.get("worktreePath"):
                     err = (wt or {}).get("error") if isinstance(wt, dict) else "unexpected reply"
-                    audit.record(**base, channel="worktree:create", phase="result", ok=False, error=str(err))
+                    audit.record_after_effect(effect_outcome="error", **base, channel="worktree:create", phase="result", ok=False, error=str(err))
                     raise WriteRefused(f"worktree:create failed: {err}")
                 if base_branch and wt.get("sourceBranch") != base_branch:
-                    audit.record(**base, channel="worktree:create", phase="result", ok=False,
+                    audit.record_after_effect(effect_outcome="error", **base, channel="worktree:create", phase="result", ok=False,
                                  error="host ignored requested base branch", requested_base_branch=base_branch,
                                  source_branch=wt.get("sourceBranch"))
                     raise WriteRefused("worktree:create did not honor requested base branch")
-                audit.record(
+                audit.record_after_effect(effect_outcome="accepted",
                     **base, channel="worktree:create", phase="result", ok=True, branch=wt.get("branchName"),
                     source_branch=wt.get("sourceBranch"), requested_base_branch=base_branch
                 )
@@ -441,11 +441,11 @@ async def session_start(
             except BatError as e:
                 if start_confirmed or start_frame.sent:
                     retain_on_error = True  # Even invoke-error may follow creation of the BAT session.
-                audit.record(**base, channel="claude:start-session", phase="result", ok=False, error=_err(e))
+                audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:start-session", phase="result", ok=False, error=_err(e))
                 if worktree_created and not retain_on_error:  # may have reached BAT on timeout
                     await rollback_worktree()
                 raise
-            audit.record(**base, channel="claude:start-session", phase="result", ok=True)
+            audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:start-session", phase="result", ok=True)
         except BaseException as e:
             unsent = not start_frame.sent and not start_confirmed
             retain_on_error = retain_on_error or start_confirmed or start_frame.sent
@@ -489,6 +489,7 @@ async def session_start(
                 term["agentParams"] = pf["agent_params"]
             if use_worktree:
                 term.update(worktreePath=wt["worktreePath"], worktreeBranch=wt.get("branchName"))
+            tab_outcome = "unknown"
             try:
                 tab = await c.append_workspace_terminal(hc.profile_id, term,
                                                         grant=resource_policy.authorize_register_tab(host, sid),
@@ -496,7 +497,8 @@ async def session_start(
                                                         before_frame=_start_frame_check)
             except BatError as e:
                 tab = {"appended": False, "error": _err(e)}
-            audit.record(
+                tab_outcome = audit_error_outcome(e)
+            audit.record_after_effect(effect_outcome="accepted" if bool(tab.get("appended")) else tab_outcome,
                 **base,
                 channel="workspace:save",
                 phase="append-terminal",
@@ -516,9 +518,9 @@ async def session_start(
                 )
                 if not isinstance(ack, dict) or not (ack.get("accepted") or ack.get("ok")):
                     raise WriteRefused("initial prompt was not accepted by BAT")
-                audit.record(**base, channel="claude:send-message", phase="result", ok=True, message_id=mid)
+                audit.record_after_effect(effect_outcome="accepted", **base, channel="claude:send-message", phase="result", ok=True, message_id=mid)
             except BatError as e:
-                audit.record(**base, channel="claude:send-message", phase="result", ok=False, error=_err(e))
+                audit.record_after_effect(effect_outcome=audit_error_outcome(e), **base, channel="claude:send-message", phase="result", ok=False, error=_err(e))
                 return {
                     "host": host,
                     "session_id": sid,
@@ -620,7 +622,7 @@ async def worktree_merge(fleet: Fleet, host: str, session_id: str, confirm: bool
         audit.record(**base, channel="worktree:merge", phase="attempt", branch=st.get("branchName"))
         r = await c.invoke("worktree:merge", {"sessionId": sid, "strategy": "merge"}, grant=grant)
         ok = isinstance(r, dict) and r.get("success") is True
-        audit.record(
+        audit.record_after_effect(effect_outcome="accepted" if ok else "error",
             **base,
             channel="worktree:merge",
             phase="result",

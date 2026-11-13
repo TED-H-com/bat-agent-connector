@@ -420,3 +420,33 @@ strict version-1 helper observation or `{error:"host_unreachable"}` /
 No SSH alias or absolute deployment path is returned. This read runs on demand
 and can take 30 seconds per configured host. Limits and the configuration/schema
 are described in [host deployment status](host-deploy-status.md).
+
+### Post-effect audit warnings
+
+An audit append failure after an effect does not change the operation's outcome.
+A known success keeps its receipt, a known error keeps its original classification,
+and an unknown result continues the original sent-effect reconciliation. The API,
+RPC and MCP operation reads expose the same durable warning in
+`external_refs.audit_results[effect_id]`:
+
+```json
+{"state":"failed","code":"AUDIT_RESULT_WRITE_FAILED","phase":"result","failure_stage":"open","effect_outcome":"accepted"}
+```
+
+`effect_id` is a stable SHA-256 identifier of the step and bounded effect selectors
+within this operation. `phase` is `result`, `append-terminal`, `rollback` or
+`record`; `failure_stage` is `mkdir`, `open`, `write`, `flush` or `close`;
+`effect_outcome` is `accepted`, `error` or `unknown`. It describes this effect at
+its audit boundary, not completion of a composite operation or an agent turn.
+Warnings contain no paths, prompts, credentials or error bodies. One
+`operation.audit_result_failed` observation event per effect ID contains that ID
+and these fields through the observation allowlist. Replaying, resuming or reading
+an operation does not duplicate the warning event or send its effect again.
+Where the step has a result transaction, the warning and event share it.
+
+The shared operation detail shows warnings in English and zh-TW for every status.
+A succeeded operation with this warning remains the original accepted effect:
+read the original receipt and repair audit storage; do not send it again. Unknown
+results retain the original operation/key/actor and require its existing readback.
+Intent audit failure before dispatch still refuses that effect. No historical
+`REFUSED` row is reclassified. This adds no capability, action, scope or schema.
