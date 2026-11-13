@@ -41,8 +41,14 @@ class MockBac:
         self.host_id = "h_0123456789abcdef0123456789abcdef"
         self.build = {"product": "bac", "revision": "unknown", "release": "dev", "dirty": None}
         self.features = dict.fromkeys(self.CHANNELS.values(), False)
-        self.limits = {"requestBytes": 65536, "resultBytes": 524288}
+        self.limits = {
+            "requestBytes": 65536, "resultBytes": 524288, "registrationBytes": 16384,
+            "profiles": 256, "terminals": 4096, "locationMatches": 100,
+            "gitStatusBytes": 4194304, "gitIndexBytes": 16777216, "gitPaths": 10000,
+            "gitTimeoutMs": 5000, "gitAttempts": 2,
+        }
         self.storage_error = None
+        self.storage_reason = "unspecified"
         self.drop_hello = False
         self.close_hello = False
         self.invoke_error = None
@@ -88,6 +94,8 @@ class MockBac:
         mid = frame.get("id")
         if not isinstance(mid, str) or "\0" in mid or not 1 <= len(mid.encode()) <= 128:
             return fail("INVALID_REQUEST", field="id")
+        if not isinstance(channel, str) or "\0" in channel:
+            return fail("INVALID_REQUEST", field="channel")
         params = frame.get("params")
         if not isinstance(params, dict):
             return fail("INVALID_REQUEST", field="params")
@@ -95,26 +103,26 @@ class MockBac:
             if set(params) - {"protocol", "minor", "expectedHostId"}:
                 return fail("INVALID_REQUEST", field="params")
             if not isinstance(params.get("protocol"), str) or "\0" in params["protocol"]:
-                return fail("INVALID_REQUEST", field="protocol")
-            if type(params.get("minor")) is not int or params["minor"] < 0:
-                return fail("INVALID_REQUEST", field="minor")
+                return fail("INVALID_REQUEST", field="params.protocol")
+            if type(params.get("minor")) is not int or not 0 <= params["minor"] < 2**64:
+                return fail("INVALID_REQUEST", field="params.minor")
             if "expectedHostId" in params and (
                 not isinstance(params["expectedHostId"], str)
                 or not re.fullmatch(r"h_[0-9a-f]{32}", params["expectedHostId"])
             ):
-                return fail("INVALID_REQUEST", field="expectedHostId")
+                return fail("INVALID_REQUEST", field="params.expectedHostId")
         size = len(json.dumps(frame, ensure_ascii=False, separators=(",", ":")).encode())
         if size > 65536:
             return fail("PAYLOAD_TOO_LARGE", maxBytes=65536)
         if "contextId" in frame:
             return fail("CONTEXT_NOT_SUPPORTED")
         if channel == "bac:hello":
-            if self.storage_error:
-                return fail(self.storage_error)
             if params["protocol"] != "bac/1" or params["minor"] != 0:
                 return fail("UNSUPPORTED_VERSION", protocol="bac/1", minor=0)
+            if self.storage_error:
+                return fail(self.storage_error, reason=self.storage_reason)
             if "expectedHostId" in params and params["expectedHostId"] != self.host_id:
-                return fail("HOST_MISMATCH", hostId=self.host_id)
+                return self.error("HOST_MISMATCH", hostId=self.host_id), False
             return {"ok": True, "value": self.hello_value()}, True
         feature = self.CHANNELS.get(channel)
         if feature is None:

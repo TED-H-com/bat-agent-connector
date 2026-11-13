@@ -44,6 +44,12 @@ def resolve(value, bac):
         return bac.host_id
     if value == '$BUILD':
         return bac.build
+    if value == '$STORAGE_REASON':
+        return bac.storage_reason
+    if value == '$FEATURES':
+        return bac.features
+    if value == '$LIMITS':
+        return bac.limits
     return value
 
 
@@ -58,7 +64,14 @@ async def bac_mock():
 
 
 @pytest.mark.parametrize('case', CASES['cases'], ids=lambda case: case['name'])
-async def test_portable_hello_case(bac_mock, case):
+@pytest.mark.parametrize('features_enabled', [False, True], ids=['features-off', 'features-on'])
+async def test_portable_hello_case(bac_mock, case, features_enabled):
+    if features_enabled:
+        bac_mock.bac.features = dict.fromkeys(bac_mock.bac.features, True)
+        bac_mock.bac.limits['profiles'] *= 2
+    for flag, value in case.get('appliesWhen', {}).get('features', {}).items():
+        if bac_mock.bac.features.get(flag) is not value:
+            pytest.skip('case applies only to the specified feature availability')
     situation = case['situation']
     async with wire(bac_mock) as ws:
         if situation['connection'] == 'negotiated':
@@ -66,12 +79,13 @@ async def test_portable_hello_case(bac_mock, case):
         storage = situation.get('identityStorage')
         if storage:
             bac_mock.bac.storage_error = 'STORAGE_' + storage.upper()
-        reply = await call(ws, 'bac:hello', resolve(case['params'], bac_mock.bac),
+        reply = await call(ws, case.get('channel', 'bac:hello'), resolve(case['params'], bac_mock.bac),
                            case['name'], **situation.get('frame', {}))
         assert reply == resolve(case['result'], bac_mock.bac)
-        probe = await call(ws, 'bac:future', {})
-        negotiated = situation['connection'] == 'negotiated' or reply['ok']
-        assert probe['error']['code'] == ('UNKNOWN_CHANNEL' if negotiated else 'NOT_OPTED_IN')
+        if 'after' in case:
+            probe = await call(ws, 'bac:workspace-read', {})
+            negotiated = probe.get('error', {}).get('code') != 'NOT_OPTED_IN'
+            assert negotiated == (case['after'] == 'negotiated')
 
 
 async def test_pre_and_post_hello_refusals_are_connection_local(bac_mock):
@@ -101,6 +115,9 @@ async def test_frame_id_and_size_boundaries(bac_mock):
             reply = await call(ws, 'bac:hello', HELLO, mid)
             assert reply['error']['code'] == 'INVALID_REQUEST'
         assert (await call(ws, 'bac:hello', HELLO, 'x' * 128))['ok']
+        assert (await call(ws, 'bac:future\0', {}))['error'] == {
+            'code': 'INVALID_REQUEST', 'message': 'Invalid BAC request',
+            'retryable': False, 'details': {'field': 'channel'}}
         frame = {'type': 'invoke', 'id': 'case', 'channel': 'bac:hello',
                  'params': {'protocol': '', 'minor': 0}}
         overhead = len(json.dumps(frame, separators=(',', ':')).encode())

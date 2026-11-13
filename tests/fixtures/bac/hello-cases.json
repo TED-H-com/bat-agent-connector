@@ -1,8 +1,11 @@
 {
-  "description": "Portable bac/1 handshake examples. Each case sends an invoke with id case.name, channel bac:hello, params case.params, plus situation.frame members. connection=negotiated means a valid hello already succeeded. identityStorage selects a storage fault; omitted means available. Substitute placeholders recursively as whole JSON values.",
+  "description": "Portable bac/1 handshake examples. Each case sends an invoke with id case.name, channel case.channel (default bac:hello), params case.params, plus situation.frame members. connection=negotiated means a valid hello already succeeded. identityStorage selects a storage fault; omitted means available. Substitute placeholders recursively as whole JSON values. Optional appliesWhen.features restricts a case to hosts reporting the exact specified boolean flags. Optional after is checked after receiving the reply by sending bac:workspace-read with empty params: error code NOT_OPTED_IN means unnegotiated; any other code (or success) means negotiated, independent of feature availability. Wait for each reply before sending another BAC frame; host state transitions are serialized but not ordered by request arrival. Request size uses compact serialization of the decoded frame, not received bytes. The oversized ASCII case is deliberately over the limit by more than framing differences, so serializers cannot disagree about its refusal.",
   "placeholders": {
     "$HOST_ID": "The synthetic identity of the host under test: h_ followed by 32 lowercase hex digits. Use an identity different from h_ffffffffffffffffffffffffffffffff.",
-    "$BUILD": "The complete build object of the host under test."
+    "$BUILD": "The complete build object of the host under test.",
+    "$STORAGE_REASON": "The fixed lower-case diagnostic reason name for the injected identity storage fault: [a-z][a-z0-9_]{0,63}; no path or content.",
+    "$FEATURES": "The complete feature map of the host under test; every value is a boolean.",
+    "$LIMITS": "The complete limit map of the host under test; every value is a non-negative integer."
   },
   "cases": [
     {
@@ -21,18 +24,11 @@
           "minor": 0,
           "hostId": "$HOST_ID",
           "build": "$BUILD",
-          "features": {
-            "workspaceRead": false,
-            "workspaceAddTerminal": false,
-            "sessionLocate": false,
-            "gitObserve": false
-          },
-          "limits": {
-            "requestBytes": 65536,
-            "resultBytes": 524288
-          }
+          "features": "$FEATURES",
+          "limits": "$LIMITS"
         }
-      }
+      },
+      "after": "negotiated"
     },
     {
       "name": "expected-identity",
@@ -51,18 +47,11 @@
           "minor": 0,
           "hostId": "$HOST_ID",
           "build": "$BUILD",
-          "features": {
-            "workspaceRead": false,
-            "workspaceAddTerminal": false,
-            "sessionLocate": false,
-            "gitObserve": false
-          },
-          "limits": {
-            "requestBytes": 65536,
-            "resultBytes": 524288
-          }
+          "features": "$FEATURES",
+          "limits": "$LIMITS"
         }
-      }
+      },
+      "after": "negotiated"
     },
     {
       "name": "already-negotiated",
@@ -80,18 +69,11 @@
           "minor": 0,
           "hostId": "$HOST_ID",
           "build": "$BUILD",
-          "features": {
-            "workspaceRead": false,
-            "workspaceAddTerminal": false,
-            "sessionLocate": false,
-            "gitObserve": false
-          },
-          "limits": {
-            "requestBytes": 65536,
-            "resultBytes": 524288
-          }
+          "features": "$FEATURES",
+          "limits": "$LIMITS"
         }
-      }
+      },
+      "after": "negotiated"
     },
     {
       "name": "storage-unavailable",
@@ -109,9 +91,12 @@
           "code": "STORAGE_UNAVAILABLE",
           "message": "BAC identity storage is unavailable",
           "retryable": false,
-          "details": {}
+          "details": {
+            "reason": "$STORAGE_REASON"
+          }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "storage-corrupt",
@@ -129,9 +114,12 @@
           "code": "STORAGE_CORRUPT",
           "message": "BAC identity storage is invalid",
           "retryable": false,
-          "details": {}
+          "details": {
+            "reason": "$STORAGE_REASON"
+          }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "context-null",
@@ -153,7 +141,8 @@
           "retryable": false,
           "details": {}
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "context-local",
@@ -175,7 +164,8 @@
           "retryable": false,
           "details": {}
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "host-mismatch",
@@ -197,7 +187,8 @@
             "hostId": "$HOST_ID"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "unsupported-protocol",
@@ -219,7 +210,8 @@
             "minor": 0
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "unsupported-minor",
@@ -241,7 +233,8 @@
             "minor": 0
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "unsupported-after-negotiated",
@@ -263,7 +256,8 @@
             "minor": 0
           }
         }
-      }
+      },
+      "after": "negotiated"
     },
     {
       "name": "params-null",
@@ -281,7 +275,8 @@
             "field": "params"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "params-list",
@@ -299,7 +294,8 @@
             "field": "params"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "missing-protocol",
@@ -316,10 +312,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "protocol"
+            "field": "params.protocol"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "protocol-not-string",
@@ -337,10 +334,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "protocol"
+            "field": "params.protocol"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "protocol-nul",
@@ -358,10 +356,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "protocol"
+            "field": "params.protocol"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "missing-minor",
@@ -378,10 +377,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "minor"
+            "field": "params.minor"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "boolean-minor",
@@ -399,10 +399,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "minor"
+            "field": "params.minor"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "string-minor",
@@ -420,10 +421,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "minor"
+            "field": "params.minor"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "negative-minor",
@@ -441,10 +443,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "minor"
+            "field": "params.minor"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "unknown-param",
@@ -466,7 +469,8 @@
             "field": "params"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "null-expected-id",
@@ -485,10 +489,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "expectedHostId"
+            "field": "params.expectedHostId"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "invalid-expected-id",
@@ -507,10 +512,11 @@
           "message": "Invalid BAC request",
           "retryable": false,
           "details": {
-            "field": "expectedHostId"
+            "field": "params.expectedHostId"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "args-forbidden",
@@ -534,7 +540,8 @@
             "field": "frame"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "shape-before-context-and-storage",
@@ -556,7 +563,8 @@
             "field": "params"
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "context-before-storage",
@@ -579,10 +587,11 @@
           "retryable": false,
           "details": {}
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
-      "name": "storage-before-version",
+      "name": "version-before-storage",
       "params": {
         "protocol": "bac/1",
         "minor": 1
@@ -594,12 +603,16 @@
       "result": {
         "ok": false,
         "error": {
-          "code": "STORAGE_UNAVAILABLE",
-          "message": "BAC identity storage is unavailable",
+          "code": "UNSUPPORTED_VERSION",
+          "message": "Unsupported BAC protocol version",
           "retryable": false,
-          "details": {}
+          "details": {
+            "protocol": "bac/1",
+            "minor": 0
+          }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "version-before-identity",
@@ -622,7 +635,8 @@
             "minor": 0
           }
         }
-      }
+      },
+      "after": "unnegotiated"
     },
     {
       "name": "size-before-context-and-storage",
@@ -647,7 +661,168 @@
             "maxBytes": 65536
           }
         }
-      }
+      },
+      "after": "unnegotiated"
+    },
+    {
+      "name": "float-minor",
+      "params": {
+        "protocol": "bac/1",
+        "minor": 0.0
+      },
+      "situation": {
+        "connection": "fresh"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_REQUEST",
+          "message": "Invalid BAC request",
+          "retryable": false,
+          "details": {
+            "field": "params.minor"
+          }
+        }
+      },
+      "after": "unnegotiated"
+    },
+    {
+      "name": "overflow-minor",
+      "params": {
+        "protocol": "bac/1",
+        "minor": 18446744073709551616
+      },
+      "situation": {
+        "connection": "fresh"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_REQUEST",
+          "message": "Invalid BAC request",
+          "retryable": false,
+          "details": {
+            "field": "params.minor"
+          }
+        }
+      },
+      "after": "unnegotiated"
+    },
+    {
+      "name": "boolean-minor-after-negotiated",
+      "params": {
+        "protocol": "bac/1",
+        "minor": true
+      },
+      "situation": {
+        "connection": "negotiated"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_REQUEST",
+          "message": "Invalid BAC request",
+          "retryable": false,
+          "details": {
+            "field": "params.minor"
+          }
+        }
+      },
+      "after": "negotiated"
+    },
+    {
+      "name": "storage-unavailable-after-negotiated",
+      "params": {
+        "protocol": "bac/1",
+        "minor": 0
+      },
+      "situation": {
+        "connection": "negotiated",
+        "identityStorage": "unavailable"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "STORAGE_UNAVAILABLE",
+          "message": "BAC identity storage is unavailable",
+          "retryable": false,
+          "details": {
+            "reason": "$STORAGE_REASON"
+          }
+        }
+      },
+      "after": "negotiated"
+    },
+    {
+      "name": "storage-corrupt-after-negotiated",
+      "params": {
+        "protocol": "bac/1",
+        "minor": 0
+      },
+      "situation": {
+        "connection": "negotiated",
+        "identityStorage": "corrupt"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "STORAGE_CORRUPT",
+          "message": "BAC identity storage is invalid",
+          "retryable": false,
+          "details": {
+            "reason": "$STORAGE_REASON"
+          }
+        }
+      },
+      "after": "negotiated"
+    },
+    {
+      "name": "host-mismatch-after-negotiated",
+      "params": {
+        "protocol": "bac/1",
+        "minor": 0,
+        "expectedHostId": "h_ffffffffffffffffffffffffffffffff"
+      },
+      "situation": {
+        "connection": "negotiated"
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "HOST_MISMATCH",
+          "message": "Host identity changed",
+          "retryable": false,
+          "details": {
+            "hostId": "$HOST_ID"
+          }
+        }
+      },
+      "after": "unnegotiated"
+    },
+    {
+      "name": "known-feature-off",
+      "channel": "bac:workspace-read",
+      "params": {},
+      "situation": {
+        "connection": "negotiated"
+      },
+      "appliesWhen": {
+        "features": {
+          "workspaceRead": false
+        }
+      },
+      "result": {
+        "ok": false,
+        "error": {
+          "code": "UNSUPPORTED_FEATURE",
+          "message": "BAC feature is unavailable",
+          "retryable": false,
+          "details": {
+            "feature": "workspaceRead"
+          }
+        }
+      },
+      "after": "negotiated"
     }
   ]
 }
