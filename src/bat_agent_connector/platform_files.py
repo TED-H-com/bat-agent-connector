@@ -11,11 +11,14 @@ import errno
 import os
 import secrets
 import stat
+import time
 from contextlib import suppress
 from pathlib import Path
 
 WINDOWS = os.name == "nt"
 _OPEN_CREATE_ATTEMPTS = 8
+PRIVATE_READ_DEADLINE_S = 0.5
+PRIVATE_READ_RETRY_S = 0.02
 if WINDOWS:
     from . import windows_files as native
 else:
@@ -124,18 +127,39 @@ def open_private_file(path, flags, mode=0o600) -> int:
             parent.close()
     parent = _posix_dir(path.parent)
     try:
-        # Validate before a truncating open can damage a link or foreign file.
-        fd = _posix_open(parent, path.name, flags, mode)
+        deadline = time.monotonic() + PRIVATE_READ_DEADLINE_S
+        pause = 0.0
+        while True:
+            # Validate before a truncating open can damage a link or foreign file.
+            fd = _posix_open(parent, path.name, flags, mode)
+            try:
+                info = os.fstat(fd)
+                # Atomic replacement can unlink the inode after open. Retry only
+                # an otherwise private regular file, never an exclusive creation.
+                retry = (info.st_nlink == 0 and stat.S_ISREG(info.st_mode)
+                         and info.st_uid == os.getuid() and not info.st_mode & 0o077
+                         and not flags & os.O_EXCL)
+                if not retry:
+                    _check_private_stat(info)
+                    if flags & os.O_TRUNC:
+                        os.ftruncate(fd, 0)
+                    return fd
+            except BaseException:
+                os.close(fd)
+                raise
+            os.close(fd)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                _check_private_stat(info)
+            # The name can still resolve to the same unlinked inode while a
+            # replacement finishes. Reopen once immediately, then let it settle.
+            if pause:
+                time.sleep(min(pause, remaining))
+                if time.monotonic() >= deadline:
+                    _check_private_stat(info)
+            pause = min(pause * 2 if pause else 0.001, PRIVATE_READ_RETRY_S)
     finally:
         os.close(parent)
-    try:
-        _check_private_stat(os.fstat(fd))
-        if flags & os.O_TRUNC:
-            os.ftruncate(fd, 0)
-        return fd
-    except BaseException:
-        os.close(fd)
-        raise
 
 
 def read_private(path, *, max_bytes=1024 * 1024) -> bytes:
