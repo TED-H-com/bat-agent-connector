@@ -20,6 +20,12 @@
   control available with English and Traditional Chinese guidance, and document
   original-operation lookup after a lost reply in all agent skills.
 
+- Fix 409 errors when readable operation, event, PM run or Dashboard bootstrap
+  pages contain rows from more than 64 original sources in total. Each row keeps
+  its own source-access and size limits; withdrawn sources remain hidden.
+  A row whose hidden source is identified through the page's host is now omitted
+  instead of making the whole page fail with 404.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API
