@@ -66,6 +66,15 @@ def test_fixed_impact_capability_advertises_only_the_read(matrix):
         assert matrix["producers"]["server"][variant]["features"]["pm_workspaces"]["plan_impact"] == expected
 
 
+def test_roadmap_report_capability_is_read_only_without_materialization(matrix):
+    from bat_agent_connector.pm_roadmap_reports import capabilities
+    for variant in ('managed', 'plain'):
+        features = matrix['producers']['server'][variant]['features']['pm_workspaces']
+        assert features['roadmap_report'] == capabilities()
+        assert 'roadmap_report_materialization' not in features
+        assert features['roadmap_report']['native_save'] is False
+
+
 def public_tree(tmp_path):
     for name in PUBLIC_TABLES:
         target = tmp_path / name

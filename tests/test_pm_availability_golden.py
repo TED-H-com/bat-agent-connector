@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from bat_agent_connector import pm_native_runtime
 from tests.test_api_v1 import daemon as api_daemon
 from tests.test_api_v1 import http, token, write_frames
@@ -70,3 +72,31 @@ async def test_pm_availability_producer_golden(served, monkeypatch, tmp_path, mo
     if os.environ.get("BATC_UPDATE_PM_AVAILABILITY_GOLDEN") == "1":
         GOLDEN.write_text(json.dumps(normalized, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     assert normalized == json.loads(GOLDEN.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize('action,flag', [('pm.roadmap.baseline.set', 'roadmap'),
+    ('pm.snapshot.create', 'brief_snapshots'), ('pm.plan.draft', 'plan_drafting')])
+async def test_roadmap_report_producer_omits_unavailable_dependency(served, action, flag):
+    d, port = served
+    auth = token(d, OWNER.actor, 'observe')
+    removed = d.ops.actions.pop(action)
+    try:
+        status, result = await http(port, 'GET', '/api/v1/capabilities', tok=auth)
+        features = result['features']['pm_workspaces']
+        assert status == 200 and features[flag] is False
+        assert 'roadmap_report' not in features
+    finally:
+        d.ops.actions[action] = removed
+
+
+async def test_roadmap_report_uses_existing_flags_without_a_new_predicate(served):
+    d, port = served
+    auth = token(d, OWNER.actor, 'observe')
+    removed = d.ops.actions.pop('pm.roadmap.observe')
+    try:
+        status, result = await http(port, 'GET', '/api/v1/capabilities', tok=auth)
+        features = result['features']['pm_workspaces']
+        assert status == 200 and all(features[k] for k in ('roadmap', 'brief_snapshots', 'plan_drafting'))
+        assert features['roadmap_report']['version'] == 1
+    finally:
+        d.ops.actions['pm.roadmap.observe'] = removed
