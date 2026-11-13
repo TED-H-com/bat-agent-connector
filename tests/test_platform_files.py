@@ -70,6 +70,150 @@ def _replace_open(monkeypatch, opening):
     monkeypatch.setattr(files, "os", SimpleNamespace(**{**vars(os), "open": opening}))
 
 
+@pytest.fixture
+def private_open_race(monkeypatch):
+    opened = []
+    real_open = files._posix_open
+
+    def inject(path, replacements=(), *, remove=False):
+        attempts = []
+
+        def opening(parent, name, flags, mode):
+            attempts.append(flags)
+            fd = real_open(parent, name, flags, mode)
+            opened.append(fd)
+            try:
+                if len(attempts) <= len(replacements):
+                    os.replace(replacements[len(attempts) - 1], path)
+                    if remove:
+                        path.unlink()
+                return fd
+            except BaseException:
+                os.close(fd)
+                raise
+
+        monkeypatch.setattr(files, "_posix_open", opening)
+        return attempts
+
+    yield inject
+    # Both rejected descriptors and the returned descriptor must be closed.
+    for fd in opened:
+        with pytest.raises(OSError) as caught:
+            os.fstat(fd)
+        assert caught.value.errno == errno.EBADF
+
+
+def _private_bytes(path, data):
+    path.write_bytes(data)
+    path.chmod(0o600)
+    return path
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
+def test_private_read_retries_replaced_inode(tmp_path, private_open_race):
+    path = _private_bytes(tmp_path / "state.json", b"old")
+    replacement = _private_bytes(tmp_path / "replacement", b"new")
+    attempts = private_open_race(path, [replacement])
+    assert files.read_private(path) == b"new"
+    assert len(attempts) == 2
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
+def test_private_read_replacement_retry_is_bounded(tmp_path, private_open_race):
+    path = _private_bytes(tmp_path / "state.json", b"old")
+    replacements = [_private_bytes(tmp_path / str(index), b"new")
+                    for index in range(files._OPEN_CREATE_ATTEMPTS)]
+    attempts = private_open_race(path, replacements)
+    with pytest.raises(ValueError, match="^local state must be private and owned by the current user$"):
+        files.read_private(path)
+    assert len(attempts) == files._OPEN_CREATE_ATTEMPTS
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
+def test_private_read_replaced_then_removed_propagates_missing(tmp_path, private_open_race):
+    path = _private_bytes(tmp_path / "state.json", b"old")
+    replacement = _private_bytes(tmp_path / "replacement", b"new")
+    attempts = private_open_race(path, [replacement], remove=True)
+    with pytest.raises(FileNotFoundError):
+        files.read_private(path)
+    assert len(attempts) == 2
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open privacy checks")
+@pytest.mark.parametrize("invalid", ["hardlink", "public", "directory", "unlinked_public"])
+def test_private_read_invalid_inode_is_not_retried(tmp_path, private_open_race, invalid):
+    path = tmp_path / "state.json"
+    replacements = []
+    if invalid == "directory":
+        path.mkdir(mode=0o700)
+    else:
+        _private_bytes(path, b"preserve")
+        if invalid == "hardlink":
+            os.link(path, tmp_path / "alias")
+        else:
+            path.chmod(0o640)
+        if invalid == "unlinked_public":
+            replacements.append(_private_bytes(tmp_path / "replacement", b"new"))
+    attempts = private_open_race(path, replacements)
+    with pytest.raises(ValueError, match="^local state must be private and owned by the current user$"):
+        files.read_private(path)
+    assert len(attempts) == 1
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
+def test_private_exclusive_create_does_not_retry_replaced_inode(tmp_path, private_open_race):
+    path = tmp_path / "new.lock"
+    replacement = _private_bytes(tmp_path / "replacement", b"preserve")
+    attempts = private_open_race(path, [replacement])
+    with pytest.raises(ValueError, match="^local state must be private and owned by the current user$"):
+        files.open_private_file(path, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_TRUNC)
+    assert len(attempts) == 1
+    assert path.read_bytes() == b"preserve"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
+@pytest.mark.parametrize("existing", [False, True])
+def test_private_lock_open_retries_replaced_inode(tmp_path, private_open_race, existing):
+    path = tmp_path / "service.lock"
+    if existing:
+        _private_bytes(path, b"old")
+    replacement = _private_bytes(tmp_path / "replacement", b"new")
+    attempts = private_open_race(path, [replacement])
+    fd = files.open_private_file(path, os.O_RDWR | os.O_CREAT)
+    try:
+        assert os.fstat(fd).st_ino == path.stat().st_ino
+        assert os.read(fd, 100) == b"new"
+        files.lock(fd, blocking=False)
+        files.unlock(fd)
+        os.write(fd, b" writable")
+    finally:
+        os.close(fd)
+    assert len(attempts) == 2
+    assert path.read_bytes() == b"new writable"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
+def test_private_truncate_only_changes_validated_inode(tmp_path, private_open_race):
+    path = _private_bytes(tmp_path / "service.log", b"preserve old")
+    replacement = _private_bytes(tmp_path / "replacement", b"truncate new")
+    attempts = private_open_race(path, [replacement])
+    old = os.open(path, os.O_RDONLY)
+    try:
+        fd = files.open_private_file(path, os.O_RDWR | os.O_TRUNC)
+        try:
+            assert os.fstat(fd).st_ino == path.stat().st_ino
+            assert os.fstat(fd).st_size == 0
+            assert os.fstat(old).st_nlink == 0
+            assert os.read(old, 100) == b"preserve old"
+            os.write(fd, b"new log")
+        finally:
+            os.close(fd)
+    finally:
+        os.close(old)
+    assert len(attempts) == 2
+    assert path.read_bytes() == b"new log"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX openat create-race regression")
 @pytest.mark.parametrize("name", ["launcher.lock", "task-daemon.lock"])
 def test_concurrent_creator_does_not_report_missing_private_lease(tmp_path, monkeypatch, name):

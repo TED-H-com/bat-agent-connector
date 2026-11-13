@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- Reading the Connector's private local state no longer fails as "not private"
+  when the Connector replaces that file at the same moment, for example while
+  the desktop app checks a service that is starting.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API
