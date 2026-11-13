@@ -13,7 +13,7 @@
   "capabilities": {
     "managed_installation": {
       "installation_id": "fixture-installation",
-      "runtime_version": "0.2.18",
+      "runtime_version": "0.2.19",
       "background": true
     },
     "desktop_identity": {
@@ -27,9 +27,9 @@
     ],
     "api_version": 1,
     "contract_version": "2026-10-08",
-    "connector": "0.2.18",
+    "connector": "0.2.19",
     "build": {
-      "version": "0.2.18",
+      "version": "0.2.19",
       "commit": null,
       "source": "package"
     },
@@ -957,6 +957,12 @@
         "allowed": false
       },
       {
+        "action": "pm.wip_policy.save",
+        "scope": "manage",
+        "summary": "Save advisory workspace WIP policy without changing admission",
+        "allowed": false
+      },
+      {
         "action": "pm.work_input.defer",
         "scope": "manage",
         "summary": "Retain an unsent Work instruction as an Idea",
@@ -1375,6 +1381,7 @@
             "pm.sprint.cancel",
             "pm.sprint.close",
             "pm.thread.rename",
+            "pm.wip_policy.save",
             "pm.work_batch.evidence.record",
             "pm.workload.capture",
             "pm.workspace.adapter.select",
@@ -1662,6 +1669,23 @@
           ],
           "existing_sessions": "continue_under_original_authority"
         },
+        "workspace_wip": {
+          "version": 1,
+          "read": "pm_workspace_wip_get",
+          "action": "pm.wip_policy.save",
+          "modes": [
+            "advisory",
+            "disabled"
+          ],
+          "enforcement": false,
+          "counting_basis": "work_commitments_v1",
+          "bounds": {
+            "works": 10000,
+            "contributing_records": 50000,
+            "per_work_history": 500,
+            "per_execution_direct_inputs": 500
+          }
+        },
         "work_profiles": {
           "version": 1,
           "contract": "work-profile-readiness/v1",
@@ -1841,6 +1865,30 @@
           "max_candidates": 20,
           "max_requirements": 20
         },
+        "brief_export": {
+          "formats": [
+            "markdown",
+            "html",
+            "svg"
+          ],
+          "locales": [
+            "en",
+            "zh-TW"
+          ],
+          "renderer_version": 4
+        },
+        "follow_up_prepare": true,
+        "guided_sprint_review": {
+          "version": 1,
+          "fixed_results": true,
+          "sourced_feedback": true,
+          "governance_decisions": true,
+          "planning_source": true
+        },
+        "kanban": true,
+        "spec_sources": true,
+        "meetings": true,
+        "dispatch": false,
         "roadmap_report": {
           "version": 1,
           "read": "pm_roadmap_report_get",
@@ -1869,31 +1917,7 @@
           "unicode_version": "15.1.0",
           "materialization": false,
           "native_save": false
-        },
-        "brief_export": {
-          "formats": [
-            "markdown",
-            "html",
-            "svg"
-          ],
-          "locales": [
-            "en",
-            "zh-TW"
-          ],
-          "renderer_version": 4
-        },
-        "follow_up_prepare": true,
-        "guided_sprint_review": {
-          "version": 1,
-          "fixed_results": true,
-          "sourced_feedback": true,
-          "governance_decisions": true,
-          "planning_source": true
-        },
-        "kanban": true,
-        "spec_sources": true,
-        "meetings": true,
-        "dispatch": false
+        }
       },
       "project_dispatch": {
         "version": 1,

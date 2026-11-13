@@ -645,17 +645,17 @@ jobs:
         working-directory: .
         timeout-minutes: 8
         run: uv run --locked --extra dev --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --previous-source .upgrade-baseline --receipt desktop/test-results/packaged-core-upgrade.json
-      - name: Check out the latest stable core upgrade baseline (0.2.17)
+      - name: Check out the latest stable core upgrade baseline (0.2.18)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 0399db5a7b647486126c9bf7bb5900c40dc54ea7
+          ref: e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270
           path: .upgrade-current-stable
           persist-credentials: false
       - name: Build the latest stable core from its own locked environment
         working-directory: .upgrade-current-stable
         timeout-minutes: 8
         env:
-          BATC_BUILD_COMMIT: 0399db5a7b647486126c9bf7bb5900c40dc54ea7
+          BATC_BUILD_COMMIT: e39b4c5ea3b6fb9faf3ccf3d34b1838f6a372270
         run: uv run --python 3.13 --locked --extra desktop-build python desktop/scripts/build-managed-runtime.py
       - name: Latest stable packaged core upgrade retains identity, workspace and original intents
         working-directory: .

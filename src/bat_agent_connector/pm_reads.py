@@ -81,6 +81,7 @@ FIELDS = {
     "pm_governance_list": ("workspace_id", "kind", "after", "limit"),
     "pm_governance_get": ("workspace_id", "record_id"),
     "pm_governance_history_list": ("workspace_id", "record_id", "after", "limit"),
+    "pm_workspace_wip_get": ("workspace_id", "policy_revision"),
     "pm_kanban_get": ("workspace_id", "project_id", "after", "limit"),
     "pm_kanban_card_get": ("workspace_id", "work_item_id"),
     "pm_meetings_list": ("workspace_id", "sprint_id", "after", "limit"),
@@ -359,6 +360,9 @@ def read(ops, principal, method, params):
         if method == "pm_governance_list":
             return pm_governance.list_records(ops, principal, workspace_id, kind=params.get("kind"), **page)
         return pm_governance.list_history(ops, principal, workspace_id, params.get("record_id"), **page)
+    if method == "pm_workspace_wip_get":
+        from . import pm_workspace_wip
+        return pm_workspace_wip.get_wip(ops, principal, workspace_id, policy_revision=params.get("policy_revision"))
     if method in {"pm_kanban_get", "pm_kanban_card_get"}:
         from . import pm_kanban
         if method == "pm_kanban_card_get":
@@ -467,6 +471,7 @@ def read(ops, principal, method, params):
             pm_runtime,
             pm_work_follow_up,
             pm_work_profiles,
+            pm_workspace_wip,
             pm_worktree,
         )
         workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
@@ -512,6 +517,7 @@ def read(ops, principal, method, params):
                 "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,
                     "adoption_scopes": ["observe", "manage", "start"], "adoption_role": "owner"},
                 "work_attempt_results": pm_attempt_result_reads.capabilities(ops),
+                **({"workspace_wip": wip_capability} if (wip_capability := pm_workspace_wip.capabilities(ops)) is not None else {}),
                 "work_profiles": pm_work_profiles.capabilities(ops),
                 "work_follow_up": pm_work_follow_up.capabilities(ops),
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)

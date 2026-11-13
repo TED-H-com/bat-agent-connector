@@ -3409,6 +3409,7 @@ var init_global_strings = __esmMin((() => {
 			action_pm_thread_plan: "Plan discussion",
 			action_pm_thread_plan_revise: "Revise discussion plan",
 			action_pm_thread_rename: "Rename discussion",
+			action_pm_wip_policy_save: "Save WIP limit policy",
 			action_pm_work_bind: "Bind work",
 			action_pm_work_batch_evidence_record: "Record work-batch evidence",
 			action_pm_work_batch_start: "Start work batch",
@@ -3622,6 +3623,7 @@ var init_global_strings = __esmMin((() => {
 			action_pm_thread_plan: "規劃討論",
 			action_pm_thread_plan_revise: "修訂討論計畫",
 			action_pm_thread_rename: "重新命名討論",
+			action_pm_wip_policy_save: "儲存 WIP 上限政策",
 			action_pm_work_bind: "綁定工作",
 			action_pm_work_batch_evidence_record: "記錄工作批次證據",
 			action_pm_work_batch_start: "開始工作批次",
@@ -9092,6 +9094,67 @@ var init_pm_meetings_strings = __esmMin((() => {
 	pmMeetingStrings = {
 		en: {
 			...pmPanelStrings.en,
+			pm_review_available_step: "Available next step: {step}",
+			pm_review_decision_source: "Recorded Sprint Review decision",
+			pm_review_clear_sources: "Clear this source selection",
+			pm_review_no_decision: "No recorded governance decision is available as a Planning source.",
+			pm_review_list_discussions: "Choose a discussion source",
+			pm_review_list_intakes: "Choose a Follow-up intake",
+			pm_review_none: "No completion claim",
+			pm_review_claimed_done: "Claimed done",
+			pm_review_reported_blocker: "Reported blocker",
+			pm_review_assessment: "Exact acceptance assessment",
+			pm_review_intake: "Follow-up intake",
+			pm_review_read_follow_up: "Read follow-up issues",
+			pm_review_await_owner: "Awaiting the responsible owner’s governance decision.",
+			pm_review_guide: "Guide Sprint Review",
+			pm_review_step_1: "Fix context",
+			pm_review_step_2: "Inspect outcomes",
+			pm_review_step_3: "Hear feedback",
+			pm_review_step_4: "Choose direction",
+			pm_review_step_5: "Record Review",
+			pm_review_step_6: "Optional next Planning",
+			pm_review_outcomes_prompt: "What met the Goal, and what remains unsupported?",
+			pm_review_feedback_prompt: "What did stakeholders learn or need to change?",
+			pm_review_direction_prompt: "Retain, change or reject the direction; name an owner and a verifiable follow-up.",
+			pm_review_reported: "Reported completion",
+			pm_review_verification: "Verification",
+			pm_review_unassessed: "Unassessed",
+			pm_review_see_original_criterion_proofs: "See original criterion proofs in Details",
+			pm_review_historical: "Historical feedback: already superseded when selected",
+			pm_review_draft_only: "Draft only; scope not adopted; work not started",
+			pm_review_planning: "Request next Planning draft",
+			pm_review_complete_first: "Record the Review before requesting a Planning draft.",
+			pm_review_more_gaps: "Unresolved items: {count}. Show all sources",
+			pm_review_results: "Select exact Results",
+			pm_review_selection_limit: "Select at most 20 sources in each collection.",
+			pm_review_work: "Work whose Results to inspect",
+			pm_review_choose: "Choose a source",
+			pm_review_result: "Collected Result",
+			pm_review_partial_results: "Only the bounded Attempt list is shown; older Result browsing is outside this guide.",
+			pm_review_fallback: "Original source unavailable",
+			pm_review_thread: "Discussion source",
+			pm_review_read_feedback: "Read feedback sources",
+			pm_review_read_issues: "Read unresolved governance sources",
+			pm_review_follow_ids: "Associated follow-ups",
+			pm_review_gap_result_not_selected: "No Result selected",
+			pm_review_gap_acceptance_missing: "Acceptance evidence missing",
+			pm_review_gap_dod_unassessed: "dod — unassessed",
+			pm_review_gap_verification_missing: "Verification missing",
+			pm_review_gap_original_binding_differs: "Original binding differs",
+			pm_review_gap_unresolved_follow_up: "Follow-up unresolved",
+			pm_review_gap_unresolved_governance: "Governance issue unresolved",
+			pm_review_gap_no_visible_explicit_requirement_relation: "Requirement relation unavailable",
+			pm_review_gap_assessment_not_applicable: "Assessment inapplicable",
+			pm_review_gap_dod_missing: "DoD missing",
+			pm_review_gap_result_coverage_incomplete: "Result coverage incomplete",
+			pm_review_gap_acceptance_accepted: "acceptance — accepted",
+			pm_review_gap_dod_accepted: "dod — accepted",
+			pm_review_gap_acceptance_rejected: "acceptance — rejected",
+			pm_review_gap_dod_rejected: "dod — rejected",
+			pm_review_gap_acceptance_unassessed: "acceptance — unassessed",
+			pm_review_gap_acceptance_not_defined: "acceptance — not_defined",
+			pm_review_gap_dod_not_defined: "dod — not_defined",
 			pm_meeting_details: "Details",
 			pm_meeting_actions: "Record",
 			pm_meeting_title: "Sprint discussions",
@@ -9201,6 +9264,67 @@ var init_pm_meetings_strings = __esmMin((() => {
 		},
 		"zh-TW": {
 			...pmPanelStrings["zh-TW"],
+			pm_review_available_step: "可進行的下一步：{step}",
+			pm_review_decision_source: "已記錄的衝刺成果檢視決策",
+			pm_review_clear_sources: "清除此組來源選擇",
+			pm_review_no_decision: "沒有已記錄的治理決策可作為規劃來源。",
+			pm_review_list_discussions: "選擇討論來源",
+			pm_review_list_intakes: "選擇追蹤匯入",
+			pm_review_none: "未聲稱完成",
+			pm_review_claimed_done: "聲稱完成",
+			pm_review_reported_blocker: "回報阻礙",
+			pm_review_assessment: "原始驗收評估",
+			pm_review_intake: "追蹤匯入",
+			pm_review_read_follow_up: "讀取追蹤問題",
+			pm_review_await_owner: "等待實際擁有者記錄治理決策。",
+			pm_review_guide: "引導衝刺成果檢視",
+			pm_review_step_1: "固定脈絡",
+			pm_review_step_2: "檢視成果",
+			pm_review_step_3: "聆聽回饋",
+			pm_review_step_4: "選擇方向",
+			pm_review_step_5: "記錄成果檢視",
+			pm_review_step_6: "選擇是否進行下一次規劃",
+			pm_review_outcomes_prompt: "哪些成果達成目標，哪些仍缺乏證據？",
+			pm_review_feedback_prompt: "利害關係人學到了什麼，或有哪些需求改變？",
+			pm_review_direction_prompt: "維持、調整或拒絕方向；指定負責人與可核對的追蹤事項。",
+			pm_review_reported: "回報完成狀態",
+			pm_review_verification: "驗證",
+			pm_review_unassessed: "尚未評估",
+			pm_review_see_original_criterion_proofs: "在詳細資訊中查看原始準則證據",
+			pm_review_historical: "歷史回饋：選取時已被後續輸入取代",
+			pm_review_draft_only: "僅建立草稿；尚未採用範圍；尚未啟動工作",
+			pm_review_planning: "要求下一次規劃草稿",
+			pm_review_complete_first: "先記錄成果檢視，再要求規劃草稿。",
+			pm_review_more_gaps: "未解事項：{count}。顯示所有來源",
+			pm_review_results: "選擇固定成果",
+			pm_review_selection_limit: "每組來源最多選擇 20 項。",
+			pm_review_work: "要檢視成果的工作",
+			pm_review_choose: "選擇來源",
+			pm_review_result: "已收集的成果",
+			pm_review_partial_results: "僅顯示有上限的嘗試清單；舊成果目錄瀏覽不在此引導範圍。",
+			pm_review_fallback: "原始來源無法讀取",
+			pm_review_thread: "討論來源",
+			pm_review_read_feedback: "讀取回饋來源",
+			pm_review_read_issues: "讀取未解治理來源",
+			pm_review_follow_ids: "關聯追蹤事項",
+			pm_review_gap_result_not_selected: "尚未選擇成果",
+			pm_review_gap_acceptance_missing: "缺少驗收證據",
+			pm_review_gap_dod_unassessed: "完成定義：尚未評估",
+			pm_review_gap_verification_missing: "缺少驗證",
+			pm_review_gap_original_binding_differs: "原始綁定不同",
+			pm_review_gap_unresolved_follow_up: "追蹤事項未解決",
+			pm_review_gap_unresolved_governance: "治理事項未解決",
+			pm_review_gap_no_visible_explicit_requirement_relation: "需求關聯無法讀取",
+			pm_review_gap_assessment_not_applicable: "評估不適用",
+			pm_review_gap_dod_missing: "缺少完成定義",
+			pm_review_gap_result_coverage_incomplete: "成果涵蓋不完整",
+			pm_review_gap_acceptance_accepted: "驗收：通過",
+			pm_review_gap_dod_accepted: "完成定義：通過",
+			pm_review_gap_acceptance_rejected: "驗收：未通過",
+			pm_review_gap_dod_rejected: "完成定義：未通過",
+			pm_review_gap_acceptance_unassessed: "驗收：尚未評估",
+			pm_review_gap_acceptance_not_defined: "驗收：未定義",
+			pm_review_gap_dod_not_defined: "完成定義：未定義",
 			pm_meeting_details: "詳細資訊",
 			pm_meeting_actions: "記錄",
 			pm_meeting_title: "衝刺討論",
@@ -20454,6 +20578,7 @@ var ACTIONS = {
 	"pm.thread.plan": "action_pm_thread_plan",
 	"pm.thread.plan.revise": "action_pm_thread_plan_revise",
 	"pm.thread.rename": "action_pm_thread_rename",
+	"pm.wip_policy.save": "action_pm_wip_policy_save",
 	"pm.work.bind": "action_pm_work_bind",
 	"pm.work_batch.evidence.record": "action_pm_work_batch_evidence_record",
 	"pm.work_batch.start": "action_pm_work_batch_start",
@@ -25636,6 +25761,445 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 		container,
 		loadList
 	};
+}
+//#endregion
+//#region src/pm-sprint-review-state.js
+var hasSprintReview = (caps) => caps?.features?.pm_workspaces?.guided_sprint_review?.version === 1;
+function reviewStep(detail, governance = []) {
+	if (!detail?.context) return 1;
+	if (detail.completion) return 6;
+	const draft = detail.draft?.document;
+	if (!draft?.guided_review) return 2;
+	if (!draft.guided_review.feedback.length) return 3;
+	if (!draft.output.next_steps.length || (draft.decisions || []).some((decision) => !governance.some((row) => row.revision?.action === "pm.governance.decide" && Object.entries(reviewProposal(detail, decision.id)).every(([key, value]) => row.record.context.review_proposal_ref?.[key] === value)))) return 4;
+	return 5;
+}
+var reviewPrompts = (gaps) => ({
+	shown: gaps.slice(0, 3),
+	remaining: Math.max(0, gaps.length - 3)
+});
+function reviewProposal(detail, decisionId) {
+	if (!detail?.draft?.document.guided_review || !detail.draft.document.decisions.some((row) => row.id === decisionId)) return null;
+	return {
+		meeting_id: detail.meeting.meeting_id,
+		draft_revision_id: detail.draft.revision_id,
+		draft_digest: detail.draft.document_digest,
+		decision_id: decisionId
+	};
+}
+function reviewInputSource(detail, decisionId) {
+	if (!detail?.completion?.document.guided_review || !detail.completion.document.decisions.some((row) => row.id === decisionId) || !detail.completion.document.governance_decisions?.some((row) => row.decision_id === decisionId)) return null;
+	return {
+		kind: "sprint_review_decision",
+		meeting_id: detail.meeting.meeting_id,
+		completion_id: detail.completion.completion_id,
+		completion_digest: detail.completion.document_digest,
+		decision_id: decisionId
+	};
+}
+var emptyReviewBasis = () => ({
+	version: 1,
+	results: [],
+	feedback_items: [],
+	governance_revision_ids: [],
+	follow_up_ref: null
+});
+var reviewReferenceKey = (reference) => JSON.stringify(reference === null ? null : Object.fromEntries(Object.keys(reference).sort().map((key) => [key, reference[key]])));
+function reviewPromptKeys(detail, governance = []) {
+	if (detail?.completion) return [];
+	const draft = detail?.draft?.document, fixed = draft?.guided_review;
+	return [
+		!fixed || fixed.gaps?.length ? "pm_review_outcomes_prompt" : null,
+		!fixed?.feedback?.length ? "pm_review_feedback_prompt" : null,
+		!fixed || !draft.output.next_steps.length || (draft.decisions || []).some((decision) => !governance.some((row) => row.revision?.action === "pm.governance.decide" && Object.entries(reviewProposal(detail, decision.id) || { missing: true }).every(([key, value]) => row.record.context.review_proposal_ref?.[key] === value))) ? "pm_review_direction_prompt" : null
+	].filter(Boolean);
+}
+function reviewRequirementLabel(snapshot, requirement, fallback) {
+	const baseline = snapshot?.baseline;
+	if (!requirement.plan_revision_id || requirement.plan_revision_id !== baseline?.document_revision) return fallback;
+	return baseline.document?.requirements?.find((row) => row.id === requirement.requirement_id)?.text || fallback;
+}
+//#endregion
+//#region src/pm-sprint-review.js
+function reviewProjection({ h, t, detail, governance = [], onEdit, onComplete = null, onNote = null, canPlan = false }) {
+	const draft = detail.draft?.document, fixed = draft?.guided_review, context = detail.context.document, next = reviewStep(detail, governance);
+	const text = (value) => h("p", { class: "pm-note-text" }, value);
+	const exact = (value) => disclosure({
+		label: t("pm_meeting_details"),
+		body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(value, null, 2))
+	});
+	const section = (number, body) => sectionCard({ body: h("section", { "data-pm-review-step": number }, h("h3", {}, `${number}. ${t("pm_review_step_" + number)}`), body) });
+	const edit = () => onEdit ? button({
+		variant: "secondary",
+		label: t("pm_meeting_edit_draft"),
+		onClick: onEdit
+	}) : "";
+	const promptKeys = reviewPromptKeys(detail, governance);
+	const prompt = (key) => onEdit && promptKeys.includes(key) ? text(t(key)) : "";
+	const result = h("div", {
+		"data-pm-guided-review": "",
+		"data-pm-review-next": next
+	}, h("p", { class: "muted" }, t("pm_review_available_step", { step: t("pm_review_step_" + next) })), section(1, h("div", {}, h("h4", {}, t("pm_meeting_goal")), text(context.sprint_goal.text), h("h4", {}, t("pm_meeting_dod")), ...(context.artifacts.dod?.document.criteria || []).map((row) => text(row.text)), text(t("pm_meeting_source_frozen")), h("p", {}, t("pm_meeting_snapshot"), " · ", timeStamp(context.snapshot_ref.as_of)), exact({
+		snapshot: context.snapshot_ref,
+		context_revision_id: detail.context.context_revision_id,
+		coverage: detail.snapshot.coverage,
+		frozen_at: fixed?.frozen_at
+	}))), section(2, h("div", {}, prompt("pm_review_outcomes_prompt"), ...draft ? [text(draft.output.goal_review), ...(draft.output.outcomes || []).map((row) => text(row.observation))] : [], ...(fixed?.results || []).map((row) => h("article", { class: "pm-fact" }, text(t("pm_review_reported") + ": " + t("pm_review_" + (row.reported || "none"))), qualityFact({
+		h,
+		t,
+		fact: {
+			...row,
+			reference: row.reference.assessment_ref
+		}
+	}), text(t("pm_review_verification") + ": " + t("pm_review_" + row.verification)), exact({
+		reference: row.reference,
+		original_binding: row.binding_id,
+		plan: row.plan_ref,
+		requirements: row.requirements,
+		assessment: row.assessment
+	}))), ...(fixed?.requirements || []).map((row) => h("p", {}, reviewRequirementLabel(detail.snapshot, row, t("pm_meeting_unknown")), " · ", t("pq_" + row.acceptance), exact({
+		requirement_id: row.requirement_id,
+		plan_revision_id: row.plan_revision_id
+	}))), edit())), section(3, h("div", {}, prompt("pm_review_feedback_prompt"), ...(fixed?.feedback || []).map((row) => h("article", { class: "pm-fact" }, text(row.content), row.superseded_at_selection ? text(t("pm_review_historical")) : "", exact(row.reference))), ...(draft?.output.environment_changes || []).map((value) => text(t("pm_meeting_environment_changes") + ": " + value)), onNote ? button({
+		variant: "secondary",
+		label: t("pm_meeting_save_note"),
+		onClick: onNote
+	}) : "", edit())), section(4, h("div", {}, prompt("pm_review_direction_prompt"), ...(draft?.decisions || []).map((row) => h("article", { class: "pm-fact" }, text(row.text), text(row.rationale), text(t("pm_meeting_assigned", { actor: row.owner_actor || t("pm_meeting_unknown") })), exact({
+		id: row.id,
+		follow_up_ids: row.follow_up_ids
+	}))), ...(draft?.output.next_steps || []).map(text), ...(draft?.follow_ups || []).map((row) => h("article", { class: "pm-fact" }, text(row.text), text(t("pm_meeting_assigned", { actor: row.owner_actor })), text(row.expected_effect), text(row.verification))), disclosure({
+		label: t("pm_meeting_unresolved_questions"),
+		body: h("ul", {}, ...(draft?.unresolved_questions || []).map((value) => h("li", {}, value)))
+	}), edit())), section(5, h("div", {}, text(detail.completion?.document.discussion_summary || t("pm_meeting_complete_help")), !detail.completion && onComplete ? button({
+		variant: "primary",
+		label: t("pm_meeting_complete"),
+		onClick: onComplete
+	}) : "", ...(detail.completion?.document.governance_decisions || []).map((row) => h("p", {}, t("pm_meeting_recorded_by", { actor: row.recorded_by }), " · ", t("pm_gov_" + row.disposition), " · ", t("pm_meeting_assigned", { actor: row.owner_actor }))), exact(detail.completion ? {
+		completion_id: detail.completion.completion_id,
+		document_digest: detail.completion.document_digest
+	} : {}))), section(6, h("div", {}, text(t("pm_review_draft_only")), canPlan && detail.completion?.document.governance_decisions?.length ? h("a", {
+		class: "ui-button secondary",
+		href: discussHref({
+			workspaceId: detail.workspace_id,
+			refs: [{
+				kind: "meeting",
+				id: detail.meeting.meeting_id
+			}]
+		})
+	}, t("pm_review_planning")) : text(t(!canPlan ? "pm_panel_read_only" : detail.completion ? "pm_review_no_decision" : "pm_review_complete_first")))));
+	if (fixed?.gaps.length) {
+		const prompts = reviewPrompts(fixed.gaps);
+		result.prepend(sectionCard({ body: h("div", { "data-pm-review-gaps": "" }, h("h3", {}, t("pm_meeting_unresolved_questions")), disclosure({
+			label: t("pm_review_more_gaps", { count: prompts.shown.length + prompts.remaining }),
+			body: h("ul", {}, ...fixed.gaps.map((row) => h("li", {}, t("pm_review_gap_" + row.reason), exact({
+				issue_id: row.issue_id,
+				source_id: row.source_id
+			}))))
+		})) }));
+	}
+	return result;
+}
+function reviewSources({ h, t, api, alive, workspaceId, detail, field, getEditor, unavailable, valid }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const element = h("div", { "data-pm-review-sources": "" }), controls = [], displays = [];
+	let serial = 0, disposed = false;
+	const current = (ticket) => !disposed && ticket === serial && valid();
+	const basis = () => JSON.parse(field.value || JSON.stringify(emptyReviewBasis()));
+	const can = () => valid() && getEditor() && !getEditor().locked();
+	const change = (fn) => {
+		if (!can()) return;
+		const value = basis();
+		fn(value);
+		field.value = JSON.stringify(value);
+		getEditor().changed();
+		sync();
+	};
+	const fold = (key, body) => disclosure({
+		label: t(key),
+		body
+	});
+	const exact = (ref) => fold("pm_meeting_details", h("pre", { class: "pm-brief-proof" }, JSON.stringify(ref, null, 2)));
+	const fail = (error) => {
+		if (!disposed) {
+			dispose();
+			unavailable(error);
+		}
+	};
+	const check = (value) => {
+		if (value?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return value;
+	};
+	async function read(path) {
+		const data = await api("GET", endpoint + path);
+		alive();
+		return data;
+	}
+	function choice(holder, label, ref, key, identity, limit = 20) {
+		const box = h("input", { type: "checkbox" });
+		const selected = () => basis()[key].some((row) => identity(row) === identity(ref));
+		box.addEventListener("change", () => change((value) => {
+			const rows = value[key].filter((row) => identity(row) !== identity(ref));
+			if (box.checked) {
+				if (rows.length >= limit) throw Error(t("pm_review_selection_limit"));
+				rows.push(ref);
+			}
+			value[key] = rows;
+		}));
+		controls.push(() => {
+			box.checked = selected();
+			box.disabled = !can() || !box.checked && basis()[key].length >= limit;
+		});
+		holder.append(h("label", { class: "pm-fact-heading" }, box, h("span", { class: "pm-note-text" }, label)), exact(ref));
+	}
+	const sourceSection = (label) => {
+		const holder = h("div");
+		displays.push(holder);
+		element.append(fold(label, holder));
+		return holder;
+	};
+	const results = sourceSection("pm_review_results"), feedback = sourceSection("pm_meeting_feedback"), issues = sourceSection("pm_meeting_unresolved_questions");
+	for (const [holder, key] of [
+		[results, "results"],
+		[feedback, "feedback_items"],
+		[issues, "governance_revision_ids"]
+	]) {
+		const clear = button({
+			variant: "secondary",
+			label: t("pm_review_clear_sources"),
+			onClick: () => change((value) => {
+				value[key] = [];
+				if (key === "governance_revision_ids") value.follow_up_ref = null;
+			})
+		});
+		controls.push(() => {
+			clear.disabled = !can();
+		});
+		holder.append(clear);
+	}
+	const notes = (detail.notes || []).filter((row) => row.context_revision_id === detail.context.context_revision_id);
+	for (const row of notes) choice(feedback, row.content, {
+		id: row.note_id,
+		source_ref: {
+			kind: "meeting_note",
+			note_id: row.note_id
+		}
+	}, "feedback_items", (row) => reviewReferenceKey(row.source_ref));
+	const work = h("select", { "aria-label": t("pm_review_work") }, h("option", { value: "" }, t("pm_review_choose")), ...detail.context.document.selected_items.map((row) => h("option", { value: row.work_item_id }, row.title || detail.snapshot.work?.find((item) => item.work_item_id === row.work_item_id)?.title || t("pm_meeting_unknown"))));
+	results.append(h("label", {}, t("pm_review_work"), work));
+	const resultRows = h("div");
+	results.append(resultRows);
+	work.addEventListener("change", async () => {
+		const ticket = ++serial, id = work.value;
+		resultRows.replaceChildren();
+		if (!id) return;
+		try {
+			const page = check(await read(`/work/${encodeURIComponent(id)}/attempts?limit=20`));
+			if (!current(ticket) || work.value !== id) return;
+			if (page.next_cursor != null) resultRows.append(h("p", {}, t("pm_review_partial_results")));
+			for (const attempt of page.attempts || []) {
+				const data = check(await read(`/work-attempts/${encodeURIComponent(attempt.attempt_id)}/result`));
+				if (!current(ticket) || work.value !== id) return;
+				if (data.attempt_id !== attempt.attempt_id) throw Error(t("pm_scope_mismatch"));
+				if (!data.sources?.result_id) continue;
+				const ref = {
+					attempt_id: data.attempt_id,
+					result_id: data.sources.result_id,
+					digest: data.sources.digest,
+					assessment_ref: null
+				};
+				choice(resultRows, data.conversation?.latest_assistant_summary?.text || t("pm_review_result"), ref, "results", (row) => row.result_id);
+				resultRows.append(h("p", {}, t("pm_review_reported"), ": ", t("pm_review_" + (data.execution?.state_facets?.self_reported || "none"))), h("p", {}, t("pq_acceptance"), ": ", t("pq_unassessed")), exact({
+					verification: data.verification,
+					requirements: data.requirements
+				}));
+				const seen = new Set(), assessment = h("select", { "aria-label": t("pm_review_assessment") }, h("option", { value: "null" }, t("pq_unassessed")));
+				for (const item of data.requirements?.items || []) for (const row of item.assessments || []) {
+					const value = reviewReferenceKey(row.reference);
+					if (seen.has(value)) continue;
+					seen.add(value);
+					assessment.append(h("option", { value }, `${row.assessed_by} · ${timeText(row.assessed_at)} · ${t(row.applicable === true ? "wres_req_applicable" : row.applicable === false ? "wres_req_no_longer_applies" : "pq_fixed")}`));
+					resultRows.append(h("ul", {}, ...(row.original?.requirements || []).map((requirement) => h("li", {}, data.requirements.items.find((item) => item.requirement_id === requirement.requirement_id)?.text || t("pm_meeting_unknown"), " · ", t("pq_" + requirement.status)))), exact({
+						reference: row.reference,
+						proof: row.original
+					}));
+				}
+				const syncAssessment = () => {
+					assessment.disabled = !can() || !basis().results.some((row) => row.result_id === ref.result_id);
+					assessment.value = reviewReferenceKey(basis().results.find((row) => row.result_id === ref.result_id)?.assessment_ref || null);
+				};
+				assessment.addEventListener("change", () => change((value) => {
+					const row = value.results.find((row) => row.result_id === ref.result_id);
+					if (row) row.assessment_ref = JSON.parse(assessment.value);
+				}));
+				controls.push(syncAssessment);
+				resultRows.append(h("label", {}, t("pm_review_assessment"), assessment));
+			}
+			sync();
+		} catch (error) {
+			if (current(ticket)) fail(error);
+		}
+	});
+	const thread = h("select", { "aria-label": t("pm_review_thread") }, h("option", { value: "" }, t("pm_review_choose")));
+	const listThreads = button({
+		variant: "secondary",
+		label: t("pm_review_list_discussions"),
+		onClick: async () => {
+			const ticket = ++serial;
+			threadRows.replaceChildren();
+			thread.replaceChildren(h("option", { value: "" }, t("pm_review_choose")));
+			try {
+				const page = check(await read("/threads?limit=20"));
+				if (!current(ticket)) return;
+				for (const row of page.threads || []) thread.append(h("option", { value: row.thread_id }, row.title));
+				if (page.next_cursor != null) threadRows.append(h("p", {}, t("pm_meeting_partial")));
+			} catch (error) {
+				if (current(ticket)) fail(error);
+			}
+		}
+	});
+	const threadRows = h("div");
+	feedback.append(listThreads, h("label", {}, t("pm_review_thread"), thread), button({
+		variant: "secondary",
+		label: t("pm_review_read_feedback"),
+		onClick: async () => {
+			const id = thread.value, ticket = ++serial;
+			threadRows.replaceChildren();
+			if (!/^pmt_[0-9a-f]{32}$/.test(id)) {
+				threadRows.append(h("p", {}, t("pm_scope_mismatch")));
+				return;
+			}
+			try {
+				const data = await read(`/threads/${id}`);
+				if (!current(ticket) || thread.value !== id) return;
+				check(data.thread);
+				if (data.thread?.thread_id !== id) throw Error(t("pm_scope_mismatch"));
+				if (data.coverage?.inputs_truncated || data.coverage?.history_truncated) threadRows.append(h("p", {}, t("pm_meeting_partial")));
+				for (const row of [...data.inputs || [], ...data.input_history || []]) choice(threadRows, row.value, {
+					id: row.input_id,
+					source_ref: {
+						kind: "discussion_input",
+						thread_id: id,
+						input_id: row.input_id,
+						operation_id: row.operation_id
+					}
+				}, "feedback_items", (row) => reviewReferenceKey(row.source_ref));
+				sync();
+			} catch (error) {
+				if (current(ticket)) fail(error);
+			}
+		}
+	}), threadRows);
+	const governanceRows = h("div");
+	issues.append(governanceRows);
+	issues.append(button({
+		variant: "secondary",
+		label: t("pm_review_read_issues"),
+		onClick: async () => {
+			const ticket = ++serial;
+			try {
+				const page = check(await read("/governance?after=0&limit=20"));
+				if (!current(ticket)) return;
+				const rows = h("div");
+				governanceRows.replaceChildren(rows);
+				if (page.next_cursor != null) rows.append(h("p", {}, t("pm_meeting_partial")));
+				for (const row of page.records || []) choice(rows, row.revision.document.title, row.revision.revision_id, "governance_revision_ids", (id) => id);
+				sync();
+			} catch (error) {
+				if (current(ticket)) fail(error);
+			}
+		}
+	}));
+	const intake = h("select", { "aria-label": t("pm_review_intake") }, h("option", { value: "" }, t("pm_review_choose"))), intakeRows = h("div");
+	issues.append(button({
+		variant: "secondary",
+		label: t("pm_review_list_intakes"),
+		onClick: async () => {
+			const ticket = ++serial;
+			intakeRows.replaceChildren();
+			intake.replaceChildren(h("option", { value: "" }, t("pm_review_choose")));
+			try {
+				const page = check(await read("/follow-ups?after=0&limit=20"));
+				if (!current(ticket)) return;
+				for (const row of page.intakes || []) intake.append(h("option", { value: row.intake_id }, `${t("pm_review_intake")} · ${new Date(row.created_at * 1e3).toISOString()}`));
+				if (page.next_cursor != null) intakeRows.append(h("p", {}, t("pm_meeting_partial")));
+			} catch (error) {
+				if (current(ticket)) fail(error);
+			}
+		}
+	}));
+	issues.append(h("label", {}, t("pm_review_intake"), intake), button({
+		variant: "secondary",
+		label: t("pm_review_read_follow_up"),
+		onClick: async () => {
+			const id = intake.value, ticket = ++serial;
+			intakeRows.replaceChildren();
+			if (!/^pmfu_[0-9a-f]{32}$/.test(id)) {
+				intakeRows.append(h("p", {}, t("pm_scope_mismatch")));
+				return;
+			}
+			try {
+				const data = check(await read(`/follow-ups/${id}`));
+				if (!current(ticket) || intake.value !== id) return;
+				if (data.intake?.intake_id !== id) throw Error(t("pm_scope_mismatch"));
+				for (const row of data.intake.document.issues) {
+					const box = h("input", { type: "checkbox" });
+					box.addEventListener("change", () => change((value) => {
+						const ref = value.follow_up_ref, ids = ref?.intake_id === id ? ref.issue_ids.filter((key) => key !== row.issue_id) : [];
+						if (box.checked && ids.length < 20) ids.push(row.issue_id);
+						value.follow_up_ref = ids.length ? {
+							intake_id: id,
+							document_digest: data.intake.document_digest,
+							issue_ids: ids
+						} : null;
+					}));
+					controls.push(() => {
+						box.checked = basis().follow_up_ref?.intake_id === id && basis().follow_up_ref.issue_ids.includes(row.issue_id);
+						box.disabled = !can() || !box.checked && basis().follow_up_ref?.issue_ids.length >= 20;
+					});
+					intakeRows.append(h("label", { class: "pm-fact-heading" }, box, h("span", { class: "pm-note-text" }, row.question || row.text || row.title || detail.snapshot.work?.find((item) => item.work_item_id === row.work_item_id)?.title || t("pm_meeting_unknown"))), exact({
+						intake_id: id,
+						issue_id: row.issue_id
+					}));
+				}
+				sync();
+			} catch (error) {
+				if (current(ticket)) fail(error);
+			}
+		}
+	}), intakeRows);
+	thread.addEventListener("change", () => {
+		++serial;
+		threadRows.replaceChildren();
+	});
+	intake.addEventListener("change", () => {
+		++serial;
+		intakeRows.replaceChildren();
+	});
+	function sync() {
+		controls.forEach((update) => update());
+	}
+	function dispose() {
+		disposed = true;
+		++serial;
+		displays.forEach((node) => node.replaceChildren());
+		controls.length = 0;
+	}
+	return {
+		element,
+		sync,
+		dispose
+	};
+}
+function reviewDecisionProof({ h, t, source, expected }) {
+	if (!source) return "";
+	if (!expected || Object.entries(expected).some(([key, value]) => source.reference?.[key] !== value) || source.governance?.decision_id !== expected.decision_id) throw Error(t("pm_scope_mismatch"));
+	return disclosure({
+		label: t("pm_review_decision_source"),
+		body: h("div", { "data-pm-review-decision-source": "" }, h("p", { class: "pm-note-text" }, source.decision.text), h("p", { class: "pm-note-text" }, source.decision.rationale), h("p", {}, t("pm_meeting_recorded_by", { actor: source.governance.recorded_by }), " · ", t("pm_gov_" + source.governance.disposition)), h("p", {}, t("pm_meeting_assigned", { actor: source.governance.owner_actor })), ...(source.follow_ups || []).map((row) => h("p", { class: "pm-note-text" }, row.text, " · ", row.verification)), disclosure({
+			label: t("pm_meeting_details"),
+			body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(source.reference, null, 2))
+		}))
+	});
 }
 //#endregion
 //#region src/pm-effective-route.js
@@ -40084,7 +40648,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 //#endregion
 //#region src/pm-governance.js
 init_pm_governance_strings();
-function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => "" }) {
+function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => "", onReviewRecorded = null, onSourceFailure = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = [
 		"risk",
 		"assumption",
@@ -40095,6 +40659,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	];
 	let serial = 0, loaded = false, dirty = false, stale = false, signature = "", selectedId = "", model = null, forms = [], widgets = [];
 	let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
+	let proposalTicket = 0;
 	let createOpen = false, createBox = null, entries = [];
 	const createId = "pm-governance-create-" + crypto.randomUUID();
 	const actorLabel = (value) => panelActorLabel(t, value);
@@ -40104,6 +40669,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		if (/^pmgov_[0-9a-f]{32}$/.test(saved || "")) selectedId = saved;
 	} catch {}
 	const selectRecord = (value) => {
+		++proposalTicket;
 		selectedId = value;
 		try {
 			alive();
@@ -40223,14 +40789,23 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		review.hidden = !stale || !can();
 		review.disabled = !loaded;
 	}
-	function unavailable(error) {
+	const reviewSources = () => !hasSprintReview(caps()) ? [] : [model?.detail?.record.context.review_proposal_ref?.meeting_id, JSON.parse(createEditor?.fields.review_proposal_ref?.value || "null")?.meeting_id].filter(Boolean);
+	function unavailable(error, reviewLinked = hasSprintReview(caps()) && (model?.detail?.record.context.review_proposal_ref || createEditor?.fields.review_proposal_ref?.value && createEditor.fields.review_proposal_ref.value !== "null"), ids = reviewSources()) {
+		++serial;
 		loaded = false;
 		++sourceTicket;
 		list.replaceChildren();
 		detail.replaceChildren();
 		editors.hidden = true;
+		if (reviewLinked) {
+			forms.forEach((editor) => editor.dispose?.());
+			clearEditors();
+			model = null;
+			signature = "";
+		}
 		update();
 		status.replaceChildren(errorBox(error, { within: status }));
+		if (reviewLinked && ids.length && ([403, 404].includes(error.status) || error.code === "FORBIDDEN" || /^PM_.*SOURCE_UNAVAILABLE$/.test(error.code || ""))) onSourceFailure?.(error, ids);
 	}
 	async function currentWorkspace() {
 		const value = await api("GET", endpoint);
@@ -40269,7 +40844,9 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		if (!loaded || !createEditor) return;
 		createOpen = true;
 		update();
-		createEditor.box.querySelector("input:not([type=\"hidden\"]), select, textarea")?.focus();
+		const ref = createEditor.fields.review_proposal_ref?.value;
+		const field = ref && ref !== "null" ? createEditor.fields.title : [...createEditor.box.querySelectorAll("input:not([type=\"hidden\"]), select, textarea")].find((node) => !node.disabled && node.getClientRects().length);
+		if (field && !field.disabled) field.focus();
 		createEditor.box.scrollIntoView({ block: "nearest" });
 	}
 	function localForm(options, rebase = false) {
@@ -40285,6 +40862,10 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		let editor;
 		editor = form({
 			...options,
+			reviewSources: () => {
+				const ref = options.action === "pm.governance.record" ? JSON.parse(options.fields.review_proposal_ref?.value || "null") : model?.detail?.record.record_id === options.target.record_id ? model.detail.record.context.review_proposal_ref : null;
+				return ref ? [ref.meeting_id] : [];
+			},
 			fields: {
 				...options.fields,
 				_baseline: baseline
@@ -40305,11 +40886,16 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				if (result?.workspace_id !== workspaceId || !/^pmgov_[0-9a-f]{32}$/.test(result.record_id)) invalid();
 				selectRecord(result.record_id);
 				await refresh(true);
+				if (model?.detail?.record.context.review_proposal_ref) await onReviewRecorded?.();
 				if (result.deduplicated) status.replaceChildren(note("pm_gov_deduplicated"));
 			}
 		});
 		if (rebase && !editor.locked()) editor.set("_baseline", expected);
 		if (!editor.locked() && baseline.value !== expected) stale = true;
+		editor.box.addEventListener("focusin", (event) => {
+			const field = Object.entries(editor.fields).find(([, node]) => node === event.target);
+			if (field) editor.lastFocusedField = field[0];
+		});
 		editor.box.addEventListener("input", () => {
 			dirty = true;
 		});
@@ -40590,6 +41176,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			fields.root_cause_key = input("pm_gov_root", { max: 120 });
 			fields.snapshot_id = select("pm_gov_snapshot", model.snapshots.map((row) => [row.snapshot_id, row.title || row.snapshot_id]), model.snapshots.at(-1)?.snapshot_id || "");
 		}
+		if (creating && hasSprintReview(caps())) fields.review_proposal_ref = hidden(null);
 		fields.review_at.type = "datetime-local";
 		const reviewValue = h("span", { class: "ui-meta" });
 		const showReview = () => {
@@ -40651,6 +41238,16 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				showReview();
 				inspect.disabled = !allowed() || stale || Boolean(editor?.locked());
 				driftHint.hidden = (creating ? fields.kind.value : existing.record.kind) !== "drift";
+				if (fields.review_proposal_ref) {
+					const ref = JSON.parse(fields.review_proposal_ref.value);
+					fields.owner_actor.readOnly = Boolean(ref);
+					fields.description.required = !ref;
+					if (ref) {
+						fields.kind.disabled = true;
+						fields.snapshot_id.disabled = true;
+						fields.description.closest("label")?.setAttribute("hidden", "");
+					}
+				}
 			},
 			params: (values) => {
 				const split = (value) => value.split(",").map((part) => part.trim()).filter(Boolean);
@@ -40667,6 +41264,14 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				};
 				delete result.related_ids;
 				delete result.distinction;
+				if (fields.review_proposal_ref) {
+					const ref = JSON.parse(values.review_proposal_ref);
+					delete result.review_proposal_ref;
+					if (ref) {
+						result.review_proposal_ref = ref;
+						delete result.description;
+					}
+				}
 				if (values.related_ids.trim() || values.distinction.trim()) result.disambiguation = {
 					record_ids: split(values.related_ids),
 					rationale: values.distinction
@@ -40698,14 +41303,40 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 						update();
 						return;
 					}
+					if (fields.review_proposal_ref) {
+						const ref = JSON.parse(fields.review_proposal_ref.value);
+						fields.description.required = !ref;
+						fields.description.hidden = Boolean(ref);
+						if (ref && !editor.locked()) {
+							const meeting = check(await api("GET", `${endpoint}/meetings/${ref.meeting_id}`));
+							alive();
+							if (ticket !== sourceTicket || !editor.box.isConnected) return;
+							if (meeting.meeting.meeting_id !== ref.meeting_id) invalid();
+							let fixed = meeting.draft, cursor = 0;
+							for (let page = 0; fixed?.revision_id !== ref.draft_revision_id && page < 20; page++) {
+								const history = check(await api("GET", `${endpoint}/meetings/${ref.meeting_id}/history/drafts?after=${cursor}&limit=50`));
+								alive();
+								if (ticket !== sourceTicket || !editor.box.isConnected) return;
+								if (history.meeting_id !== ref.meeting_id || history.kind !== "drafts") invalid();
+								fixed = history.records.find((row) => row.revision_id === ref.draft_revision_id);
+								if (fixed || history.next_cursor == null) break;
+								if (!Number.isSafeInteger(history.next_cursor) || history.next_cursor <= cursor) invalid();
+								cursor = history.next_cursor;
+							}
+							const decision = fixed?.document.decisions.find((row) => row.id === ref.decision_id);
+							if (fixed?.document_digest !== ref.draft_digest || !decision) throw Object.assign(Error(t("pm_gov_source_missing")), { status: 404 });
+							sourceStatus.append(text(decision.text), text(t("pm_meeting_assigned", { actor: decision.owner_actor })), fold("pm_gov_details", h("pre", { class: "pm-brief-proof" }, JSON.stringify(ref, null, 2))));
+						}
+					}
 					createSnapshot = result.snapshot;
 					affected.rebuild(sourceChoices(createSnapshot).filter((row) => row.kind === "requirement").map((row) => [row.id, sourceLabel(row.kind, row.source)]));
 					sourceSync = refsWidget(fields.source_refs, sourceHolder, createSnapshot, () => editor);
 					update();
 				} catch (error) {
 					if (ticket !== sourceTicket || !editor.box.isConnected) return;
-					if (error.status !== 404) {
-						unavailable(error);
+					const ref = JSON.parse(fields.review_proposal_ref?.value || "null");
+					if (error.status !== 404 || ref) {
+						unavailable(error, Boolean(ref), ref ? [ref.meeting_id] : []);
 						return;
 					}
 					try {
@@ -40829,7 +41460,8 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		clearEditors();
 		dirty = false;
 		stale = false;
-		if (model.detail) {
+		if (hasSprintReview(caps()) && model.detail?.record.context.review_proposal_ref) editors.append(documentView(model.detail.revision), decisionEditors(rebase), !owner() ? note("pm_review_await_owner") : "");
+		else if (model.detail) {
 			const finding = findingEditor(model.detail, rebase);
 			editors.append(withRegister ? h("strong", { "data-pm-governance-selected": selectedId }, model.detail.revision.document.title) : "", finding.element, decisionEditors(rebase), entryPoint(button({
 				variant: "secondary",
@@ -40903,6 +41535,15 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			} catch (error) {
 				if (ticket !== serial) return;
 				if (error.status !== 404) throw error;
+				const linked = [
+					current,
+					model?.detail?.record.record_id === selectedId ? model.detail : null,
+					...records.filter((row) => row.record.record_id === selectedId)
+				].map((row) => row?.record.context.review_proposal_ref?.meeting_id).filter(Boolean);
+				if (hasSprintReview(caps()) && linked.length) {
+					unavailable(error, true, linked);
+					return;
+				}
 				const withdrawn = selectedId;
 				detail.replaceChildren();
 				list.replaceChildren();
@@ -40959,6 +41600,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	}
 	async function openRef(ref, { form: requested = "revise" } = {}) {
 		if (ref.kind !== "governance") return;
+		++proposalTicket;
 		if (requested !== "record") {
 			if (!/^pmgov_[0-9a-f]{32}$/.test(ref.id || "")) return;
 			selectRecord(ref.id);
@@ -40976,11 +41618,53 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		(requested === "resolve" ? editor.fields.rationale : editor.box.querySelector("input:not([type=\"hidden\"]), select, textarea"))?.focus();
 		editor.box.scrollIntoView({ block: "nearest" });
 	}
+	async function openReviewProposal(ref, ownerActor, snapshotId) {
+		if (!hasSprintReview(caps())) return;
+		const previous = JSON.parse(createEditor?.fields.review_proposal_ref?.value || "null");
+		const same = previous && [
+			"meeting_id",
+			"draft_revision_id",
+			"draft_digest",
+			"decision_id"
+		].every((key) => previous[key] === ref[key]);
+		const name = createEditor?.lastFocusedField, field = createEditor?.fields[name];
+		const selection = same && !createEditor.locked() && typeof field?.selectionStart === "number" ? {
+			name,
+			start: field.selectionStart,
+			end: field.selectionEnd,
+			direction: field.selectionDirection
+		} : null;
+		const request = ++proposalTicket;
+		await refresh(true);
+		if (request !== proposalTicket || !loaded || !createEditor || createEditor.locked()) return;
+		for (const [key, value] of Object.entries({
+			review_proposal_ref: JSON.stringify(ref),
+			kind: "change",
+			owner_actor: ownerActor,
+			snapshot_id: snapshotId,
+			description: ""
+		})) createEditor.set(key, value);
+		await refreshCreateSource();
+		if (request !== proposalTicket || !loaded || !createEditor) return;
+		showCreate();
+		const restored = selection && createEditor.fields[selection.name];
+		if (restored && !restored.disabled && !createEditor.locked()) {
+			for (let parent = restored.parentElement; parent && parent !== element; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
+			restored.focus();
+			restored.setSelectionRange(selection.start, selection.end, selection.direction);
+		}
+	}
 	return {
 		element,
 		refresh,
 		openRef,
+		openReviewProposal,
 		relabel,
+		withdraw: unavailable,
+		withdrawReview: (error, ids) => {
+			if (reviewSources().some((id) => ids.includes(id))) unavailable(error);
+			else if (!loaded) ++serial;
+		},
 		requirementIds: () => model ? [...model.records.flatMap((row) => row.revision.document.affected_requirement_ids), ...forms.flatMap((editor) => editor.fields?.affected_requirement_ids?.value.split(",").map((value) => value.trim()).filter(Boolean) || [])] : [],
 		namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id && Array.isArray(model.plan.document?.requirements) ? model.plan : void 0
 	};
@@ -45607,7 +46291,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 }
 //#endregion
 //#region src/pm-sprints.js
-function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, qualitySelection = null }) {
+function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, qualitySelection = null, onGuideReview = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let model = null, signature = "", selectedId = "", serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
 	let forms = [], titles = new Map();
@@ -45792,6 +46476,11 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			developers.append(mono(id));
 		});
 		view.append(h("div", { class: "pm-sprint-answer" }, h("div", { class: "pm-tool-head" }, sprintPill(sprint.status), data.quality === "fixed_original_assessments" ? null : sprintPill("not_assessed")), h("p", { class: "pm-sprint-goal" }, data.goal.text), items.length ? h("ul", { class: "pm-sprint-work" }, ...items.map((item) => h("li", { "data-pm-sprint-work": item.work_item_id }, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item))))) : note("pm_sprint_no_work"), h("p", { class: "pm-sprint-period" }, absoluteStamp(def.starts_at), " – ", absoluteStamp(def.ends_at)), data.timebox_elapsed ? note("pm_sprint_elapsed") : null, fold("pm_sprint_details", h("div", {}, h("p", { class: "muted" }, t(def.mode === "scrum" ? "pm_sprint_scrum" : "pm_sprint_personal")), h("p", {}, t("pm_sprint_owner"), ": ", t("pm_sprint_role_owner"), " ", mono(def.owner_actor)), h("p", {}, t("pm_sprint_developers"), ": ", developers), h("p", {}, t("pm_sprint_capacity"), ": ", def.capacity_note), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), data.quality === "fixed_original_assessments" ? null : note("pm_sprint_quality"), h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, mono(def.product_goal_revision_id)), h("p", {}, mono(def.dod_revision_id)), h("p", {}, mono(def.backlog_revision_id))))));
+		if (hasSprintReview(caps()) && onGuideReview) view.append(button({
+			variant: "secondary",
+			label: t("pm_review_guide"),
+			onClick: () => onGuideReview(sprint.sprint_id)
+		}));
 		const ticket = serial, terminal = ["closed", "cancelled"].includes(sprint.status);
 		let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
 		const closure = h("section", {
@@ -49457,7 +50146,7 @@ function workspaceKanban({ t, api, alive, serverId, namespace = "", workspaceId,
 //#endregion
 //#region src/pm-meetings.js
 init_pm_governance_strings();
-function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
+function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, onGovernance = null, onSourceFailure = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const navigationKey = `batc.pm.meeting-navigation.${namespace}.${workspaceId}.${caps()?.actor}`;
 	let navigation = {};
@@ -49466,7 +50155,8 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		if (saved && typeof saved === "object" && !Array.isArray(saved)) navigation = saved;
 	} catch {}
 	let model = null, selectedId = typeof navigation.meeting_id === "string" ? navigation.meeting_id : "", signature = "", serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
-	let forms = [], editorMeetingId = null;
+	let forms = [], editorMeetingId = null, sourcePicker = null, guidedSprint = null;
+	const guided = () => hasSprintReview(caps()) && model?.detail?.meeting.kind === "review";
 	let createOpen = false, createBox = null, entries = [];
 	const createId = "pm-meeting-create-" + crypto.randomUUID();
 	const actorLabel = (value) => panelActorLabel(t, value);
@@ -49480,6 +50170,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	const choose = h("select", {
 		"aria-label": t("pm_meeting_choose"),
 		onchange: () => {
+			guidedSprint = null;
 			selectedId = choose.value;
 			remember("meeting_id", selectedId);
 			refresh(true);
@@ -49593,13 +50284,25 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		sync();
 		return slot;
 	}
+	const reviewMeetingIds = () => guided() && model.detail.meeting.meeting_id === selectedId ? [selectedId] : [];
 	function unavailable(error) {
+		const ids = reviewMeetingIds();
+		const review = guided();
+		++serial;
 		loaded = false;
 		update();
 		view.replaceChildren();
 		choose.replaceChildren();
 		editors.hidden = true;
+		if (review) {
+			sourcePicker?.dispose();
+			forms.forEach((editor) => editor.dispose?.());
+			editors.replaceChildren();
+			model = null;
+			signature = "";
+		}
 		status.replaceChildren(errorBox(error, { within: status }));
+		if (ids.length && ([403, 404].includes(error.status) || error.code === "FORBIDDEN" || /^PM_.*SOURCE_UNAVAILABLE$/.test(error.code || ""))) onSourceFailure?.(error, ids);
 	}
 	function localForm(config) {
 		const expected = JSON.stringify({
@@ -49611,8 +50314,10 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			value: expected
 		});
 		baseline.dataset.pmDefault = expected;
+		const ids = config.target.meeting_id === selectedId ? reviewMeetingIds() : [];
 		const editor = form({
 			...config,
+			reviewSources: () => ids,
 			fields: {
 				...config.fields,
 				_baseline: baseline
@@ -49807,6 +50512,36 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			return;
 		}
 		const context = detail.context.document;
+		if (guided()) {
+			const projection = reviewProjection({
+				h,
+				t,
+				detail,
+				governance: model.governance,
+				canPlan: can(),
+				onEdit: can() && detail.meeting.status === "draft" ? () => reveal("pm.meeting.draft") : null,
+				onComplete: owner() && detail.meeting.status === "draft" && detail.draft?.document.guided_review ? () => reveal("pm.meeting.complete") : null,
+				onNote: can() && detail.meeting.status === "draft" ? () => reveal("pm.meeting.note") : null
+			});
+			const direction = projection.querySelector("[data-pm-review-step=\"4\"]");
+			for (const decision of !detail.completion && detail.draft?.document.guided_review ? detail.draft.document.decisions : []) {
+				const ref = reviewProposal(detail, decision.id), entry = (model.governance || []).find((row) => Object.entries(ref || {}).every(([key, value]) => row.record.context.review_proposal_ref?.[key] === value));
+				if (entry?.revision.document.decision) direction.append(h("p", {}, t("pm_meeting_recorded_by", { actor: entry.revision.document.decision.recorded_by }), " · ", t("pm_gov_" + entry.revision.document.decision.disposition), " · ", t("pm_meeting_assigned", { actor: entry.revision.document.owner_actor })));
+				else if (entry && role(caps()?.actor) !== "owner") direction.append(note("pm_review_await_owner"));
+				if (onGovernance && can() && (!entry || role(caps()?.actor) === "owner")) direction.append(button({
+					variant: "secondary",
+					label: t(entry ? "pm_gov_decide" : "pm_gov_new"),
+					onClick: () => onGovernance({
+						ref,
+						entry,
+						ownerActor: decision.owner_actor,
+						snapshotId: context.snapshot_ref.snapshot_id
+					})
+				}));
+			}
+			view.append(projection);
+			return;
+		}
 		const facts = h("div", {}, h("p", {}, context.sprint_definition.title), h("p", {}, t("pm_meeting_snapshot"), " · ", timeStamp(context.snapshot_ref.as_of)), source(context.snapshot_ref.snapshot_id), source(detail.context.context_revision_id), source(context.sprint_goal.revision_id), ...context.selected_items.map((item) => source(item.binding_id)), h("h4", {}, t("pm_meeting_dod")), h("ul", {}, ...context.artifacts.dod.document.criteria.map((item) => h("li", {}, item.text))), h("p", { class: "muted" }, t("pm_meeting_quality"), detail.completion ? " " + t("pm_meeting_completion_help") : ""), historyView(detail));
 		view.append(h("div", {
 			class: "pm-meeting-summary",
@@ -49829,7 +50564,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			class: "ui-button secondary ui-sm"
 		}, t("pm_meeting_add_" + key));
 		const holder = h("div", {}, rows, add);
-		let controls = [];
+		let controls = [], associations = [];
 		const change = (values) => {
 			if (!getEditor() || getEditor().locked() || !can() || stale) return;
 			field.value = JSON.stringify(values);
@@ -49838,11 +50573,15 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		};
 		function render() {
 			controls = [];
+			associations = [];
 			rows.replaceChildren();
 			const values = JSON.parse(field.value || "[]");
 			for (const item of values) {
 				const fields = definitions.map((def) => {
-					const node = def.choices ? options(def.label, def.choices, item[def.name] || "") : input(def.label, {
+					const node = def.multiple ? h("select", {
+						multiple: true,
+						"aria-label": t(def.label)
+					}) : def.choices ? options(def.label, def.choices, item[def.name] || "") : input(def.label, {
 						multiline: true,
 						max: 4e3,
 						required: def.required !== false,
@@ -49851,9 +50590,14 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 					node.addEventListener("input", () => {
 						const values = JSON.parse(field.value || "[]"), row = values.find((value) => value.id === item.id);
 						if (row) {
-							row[def.name] = node.value;
+							row[def.name] = def.multiple ? [...node.selectedOptions].map((option) => option.value).join("\n") : node.value;
 							change(values);
 						}
+					});
+					if (def.multiple) associations.push({
+						node,
+						def,
+						id: item.id
 					});
 					controls.push(node);
 					return labelled(def.label, node);
@@ -49868,11 +50612,24 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 					}
 				}, t("pm_meeting_remove"));
 				controls.push(remove);
-				rows.append(h("article", { class: "pm-fact pm-fields" }, ...fields, refsView(item.source_refs), remove));
+				rows.append(h("article", { class: "pm-fact pm-fields" }, ...guided() ? [fold("pm_meeting_details", source(item.id))] : [], ...fields, refsView(item.source_refs), remove));
 			}
 		}
 		const sync = () => {
 			const disabled = !can() || stale || Boolean(getEditor()?.locked());
+			for (const { node, def, id } of associations) {
+				const current = JSON.parse(field.value || "[]").find((row) => row.id === id), selected = lines(current?.[def.name] || ""), choices = def.multiple();
+				for (const option of [...node.options]) if (!choices.some((row) => row.id === option.value)) option.remove();
+				for (const row of choices) {
+					let option = [...node.options].find((option) => option.value === row.id);
+					if (!option) {
+						option = h("option", { value: row.id });
+						node.append(option);
+					}
+					option.textContent = row.text;
+					option.selected = selected.includes(row.id);
+				}
+			}
 			controls.forEach((node) => {
 				node.disabled = disabled;
 			});
@@ -49898,7 +50655,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		};
 	}
 	function draftEditor() {
-		const detail = model.detail, context = detail.context.document, saved = detail.draft?.document;
+		const detail = model.detail, context = detail.context.document, saved = guided() ? null : detail.draft?.document;
 		const fields = {}, body = h("div", { class: "pm-fields" }), widgets = [];
 		let editor;
 		const textField = (key, value, required = true) => {
@@ -49929,7 +50686,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			})));
 			outcomeHolder = h("div");
 			body.append(outcomeHolder);
-			for (const key of [
+			for (const key of guided() ? ["environment_changes", "next_steps"] : [
 				"feedback",
 				"environment_changes",
 				"next_steps"
@@ -49957,13 +50714,25 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			source_refs
 		})));
 		const writers = (workspace()?.members || []).filter((member) => ["owner", "contributor"].includes(member.role)).map((member) => [member.actor, actorLabel(member.actor)]);
-		const decision = collection(fields.decisions, () => editor, [{
-			name: "text",
-			label: "pm_meeting_decision_text"
-		}, {
-			name: "rationale",
-			label: "pm_meeting_decision_reason"
-		}], 10, "decision");
+		const decision = collection(fields.decisions, () => editor, [
+			{
+				name: "text",
+				label: "pm_meeting_decision_text"
+			},
+			{
+				name: "rationale",
+				label: "pm_meeting_decision_reason"
+			},
+			...guided() ? [{
+				name: "owner_actor",
+				label: "pm_meeting_owner",
+				choices: writers
+			}, {
+				name: "follow_up_ids",
+				label: "pm_review_follow_ids",
+				multiple: () => JSON.parse(fields.follow_ups.value)
+			}] : []
+		], 10, "decision");
 		const follow = collection(fields.follow_ups, () => editor, [
 			{
 				name: "text",
@@ -49990,6 +50759,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		fields.rationale = reason();
 		body.append(labelled("pm_meeting_reason", fields.rationale));
 		const contextId = detail.context.context_revision_id;
+		if (guided()) fields.review_basis = hidden(detail.draft?.document.guided_review?.basis || emptyReviewBasis());
 		editor = localForm({
 			action: "pm.meeting.draft",
 			target: target(),
@@ -50010,7 +50780,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 					} : kind === "review" ? {
 						goal_review: values.goal_review,
 						outcomes: JSON.parse(values.outcomes).filter((row) => row.observation.trim()),
-						feedback: lines(values.feedback),
+						feedback: guided() ? [] : lines(values.feedback),
 						environment_changes: lines(values.environment_changes),
 						next_steps: lines(values.next_steps)
 					} : {
@@ -50018,14 +50788,34 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 						previous_improvement_review: values.previous_improvement_review,
 						...values.no_improvement_rationale.trim() ? { no_improvement_rationale: values.no_improvement_rationale } : {}
 					},
-					decisions: JSON.parse(values.decisions),
+					decisions: JSON.parse(values.decisions).map((row) => guided() ? {
+						...row,
+						follow_up_ids: lines(row.follow_up_ids || "")
+					} : row),
 					follow_ups: JSON.parse(values.follow_ups),
 					source_refs: JSON.parse(values.source_refs),
 					unresolved_questions: lines(values.unresolved_questions),
-					rationale: values.rationale
+					rationale: values.rationale,
+					...guided() ? { review_basis: JSON.parse(values.review_basis) } : {}
 				};
 			}
 		});
+		if (guided()) {
+			sourcePicker = reviewSources({
+				h,
+				t,
+				api,
+				alive,
+				workspaceId,
+				detail,
+				field: fields.review_basis,
+				getEditor: () => editor,
+				unavailable,
+				valid: () => can() && !stale && model?.detail?.meeting.meeting_id === detail.meeting.meeting_id
+			});
+			body.prepend(sourcePicker.element);
+			widgets.push(sourcePicker);
+		}
 		const refs = refsControl(fields.source_refs, () => editor);
 		widgets.push(refs);
 		body.append(refs.element);
@@ -50129,7 +50919,11 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			multiline: true,
 			max: 8e3
 		}), completeReason = reason();
-		const selected = hidden([]), choices = h("div");
+		const selected = hidden([]), proofs = hidden((model.governance || []).filter((row) => row.revision.action === "pm.governance.decide" && Object.entries(reviewProposal(detail, row.record.context.review_proposal_ref?.decision_id) || { missing: true }).every(([key, value]) => row.record.context.review_proposal_ref?.[key] === value)).map((row) => ({
+			decision_id: row.record.context.review_proposal_ref.decision_id,
+			revision_id: row.revision.revision_id,
+			document_digest: row.revision.document_digest
+		}))), choices = h("div");
 		let completion;
 		const decisionControls = [];
 		const addDecision = (item) => {
@@ -50161,28 +50955,34 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				draft_revision_id: draftId,
 				discussion_summary: summary,
 				decision_ids: selected,
-				rationale: completeReason
+				rationale: completeReason,
+				...guided() ? { governance_decisions: proofs } : {}
 			},
 			preconditions: pre,
 			context: {
 				revision_id: detail.context.context_revision_id,
-				draft_revision_id: detail.draft?.revision_id || null
+				draft_revision_id: detail.draft?.revision_id || null,
+				...guided() ? { governance_decisions: JSON.parse(proofs.value) } : {}
 			},
-			permitted: () => owner() && model.detail.meeting.status === "draft" && Boolean(detail.draft),
+			permitted: () => owner() && model.detail.meeting.status === "draft" && Boolean(detail.draft) && (!guided() || Boolean(detail.draft.document.guided_review)),
 			label: "pm_meeting_complete",
 			onStateChange: syncDecisions,
 			extra: h("div", { class: "pm-fields" }, note("pm_meeting_complete_help"), !owner() ? note("pm_meeting_owner_only") : "", labelled("pm_meeting_summary", summary), choices, note("pm_meeting_decision_help"), labelled("pm_meeting_reason", completeReason)),
 			params: (values) => ({
 				...values,
 				draft_revision_id: JSON.parse(values.draft_revision_id),
-				decision_ids: JSON.parse(values.decision_ids)
+				decision_ids: JSON.parse(values.decision_ids),
+				...guided() ? { governance_decisions: JSON.parse(values.governance_decisions).filter((row) => JSON.parse(values.decision_ids).includes(row.decision_id)) } : {}
 			})
 		});
 		for (const id of JSON.parse(selected.value)) if (!decisionControls.some(([, key]) => key === id)) addDecision({
 			id,
 			text: `${t("pm_meeting_source_unavailable")} · ${id}`
 		});
-		if (reviewing && !completion.locked()) completion.set("draft_revision_id", JSON.stringify(detail.draft?.revision_id || null));
+		if (reviewing && !completion.locked()) {
+			completion.set("draft_revision_id", JSON.stringify(detail.draft?.revision_id || null));
+			if (guided()) completion.set("governance_decisions", proofs.dataset.pmDefault);
+		}
 		syncDecisions();
 		const completeBox = fold("pm_meeting_complete", completion.box, completion.locked());
 		completeBox.hidden = detail.meeting.status === "completed" && !completion.locked();
@@ -50255,7 +51055,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			createBox = null;
 			return h("div");
 		}
-		const initial = model.sprints.some((row) => row.sprint_id === navigation.sprint_id) ? navigation.sprint_id : model.sprints.find((row) => row.status === "active")?.sprint_id || model.sprints[0]?.sprint_id || "";
+		const initial = guidedSprint || (model.sprints.some((row) => row.sprint_id === navigation.sprint_id) ? navigation.sprint_id : model.sprints.find((row) => row.status === "active")?.sprint_id || model.sprints[0]?.sprint_id || "");
 		const holder = h("div", { class: "pm-fields" }), sprint = options("pm_meeting_sprint", model.sprints.map((row) => [row.sprint_id, row.definition.title]), initial), slot = h("div");
 		holder.append(labelled("pm_meeting_sprint", sprint), slot);
 		let current;
@@ -50265,11 +51065,11 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				slot.replaceChildren(note("pm_meeting_sprint_required"));
 				return;
 			}
-			const title = input("pm_meeting_name", { max: 200 }), kind = options("pm_meeting_kind", [
+			const title = input("pm_meeting_name", { max: 200 }), kind = options("pm_meeting_kind", (guidedSprint ? ["review"] : [
 				"planning",
 				"review",
 				"retro"
-			].map((key) => [key, t("pm_meeting_" + key)]), "planning"), snapshot = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`]), model.snapshots.at(-1)?.snapshot_id || ""), rationale = reason();
+			]).map((key) => [key, t("pm_meeting_" + key)]), guidedSprint ? "review" : "planning"), snapshot = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`]), model.snapshots.at(-1)?.snapshot_id || ""), rationale = reason();
 			current = localForm({
 				action: "pm.meeting.create",
 				target: {
@@ -50288,6 +51088,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				params: (values) => values,
 				extra: h("div", { class: "pm-fields" }, labelled("pm_meeting_name", title), labelled("pm_meeting_kind", kind), note("pm_meeting_started_help"), labelled("pm_meeting_snapshot", snapshot), !model.snapshots.length ? note("pm_meeting_snapshot_required") : "", labelled("pm_meeting_reason", rationale))
 			});
+			if (guidedSprint && !current.locked()) current.set("kind", "review");
 			kind.addEventListener("change", () => current.update());
 			slot.replaceChildren(current.box);
 			update();
@@ -50321,6 +51122,9 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		const action = focused?.closest("[data-pm-action]")?.dataset.pmAction;
 		const field = focused?.getAttribute("aria-label");
 		const selection = focused && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
+		sourcePicker?.dispose();
+		sourcePicker = null;
+		if (hasSprintReview(caps())) forms.forEach((editor) => editor.dispose?.());
 		stale = false;
 		dirty = false;
 		forms = [];
@@ -50351,7 +51155,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			alive();
 			if (page.workspace_id !== void 0) check(page);
 			if (!Array.isArray(page[property])) throw Error(t("pm_scope_mismatch"));
-			for (const row of page[property]) check(row);
+			for (const row of page[property]) check(property === "records" ? row.record : row);
 			records.push(...page[property]);
 			if (page.next_cursor == null) return records;
 			if (!Number.isInteger(page.next_cursor) || page.next_cursor <= after) throw Error(t("pm_scope_mismatch"));
@@ -50374,12 +51178,17 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			]);
 			alive();
 			if (ticket !== serial) return;
-			if (!meetings.some((row) => row.meeting_id === selectedId)) selectedId = meetings.at(-1)?.meeting_id || "";
+			if (guidedSprint) selectedId = meetings.find((row) => row.meeting_id === selectedId && row.sprint_id === guidedSprint && row.kind === "review")?.meeting_id || meetings.filter((row) => row.sprint_id === guidedSprint && row.kind === "review").at(-1)?.meeting_id || "";
+			else if (!meetings.some((row) => row.meeting_id === selectedId)) selectedId = meetings.at(-1)?.meeting_id || "";
 			const detail = selectedId ? check(await api("GET", `${endpoint}/meetings/${selectedId}?history_limit=20`)) : null;
 			alive();
 			if (ticket !== serial) return;
 			if (detail && (check(detail.meeting).meeting_id !== selectedId || detail.context?.meeting_id !== selectedId || detail.context.context_revision_id !== detail.meeting.context_revision_id || detail.context.document.sprint_id !== detail.meeting.sprint_id || check(detail.snapshot).snapshot_id !== detail.context.document.snapshot_ref.snapshot_id || detail.draft && (detail.draft.meeting_id !== selectedId || detail.draft.revision_id !== detail.meeting.draft_revision_id) || detail.completion && (detail.completion.meeting_id !== selectedId || detail.completion.completion_id !== detail.meeting.completion_id))) throw Error(t("pm_scope_mismatch"));
+			const governance = hasSprintReview(caps()) && detail?.meeting.kind === "review" && !detail.completion ? await pages("governance", "records") : [];
+			alive();
+			if (ticket !== serial) return;
 			const next = JSON.stringify([
+				governance.map((row) => row.revision.revision_id),
 				selectedId,
 				detail?.meeting.version,
 				sprints.map((row) => [row.sprint_id, row.version]),
@@ -50391,14 +51200,15 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				meetings,
 				sprints,
 				snapshots,
-				detail
+				detail,
+				governance
 			};
 			loaded = true;
 			editors.hidden = false;
 			choose.replaceChildren(...meetings.map((row) => h("option", { value: row.meeting_id }, row.title)));
 			choose.value = selectedId;
 			renderView();
-			if (force || !signature || changed && !dirty && !forms.some((editor) => editor.locked())) renderEditors();
+			if (force || !signature || hasSprintReview(caps()) && editorMeetingId !== (detail?.meeting.meeting_id || null) || changed && !dirty && !forms.some((editor) => editor.locked())) renderEditors();
 			else if (changed) stale = true;
 			signature = next;
 			update();
@@ -50430,7 +51240,13 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			node.hidden = false;
 			node.open = true;
 		}
-		editor.box.querySelector("input:not([type=\"hidden\"]), select, textarea")?.focus();
+		const authored = action === "pm.meeting.draft" ? editor.fields.goal_review : null;
+		const field = authored && !authored.disabled ? authored : [...editor.box.querySelectorAll("input:not([type=\"hidden\"]), select, textarea")].find((node) => !node.disabled && node.getClientRects().length);
+		for (let node = field?.parentElement; node && node !== element; node = node.parentElement) if (node instanceof HTMLDetailsElement) {
+			node.hidden = false;
+			node.open = true;
+		}
+		field?.focus();
 		editor.box.scrollIntoView({ block: "nearest" });
 	}
 	async function openRef(target, { form: requested = "follow_up.record" } = {}) {
@@ -50441,10 +51257,24 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		if (model?.detail?.meeting.meeting_id !== target.meeting_id) return;
 		reveal("pm.meeting." + requested, target.follow_up_id);
 	}
+	async function openSprint(sprintId) {
+		if (!hasSprintReview(caps())) return;
+		guidedSprint = sprintId;
+		await refresh(true);
+		if (guidedSprint !== sprintId) return;
+		if (model?.detail) remember("meeting_id", model.detail.meeting.meeting_id);
+		else reveal("pm.meeting.create");
+	}
 	return {
 		element,
 		refresh,
-		openRef
+		openRef,
+		openSprint,
+		withdraw: unavailable,
+		withdrawReview: (error, ids) => {
+			if (reviewMeetingIds().some((id) => ids.includes(id))) unavailable(error);
+			else if (!loaded) ++serial;
+		}
 	};
 }
 //#endregion
@@ -57203,37 +58033,56 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
 	let draftSourceUnavailable = false, contextSequence = 0, settledContextSequence = 0;
 	const canRestoreDiscussion = () => !disposed && loaded && !refreshing && contextSequence === settledContextSequence && workspace?.workspace_id === workspaceId && (threadId === "new" ? !draftSourceUnavailable : threadData?.thread?.workspace_id === workspaceId && threadData.thread.thread_id === threadId && !(threadData.thread.context || []).some((ref) => ref.available === false));
-	async function draftSourceRefs(refs = launch.refs, reads = new Map()) {
+	const reviewRefusal = (error) => [403, 404].includes(error.status) || error.code === "FORBIDDEN" || /^PM_.*SOURCE_UNAVAILABLE$/.test(error.code || "") || error.reviewIntegrity === true;
+	async function draftSourceRefs(refs = launch.refs, reads = new Map(), required = false) {
 		const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+		const lookup = (path) => api("GET", path).catch((error) => {
+			throw Object.assign(error, { reviewLookupFailure: true });
+		});
 		const read = (path) => {
-			if (!reads.has(path)) reads.set(path, api("GET", endpoint + path));
+			if (!reads.has(path)) reads.set(path, lookup(endpoint + path));
 			return reads.get(path);
 		};
 		const unavailable = () => {
-			throw Error(t("pd_unavailable"));
+			throw Object.assign(Error(t("pd_unavailable")), { reviewIntegrity: true });
 		};
 		const scoped = (value, id, key) => {
-			if (!value || value.workspace_id !== workspaceId || key && value[key] !== id) unavailable();
+			if (!value || value.workspace_id !== workspaceId || key && value[key] !== id || value.visibility_filtered || value.visibility?.filtered) unavailable();
 			return value;
 		};
 		const text = (value) => typeof value === "string" && value.trim() && !/(?:pm[a-z]*|wi|op)_[0-9a-f]{20,64}/.test(value.trim()) ? value.trim() : "";
 		return Promise.all(refs.map(async (ref, position) => {
-			if (ref.available === false) return {
-				kind: ref.kind,
-				position,
-				available: false
-			};
-			if (ref.available === true && !["governance", "plan_revision"].includes(ref.kind) && text(ref.label)) return {
+			if (ref.available === false) {
+				if (hasSprintReview(caps()) && required) throw Object.assign(Error(t("pd_unavailable")), {
+					status: 404,
+					code: "PM_MEETING_SOURCE_UNAVAILABLE",
+					reviewRef: {
+						kind: ref.kind,
+						id: ref.id
+					}
+				});
+				return {
+					kind: ref.kind,
+					position,
+					available: false
+				};
+			}
+			if (ref.available === true && ![
+				"governance",
+				"plan_revision",
+				...hasSprintReview(caps()) ? ["meeting"] : []
+			].includes(ref.kind) && text(ref.label)) return {
 				...ref,
 				label: text(ref.label),
 				bound_label: text(ref.bound_label)
 			};
 			try {
-				let label = "", recordType = null, findingIdentity = null;
+				let label = "", recordType = null, findingIdentity = null, reviewDecisions = null, reviewMeetingId = null;
 				if (ref.kind === "governance") {
 					const value = await read(`/governance/${encodeURIComponent(ref.id)}`);
 					scoped(value, workspaceId, "workspace_id");
 					if (value.record?.record_id !== ref.id) unavailable();
+					reviewMeetingId = hasSprintReview(caps()) ? value.record.context?.review_proposal_ref?.meeting_id : null;
 					label = text(value.revision?.document?.title);
 					recordType = [
 						"risk",
@@ -57258,7 +58107,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					label = text(card.work.title);
 				} else if (ref.kind === "work_input") {
 					const key = `/operations/${encodeURIComponent(ref.id)}`;
-					if (!reads.has(key)) reads.set(key, api("GET", key));
+					if (!reads.has(key)) reads.set(key, lookup(key));
 					const value = (await reads.get(key)).operation;
 					const receipt = value?.input_receipt;
 					if (value?.operation_id !== ref.id || receipt?.operation_id !== ref.id || receipt.workspace_id !== workspaceId || receipt.state !== "cancelled") unavailable();
@@ -57270,7 +58119,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					const work = await draftSourceRefs([{
 						kind: "work_item",
 						id: review.work_item_id
-					}], reads);
+					}], reads, required);
 					if (work[0].available === false) unavailable();
 					label = work[0].label;
 				} else if (ref.kind === "snapshot") {
@@ -57300,7 +58149,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					const work = await draftSourceRefs([{
 						kind: "work_item",
 						id: repair.work_item_id
-					}], reads);
+					}], reads, required);
 					if (work[0].available === false) unavailable();
 					label = work[0].label;
 				} else if (ref.kind === "follow_up") {
@@ -57317,13 +58166,17 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					const work = await draftSourceRefs([{
 						kind: "work_item",
 						id: value.current.work_item_id
-					}], reads);
+					}], reads, required);
 					if (work[0].available === false) unavailable();
 					label = text(value.current.document?.public_title) || work[0].label;
 				} else if (ref.kind === "meeting") {
 					const value = scoped(await read(`/meetings/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id");
 					if (value.meeting?.meeting_id !== ref.id) unavailable();
 					label = text(value.meeting.title);
+					if (hasSprintReview(caps()) && value.completion?.document.guided_review) reviewDecisions = value.completion.document.decisions.map((row) => ({
+						label: row.text,
+						reference: reviewInputSource(value, row.id)
+					}));
 				} else if (ref.kind === "lifecycle_transition") {
 					const value = scoped(await read(`/lifecycle/transitions/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id");
 					if (value.transition?.transition_id !== ref.id) unavailable();
@@ -57336,12 +58189,21 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					record_type: recordType,
 					bound_label: text(ref.bound_label)
 				};
+				if (reviewDecisions) result.review_decisions = reviewDecisions;
+				if (reviewMeetingId) result.review_meeting_id = reviewMeetingId;
 				if (ref.kind === "finding") {
 					if (findingIdentity) result.finding = findingIdentity;
 					else delete result.finding;
 				}
 				return result;
 			} catch (error) {
+				if (hasSprintReview(caps()) && required) {
+					if (!error.reviewLookupFailure) error.reviewIntegrity = true;
+					throw Object.assign(error, { reviewRef: {
+						kind: ref.kind,
+						id: ref.id
+					} });
+				}
 				return {
 					kind: ref.kind,
 					position,
@@ -57349,6 +58211,38 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				};
 			}
 		}));
+	}
+	const reviewInputs = (data) => [
+		...data?.inputs || [],
+		...data?.input_history || [],
+		...data?.draft?.selected_inputs || [],
+		...data?.draft?.candidate_inputs || []
+	];
+	const reviewMeetingIds = (data, selected = null) => !hasSprintReview(caps()) ? [] : [...new Set(reviewInputs(data).filter((row) => row.source_ref?.kind === "sprint_review_decision" && (!selected || selected.includes(row.input_id))).map((row) => row.source_ref.meeting_id))];
+	async function threadSources(data, reads = new Map()) {
+		const meetingIds = reviewMeetingIds(data);
+		try {
+			await draftSourceRefs(meetingIds.map((id) => ({
+				kind: "meeting",
+				id
+			})), reads, true);
+			return {
+				...data,
+				thread: {
+					...data.thread,
+					context: await draftSourceRefs(data.thread.context || [], reads, meetingIds.length > 0)
+				}
+			};
+		} catch (error) {
+			if (meetingIds.length) {
+				if (reviewRefusal(error)) Object.assign(error, {
+					reviewDependency: true,
+					reviewMeetingIds: error.reviewRef?.kind === "meeting" && meetingIds.includes(error.reviewRef.id) ? [error.reviewRef.id] : []
+				});
+				else error.reviewSourcePending = true;
+			}
+			throw error;
+		}
 	}
 	const threadRows = h("div", { class: "pd-thread-rows" });
 	const threadState = viewState(namespace, workspaceId, "discussion." + (threadId || "list"));
@@ -57426,6 +58320,15 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 			...options,
 			canSend: () => (options.canSend ? options.canSend() : true) && canSend(),
 			clientGate,
+			onError: (error) => {
+				const ids = hasSprintReview(caps()) ? options.reviewSources?.() || [] : [];
+				if (ids.length && reviewRefusal(error)) {
+					withdrawReviewSources(error, ids);
+					status.replaceChildren(errorBox(error, { within: status }));
+					return true;
+				}
+				return options.onError?.(error) || false;
+			},
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)(),
 			onConnectionChange: (connected) => {
@@ -57833,7 +58736,11 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		labelled,
 		errorBox,
 		caps,
-		qualitySelection
+		qualitySelection,
+		onGuideReview: (id) => {
+			openRegisterForm("discussions", "ui_meetings");
+			openVisibleSource(meetings, () => meetings?.openSprint(id));
+		}
 	}) : null;
 	if (sprints) body.insertBefore(sprints.box, content);
 	let meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
@@ -57849,10 +58756,12 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		input,
 		labelled,
 		errorBox,
-		caps
+		caps,
+		onGovernance: openReviewGovernance,
+		onSourceFailure: withdrawReviewSources
 	}) : null;
 	if (meetings) body.insertBefore(meetings.element, content);
-	const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance ? workspaceGovernance({
+	let governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance ? workspaceGovernance({
 		h,
 		t,
 		api,
@@ -57867,9 +58776,103 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		errorBox,
 		caps,
 		withRegister: caps()?.features?.pm_register?.version === 1,
+		onReviewRecorded: () => meetings?.refresh(),
+		onSourceFailure: withdrawReviewSources,
 		nameFor: (kind, id) => kind === "requirement" ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ""
 	}) : null;
 	if (governance) body.insertBefore(governance.element, content);
+	let withdrawingReview = false;
+	function withdrawReviewSources(error, meetingIds = [], selectedThread = false) {
+		if (withdrawingReview || !hasSprintReview(caps()) || !meetingIds.length && !selectedThread) return;
+		withdrawingReview = true;
+		try {
+			const linkedThread = selectedThread || reviewMeetingIds(threadData).some((id) => meetingIds.includes(id));
+			const matches = (ref) => ref.kind === "meeting" && meetingIds.includes(ref.id) || meetingIds.includes(ref.review_meeting_id);
+			const citedThread = !linkedThread && threadData?.thread.context?.some(matches);
+			++sequence;
+			++contextSequence;
+			refreshing = false;
+			refresh.disabled = false;
+			meetings?.withdrawReview(error, meetingIds);
+			governance?.withdrawReview(error, meetingIds);
+			if (lastThreadList) {
+				lastThreadList = {
+					...lastThreadList,
+					threads: lastThreadList.threads.map((row) => ({
+						...row,
+						context: (row.context || []).map((ref, position) => linkedThread && row.thread_id === threadId || matches(ref) ? {
+							kind: ref.kind,
+							position,
+							available: false
+						} : ref)
+					}))
+				};
+				renderThreadRows(lastThreadList);
+			}
+			if (threadId && linkedThread) {
+				loaded = false;
+				threadData = null;
+				mountedThread = null;
+				boundContext?.replaceChildren();
+				panelContext?.replaceChildren();
+				discussionTools?.close();
+				for (const editor of forms) if (content.contains(editor.box)) editor.dispose();
+				content.replaceChildren(workspaceList);
+				content.hidden = false;
+				updateForms();
+			} else if (citedThread) {
+				threadData = {
+					...threadData,
+					thread: {
+						...threadData.thread,
+						context: threadData.thread.context.map((ref, position) => matches(ref) ? {
+							kind: ref.kind,
+							position,
+							available: false
+						} : ref)
+					}
+				};
+				const selectedSource = sourceSelect?.value;
+				renderThread(threadData);
+				if (selectedSource?.startsWith("review:") && meetingIds.includes(JSON.parse(selectedSource.slice(7)).meeting_id)) {
+					sourceSelect.append(h("option", { value: selectedSource }, t("pd_unavailable")));
+					sourceSelect.value = selectedSource;
+				}
+				updateForms();
+			}
+			if (earlier) earlier.disabled = !loaded;
+			status.replaceChildren(errorBox(error, { within: status }));
+		} finally {
+			withdrawingReview = false;
+		}
+	}
+	async function openReviewGovernance({ ref, entry, ownerActor, snapshotId }) {
+		if (!governance) {
+			governance = workspaceGovernance({
+				h,
+				t,
+				api,
+				alive,
+				namespace,
+				workspaceId,
+				workspace: () => workspace,
+				permitted,
+				form,
+				input,
+				labelled,
+				errorBox,
+				caps,
+				onReviewRecorded: () => meetings?.refresh(),
+				onSourceFailure: withdrawReviewSources
+			});
+			drawersHome.append(governance.element);
+		}
+		openPanel(t("ui_governance"), governance.element, false);
+		await openVisibleSource(governance, () => entry ? governance.openRef({
+			kind: "governance",
+			id: entry.record.record_id
+		}, { form: "decide" }) : governance.openReviewProposal(ref, ownerActor, snapshotId));
+	}
 	let openRegisterForm = () => {};
 	const routeRegisterAction = (action) => {
 		const name = action?.action || "";
@@ -58889,6 +59892,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				time: time(message.created_at)
 			}) : t("pm_saved_note_source");
 		}
+		if (source.kind === "sprint_review_decision") return t("pm_review_decision_source");
 		if (source.kind === "maintenance_review_candidate") return t("pmrv_idea_original") + " · " + source.event_id;
 		return [
 			source.ref,
@@ -59180,6 +60184,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 			factForm = form({
 				action: "pm.input.record",
 				target,
+				reviewSources: () => sourceSelect.value.startsWith("review:") ? [JSON.parse(sourceSelect.value.slice(7)).meeting_id] : [],
 				fields: {
 					slot: slotSelect,
 					value,
@@ -59192,8 +60197,8 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					return {
 						slot: values.slot,
 						value: values.value,
-						status: values.status,
-						source_ref: values.source.startsWith("message:") ? {
+						status: hasSprintReview(caps()) && values.source.startsWith("review:") ? "unresolved" : values.status,
+						source_ref: hasSprintReview(caps()) && values.source.startsWith("review:") ? JSON.parse(values.source.slice(7)) : values.source.startsWith("message:") ? {
 							kind: "message",
 							message_id: values.source.slice(8)
 						} : {
@@ -59206,7 +60211,16 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				permitted: write,
 				label: "pm_record_input",
 				onSaved: () => load(),
+				onStateChange: () => {
+					if (hasSprintReview(caps()) && sourceSelect.value.startsWith("review:")) statusSelect.disabled = true;
+				},
 				extra: h("div", { class: "pm-fields" }, labelled("pm_input_slot", slotSelect), labelled("pm_input_value", value), labelled("pm_input_status", statusSelect), labelled("pm_input_source", sourceSelect), labelled("pm_source_ref", reference), h("p", { class: "muted" }, t("pm_source_help")))
+			});
+			sourceSelect.addEventListener("change", () => {
+				if (hasSprintReview(caps()) && sourceSelect.value.startsWith("review:") && !factForm.locked()) {
+					factForm.set("status", "unresolved");
+					factForm.update();
+				}
 			});
 			requireReference();
 			const selected = h("input", { type: "hidden" });
@@ -59219,6 +60233,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 			planForm = form({
 				action: "pm.thread.plan",
 				target,
+				reviewSources: () => reviewMeetingIds(threadData, JSON.parse(selected.value || "[]")),
 				fields: {
 					selected,
 					rationale
@@ -59255,6 +60270,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				planningRevisionForm = form({
 					action: "pm.thread.plan.revise",
 					target,
+					reviewSources: () => reviewMeetingIds(threadData, JSON.parse(selected.value || "[]")),
 					fields: {
 						selected,
 						draftId,
@@ -59317,7 +60333,9 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				input,
 				labelled,
 				errorBox,
-				caps
+				caps,
+				onGovernance: openReviewGovernance,
+				onSourceFailure: withdrawReviewSources
 			});
 			if (thread.mode === "follow_up" && caps()?.features?.pm_workspaces?.follow_up_prepare) contextPane.append(h("a", {
 				class: "ui-button secondary ui-sm",
@@ -59433,6 +60451,20 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		}
 		const oldSource = sourceSelect.value, oldSlot = slotSelect.value;
 		for (const message of data.messages || []) if (![...sourceSelect.options].some((option) => option.value === "message:" + message.message_id)) sourceSelect.append(h("option", { value: "message:" + message.message_id }, `${message.actor} · ${message.content.slice(0, 50)}`));
+		if (hasSprintReview(caps())) {
+			for (const option of [...sourceSelect.options]) if (option.value.startsWith("review:")) option.remove();
+			for (const source of thread.context || []) for (const row of source.review_decisions || []) if (row.reference) sourceSelect.append(h("option", { value: "review:" + JSON.stringify(row.reference) }, row.label));
+			const hasReview = (thread.context || []).some((row) => row.review_decisions?.length) || (data.inputs || []).some((row) => row.source_ref?.kind === "sprint_review_decision");
+			let boundary = draft.parentElement?.querySelector(":scope > [data-pm-review-planning-boundary]");
+			if (hasReview && !boundary) {
+				boundary = h("p", {
+					"data-pm-review-planning-boundary": "",
+					class: "muted"
+				}, t("pm_review_draft_only"));
+				draft.before(boundary);
+			}
+			if (!hasReview) boundary?.remove();
+		}
 		sourceSelect.value = oldSource || "statement";
 		const slots = data.profile?.input_slots || [];
 		for (const slot of slots) {
@@ -59478,6 +60510,12 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					label: t("pd_details"),
 					body: h("div", {}, h("code", { class: "mono" }, item.input_id), item.status === "user_confirmed" ? h("p", {}, t("pm_confirmed_by", { actor: item.confirmed_by || item.recorded_by })) : null)
 				}));
+				if (hasSprintReview(caps()) && item.source_decision) row.append(reviewDecisionProof({
+					h,
+					t,
+					source: item.source_decision,
+					expected: item.source_ref
+				}));
 				if (item.source_candidate) row.append(reviewCandidateProof({
 					h,
 					t,
@@ -59487,6 +60525,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					const rationale = input("pm_confirm_rationale", { max: 2e3 });
 					const confirm = form({
 						action: "pm.input.confirm",
+						reviewSources: () => item.source_ref?.kind === "sprint_review_decision" ? [item.source_ref.meeting_id] : [],
 						target: {
 							workspace_id: workspaceId,
 							thread_id: threadId
@@ -59537,7 +60576,12 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		draft.replaceChildren();
 		if (data.draft) {
 			const selected = data.draft.selected_inputs || [], candidates = data.draft.candidate_inputs || [];
-			draft.append(h("h2", {}, t("pm_draft_title")), h("p", {}, data.draft.title), h("p", { class: "pm-note-text" }, data.draft.rationale), h("h3", {}, t("pm_selected")), h("ul", {}, ...selected.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_candidates")), h("ul", {}, ...candidates.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_open_planning")), h("ul", {}, ...(data.draft.unknowns || []).map((item) => h("li", {}, discussionLabel(t, "pm_slot_", item.slot)))), data.draft.candidates_truncated ? h("p", { class: "muted" }, t("pm_partial")) : "", h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.plan_drafting ? "pm_planning_source_help" : "pm_draft_help")));
+			draft.append(h("h2", {}, t("pm_draft_title")), h("p", {}, data.draft.title), h("p", { class: "pm-note-text" }, data.draft.rationale), h("h3", {}, t("pm_selected")), h("ul", {}, ...selected.map((item) => h("li", {}, item.value, hasSprintReview(caps()) && item.source_decision ? reviewDecisionProof({
+				h,
+				t,
+				source: item.source_decision,
+				expected: item.source_ref
+			}) : ""))), h("h3", {}, t("pm_candidates")), h("ul", {}, ...candidates.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_open_planning")), h("ul", {}, ...(data.draft.unknowns || []).map((item) => h("li", {}, discussionLabel(t, "pm_slot_", item.slot)))), data.draft.candidates_truncated ? h("p", { class: "muted" }, t("pm_partial")) : "", h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.plan_drafting ? "pm_planning_source_help" : "pm_draft_help")));
 		}
 		planForm.box.closest("[data-pm-plan]").hidden = thread.mode !== "idea" && !planForm.locked() || !data.capabilities?.decide;
 		if (planningRevisionForm) planningRevisionForm.box.closest("[data-pm-planning-revision]").hidden = thread.mode !== "planning" && !planningRevisionForm.locked() || !data.capabilities?.decide;
@@ -59631,15 +60675,29 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		headerReads++;
 		try {
 			alive();
-			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
+			let data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
 			alive();
 			if (ticket !== sequence) return;
 			if (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId) throw Error(t("pm_scope_mismatch"));
+			data = await threadSources(data);
+			alive();
+			if (ticket !== sequence) return;
 			historyCursor = data.next_message_cursor;
 			historyExpanded = true;
 			renderThread(data);
 		} catch (error) {
 			if (!retiredView(error) && ticket === sequence) {
+				if (error.reviewDependency) {
+					withdrawReviewSources(error, error.reviewMeetingIds, true);
+					return;
+				}
+				if (error.reviewSourcePending) {
+					++contextSequence;
+					updateForms();
+					status.replaceChildren(errorBox(error, { within: status }));
+					return;
+				}
+				if ([403, 404].includes(error.status)) withdrawReviewSources(error, [], reviewMeetingIds(threadData).length > 0);
 				loaded = false;
 				lastThreadList = null;
 				workspace = null;
@@ -59765,13 +60823,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				}
 			}
 			const contextReads = new Map();
-			if (data?.thread?.context) data = {
-				...data,
-				thread: {
-					...data.thread,
-					context: await draftSourceRefs(data.thread.context, contextReads)
-				}
-			};
+			let sourceError = null;
 			if (threadList?.threads) threadList = {
 				...threadList,
 				threads: await Promise.all(threadList.threads.map(async (thread) => ({
@@ -59779,6 +60831,16 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					context: await draftSourceRefs(thread.context || [], contextReads)
 				})))
 			};
+			if (data?.thread) {
+				if (data.thread.workspace_id !== workspaceId || data.thread.thread_id !== threadId) throw Error(t("pm_scope_mismatch"));
+				try {
+					data = await threadSources(data, contextReads);
+				} catch (error) {
+					if (!error.reviewDependency) throw error;
+					sourceError = error;
+					data = null;
+				}
+			}
 			alive();
 			if (ticket !== sequence) return;
 			if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t("pm_scope_mismatch"));
@@ -59828,6 +60890,10 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 					load();
 				}
 			}, t("pm_more_threads")));
+			if (sourceError) {
+				withdrawReviewSources(sourceError, sourceError.reviewMeetingIds, true);
+				return;
+			}
 			if (data) renderThread(data, runs);
 			else if (!content.querySelector(".pm-thread-layout")) {
 				if (!workspace) content.append(emptyState({
@@ -60048,10 +61114,16 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 			}
 		} catch (error) {
 			if (!retiredView(error) && ticket === sequence) {
+				if (error.reviewSourcePending) {
+					updateForms();
+					status.replaceChildren(errorBox(error, { within: status }));
+					return;
+				}
 				if (capabilityReadError) {
 					pmCapabilitiesError = capabilityReadError;
 					pmCapabilities = null;
 				}
+				if ([403, 404].includes(error.status)) withdrawReviewSources(error, [], reviewMeetingIds(threadData).length > 0);
 				loaded = false;
 				workspace = null;
 				threadData = null;
@@ -60229,13 +61301,7 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 				let data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`);
 				alive();
 				if (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId) throw Error(t("pm_scope_mismatch"));
-				data = {
-					...data,
-					thread: {
-						...data.thread,
-						context: await draftSourceRefs(data.thread.context || [])
-					}
-				};
+				data = await threadSources(data);
 				alive();
 				if (ticket !== contextSequence || generation !== sequence) return;
 				renderThread(data);
@@ -60270,6 +61336,11 @@ async function mountPmWorkspace({ main, h, t, api, serverId, caps, guard, namesp
 		} catch (error) {
 			alive();
 			if (ticket !== contextSequence || generation !== sequence) return;
+			if (error.reviewDependency) {
+				withdrawReviewSources(error, error.reviewMeetingIds, true);
+				return;
+			}
+			if ([403, 404].includes(error.status)) withdrawReviewSources(error, [], reviewMeetingIds(threadData).length > 0);
 			if ([403, 404].includes(error.status)) {
 				loaded = false;
 				threadData = null;

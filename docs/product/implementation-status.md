@@ -1,5 +1,26 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+## 2026-11-12：Connector 0.2.19／Desktop 0.1.15 發布準備
+
+分支 `release/0.2.19-desktop-0.1.15` 同步套件、技能及身分 golden 的版本。
+主線已合併 #524、#525、#526、#527、#528、#529、#530、#531 與 #532，
+涵蓋原始評估／清理 ID 讀取及共用介面、scope impact 預覽、workspace WIP 建議、
+引導式 Sprint Review 與測試基礎設施修正。最新穩定版升級 fixture 改用已發布
+0.2.18，保留 0.2.12 較早基準。這是發布準備，尚不代表發布、安裝或驗收；
+簽章、公證、signed updater feed、owner／真 BAT／模型及 R0–R5 驗收不因此完成。
+已發布下載文件與網站仍指向 0.2.18／0.1.14，待發布後另行更新。
+E00–E11、R0–R5、A01–A40 與未修訂的 PM v1.2 生命週期待辦保持開放。
+
+This branch prepares Connector 0.2.19 / Desktop 0.1.15 package, skill and identity
+golden versions. Main has merged #524, #525, #526, #527, #528, #529, #530, #531 and
+#532: original-assessment and cleanup-ID reads and shared UI, scope-impact preview,
+advisory workspace WIP, guided Sprint Review and test infrastructure fixes.
+The latest-stable upgrade fixture uses published 0.2.18 alongside the earlier
+0.2.12 baseline. Publication, installation, signing, notarization, a signed updater
+feed and owner/live acceptance remain separate gates. Published download documentation
+and the site retain 0.2.18 / 0.1.14 until publication. Open E00–E11, R0–R5, A01–A40
+and unrevised PM v1.2 lifecycle requirements remain open.
+
 ## Connector 0.2.18／Desktop 0.1.14 交付
 
 分支：`release/upgrade-baseline-0.2.17` 的版本準備已整合；合併：#521 納入

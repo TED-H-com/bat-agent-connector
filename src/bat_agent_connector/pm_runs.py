@@ -76,6 +76,7 @@ def schema(journal):
                 model TEXT, completeness TEXT NOT NULL, source_refs TEXT NOT NULL,
                 context_digest TEXT NOT NULL, created_at REAL NOT NULL)""",
             "CREATE INDEX IF NOT EXISTS pm_runs_workspace ON pm_runs(workspace_id,created_at,run_id)",
+            "CREATE INDEX IF NOT EXISTS pm_run_state_session ON pm_run_state(json_extract(session_binding,'$.host'),json_extract(session_binding,'$.session_id'))",
         ):
             journal.db.execute(statement)
         for table in ("pm_runs", "pm_workspace_worktrees", "pm_run_receipts", "pm_run_native_events", "pm_assistant_provenance"):
