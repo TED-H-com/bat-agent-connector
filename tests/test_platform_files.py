@@ -71,11 +71,34 @@ def _replace_open(monkeypatch, opening):
 
 
 @pytest.fixture
-def private_open_race(monkeypatch):
+def private_clock(monkeypatch):
+    class Clock:
+        now = 0.0
+
+        def __init__(self):
+            self.sleeps = []
+
+        def monotonic(self):
+            return self.now
+
+        def sleep(self, seconds):
+            assert 0 < seconds <= 0.5 - self.now + 1e-12
+            self.sleeps.append(seconds)
+            self.now = round(self.now + seconds, 9)
+
+    clock = Clock()
+    # raising=False also lets these regressions run against the original module,
+    # which did not import time. Never replace the stdlib clock or sleep itself.
+    monkeypatch.setattr(files, "time", clock, raising=False)
+    return clock
+
+
+@pytest.fixture
+def private_open_race(monkeypatch, private_clock):
     opened = []
     real_open = files._posix_open
 
-    def inject(path, replacements=(), *, remove=False):
+    def inject(path, replacements=(), *, remove=False, open_elapsed=0.0):
         attempts = []
 
         def opening(parent, name, flags, mode):
@@ -87,6 +110,7 @@ def private_open_race(monkeypatch):
                     os.replace(replacements[len(attempts) - 1], path)
                     if remove:
                         path.unlink()
+                private_clock.now += open_elapsed
                 return fd
             except BaseException:
                 os.close(fd)
@@ -110,38 +134,66 @@ def _private_bytes(path, data):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
-def test_private_read_retries_replaced_inode(tmp_path, private_open_race):
+def test_private_read_retries_replaced_inode(tmp_path, private_open_race, private_clock):
     path = _private_bytes(tmp_path / "state.json", b"old")
     replacement = _private_bytes(tmp_path / "replacement", b"new")
     attempts = private_open_race(path, [replacement])
     assert files.read_private(path) == b"new"
     assert len(attempts) == 2
+    assert private_clock.sleeps == []
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
-def test_private_read_replacement_retry_is_bounded(tmp_path, private_open_race):
+def test_private_read_replacement_retry_is_bounded(tmp_path, private_open_race, private_clock):
     path = _private_bytes(tmp_path / "state.json", b"old")
     replacements = [_private_bytes(tmp_path / str(index), b"new")
-                    for index in range(files._OPEN_CREATE_ATTEMPTS)]
+                    for index in range(40)]
     attempts = private_open_race(path, replacements)
     with pytest.raises(ValueError, match="^local state must be private and owned by the current user$"):
         files.read_private(path)
-    assert len(attempts) == files._OPEN_CREATE_ATTEMPTS
+    assert len(attempts) == 30
+    assert private_clock.sleeps == pytest.approx(
+        [0.001, 0.002, 0.004, 0.008, 0.016] + [0.020] * 23 + [0.009])
+    assert private_clock.now == 0.5
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
-def test_private_read_replaced_then_removed_propagates_missing(tmp_path, private_open_race):
+@pytest.mark.parametrize("replaced", [4, 10])
+def test_private_read_waits_until_replacement_settles(tmp_path, private_open_race, private_clock, replaced):
+    path = _private_bytes(tmp_path / "state.json", b"old")
+    replacements = [_private_bytes(tmp_path / str(index), b"new") for index in range(replaced)]
+    attempts = private_open_race(path, replacements)
+    assert files.read_private(path) == b"new"
+    assert len(attempts) == replaced + 1
+    expected = [0.001, 0.002, 0.004] if replaced == 4 else [0.001, 0.002, 0.004, 0.008, 0.016] + [0.020] * 4
+    assert private_clock.sleeps == pytest.approx(expected)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
+def test_private_read_expired_first_open_does_not_retry(tmp_path, private_open_race, private_clock):
+    path = _private_bytes(tmp_path / "state.json", b"old")
+    replacement = _private_bytes(tmp_path / "replacement", b"new")
+    attempts = private_open_race(path, [replacement], open_elapsed=0.501)
+    with pytest.raises(ValueError, match="^local state must be private and owned by the current user$"):
+        files.read_private(path)
+    assert len(attempts) == 1
+    assert private_clock.sleeps == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
+def test_private_read_replaced_then_removed_propagates_missing(tmp_path, private_open_race, private_clock):
     path = _private_bytes(tmp_path / "state.json", b"old")
     replacement = _private_bytes(tmp_path / "replacement", b"new")
     attempts = private_open_race(path, [replacement], remove=True)
     with pytest.raises(FileNotFoundError):
         files.read_private(path)
     assert len(attempts) == 2
+    assert private_clock.sleeps == []
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX post-open privacy checks")
 @pytest.mark.parametrize("invalid", ["hardlink", "public", "directory", "unlinked_public"])
-def test_private_read_invalid_inode_is_not_retried(tmp_path, private_open_race, invalid):
+def test_private_read_invalid_inode_is_not_retried(tmp_path, private_open_race, private_clock, invalid):
     path = tmp_path / "state.json"
     replacements = []
     if invalid == "directory":
@@ -158,22 +210,24 @@ def test_private_read_invalid_inode_is_not_retried(tmp_path, private_open_race, 
     with pytest.raises(ValueError, match="^local state must be private and owned by the current user$"):
         files.read_private(path)
     assert len(attempts) == 1
+    assert private_clock.sleeps == []
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
-def test_private_exclusive_create_does_not_retry_replaced_inode(tmp_path, private_open_race):
+def test_private_exclusive_create_does_not_retry_replaced_inode(tmp_path, private_open_race, private_clock):
     path = tmp_path / "new.lock"
     replacement = _private_bytes(tmp_path / "replacement", b"preserve")
     attempts = private_open_race(path, [replacement])
     with pytest.raises(ValueError, match="^local state must be private and owned by the current user$"):
         files.open_private_file(path, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_TRUNC)
     assert len(attempts) == 1
+    assert private_clock.sleeps == []
     assert path.read_bytes() == b"preserve"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
 @pytest.mark.parametrize("existing", [False, True])
-def test_private_lock_open_retries_replaced_inode(tmp_path, private_open_race, existing):
+def test_private_lock_open_retries_replaced_inode(tmp_path, private_open_race, private_clock, existing):
     path = tmp_path / "service.lock"
     if existing:
         _private_bytes(path, b"old")
@@ -189,11 +243,12 @@ def test_private_lock_open_retries_replaced_inode(tmp_path, private_open_race, e
     finally:
         os.close(fd)
     assert len(attempts) == 2
+    assert private_clock.sleeps == []
     assert path.read_bytes() == b"new writable"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX post-open replacement race")
-def test_private_truncate_only_changes_validated_inode(tmp_path, private_open_race):
+def test_private_truncate_only_changes_validated_inode(tmp_path, private_open_race, private_clock):
     path = _private_bytes(tmp_path / "service.log", b"preserve old")
     replacement = _private_bytes(tmp_path / "replacement", b"truncate new")
     attempts = private_open_race(path, [replacement])
@@ -211,6 +266,7 @@ def test_private_truncate_only_changes_validated_inode(tmp_path, private_open_ra
     finally:
         os.close(old)
     assert len(attempts) == 2
+    assert private_clock.sleeps == []
     assert path.read_bytes() == b"new log"
 
 
