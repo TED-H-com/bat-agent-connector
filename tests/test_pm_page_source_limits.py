@@ -1,0 +1,291 @@
+"""Page partitioning preserves record policy, response context and envelope gates."""
+from __future__ import annotations
+
+import copy
+import json
+import random
+import sqlite3
+
+import pytest
+
+from bat_agent_connector import pm_source_lineage as lineage
+from bat_agent_connector.api_auth import Principal
+from bat_agent_connector.operations import OperationError
+from tests.pm_page_source_reference import namespace
+
+OWNER = Principal('page-reader', frozenset({'observe'}))
+LIMIT = ('PM_SOURCE_LINEAGE_LIMIT', 'Too many original sources for one document', 409)
+HIDDEN = ('NOT_FOUND', 'Original resource sources are unavailable', 404)
+DEPTH = ('PM_SOURCE_LINEAGE_LIMIT', 'Source references exceed the bounded document depth', 409)
+
+
+@pytest.fixture
+def sources(tmp_path, monkeypatch):
+    db = sqlite3.connect(tmp_path / 'page-sources.db', isolation_level=None)
+    db.execute('CREATE TABLE operations(operation_id TEXT,action TEXT,target TEXT,params TEXT)')
+    db.execute('CREATE TABLE pm_source_lineage(resource_type TEXT,resource_id TEXT,original_operation_id TEXT,creation_operation_id TEXT)')
+    for index in range(140):
+        oid = f'op_{index:032x}'
+        db.execute('INSERT INTO operations VALUES(?,?,?,?)', (oid, 'fixture.source', '{}', '{}'))
+        for kind, identity in [('operation', oid), ('session', f'fixture-host/session-{index}')]:
+            db.execute('INSERT INTO pm_source_lineage VALUES(?,?,?,?)', (kind, identity, oid, oid))
+    hidden, calls = set(), []
+
+    def visible(db, principal, identities):
+        calls.extend(identities)
+        return not hidden.intersection(identities)
+
+    monkeypatch.setattr(lineage, '_visible_roots', visible)
+    yield db, hidden, calls
+    db.close()
+
+
+def oid(index):
+    return f'op_{index:032x}'
+
+
+def row(index):
+    return {'operation_id': oid(index), 'text': f'fixture-{index}'}
+
+
+def bootstrap(page, **extra):
+    return {'snapshot': {'part': page}, 'sync': {}, 'capabilities': {}, 'pagination': {}, **extra}
+
+
+def outcome(reader, db, value):
+    try:
+        result = reader(db, OWNER, copy.deepcopy(value))
+        return 'ok', json.dumps(result, ensure_ascii=False).encode()
+    except OperationError as error:
+        return 'error', (error.code, error.message, error.status)
+
+
+@pytest.mark.parametrize('key', sorted(lineage._COLLECTIONS))
+def test_all_established_collections_have_independent_roots(sources, key):
+    db, _, _ = sources
+    value = {key: [row(index) for index in range(66)], 'count': 66, 'next_cursor': 'fixed'}
+    assert outcome(namespace()['read_response'], db, value) == ('error', LIMIT)
+    assert lineage.read_response(db, OWNER, value) == value
+
+
+@pytest.mark.parametrize('shape', ['deployment', 'runs', 'bootstrap', 'nested_bootstrap'])
+def test_special_pages_have_independent_roots(sources, shape):
+    db, _, _ = sources
+    rows = [row(index) for index in range(66)]
+    if shape == 'deployment':
+        value = {'items': [dict(item, deployment_id=f'deployment-{i}') for i, item in enumerate(rows)], 'next_cursor': None}
+    elif shape == 'runs':
+        value = {'workspace_id': 'ws_fixture', 'runs': [dict(item, run_id=f'pmr_{i}', workspace_id='ws_fixture') for i, item in enumerate(rows)],
+                 'next_cursor': None, 'coverage': {'scanned': 66, 'visibility_filtered': False}}
+    else:
+        value = bootstrap({'operations': rows[:33], 'events': rows[33:]})
+        if shape == 'nested_bootstrap':
+            value = bootstrap(value)
+    assert outcome(namespace()['read_response'], db, value) == ('error', LIMIT)
+    assert lineage.read_response(db, OWNER, value) == value
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+def test_hidden_rows_keep_cursor_flag_and_count(sources, wrapped):
+    db, hidden, _ = sources
+    hidden.add(oid(1))
+    page = {'operations': [row(0), dict(row(1), text='PRIVATE-SENTINEL')], 'events': [row(2)],
+            'count': 3, 'next_cursor': 'original-cursor'}
+    value = bootstrap(page) if wrapped else page
+    result = lineage.read_response(db, OWNER, value)
+    assert 'PRIVATE-SENTINEL' not in json.dumps(result)
+    actual = result['snapshot']['part'] if wrapped else result
+    assert actual == {**page, 'operations': [row(0)], 'count': 2, 'source_visibility_filtered': True}
+    assert outcome(namespace()['read_response'], db, value) == outcome(lineage.read_response, db, value)
+
+
+@pytest.mark.parametrize('location', ['page', 'outer', 'snapshot', 'part'])
+def test_inherited_host_drops_hidden_row(sources, location):
+    db, hidden, _ = sources
+    hidden.add(oid(0))
+    page = {'sessions': [{'session_id': 'session-0', 'text': 'PRIVATE-SENTINEL'}, {'session_id': 'session-1'}], 'count': 2}
+    value = {**page, 'host': 'fixture-host'}
+    if location != 'page':
+        value = bootstrap(page)
+        target = value if location == 'outer' else value['snapshot'] if location == 'snapshot' else value['snapshot']['part']
+        target['host'] = 'fixture-host'
+    assert outcome(namespace()['read_response'], db, value) == ('error', HIDDEN)
+    result = lineage.read_response(db, OWNER, value)
+    actual = result if location == 'page' else result['snapshot']['part']
+    assert actual['sessions'] == [{'session_id': 'session-1'}]
+    assert actual['count'] == 1 and actual['source_visibility_filtered']
+    assert 'PRIVATE-SENTINEL' not in json.dumps(result)
+    unknown = {'host': 'fixture-host', 'unknown': page}
+    assert outcome(lineage.read_response, db, unknown) == ('error', HIDDEN)
+
+
+@pytest.mark.parametrize('number', [0, 1])
+@pytest.mark.parametrize('location', ['page', 'snapshot', 'sync', 'capabilities', 'pagination'])
+def test_hidden_envelope_refuses_whole_response(sources, number, location):
+    db, hidden, _ = sources
+    hidden.add(oid(100))
+    page = {'operations': [row(i) for i in range(number)]}
+    if location == 'page':
+        value = {**page, 'metadata': row(100)}
+    else:
+        value = bootstrap(page)
+        value[location]['metadata'] = row(100)
+    assert outcome(lineage.read_response, db, value) == ('error', HIDDEN)
+
+
+@pytest.mark.parametrize('number', [64, 65])
+@pytest.mark.parametrize('location', ['row', 'envelope', 'unknown', 'top_list', 'nested_record', 'receipt', 'bootstrap_envelope'])
+def test_individual_document_limits_are_unchanged(sources, number, location):
+    db, _, _ = sources
+    refs = {'operation_ids': [oid(i) for i in range(number)]}
+    value = {'operations': [refs]}
+    if location == 'envelope':
+        value = {'operations': [], 'metadata': refs}
+    elif location == 'unknown':
+        value = {'unknown': [refs]}
+    elif location == 'top_list':
+        value = [refs]
+    elif location == 'nested_record':
+        value = {'record': {'operations': [refs]}}
+    elif location == 'receipt':
+        value = {'operation': {'result': refs}}
+    elif location == 'bootstrap_envelope':
+        value = bootstrap({'operations': []}, sync={'left': {'operation_ids': refs['operation_ids'][:32]}})
+        value['snapshot']['metadata'] = {'operation_ids': refs['operation_ids'][32:]}
+    expected = outcome(namespace()['read_response'], db, value)
+    assert expected[0] == ('ok' if number == 64 else 'error')
+    if number == 65:
+        assert expected == ('error', LIMIT)
+    assert outcome(lineage.read_response, db, value) == expected
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+@pytest.mark.parametrize('extra_depth', [0, 1])
+def test_row_depth_is_counted_from_response_root(sources, wrapped, extra_depth):
+    db, _, _ = sources
+    depth = 4 if wrapped else 2
+    nested = row(0)
+    for _ in range(32 - depth + extra_depth):
+        nested = {'nested': nested}
+    value = {'operations': [nested]}
+    if wrapped:
+        value = bootstrap(value)
+    expected = outcome(namespace()['read_response'], db, value)
+    assert expected[0] == ('error' if extra_depth else 'ok')
+    if extra_depth:
+        assert expected == ('error', DEPTH)
+    assert outcome(lineage.read_response, db, value) == expected
+
+
+@pytest.mark.parametrize('change', ['missing_workspace', 'missing_coverage', 'wrong_coverage', 'missing_cursor', 'wrong_row', 'nested'])
+def test_runs_registration_requires_the_complete_shape(sources, change):
+    db, _, _ = sources
+    value = {'workspace_id': 'ws_fixture', 'runs': [dict(row(i), workspace_id='ws_fixture', run_id=f'pmr_{i}') for i in range(66)],
+             'coverage': {'scanned': 66, 'visibility_filtered': False}, 'next_cursor': None}
+    if change == 'missing_workspace':
+        del value['workspace_id']
+    elif change == 'missing_coverage':
+        del value['coverage']
+    elif change == 'missing_cursor':
+        del value['next_cursor']
+    elif change == 'wrong_coverage':
+        value['coverage']['scanned'] = True
+    elif change == 'wrong_row':
+        value['runs'][0]['workspace_id'] = 'different'
+    else:
+        value = {'record': value}
+    assert outcome(lineage.read_response, db, value) == ('error', LIMIT)
+
+
+def test_empty_lineage_scalar_and_unknown_shapes_are_unchanged(sources):
+    db, _, _ = sources
+    for value in [None, 3, 'text', [], {}, {'items': [row(0)]}, {'runs': [row(0)]}]:
+        assert outcome(lineage.read_response, db, value) == outcome(namespace()['read_response'], db, value)
+    db.execute('DELETE FROM pm_source_lineage')
+    value = {'operations': [{'nested': [row(i) for i in range(100)]}]}
+    assert lineage.read_response(db, OWNER, value) == value
+
+
+def test_registered_pages_never_increase_existing_visibility_cost(sources):
+    db, _, calls = sources
+    for wrap in [lambda value: value, bootstrap, lambda value: bootstrap(bootstrap(value))]:
+        for key in ['operations', 'events', 'items']:
+            value = wrap({key: [dict(row(i), deployment_id=f'dep-{i}') for i in range(66)], 'next_cursor': None})
+            calls.clear()
+            outcome(namespace()['read_response'], db, value)
+            before = len(calls)
+            calls.clear()
+            assert outcome(lineage.read_response, db, value)[0] == 'ok'
+            assert len(calls) <= before
+    page = {'workspace_id': 'ws_fixture', 'runs': [dict(row(0), run_id=f'pmr_{i}', workspace_id='ws_fixture') for i in range(64)],
+            'coverage': {'scanned': 64, 'visibility_filtered': False}, 'next_cursor': None}
+    calls.clear()
+    namespace()['read_response'](db, OWNER, page)
+    assert len(calls) == 1
+    calls.clear()
+    lineage.read_response(db, OWNER, page)
+    assert len(calls) == 64
+
+
+def test_fixed_seed_reference_equivalence(sources):
+    db, hidden, _ = sources
+    hidden.update({oid(i) for i in range(100, 110)})
+    rng = random.Random(447212)
+    reference = namespace()['read_response']
+    cases = {'same': 0, 'union': 0, 'inherited_host': 0, 'refusal': 0}
+    for index in range(400):
+        scenario = index % 4
+        count = rng.randint(1, 12) if scenario != 1 else 66
+        rows, expected_rows = [], []
+        for i in range(count):
+            identity = i if scenario == 1 else rng.choice([0, 1, 2, 100])
+            own_host = rng.choice([False, True])
+            item = ({'session_id': f'session-{identity}'} if scenario == 2 else row(identity))
+            if own_host:
+                item['host'] = 'fixture-host'
+            for _ in range(rng.randrange(4)):
+                item = {'member': [item], 'unicode': '來源'}
+            rows.append(item)
+            if oid(identity) not in hidden:
+                expected_rows.append(item)
+        # Guarantee an inherited-only hidden row for the third oracle branch.
+        if scenario == 2:
+            rows.append({'session_id': 'session-100', 'text': 'PRIVATE-SENTINEL'})
+        value = {'host': 'fixture-host', 'operations': rows, 'events': [row(3)], 'count': len(rows) + 1}
+        expected = {**value, 'operations': expected_rows}
+        if len(rows) != len(expected_rows):
+            expected.update(count=len(expected_rows) + 1, source_visibility_filtered=True)
+        if scenario == 3:
+            value['envelope'] = expected['envelope'] = {'operation_ids': [oid(i) for i in range(65)]} if index % 8 == 3 else row(100)
+        for _ in range(rng.randrange(3)):
+            value, expected = bootstrap(value), bootstrap(expected)
+        old = outcome(reference, db, value)
+        new = outcome(lineage.read_response, db, value)
+        expected_bytes = json.dumps(expected, ensure_ascii=False).encode()
+        if old[0] == 'ok':
+            cases['same'] += 1
+            assert new == old, index
+        elif scenario == 1 and old == ('error', LIMIT):
+            cases['union'] += 1
+            assert new == ('ok', expected_bytes), index
+        elif scenario == 2 and old == ('error', HIDDEN):
+            cases['inherited_host'] += 1
+            assert new == ('ok', expected_bytes), index
+        elif scenario == 3:
+            cases['refusal'] += 1
+            assert new == old, index
+        else:
+            pytest.fail(f'Unclassified reference result at {index}: {old}')
+    assert all(cases.values()), cases
+
+
+def test_hidden_row_is_removed_before_whole_response_depth_validation(sources):
+    db, hidden, _ = sources
+    hidden.add(oid(0))
+    nested = row(0)
+    for _ in range(31):
+        nested = {'nested': nested}
+    value = {'operations': [nested], 'count': 1}
+    expected = {'operations': [], 'count': 0, 'source_visibility_filtered': True}
+    assert namespace()['read_response'](db, OWNER, value) == expected
+    assert lineage.read_response(db, OWNER, value) == expected
