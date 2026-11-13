@@ -26,6 +26,10 @@
   A row whose hidden source is identified through the page's host is now omitted
   instead of making the whole page fail with 404.
 
+- Keep existing BAT hosts working as before while checking the identity and
+  version of hosts that support the suite's new connection handshake. This
+  does not enable any new host actions.
+
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 
 - Let workspace owners set an advisory WIP limit for a PM workspace, and let API

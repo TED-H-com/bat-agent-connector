@@ -27,7 +27,8 @@
 **連線相容（上游 client 不受影響）**
 
 - 上游 `bat-remote/v2` 的 channel、event、payload、錯誤與限制，在所追蹤的上游版本上行為不變。
-- `serverVersion` 回報所追蹤的上游版本；本產品的版本與建置識別只出現在新增的 capability 內。
+- `serverVersion` 回報所追蹤的上游版本；auth 的 `bac` capability 僅宣告協定版本，
+  本產品的版本與建置識別由新增的 `bac:hello` 回覆提供。
 - 新功能只使用 `bac:*` channel 與驗證結果中一個新增的 `bac` capability。本產品的事件只送給
   明確啟用的 client。
 - 從未使用 `bac` 的 client 看到的行為須與上游相同：以同一份腳本 client 分別對上游
@@ -70,6 +71,9 @@
   判定相容。
 
 ## 分期
+
+主機合約：[Connector 握手合約](../design/host-contracts.md)記錄 P1 第一段的 capability
+偵測、hello、記憶中的身分及降級行為；此段不啟用任何主機功能，也不是 P1 完成或實機驗收。
 
 各期的驗收都分開回報 branch、merged、installed、live-tested；CI 不是實機驗收。
 
