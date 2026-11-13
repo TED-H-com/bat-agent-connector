@@ -96,7 +96,14 @@ Hidden rows advance the scan cursor without exposing their receipt metadata.
 
 Visibility uses the existing source-lineage hook and request-scoped read cache.
 Within one synchronous snapshot, the same observation's full `load_fixed` closure
-is authorized at most once for a principal. No permission cache persists between
+is authorized at most once for a principal. For a plain collection request over HTTP,
+RPC or MCP, one observation shared by every returned row costs at most two full
+loader calls: one in the handler and one in the fresh final barrier. A request
+with an original-source selector costs at most three, including `read_request`
+before the handler. Completed proofs are shared only within each synchronous
+snapshot, never across these phases or across an await. Withdrawal between the
+handler and the final barrier is therefore still enforced.
+No permission cache persists between
 requests, writes, transactions, tasks or event-loop turns. Cycle and budget
 refusals retain the existing guarded-cache rules. Collection readers start an
 independent traversal budget and recursion state for each top-level record while
