@@ -412,3 +412,52 @@ async def test_unavailable_read_transport_is_bilingual_and_has_no_effect(world, 
     await call(world, code='REPOSITORY_SOURCE_UNAVAILABLE')
     if transport == 'bat':
         assert not world.provider
+
+
+async def test_ambiguous_bindings_require_an_explicit_target(world):
+    from bat_agent_connector import repository_sync
+    w = world
+    fleet = w.ops.context['fleet']
+    fleet.config.hosts['h2'] = SimpleNamespace(**{**vars(fleet.config.hosts['h1']), 'name': 'h2'})
+    fleet.config.github.repos['o/r'].sync.bindings = (('h1', 'w1'), ('h2', 'w1'))
+    fleet.orchestrate_enabled = lambda host: host in fleet.config.hosts
+    w.ops.context['git_runner'].available = fleet.orchestrate_enabled
+    assert len(repository_sync.capabilities(w.ops)) == 2
+    del w.body['code_target']['host']
+    await call(w, code='PM_EXTERNAL_CONTINUATION_UNSUPPORTED')
+    assert not w.frames and not w.provider
+
+
+@pytest.mark.parametrize('missing', ['observe', 'membership', 'reader_grant'])
+async def test_access_refusal_parity_precedes_basis_details(world, served, monkeypatch, missing):  # noqa: F811
+    w = world
+    _, port = served
+    principal = replace(OWNER, scopes=frozenset({'manage', 'start'})) if missing == 'observe' else OWNER
+    auth = token(w.d, principal.actor, *principal.scopes)
+    if missing == 'membership':
+        w.ops.db.execute('DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?', (w.wid, OWNER.actor))
+    elif missing == 'reader_grant':
+        w.d.history_collector.config = HistoryConfig(10, (replace(w.source, readers=('other',)),))
+    w.body['code_target']['repository'] = 'hidden/not-bound'
+    monkeypatch.setenv('BATC_TASK_URL', f'http://127.0.0.1:{port}/rpc')
+    monkeypatch.setenv('BATC_API_TOKEN', auth)
+    server, fleet = mcp_server.build_server(w.d.fleet.config, read_only=False, principal_only=True)
+    try:
+        before = snapshot(w)
+        code = 'FORBIDDEN' if missing == 'observe' else 'PM_HISTORY_SOURCE_UNAVAILABLE'
+        path = f'/api/v1/pm/workspaces/{w.wid}/history-continuation-preview'
+        status, result = await http(port, 'POST', path, tok=auth, body=w.body)
+        assert status == (403 if missing == 'observe' else 404), result
+        assert result['error']['code'] == code
+        with pytest.raises(OperationError) as error:
+            await w.d.call_api('pm_history_continuation_preview', {'workspace_id': w.wid, 'body': w.body}, principal)
+        assert result['error'] == {'code': error.value.code, 'message': error.value.message}
+        with pytest.raises(Exception) as mcp_error:
+            await server.call_tool('pm_history_continuation_preview', {'workspace_id': w.wid, 'body': w.body})
+        assert code in str(mcp_error.value)
+        for message in continuation.reason(code)['message'].values():
+            assert message in str(mcp_error.value)
+        assert snapshot(w) == before
+        assert not w.frames and not w.provider and not w.git
+    finally:
+        await fleet.close()
