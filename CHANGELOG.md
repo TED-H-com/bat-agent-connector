@@ -9,6 +9,17 @@
   available in English and Traditional Chinese as Markdown, HTML or SVG; actual
   dates remain unknown. Reading a report changes nothing and calls no model.
 
+- Reading the Connector's private local state no longer fails as "not private"
+  when the Connector replaces that file at the same moment, for example while
+  the desktop app checks a service that is starting.
+
+- Repair checks tolerate concurrent Connector update-state writes without reporting invalid state.
+
+- Preserve paired operation-history cursors in MCP, RPC, CLI and Dashboard readers,
+  including equal timestamps and empty continuing pages. Keep Attention's next-page
+  control available with English and Traditional Chinese guidance, and document
+  original-operation lookup after a lost reply in all agent skills.
+
 - Fix 409 errors when readable operation, event, PM run or Dashboard bootstrap
   pages contain rows from more than 64 original sources in total. Each row keeps
   its own source-access and size limits; withdrawn sources remain hidden.

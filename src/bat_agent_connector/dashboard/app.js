@@ -12726,6 +12726,7 @@ var init_i18n = __esmMin((() => {
 			attention_empty: "這一類目前沒有項目。",
 			attention_not_updated: "本次未能更新；若下方有資料，仍是上次讀取的內容。",
 			attention_invalid: "清單回應不完整，請重新讀取。",
+			attention_more_possible: "可能還有更多項目，請載入下一頁。",
 			conversation_mark: "標為已讀",
 			conversation_remember: "儲存位置",
 			conversation_saving: "正在儲存閱讀狀態",
@@ -14544,6 +14545,7 @@ var init_i18n = __esmMin((() => {
 			attention_empty: "No items in this category.",
 			attention_not_updated: "Could not refresh. Any items below are from the previous read.",
 			attention_invalid: "Incomplete list response; reload to try again.",
+			attention_more_possible: "More items may exist. Load the next page.",
 			conversation_mark: "Mark read",
 			conversation_remember: "Save position",
 			conversation_saving: "Saving reading state",
@@ -21549,6 +21551,27 @@ function resultRequirements({ h, t, section, open = new Set(), assessmentShortcu
 	return element;
 }
 //#endregion
+//#region src/operation-page.js
+var operationId$5 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
+function operationPage(result, previous = null) {
+	if (!Array.isArray(result?.operations) || result.operations.some((op) => !operationId$5(op?.operation_id))) return null;
+	const time = result.next_before ?? null, id = result.next_before_id ?? null;
+	if (time === null) return id === null ? {
+		operations: result.operations,
+		next: null
+	} : null;
+	const paired = Object.hasOwn(result, "next_before_id");
+	if (typeof time !== "number" || !Number.isFinite(time) || time <= 0 || paired && !operationId$5(id)) return null;
+	if (previous && !(time < previous.time || time === previous.time && previous.id !== null && id !== null && id < previous.id)) return null;
+	return {
+		operations: result.operations,
+		next: {
+			time,
+			id
+		}
+	};
+}
+//#endregion
 //#region src/pm-execution-verification.js
 var ACTION$6 = "pm.execution.verify";
 var sha$6 = /^[0-9a-f]{40}$/;
@@ -22100,19 +22123,21 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		let after = descending ? null : 0;
 		const rows = [], seen = new Set();
 		for (let page = 0; page < 20; page++) {
-			const query = `${path.includes("?") ? "&" : "?"}limit=50${after === null ? "" : `&${descending ? "before" : "after"}=${after}`}`;
+			const query = `${path.includes("?") ? "&" : "?"}limit=50${after === null ? "" : descending ? `&before=${after.time}${after.id === null ? "" : `&before_id=${encodeURIComponent(after.id)}`}` : `&after=${after}`}`;
 			const value = await request("GET", path + query);
 			if (!valid(ticket)) return null;
 			if (value.visibility_filtered || value.source_visibility_filtered || value.coverage?.visibility_filtered || value.coverage?.inaccessible_sources) filtered = true;
-			if (wid && value.workspace_id !== workspaceId || !Array.isArray(value[key]) || value[cursor] !== null && (!Number.isFinite(value[cursor]) || !descending && !Number.isSafeInteger(value[cursor]) || value[cursor] <= 0 || after !== null && (descending ? value[cursor] >= after : value[cursor] <= after))) throw error();
+			const parsed = descending ? operationPage(value, after) : null;
+			if (wid && value.workspace_id !== workspaceId || descending && !parsed || !descending && (!Array.isArray(value[key]) || value[cursor] !== null && (!Number.isSafeInteger(value[cursor]) || value[cursor] <= after))) throw error();
 			for (const row of value[key]) {
 				const id = row.review_id || row.package_id || row.revision_id || row.observation_id || row.evidence_id || row.operation_id;
 				if (!id || seen.has(id)) throw error();
 				seen.add(id);
 				rows.push(row);
 			}
-			if (value[cursor] === null) return rows;
-			after = value[cursor];
+			const next = descending ? parsed.next : value[cursor];
+			if (next === null) return rows;
+			after = next;
 		}
 		throw Error(t("pmq_history_bound"));
 	}
@@ -23437,12 +23462,12 @@ function sourceSentence(t, envelope, candidate) {
 	if (receipt && receipt === candidate && receipt !== fixed?.commit_sha) return t("wpub_commit_from_receipt");
 	return t("wpub_commit_from_result");
 }
-function operationId$5(value) {
+function operationId$4(value) {
 	return typeof value === "string" && OP_ID.test(value) ? value : "";
 }
 function publicationPrLine(h, t, pr) {
 	if (!pr || typeof pr !== "object") return null;
-	const opId = operationId$5(pr.publication_operation_id);
+	const opId = operationId$4(pr.publication_operation_id);
 	const number = Number.isSafeInteger(pr.pull_number) ? pr.pull_number : null;
 	const repo = text$6(pr.repository) ? pr.repository : "";
 	const label = number != null && repo ? `PR #${number} · ${repo}` : "";
@@ -23459,7 +23484,7 @@ function publicationPrLine(h, t, pr) {
 	return item;
 }
 function publicationDeliveryLine(h, t, pr, envelope, attempt) {
-	if (!operationId$5(pr?.publication_operation_id)) return null;
+	if (!operationId$4(pr?.publication_operation_id)) return null;
 	const host = text$6(attempt?.session?.host) ? attempt.session.host : text$6(attempt?.native_session?.host) ? attempt.native_session.host : "";
 	const source = text$6(pr.child_operation_id) ? pr.child_operation_id : text$6(envelope?.identity?.execution_operation_id) ? envelope.identity.execution_operation_id : "";
 	const repo = text$6(pr.repository) ? pr.repository : "";
@@ -54706,13 +54731,13 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		const result = [];
 		let before = null;
 		for (let page = 0; page < 20; page++) {
-			const data = await api("GET", `/operations?action=pm.execution.verify&limit=50${before === null ? "" : "&before=" + before}`);
+			const data = await api("GET", `/operations?action=pm.execution.verify&limit=50${before === null ? "" : `&before=${before.time}${before.id === null ? "" : `&before_id=${encodeURIComponent(before.id)}`}`}`);
 			if (!valid(ticket)) return null;
-			const next = data.next_before;
-			if (!Array.isArray(data.operations) || next !== null && (!Number.isSafeInteger(next) || next <= 0 || before !== null && next >= before)) throw invalid();
-			result.push(...data.operations);
-			if (next === null) return result;
-			before = next;
+			const parsed = operationPage(data, before);
+			if (!parsed) throw invalid();
+			result.push(...parsed.operations);
+			if (parsed.next === null) return result;
+			before = parsed.next;
 		}
 		throw Error(t("pmr_limit"));
 	}
@@ -62964,27 +62989,6 @@ function setupDraftForStorage(draft) {
 	return saved;
 }
 //#endregion
-//#region src/operation-page.js
-var operationId$4 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
-function operationPage(result, previous = null) {
-	if (!Array.isArray(result?.operations) || result.operations.some((op) => !operationId$4(op?.operation_id))) return null;
-	const time = result.next_before ?? null, id = result.next_before_id ?? null;
-	if (time === null) return id === null ? {
-		operations: result.operations,
-		next: null
-	} : null;
-	const paired = Object.hasOwn(result, "next_before_id");
-	if (typeof time !== "number" || !Number.isFinite(time) || time <= 0 || paired && !operationId$4(id)) return null;
-	if (previous && !(time < previous.time || time === previous.time && previous.id !== null && id !== null && id < previous.id)) return null;
-	return {
-		operations: result.operations,
-		next: {
-			time,
-			id
-		}
-	};
-}
-//#endregion
 //#region src/managed-setup.js
 init_health_fact();
 function normalizeSetupFingerprint(value) {
@@ -64904,14 +64908,16 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			let cursor = null, pages = 0;
 			const items = new Map(), seen = new Set();
 			do {
-				const data = await api("GET", section.path + (cursor == null ? "" : `&${section.param || "cursor"}=${encodeURIComponent(cursor)}`));
+				const data = await api("GET", section.path + (cursor == null ? "" : section.field === "operations" ? `&before=${cursor.time}${cursor.id === null ? "" : `&before_id=${encodeURIComponent(cursor.id)}`}` : `&${section.param || "cursor"}=${encodeURIComponent(cursor)}`));
 				guard();
-				if (!Array.isArray(data[section.field])) throw new Error(t("attention_invalid"));
-				for (const row of data[section.field]) if (!section.filter || section.filter(row)) items.set(row.work_item_id || row.operation_id || (row.session_id ? JSON.stringify([row.host, row.session_id]) : row.host), row);
-				cursor = data[section.cursor || "next_cursor"] ?? null;
+				const parsed = section.field === "operations" ? operationPage(data, cursor) : null;
+				if (section.field === "operations" ? !parsed : !Array.isArray(data[section.field])) throw new Error(t("attention_invalid"));
+				for (const row of parsed ? parsed.operations : data[section.field]) if (!section.filter || section.filter(row)) items.set(row.work_item_id || row.operation_id || (row.session_id ? JSON.stringify([row.host, row.session_id]) : row.host), row);
+				cursor = parsed ? parsed.next : data[section.cursor || "next_cursor"] ?? null;
 				pages++;
-				if (cursor !== null && seen.has(cursor)) throw new Error(t("attention_invalid"));
-				seen.add(cursor);
+				const key = JSON.stringify(cursor);
+				if (cursor !== null && seen.has(key)) throw new Error(t("attention_invalid"));
+				seen.add(key);
 			} while (cursor !== null && pages < wanted);
 			section.pages = pages;
 			section.size = items.size;
@@ -64921,10 +64927,10 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			section.badge.textContent = section.partial ? "" : String(items.size);
 			section.count.hidden = !section.partial;
 			section.count.textContent = section.partial ? t("global_shown", { count: items.size }) : "";
-			section.status.replaceChildren();
+			section.status.replaceChildren(...items.size === 0 && cursor !== null ? [t("attention_more_possible")] : []);
 			section.more.hidden = cursor === null;
 			section.readFailed = false;
-			section.section.hidden = items.size === 0;
+			section.section.hidden = items.size === 0 && cursor === null;
 			section.section.dataset.fresh = "true";
 			if (focusKey) {
 				const row = section.list.querySelector(`[data-inbox-key="${CSS.escape(focusKey)}"]`);
@@ -74516,14 +74522,17 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 				const before = more ? pages.get(action) : null;
 				return {
 					action,
-					data: await api("GET", `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ""}`)
+					before,
+					data: await api("GET", `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before.time}${before.id === null ? "" : `&before_id=${encodeURIComponent(before.id)}`}` : ""}`)
 				};
 			}));
 			guard();
 			if (frozen()) return;
 			for (const result of results.filter(Boolean)) {
-				pages.set(result.action, result.data.next_before ?? null);
-				for (const op of result.data.operations || []) {
+				const parsed = operationPage(result.data, result.before);
+				if (!parsed) throw new Error(t("ar_invalid_result"));
+				pages.set(result.action, parsed.next);
+				for (const op of parsed.operations) {
 					const bound = sourceFromOperation(op);
 					if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
 						const selector = { execution_operation_id: op.operation_id };

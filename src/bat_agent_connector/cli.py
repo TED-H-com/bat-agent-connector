@@ -1009,6 +1009,8 @@ def build_parser() -> argparse.ArgumentParser:
     steer.add_argument("--resume", action="store_true", help="run a needs_attention operation again (local admin)")
     p.add_argument("--status", action="append")
     p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--before", help="next_before timestamp from the previous page (use with --before-id)")
+    p.add_argument("--before-id", help="next_before_id from the previous page (use with --before)")
     sp.add_parser("config-path", help="print the config path")
     return ap
 
@@ -1490,7 +1492,8 @@ def main(argv: list[str] | None = None) -> int:
             elif args.operation_id:
                 out = request("op_get", operation_id=args.operation_id, entry="cli", **auth)
             else:
-                out = request("op_list", statuses=args.status, limit=args.limit, entry="cli", **auth)
+                out = request("op_list", statuses=args.status, limit=args.limit,
+                              before=args.before, before_id=args.before_id, entry="cli", **auth)
             _print(out, True)
             return 0
         if args.cmd == "import-bat":

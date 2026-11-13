@@ -60,7 +60,11 @@ MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confir
 且同時有 `before`。重複或空的 cursor 欄位回既有 `422 INVALID_FILTER`；
 只提供時間的舊 client 仍可使用。驗證由 OperationService 共用，HTTP 保留原始
 cursor 值供中央檢查；未知 query keys 與其他參數維持既有相容行為。
-目前 daemon `op_list` 與 MCP `operations_list` 不接收 cursor，不擴充其參數。
+daemon `op_list` 與 MCP `operations_list` 接收 `before`／`before_id`，CLI `batc op`
+使用 `--before`／`--before-id`，皆原樣交由中央 validator 檢查。將回應的
+`next_before`／`next_before_id` 成對送回，直到兩者皆為 null；短頁或空頁仍可繼續。
+錯誤沿用各 transport 格式：API v1 為 422，RPC 為 HTTP 400 與 error／message，
+MCP 為 tool error 文字，CLI 為 stderr 與 exit 1；保留中央 `INVALID_FILTER` 與訊息。
 Python 與 Rust 測試使用同一份 `tests/fixtures/operation-history-cursors.json`，
 Node route inventory 只驗證路由，不代表 Rust query 驗證已執行。
 
@@ -69,7 +73,12 @@ optional `before_id` of `op_` plus 32 lowercase hex digits, paired with `before`
 Repeated or empty cursor fields use the existing `422 INVALID_FILTER` response.
 Timestamp-only callers, unknown HTTP query keys and other parameters remain
 compatible. HTTP passes raw cursor values to the shared OperationService validator.
-Daemon/MCP list methods currently expose no cursor. Python and native tests consume
+Daemon `op_list` and MCP `operations_list` forward `before` and `before_id`; CLI
+`batc op` exposes `--before` and `--before-id`. Follow the returned pair until both
+are null, including short or empty pages. The central validator remains the only
+cursor validator for these adapters. Existing error formats stay unchanged: API v1
+422, RPC HTTP 400 with error/message, MCP tool error text, and CLI stderr with exit 1.
+Each preserves the central INVALID_FILTER code and message. Python and native tests consume
 the same cursor vectors; Node route inventory is not native query validation.
 
 HTTP `POST /operations?wait=…`、RPC `op_submit(wait_s=…)` 與 MCP

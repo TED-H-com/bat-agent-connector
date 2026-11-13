@@ -1,3 +1,4 @@
+import {operationPage} from './operation-page.js';
 import {actionLabel} from './global-labels.js';
 import {disclosure, pageHeader} from './ui/components.js';
 import {artifactContent, retainFocus} from "./artifact-content.js";
@@ -345,12 +346,14 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
       const results = await Promise.all(executions.map(async action => {
         if (more && pages.get(action) === null) return;
         const before = more ? pages.get(action) : null;
-        return {action, data: await api('GET', `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ''}`)};
+        return {action, before, data: await api('GET', `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before.time}${before.id === null ? '' : `&before_id=${encodeURIComponent(before.id)}`}` : ''}`)};
       })); guard();
       if (frozen()) return;
       for (const result of results.filter(Boolean)) {
-        pages.set(result.action, result.data.next_before ?? null);
-        for (const op of result.data.operations || []) {
+        const parsed = operationPage(result.data, result.before);
+        if (!parsed) throw new Error(t('ar_invalid_result'));
+        pages.set(result.action, parsed.next);
+        for (const op of parsed.operations) {
           const bound = sourceFromOperation(op);
           if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
             const selector = {execution_operation_id: op.operation_id}; candidates.set(stable(selector), {selector, label: `${actionLabel(op.action)} · ${op.operation_id}`});

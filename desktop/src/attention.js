@@ -1,3 +1,4 @@
+import {operationPage} from './operation-page.js';
 import {disclosure, emptyState, iconButton, inlineError, inspector, pageHeader, segmented, skeleton, statusPill} from './ui/components.js';
 import {reasonText} from './global-labels.js';
 import {inboxRow} from './global-screens.js';
@@ -184,16 +185,20 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
       let cursor = null, pages = 0;
       const items = new Map(), seen = new Set();
       do {
-        const path = section.path + (cursor == null ? '' : `&${section.param || 'cursor'}=${encodeURIComponent(cursor)}`);
+        const path = section.path + (cursor == null ? '' : section.field === 'operations'
+          ? `&before=${cursor.time}${cursor.id === null ? '' : `&before_id=${encodeURIComponent(cursor.id)}`}`
+          : `&${section.param || 'cursor'}=${encodeURIComponent(cursor)}`);
         const data = await api('GET', path); guard();
-        if (!Array.isArray(data[section.field])) throw new Error(t('attention_invalid'));
-        for (const row of data[section.field]) {
+        const parsed = section.field === 'operations' ? operationPage(data, cursor) : null;
+        if (section.field === 'operations' ? !parsed : !Array.isArray(data[section.field])) throw new Error(t('attention_invalid'));
+        for (const row of parsed ? parsed.operations : data[section.field]) {
           if (!section.filter || section.filter(row)) items.set(row.work_item_id || row.operation_id ||
             (row.session_id ? JSON.stringify([row.host, row.session_id]) : row.host), row);
         }
-        cursor = data[section.cursor || 'next_cursor'] ?? null; pages++;
-        if (cursor !== null && seen.has(cursor)) throw new Error(t('attention_invalid'));
-        seen.add(cursor);
+        cursor = parsed ? parsed.next : data[section.cursor || 'next_cursor'] ?? null; pages++;
+        const key = JSON.stringify(cursor);
+        if (cursor !== null && seen.has(key)) throw new Error(t('attention_invalid'));
+        seen.add(key);
       } while (cursor !== null && pages < wanted);
       section.pages = pages; section.size = items.size; section.partial = cursor !== null;
       section.list.replaceChildren(...(items.size ? [...items.values()].map(item => section.row(item, open)) : []));
@@ -201,10 +206,10 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
       section.badge.textContent = section.partial ? '' : String(items.size);
       section.count.hidden = !section.partial;
       section.count.textContent = section.partial ? t('global_shown', {count: items.size}) : '';
-      section.status.replaceChildren();
+      section.status.replaceChildren(...(items.size === 0 && cursor !== null ? [t('attention_more_possible')] : []));
       section.more.hidden = cursor === null;
       section.readFailed = false;
-      section.section.hidden = items.size === 0;
+      section.section.hidden = items.size === 0 && cursor === null;
       section.section.dataset.fresh = 'true';
       if (focusKey) {
         const row = section.list.querySelector(`[data-inbox-key="${CSS.escape(focusKey)}"]`);
