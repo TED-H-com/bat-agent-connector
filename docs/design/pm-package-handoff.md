@@ -163,7 +163,7 @@ retain the whole-document rule. These are deliberate limits, not partial-result
 or cursor signals.
 
 There is no new scope, cache or source budget shared across rows. For N rows returned
-by handlers across the registered parts, the barrier makes at most one
+by handlers before filtering, across every registered list and bootstrap part, the barrier makes at most one
 independent source-visibility check per row and one check of the remainder.
 Each keeps the existing maximum of 64 original roots, 2,048 source nodes and
 source depth 64; root lookup retains its 256-identity recursion bound. Thus the
@@ -185,9 +185,27 @@ The final pass is necessary: handler-time authorization cannot authorize a sourc
 withdrawn before the response barrier. An additional bootstrap fixture places
 66 roots in its first source-bearing part: the old barrier aborts before later
 parts and performs 89 checks, whereas completing the corrected response takes
-178 checks. Consequently these measurements do not establish a universal
-non-increase relative to early-aborted responses; that cost-policy interpretation
-needs separate confirmation.
+178 checks. The cost of a refusal is not a budget for a returned page.
+
+The cost policy has three rules:
+
+1. Every response obeys the per-row-plus-remainder bound above, including responses
+   that are ultimately refused. Each check retains its existing limits.
+2. For an already registered shape that the old barrier returns (established
+   collections, deployment items and bootstrap), original-root checks do not
+   increase except for inherited-only references of individual rows. The allowance
+   is the sum, over handler-returned rows, of `document_roots(row, inherited_host)`
+   minus `document_roots(row)`; no root outside that difference adds an allowance.
+   For 64 operation rows sharing one source the barrier costs 65 → 64 checks.
+   A returned bootstrap with two 32-row parts spanning 64 distinct sources costs
+   192 → 64. With a page `host` and 64 rows sharing only one readable `session_id`,
+   it costs 1 → 64: the inherited-only roots explain this exception. Newly
+   registered PM runs retain the separate 66 → 132 and 1 → 64 rules above.
+3. A response refused by the old barrier may cost more, whether it is now returned
+   or still refused. The old barrier may stop at the first failing part; now all
+   parts' rows are checked before the remainder. The 89 → 178 bootstrap is the
+   returned example. No scope, cache or traversal budget is shared across rows to
+   hide that additional work; rule 1 still applies.
 
 A future optimization may use one synchronous barrier snapshot with independent
 per-record budgets (the `pm_source_reads.record` mechanism proposed separately, absent from this baseline).

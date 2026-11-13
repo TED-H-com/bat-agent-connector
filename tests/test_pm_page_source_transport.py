@@ -15,6 +15,7 @@ from tests.pm_page_source_reference import namespace
 from tests.test_api_v1 import daemon as daemon  # noqa: F401
 from tests.test_api_v1 import http, token
 from tests.test_api_v1 import served as served  # noqa: F401
+from tests.test_pm_page_source_limits import page_rows
 from tests.test_work_items import act
 
 OWNER = api_auth.Principal('page-fixture-owner', frozenset({'observe', 'manage', 'start', 'operate'}))
@@ -25,7 +26,8 @@ async def pages(served, request):
     d, port = served
     project = (await act(d, OWNER, 'project.create', params={'name': 'Bootstrap source fixture'}))['result']['project_id']
     work = []
-    for i in range(2 if getattr(request, 'param', None) == 'early_failure' else 1):
+    early_failure = getattr(request, 'param', None) == 'early_failure'
+    for i in range(0 if early_failure else 1):
         item = await act(d, OWNER, 'work_item.create', {'project_id': project}, {'title': f'Source group {i}'})
         work.append(item['result']['work_item_id'])
     originals, workspaces = [], []
@@ -52,6 +54,12 @@ async def pages(served, request):
             expected_version=pm_discussions._thread(d.ops.db, wid, tid)['version'],
             adapter='bat.codex', purpose='Fixture only; no provider execution', execution_authority=authority)
         pm_runs.fail(d.journal, run['run_id'], run['generation'], 'Fixture ends before provider execution', before_send=True)
+    if early_failure:
+        # Restore the original refusal fixture: these two source-bearing Work
+        # creations also appear in the final 50-operation bootstrap window.
+        for i in range(2):
+            item = await act(d, OWNER, 'work_item.create', {'project_id': project}, {'title': f'Source group {i}'})
+            work.append(item['result']['work_item_id'])
     # Keep the real 50-row bootstrap limit. WorkItems predate the operation
     # page and carry the roots absent from that page, so each part stays <=64
     # and only the outer bootstrap union reaches 66. The separate early-failure
@@ -132,9 +140,9 @@ async def test_66_sources_pass_real_read_barriers(pages, monkeypatch, shape, tra
     elif shape in {'operations', 'events'}:
         assert (before_count, after_count) == (132, 132)
     else:
-        assert after_count <= before_count
+        assert (before_count, after_count) == (156, 90)
     if os.environ.get('BAC_EVIDENCE'):
-        directory = Path(os.environ['BAC_EVIDENCE']) / 'r1'
+        directory = Path(os.environ['BAC_EVIDENCE']) / 'r2'
         directory.mkdir(parents=True, exist_ok=True)
         (directory / f'cost-{shape}-{transport}-{role}.json').write_text(json.dumps({
             'shape': shape, 'transport': transport, 'role': role, 'before': before_count, 'after': after_count,
@@ -167,3 +175,50 @@ async def test_withdrawal_after_handler_is_enforced(pages, monkeypatch, shape, t
     else:
         assert len(seen[0][shape]) == 66
         assert len(body[shape]) == 65 and body['source_visibility_filtered']
+
+
+@pytest.mark.parametrize('pages', ['early_failure'], indirect=True)
+@pytest.mark.parametrize('transport', ['http', 'call_api'])
+@pytest.mark.parametrize('role', ['member', 'admin'])
+async def test_bootstrap_first_part_refusal_cost(pages, monkeypatch, transport, role):
+    """Fails on 447da212: the first part's union refuses the response with 409."""
+    d, _, _, _, _, work = pages
+    credential = token(d, OWNER.actor, *OWNER.scopes) if role == 'member' else d._admin_token
+    principal = api_auth.authenticate(d.ops.db, credential, d._admin_token)
+    current, original_root, original_visible = lineage.read_response, lineage._visible_roots, lineage.visible_roots
+    roots, checks, supplied = [], [], []
+    active = False
+
+    def count_root(db, principal, identities):
+        roots.extend(identities)
+        return original_root(db, principal, identities)
+
+    def count_check(db, principal, identities):
+        if active:
+            checks.append(frozenset(identities))
+        return original_visible(db, principal, identities)
+
+    def barrier(db, principal, value):
+        nonlocal active
+        supplied.append(value)
+        active = True
+        try:
+            return current(db, principal, value)
+        finally:
+            active = False
+
+    monkeypatch.setattr(lineage, '_visible_roots', count_root)
+    monkeypatch.setattr(lineage, 'visible_roots', count_check)
+    monkeypatch.setattr(lineage, 'read_response', namespace()['read_response'])
+    status, body = await request_page(pages, monkeypatch, 'bootstrap', transport, principal, credential)
+    assert status == 409 and body['error']['code'] == 'PM_SOURCE_LINEAGE_LIMIT'
+    before = len(roots)
+    roots.clear()
+    monkeypatch.setattr(lineage, 'read_response', barrier)
+    status, body = await request_page(pages, monkeypatch, 'bootstrap', transport, principal, credential)
+    assert status == 200, body
+    assert body == supplied[0]  # Every readable row and all metadata survive.
+    assert {item['work_item_id'] for item in body['snapshot']['work_items']['work_items']} == set(work)
+    assert (before, len(roots)) == (89, 178)
+    assert len(checks) <= len(list(page_rows(supplied[0]))) + 1
+    assert all(len(ids) <= 64 for ids in checks)

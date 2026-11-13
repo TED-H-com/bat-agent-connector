@@ -206,7 +206,7 @@ def test_empty_lineage_scalar_and_unknown_shapes_are_unchanged(sources):
     assert lineage.read_response(db, OWNER, value) == value
 
 
-def test_registered_pages_never_increase_existing_visibility_cost(sources):
+def test_single_part_refusal_and_new_runs_visibility_cost(sources):
     db, _, calls = sources
     for wrap in [lambda value: value, bootstrap, lambda value: bootstrap(bootstrap(value))]:
         for key in ['operations', 'events', 'items']:
@@ -227,8 +227,72 @@ def test_registered_pages_never_increase_existing_visibility_cost(sources):
     assert len(calls) == 64
 
 
-def test_fixed_seed_reference_equivalence(sources):
-    db, hidden, _ = sources
+def page_rows(value, inherited_host=None):
+    """Count handler-returned fixture rows, before any visibility filtering."""
+    if not isinstance(value, dict):
+        return
+    host = value.get('host', inherited_host)
+    keys = set(namespace()['_COLLECTIONS'])
+    if ('next_cursor' in value and isinstance(value.get('items'), list)
+            and all(isinstance(item, dict) and 'deployment_id' in item for item in value['items'])):
+        keys.add('items')
+    for key in keys:
+        for item in value.get(key, []) if isinstance(value.get(key), list) else []:
+            yield item, host
+    if (isinstance(value.get('snapshot'), dict) and isinstance(value.get('sync'), dict)
+            and isinstance(value.get('capabilities'), dict) and 'pagination' in value):
+        for part in value['snapshot'].values():
+            yield from page_rows(part, value['snapshot'].get('host', host))
+
+
+def visibility_calls(monkeypatch):
+    calls = []
+    original = lineage.visible_roots
+
+    def counted(db, principal, identities):
+        calls.append(frozenset(identities))
+        return original(db, principal, identities)
+
+    monkeypatch.setattr(lineage, 'visible_roots', counted)
+    return calls
+
+
+@pytest.mark.parametrize('shape,counts', [
+    ('shared_operations', (65, 64)),
+    ('returned_bootstrap', (192, 64)),
+    ('inherited_session', (1, 64)),
+])
+def test_returned_page_exact_costs(sources, monkeypatch, shape, counts):
+    """All return on 447da212; the corrected-cost assertions fail there."""
+    db, _, roots = sources
+    if shape == 'shared_operations':
+        value = {'operations': [row(0) for _ in range(64)]}
+    elif shape == 'returned_bootstrap':
+        value = bootstrap({'operations': [row(i) for i in range(32)]})
+        value['snapshot']['second'] = {'events': [row(i) for i in range(32, 64)]}
+    else:
+        value = {'host': 'fixture-host', 'sessions': [{'session_id': 'session-0'} for _ in range(64)]}
+    calls = visibility_calls(monkeypatch)
+    roots.clear()
+    before = outcome(namespace()['read_response'], db, value)
+    before_roots = tuple(roots)
+    calls.clear()
+    roots.clear()
+    after = outcome(lineage.read_response, db, value)
+    assert after == before and before[0] == 'ok'
+    assert (len(before_roots), len(roots)) == counts
+    rows = list(page_rows(value))
+    inherited = sum(len(lineage.document_roots(db, item, inherited_host=host)
+                        - lineage.document_roots(db, item)) for item, host in rows)
+    assert len(roots) <= len(before_roots) + inherited
+    assert len(calls) <= len(rows) + 1 and all(len(ids) <= 64 for ids in calls)
+    if shape != 'inherited_session':
+        assert inherited == 0 and len(roots) <= len(before_roots)
+
+
+def test_fixed_seed_reference_equivalence(sources, monkeypatch):
+    db, hidden, roots = sources
+    calls = visibility_calls(monkeypatch)
     hidden.update({oid(i) for i in range(100, 110)})
     rng = random.Random(447212)
     reference = namespace()['read_response']
@@ -259,8 +323,22 @@ def test_fixed_seed_reference_equivalence(sources):
             value['envelope'] = expected['envelope'] = {'operation_ids': [oid(i) for i in range(65)]} if index % 8 == 3 else row(100)
         for _ in range(rng.randrange(3)):
             value, expected = bootstrap(value), bootstrap(expected)
+        roots.clear()
         old = outcome(reference, db, value)
+        before_roots = tuple(roots)
+        calls.clear()
+        roots.clear()
         new = outcome(lineage.read_response, db, value)
+        after_roots = tuple(roots)
+        registered = list(page_rows(value))
+        assert len(calls) <= len(registered) + 1, index
+        assert all(len(ids) <= 64 for ids in calls), index
+        inherited = sum(len(lineage.document_roots(db, item, inherited_host=host)
+                            - lineage.document_roots(db, item)) for item, host in registered)
+        if scenario in {0, 3}:
+            assert inherited == 0, index
+        if old[0] == 'ok':
+            assert len(after_roots) <= len(before_roots) + inherited, index
         expected_bytes = json.dumps(expected, ensure_ascii=False).encode()
         if old[0] == 'ok':
             cases['same'] += 1
