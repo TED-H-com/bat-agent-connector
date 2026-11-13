@@ -20,6 +20,12 @@
   control available with English and Traditional Chinese guidance, and document
   original-operation lookup after a lost reply in all agent skills.
 
+- Fix 409 errors when readable operation, event, PM run or Dashboard bootstrap
+  pages contain rows from more than 64 original sources in total. Each row keeps
+  its own source-access and size limits; withdrawn sources remain hidden.
+  A row whose hidden source is identified through the page's host is now omitted
+  instead of making the whole page fail with 404.
+
 - Preview exact retained external context together with an independently verified
   published branch head through HTTP, MCP and the desktop bridge. Preserve both
   identities and bilingual refusal reasons without creating Work or attributing
