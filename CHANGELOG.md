@@ -8,9 +8,17 @@
   quality and coverage. Every original source must remain readable. Reports are
   available in English and Traditional Chinese as Markdown, HTML or SVG; actual
   dates remain unknown. Reading a report changes nothing and calls no model.
+
 - Reading the Connector's private local state no longer fails as "not private"
   when the Connector replaces that file at the same moment, for example while
   the desktop app checks a service that is starting.
+
+- Repair checks tolerate concurrent Connector update-state writes without reporting invalid state.
+
+- Preserve paired operation-history cursors in MCP, RPC, CLI and Dashboard readers,
+  including equal timestamps and empty continuing pages. Keep Attention's next-page
+  control available with English and Traditional Chinese guidance, and document
+  original-operation lookup after a lost reply in all agent skills.
 
 - Preserve the original operation result when its later audit record cannot be
   written. Show a durable warning in English and Traditional Chinese without
