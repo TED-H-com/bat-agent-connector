@@ -9,10 +9,15 @@ Result. 中文：由請求者選取的保留外部內容，搭配獨立驗證的
 The Python Connector is the only authority. The preview creates no Work, Attempt,
 package, relationship, operation or receipt. It writes no journal or table rows,
 runs no Git command, clones nothing, collects no history and calls no model.
-It reuses `repository_sync.source_preview` unchanged: it reads the BAT workspace
-once, read-only, through `workspace:load` on the read-only Fleet client, in the
-same way as the existing published continuation preview. That is the only allowed
-BAT frame. The exact workspace folder remains part of the existing binding digest;
+It reuses `repository_sync.source_preview` unchanged: it makes one read-only
+`workspace:load` request through the read-only Fleet client, in the same way as
+the existing published continuation preview. The shared client may resend that
+read-only frame after a busy reply, up to its existing bound of three attempts
+(`client.py`, `_invoke_checked`). Only `workspace:load` invoke frames are sent.
+The client records transport failures in the Connector's own error log; its retry
+and logging behavior are unchanged. 中文：預覽發出一次唯讀請求；共用 client 遇到
+busy 回覆可在既有三次嘗試上限內重送同一種唯讀 frame，並記錄傳輸錯誤日誌。
+The exact workspace folder remains part of the existing binding digest;
 there is no cache, caller assertion or reduced digest. Manual and foreign sessions
 and worktrees remain read-only.
 
@@ -25,6 +30,25 @@ and worktrees remain read-only.
 - Tauri: the same POST path and body through the existing central API bridge.
   The bridge rejects extra fields, wrong methods, queries and operation keys;
   Python resolves grants, retained content and the published basis.
+
+MCP exposes `workspace_id` and an opaque object `body`; it does not publish a
+typed schema for the nested body fields. The central Python validator is their
+only authority. Before that call, the MCP adapter may parse a JSON object string
+or refuse a non-object body with its own English validation text, which may repeat
+the caller's input. Those adapter errors are not the central bilingual catalog.
+中文：MCP 的 body 是不透明物件，內層欄位由中央驗證；adapter 的前置英文錯誤
+可能重複呼叫者輸入，不屬於中央雙語 reason catalog。
+
+The existing HTTP API request-body limit is 200,000 bytes; an oversized body
+receives HTTP 413 / `TOO_LARGE`. The daemon RPC envelope limit is 100,000 bytes,
+including `method` and `params`; an oversized envelope is rejected before the
+ordinary RPC error envelope and callers can receive a connection reset. MCP uses
+that RPC transport and inherits its limit. A body within every field's character
+limit can still exceed either byte limit, especially with escaped Unicode JSON.
+These transport limits and the RPC reset behavior are unchanged by this read.
+中文：HTTP body 上限為 200,000 bytes（超限回 413 / `TOO_LARGE`）；RPC envelope
+含 method/params 上限為 100,000 bytes，超限可能直接中斷連線，MCP 亦受此限制。
+符合各欄位字數限制，不代表序列化後符合傳輸位元組上限。
 
 The caller needs `observe`, explicit current PM workspace membership and the
 current named reader grant for the selected history source. Administrator status
@@ -41,15 +65,28 @@ The exact body has these fields (only `model` is optional):
 | Field | Contract |
 |---|---|
 | `context_ref` | Complete `external_history_ref/v1`, as returned by the existing fixed excerpt preview. |
-| `code_target` | Exactly `repository`, `host`, BAT `workspace_id`, `source_ref`. An explicit configured binding and a `refs/heads/` branch are required. No inferred target when bindings are ambiguous. |
+| `code_target` | Exactly `repository`, `host`, BAT `workspace_id`, `source_ref`; each at most 256 UTF-8 bytes. An explicit configured binding and a `refs/heads/` branch (at most 200 ASCII characters after the prefix) are required. No inferred target when bindings are ambiguous. |
 | `expected_source_sha` | Explicit reviewed full lowercase 40-hex branch head SHA. A changed head is refused, never substituted. |
 | `project_id` | Existing active project explicitly bound to this PM workspace, including the selected repository. |
-| `requirement_ids` | 1–50 distinct IDs from the existing adopted scope. |
+| `requirement_ids` | 1–50 distinct IDs from the existing adopted scope, using its actual `pm_plans.ITEM_ID` grammar: `[a-z][a-z0-9_.-]{0,79}` (at most 80 ASCII characters). |
 | `new_work` | Exactly `title`, `goal`, `acceptance`, with existing Work field validation (title up to 120 characters; goal and acceptance up to 20,000). No Work is inserted. |
 | `instruction` | Nonempty instruction up to 4,000 characters, separate from the retained excerpt. |
 | `agent` | Explicit BAT agent `claude` or `codex`; no native alias or adapter fallback. |
 | `delivery` | `pull_request` or `reviewable_changes`. |
 | `model` | If present, nonempty string up to 256 characters; absence uses the existing BAT selection semantics. |
+
+All text must be valid Unicode scalar text, without unpaired surrogates. Character
+bounds count codepoints, not UTF-16 units. Blank means empty or entirely Python's
+Unicode whitespace set: U+0009–000D, U+001C–001F, U+0020, U+0085, U+00A0, U+1680,
+U+2000–200A, U+2028–2029, U+202F, U+205F and U+3000. The bridge uses the same set.
+`server_id` (128 codepoints), `model` and all target fields refuse blank values,
+C0/C1 controls (U+0000–001F and U+007F–009F), and U+2028/U+2029 line separators.
+Goal and acceptance retain existing Work text rules: empty text is allowed,
+CRLF/CR is counted after conversion to LF, and C0 controls other than tab/LF/CR
+and DEL are refused. Instruction also uses those Work text rules, requires
+nonblank text and has a 4,000-codepoint raw bound. Title retains the existing
+Work title validation and the preview's 120-codepoint raw bound. Retained context
+is never normalized by these request-field checks.
 
 URLs, cwd, paths, credentials, native session IDs, checkpoint IDs, ownership or
 producer claims, extra nested fields and alternate schemas are refused. Text in a

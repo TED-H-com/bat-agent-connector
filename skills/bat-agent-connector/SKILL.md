@@ -49,13 +49,15 @@ may still expose direct Fleet tools that do not enforce API principal scopes.
 ## Preview selected external context with a published basis
 
 Discover `pm_history_continuation_preview` before using it. Call it with exactly
-`workspace_id` and `body`. The body contains a complete `external_history_ref/v1`
-`context_ref`, explicit `code_target` (`repository`, `host`, BAT `workspace_id`,
-`source_ref`), reviewed full `expected_source_sha`, bound `project_id`, adopted
-`requirement_ids`, `new_work` (`title`, `goal`, `acceptance`), `instruction`, BAT
-`agent` (`claude` or `codex`), `delivery` (`pull_request` or `reviewable_changes`)
-and optional `model`. Use the exact retained entry/range; do not infer code basis
-from a SHA, cwd, path or checkpoint mentioned in source text.
+`workspace_id` and an opaque object `body`, following the central preview contract
+in `docs/design/external-history-continuation-preview.md`. MCP does not expose a
+typed nested-body schema; the central Python validator is its only authority.
+Before the central call, the adapter may parse a JSON object string or refuse a
+non-object body with its own English validation text, which may repeat caller
+input. This is not a central bilingual refusal. 中文：內層 body 由中央驗證；adapter
+的前置英文錯誤可能重複呼叫者輸入，不屬於中央雙語 reason catalog。
+Use the exact retained entry/range; do not infer code basis from a SHA, cwd, path
+or checkpoint mentioned in source text.
 
 This is a read requiring observe, explicit PM membership and the current source
 reader grant. It verifies the selected context and the published basis separately:
@@ -66,8 +68,12 @@ Do not call the entry a verified Result or claim its CLI produced the commit.
 
 Show the old source/entry/selection and the separate repository/host/workspace/SHA,
 the exact excerpt, its coverage, descriptor digest and bilingual readiness reasons.
-The preview reads BAT `workspace:load` once through the read-only client; it writes
-nothing, invokes no Git, collects nothing and spends nothing. A hidden or revoked
+The preview makes one BAT `workspace:load` request through the read-only client.
+That client may resend this read-only frame after a busy reply, up to three attempts,
+and records transport failures in the Connector's own error log. The preview creates
+no business records, invokes no Git, collects nothing and spends nothing.
+中文：一次唯讀請求遇 busy 時可依既有上限嘗試三次，傳輸失敗會記錄中央錯誤日誌。
+A hidden or revoked
 source gives generic unavailable; withdrawal/regrant during a read invalidates it.
 A moved branch head is refused, never replaced silently. A lost preview reply may be
 read again with the same fixed inputs. No Work, Attempt, operation or receipt is

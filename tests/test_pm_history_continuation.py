@@ -394,15 +394,17 @@ def test_shared_native_wire_validation_corpus():
         target = body
         for key in case['path'][:-1]:
             target = target[key]
-        value = case['value'] * case['repeat'] if 'repeat' in case else case['value']
+        value = json.loads(case['encoded_value']) if 'encoded_value' in case else case['value']
+        if 'repeat' in case:
+            value *= case['repeat']
         if case['path']:
             target[case['path'][-1]] = value
         else:
-            body = case['value']
+            body = value
         if case['valid']:
             continuation.validate_preview_request(body)
         else:
-            with pytest.raises(OperationError, match='PM_EXTERNAL_CONTINUATION_UNSUPPORTED'):
+            with pytest.raises(OperationError, match=case.get('python_code', 'PM_EXTERNAL_CONTINUATION_UNSUPPORTED')):
                 continuation.validate_preview_request(body)
 
 

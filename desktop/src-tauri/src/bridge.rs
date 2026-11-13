@@ -157,12 +157,24 @@ fn validate_history_continuation_preview(
     let value = body.ok_or(invalid)?;
     let doc: HistoryContinuationPreview =
         serde_json::from_value(value.clone()).map_err(|_| invalid)?;
-    let bounded = |s: &str, max: usize| !s.trim().is_empty() && s.chars().count() <= max;
+    // Match Python's whitespace set, including its four extra C0 separators.
+    let blank = |s: &str| {
+        s.chars()
+            .all(|c| c.is_whitespace() || matches!(c, '\u{1c}'..='\u{1f}'))
+    };
+    let bounded = |s: &str, max: usize| !blank(s) && s.chars().count() <= max;
+    let single_line = |s: &str, max: usize| {
+        bounded(s, max)
+            && !s
+                .chars()
+                .any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}'))
+    };
     let digest = |s: &str, n: usize| {
         s.len() == n
             && s.bytes()
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     };
+    let requirement_id = Regex::new(r"^[a-z][a-z0-9_.-]{0,79}$").unwrap();
     // Match existing Work field validation; retained context is never normalized.
     let work_text = |s: &str, max: usize| {
         let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
@@ -174,7 +186,7 @@ fn validate_history_continuation_preview(
     let r = doc.context_ref;
     if r.schema != "external_history_ref/v1"
         || r.workspace_id != workspace
-        || !bounded(&r.server_id, 128)
+        || !single_line(&r.server_id, 128)
         || !digest(&r.source_digest, 64)
         || !digest(&r.content_digest, 64)
         || !digest(&r.excerpt_digest, 64)
@@ -184,7 +196,7 @@ fn validate_history_continuation_preview(
             .is_match(&doc.project_id)
         || doc.requirement_ids.is_empty()
         || doc.requirement_ids.len() > 50
-        || doc.requirement_ids.iter().any(|id| !bounded(id, 128))
+        || doc.requirement_ids.iter().any(|id| !requirement_id.is_match(id))
         || doc
             .requirement_ids
             .iter()
@@ -204,7 +216,14 @@ fn validate_history_continuation_preview(
         || !work_text(&doc.instruction, 4000)
         || !matches!(doc.agent.as_str(), "claude" | "codex")
         || !matches!(doc.delivery.as_str(), "pull_request" | "reviewable_changes")
-        || (value.get("model").is_some() && doc.model.as_deref().is_none_or(|s| !bounded(s, 256)))
+        || (value.get("model").is_some()
+            && doc.model.as_deref().is_none_or(|s| !single_line(s, 256)))
+        || doc.code_target.as_object().is_none_or(|target| {
+            target.values().any(|v| {
+                v.as_str()
+                    .is_none_or(|s| !single_line(s, 256) || s.len() > 256)
+            })
+        })
     {
         return Err(invalid.into());
     }
@@ -3648,7 +3667,18 @@ mod tests {
         for case in corpus["cases"].as_array().unwrap() {
             let mut body = corpus["body"].clone();
             let keys = case["path"].as_array().unwrap();
-            let mut value = case["value"].clone();
+            let mut value = if let Some(encoded) = case.get("encoded_value").and_then(Value::as_str) {
+                match serde_json::from_str::<Value>(encoded) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        // Unpaired surrogates cannot cross the JSON/String boundary.
+                        assert!(!case["valid"].as_bool().unwrap(), "{}", case["name"]);
+                        continue;
+                    }
+                }
+            } else {
+                case["value"].clone()
+            };
             if let Some(repeat) = case.get("repeat").and_then(Value::as_u64) {
                 value = serde_json::json!(value.as_str().unwrap().repeat(repeat as usize));
             }

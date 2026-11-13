@@ -71,7 +71,8 @@ def _matches(value, pattern):
 
 
 def _text(value, limit):
-    if not isinstance(value, str) or not value.strip() or len(value) > limit:
+    # Python's whitespace set includes U+001C–U+001F; the bridge uses this same set.
+    if not isinstance(value, str) or not value or value.isspace() or len(value) > limit:
         raise _error()
     try:
         value.encode('utf-8')
@@ -79,11 +80,17 @@ def _text(value, limit):
         raise _error() from None
 
 
+def _line_text(value, limit):
+    _text(value, limit)
+    if any(ord(c) < 32 or 127 <= ord(c) < 160 or c in '\u2028\u2029' for c in value):
+        raise _error()
+
+
 def _target(target):
     _exact(target, ('repository', 'host', 'workspace_id', 'source_ref'))
     for value in target.values():
-        _text(value, 256)
-        if len(value.encode('utf-8')) > 256 or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in value):
+        _line_text(value, 256)
+        if len(value.encode('utf-8')) > 256:
             raise _error()
     if (not _matches(target['repository'], r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+')
             or not _matches(target['host'], r'[A-Za-z0-9_.-]+')):
@@ -102,7 +109,7 @@ def validate_descriptor(descriptor):
     if (ref['schema'] != refs.SCHEMA or descriptor['server_id'] != ref['server_id']
             or descriptor['workspace_id'] != ref['workspace_id']):
         raise _error()
-    _text(ref['server_id'], 128)
+    _line_text(ref['server_id'], 128)
     if (not _matches(ref['workspace_id'], r'ws_[0-9a-f]{32}')
             or not _matches(ref['source_id'], r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}')
             or not _matches(ref['entry_id'], r'shi_[0-9a-f]{32}')
@@ -153,7 +160,7 @@ async def _published(ops, principal, wid, ref, target):
     logical = {k: target[k] for k in ('repository', 'host', 'workspace_id')}
     config = repository_sync.config_snapshot(ops, logical)
     try:
-        # Contract A: unchanged proof, including exactly one read-only workspace:load.
+        # One read-only workspace:load request; the shared client owns read retries.
         published = await repository_sync.source_preview(ops, target)
     except (BatError, GitHubAmbiguous, OSError):
         raise _error('REPOSITORY_SOURCE_UNAVAILABLE', 409) from None
@@ -237,10 +244,10 @@ def validate_preview_request(body):
             or not _matches(body['expected_source_sha'], r'[0-9a-f]{40}')):
         raise _error()
     if 'model' in body:
-        _text(body['model'], 256)
+        _line_text(body['model'], 256)
     ids = body['requirement_ids']
     if (not isinstance(ids, list) or not 1 <= len(ids) <= 50
-            or any(not isinstance(rid, str) or not rid.strip() or len(rid) > 128 for rid in ids)
+            or any(not isinstance(rid, str) or not pm_plans.ITEM_ID.fullmatch(rid) for rid in ids)
             or len(set(ids)) != len(ids)):
         raise _error()
     if not _matches(body['project_id'], r'prj_[0-9a-f]{20}'):
