@@ -67,6 +67,7 @@ import { groupedSessions, matchesSession, runtimeStale, sessionActivity, session
 import { capturePanel } from "./capture.js";
 import { taskControlsPanel } from "./task-controls.js";
 import { operationList } from "./operation-list.js";
+import {operationAuditNotice} from './operation-audit.js';
 import {connectionOperationRecovery, connectionOperationNotice} from './connection-operation.js';
 import { permissionsPanel } from "./permissions.js";
 import { approvalsPanel } from "./approvals.js";
@@ -3646,6 +3647,7 @@ async function viewOperation(main, id) {
       freshPage();
       fill(panel, pageHeader({title: actionLabel(op.action), pill: statusPill(operationStatusKey(op.status))}),
         h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText(op.error_code) || t("reason_unavailable"), "bad") : null),
+        operationAuditNotice(op, {h, t}),
         connectionOperationNotice(connectionRecovery, {h, t, refresh: readOriginal, busy: controlBusy, readback: needsReadback}),
         ...(linked?.length ? [linkedItems(linked)] : []),
         h("dl", { class: "kv" },

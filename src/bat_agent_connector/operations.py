@@ -19,6 +19,7 @@ import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -51,6 +52,7 @@ ALLOWED = {
 UNCERTAIN_RETRY_S = (30.0, 60.0, 120.0, 300.0, 600.0)
 NO_KEY_PREFIX = "batc:nokey:"
 PM_KEY_PREFIX = NO_KEY_PREFIX + "pm:"
+_audit_warnings = ContextVar("operation_audit_warnings", default=None)
 LEGACY_SESSION_ACTIONS = frozenset({"worktree.merge", "session.record_verification", "session.failover", "fanout.plan", "fanout.start", "session.relay", "session.start", "session.send", "session.answer", "session.interrupt", "session.permissions", "session.approve_pending"})
 LEGACY_TASK_ACTIONS = frozenset({"task.pause", "task.resume", "task.mark_stage",
                                  "task.verify", "task.request_ted", "task.command.reconcile"})
@@ -289,9 +291,37 @@ class OpContext:
         if any(k not in current or current[k] != v for k, v in values.items()):
             self.set_refs(**values)
 
+    @contextlib.contextmanager
+    def audit_scope(self, name: str):
+        """Bind warnings to this execution; nested steps retain distinct identities."""
+        from .safety import result_audit_sink
+
+        warnings = {}
+        def collect(identity, warning):
+            effect_id = hashlib.sha256(_canonical([name, identity]).encode()).hexdigest()
+            warnings.setdefault(effect_id, warning)
+        token = _audit_warnings.set((self.service, self.operation_id, warnings))
+        try:
+            with result_audit_sink(collect):
+                yield
+        finally:
+            _audit_warnings.reset(token)
+
     async def step(self, name: str, fn: Callable[[], Awaitable[dict]], *, request: dict | None = None,
                    reconcile: Callable[[dict], Awaitable[dict | None]] | None = None,
                    receipt_only: bool = False) -> dict:
+        with self.audit_scope(name):
+            try:
+                return await self._step(name, fn, request=request, reconcile=reconcile, receipt_only=receipt_only)
+            except (Wait, asyncio.CancelledError):
+                # These exits have no step result transaction. Journal errors
+                # still propagate through the existing settlement path.
+                self.service._record_audit_warnings(self.operation_id)
+                raise
+
+    async def _step(self, name: str, fn: Callable[[], Awaitable[dict]], *, request: dict | None = None,
+                    reconcile: Callable[[dict], Awaitable[dict | None]] | None = None,
+                    receipt_only: bool = False) -> dict:
         """Run one external call exactly once from this record's point of view.
 
         A finished step returns its stored response. A step whose earlier run never recorded an outcome (process
@@ -564,6 +594,7 @@ class OperationService:
                             (_canonical({**response, **({"reconciled": True} if reconciled else {})}),
                              time.time(), response.get("external_ref"), operation_id, name))
             self._observation_event(operation_id, "operation.step.succeeded", {"step": name, "response": response, "reconciled": reconciled})
+            self._record_audit_warnings(operation_id)
 
     def _step_status(self, operation_id: str, name: str, status: str, *, error: dict | None = None) -> None:
         with self.journal.tx():
@@ -572,6 +603,24 @@ class OperationService:
                             (status, _canonical(error) if error else None, status, time.time(), operation_id,
                              name))
             self._observation_event(operation_id, "operation.step." + status, {"step": name, "status": status, "error_code": (error or {}).get("code")})
+            self._record_audit_warnings(operation_id)
+
+    def _record_audit_warnings(self, operation_id: str) -> None:
+        pending = _audit_warnings.get()
+        if not pending or pending[0] is not self or pending[1] != operation_id or not pending[2]:
+            return
+        with self.journal.tx():
+            row = self.db.execute("SELECT external_refs FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
+            refs = json.loads(row["external_refs"] or "{}")
+            saved = refs.setdefault("audit_results", {})
+            fresh = {key: value for key, value in pending[2].items() if key not in saved}
+            if not fresh:
+                return
+            saved.update(fresh)
+            self.db.execute("UPDATE operations SET external_refs=?,updated_at=? WHERE operation_id=?",
+                            (_canonical(refs), time.time(), operation_id))
+            for effect_id, warning in fresh.items():
+                self._observation_event(operation_id, "operation.audit_result_failed", {"effect_id": effect_id, **warning})
 
     def has_idempotency_record(self, principal: Principal, *, action, target, idempotency_key) -> bool:
         """Internal admission classification, not a public lookup or source read.

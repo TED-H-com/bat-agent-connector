@@ -60,9 +60,8 @@ def host_git_context(tmp_path, monkeypatch):
     system.write_text('')
     global_config.write_text('')
     monkeypatch.setenv('XDG_CONFIG_HOME', str(context))
-    # /dev/shm basetemps may be noexec. Only this disposable launcher uses /tmp;
-    # config and repositories still live in the isolated pytest fixture directory.
-    with tempfile.TemporaryDirectory(prefix='bac-merge-git-', dir='/tmp') as launchers:
+    # Keep the executable launcher with the disk-backed Git/config fixtures.
+    with tempfile.TemporaryDirectory(prefix='bac-merge-git-', dir=tmp_path) as launchers:
         launcher = Path(launchers) / 'git'
         launcher.write_text(
             f'#!{sys.executable}\n'
