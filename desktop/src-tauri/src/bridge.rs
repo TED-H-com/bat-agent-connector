@@ -149,10 +149,14 @@ struct HistoryContinuationWork {
     acceptance: String,
 }
 
-fn validate_history_continuation_preview(body: Option<&Value>, workspace: &str) -> Result<(), String> {
+fn validate_history_continuation_preview(
+    body: Option<&Value>,
+    workspace: &str,
+) -> Result<(), String> {
     let invalid = "PM_EXTERNAL_CONTINUATION_UNSUPPORTED: Select retained context and an explicit published branch head. / 請選取保留的內容及明確已發布的分支頂端。";
     let value = body.ok_or(invalid)?;
-    let doc: HistoryContinuationPreview = serde_json::from_value(value.clone()).map_err(|_| invalid)?;
+    let doc: HistoryContinuationPreview =
+        serde_json::from_value(value.clone()).map_err(|_| invalid)?;
     let bounded = |s: &str, max: usize| !s.trim().is_empty() && s.chars().count() <= max;
     let digest = |s: &str, n: usize| {
         s.len() == n
@@ -163,9 +167,9 @@ fn validate_history_continuation_preview(body: Option<&Value>, workspace: &str) 
     let work_text = |s: &str, max: usize| {
         let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
         normalized.chars().count() <= max
-            && !normalized.chars().any(|c| {
-                matches!(c, '\0'..='\u{8}' | '\u{b}' | '\u{c}' | '\u{e}'..='\u{1f}' | '\u{7f}')
-            })
+            && !normalized.chars().any(
+                |c| matches!(c, '\0'..='\u{8}' | '\u{b}' | '\u{c}' | '\u{e}'..='\u{1f}' | '\u{7f}'),
+            )
     };
     let r = doc.context_ref;
     if r.schema != "external_history_ref/v1"
@@ -188,17 +192,19 @@ fn validate_history_continuation_preview(body: Option<&Value>, workspace: &str) 
             .len()
             != doc.requirement_ids.len()
         || !bounded(&doc.new_work.title, 120)
-        || doc.new_work.title.trim().chars().any(|c| {
-            matches!(c, '\0'..='\u{1f}' | '\u{7f}' | '\u{2028}' | '\u{2029}')
-        })
+        || doc
+            .new_work
+            .title
+            .trim()
+            .chars()
+            .any(|c| matches!(c, '\0'..='\u{1f}' | '\u{7f}' | '\u{2028}' | '\u{2029}'))
         || !work_text(&doc.new_work.goal, 20000)
         || !work_text(&doc.new_work.acceptance, 20000)
         || !bounded(&doc.instruction, 4000)
         || !work_text(&doc.instruction, 4000)
         || !matches!(doc.agent.as_str(), "claude" | "codex")
         || !matches!(doc.delivery.as_str(), "pull_request" | "reviewable_changes")
-        || (value.get("model").is_some()
-            && doc.model.as_deref().is_none_or(|s| !bounded(s, 256)))
+        || (value.get("model").is_some() && doc.model.as_deref().is_none_or(|s| !bounded(s, 256)))
     {
         return Err(invalid.into());
     }
@@ -3637,7 +3643,8 @@ mod tests {
             "../../../tests/fixtures/history-continuation-preview.json"
         ))
         .unwrap();
-        let path = "/pm/workspaces/ws_11111111111111111111111111111111/history-continuation-preview";
+        let path =
+            "/pm/workspaces/ws_11111111111111111111111111111111/history-continuation-preview";
         for case in corpus["cases"].as_array().unwrap() {
             let mut body = corpus["body"].clone();
             let keys = case["path"].as_array().unwrap();
