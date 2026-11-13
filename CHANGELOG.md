@@ -13,6 +13,8 @@
   when the Connector replaces that file at the same moment, for example while
   the desktop app checks a service that is starting.
 
+- Repair checks tolerate concurrent Connector update-state writes without reporting invalid state.
+
 - Preserve paired operation-history cursors in MCP, RPC, CLI and Dashboard readers,
   including equal timestamps and empty continuing pages. Keep Attention's next-page
   control available with English and Traditional Chinese guidance, and document

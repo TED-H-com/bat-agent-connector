@@ -4,8 +4,10 @@ import os
 import re
 import secrets
 import stat
+import time
 from pathlib import Path
 
+from .platform_files import PRIVATE_READ_DEADLINE_S, PRIVATE_READ_RETRY_S
 from .update_release import REPOSITORY, UpdateError, commit, require
 from .updater import Updater
 
@@ -14,13 +16,31 @@ def verify_repair(home):
     """Bounded read-only validation; bootstrap and installed counterpart stay identical."""
     state_path = home / ".local/share/bat-agent-connector/update/state.json"
     try:
-        descriptor = os.open(state_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(descriptor, "rb") as stream:
-            info = os.fstat(stream.fileno())
-            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
-                    and not info.st_mode & 0o077 and info.st_nlink == 1
-                    and info.st_size <= 1024 * 1024, "repair_state_invalid")
-            raw = stream.read(1024 * 1024 + 1)
+        deadline = time.monotonic() + PRIVATE_READ_DEADLINE_S
+        pause = 0.0
+        while True:
+            descriptor = os.open(state_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                info = os.fstat(descriptor)
+                require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                        and not info.st_mode & 0o077 and info.st_size <= 1024 * 1024,
+                        "repair_state_invalid")
+                if info.st_nlink == 1:
+                    with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                        raw = stream.read(1024 * 1024 + 1)
+                    break
+                # atomic_write may have unlinked the opened inode. All other
+                # refusals stay immediate, including an oversized unlinked file.
+                require(info.st_nlink == 0, "repair_state_invalid")
+            finally:
+                os.close(descriptor)
+            remaining = deadline - time.monotonic()
+            require(remaining > 0, "repair_state_invalid")
+            # Match platform_files: reopen once immediately, then back off.
+            if pause:
+                time.sleep(min(pause, remaining))
+                require(time.monotonic() < deadline, "repair_state_invalid")
+            pause = min(pause * 2 if pause else 0.001, PRIVATE_READ_RETRY_S)
         require(len(raw) <= 1024 * 1024, "repair_state_invalid")
         state = json.loads(raw)
         require(type(state["format"]) is int and state["format"] == 1
