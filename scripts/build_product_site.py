@@ -438,8 +438,8 @@ for en, zh, d, dz in [
     (
         "Match the package",
         "核對套件",
-        "Stable: Connector 0.2.19 / desktop 0.1.15, source recorded in release-manifest.json. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
-        "穩定版：Connector 0.2.19／desktop 0.1.15，完整來源見 release-manifest.json。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
+        "Stable: Connector 0.2.20 / desktop 0.1.16, source recorded in release-manifest.json. Prerelease: Connector 0.2.13 / desktop 0.1.9, source 437ee6a7143a82e32eae1d6a008203b2df072aaf (437ee6a7). Choose the matching desktop asset below and check release-manifest.json and SHA256SUMS. Each release has a wheel, sdist, Linux deb, two macOS DMGs, Windows installer and those two records: eight assets.",
+        "穩定版：Connector 0.2.20／desktop 0.1.16，完整來源見 release-manifest.json。預覽版（prerelease）：Connector 0.2.13／desktop 0.1.9，來源 437ee6a7143a82e32eae1d6a008203b2df072aaf（437ee6a7）。從下方選擇相符桌面套件，核對 release-manifest.json 與 SHA256SUMS。每版各有 wheel、sdist、Linux deb、兩個 macOS DMG、Windows 安裝器與這兩份紀錄，共八檔。",
     ),
     (
         "Connect your environment",
@@ -459,18 +459,18 @@ parts.append(
     '</ol><div class="install-current">'
     + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
-        "Stable 0.2.19 was published on November 13, 2026; its exact source is recorded in release-manifest.json. Its backend and desktop CI passed, and all eight public asset names, sizes and digests match the verified records. Source and validation details are linked below.",
-        "穩定版 0.2.19 於 2026 年 11 月 13 日發布，完整來源記錄於 release-manifest.json。該來源的 backend 與 desktop CI 均通過，八個公開資產的名稱、大小及 digest 亦核對相符；來源與驗證詳情見下方連結。",
+        "Stable 0.2.20 was published on November 14, 2026; its exact source is recorded in release-manifest.json. Its backend and desktop CI passed, and the release contains eight assets. Source and validation details are linked below.",
+        "穩定版 0.2.20 於 2026 年 11 月 14 日發布，完整來源記錄於 release-manifest.json。該來源的 backend 與 desktop CI 均通過，發布包含八個資產；來源與驗證詳情見下方連結。",
         "p",
     )
     + bi(
-        "Connector 0.2.19 / Desktop 0.1.15 adds guided Sprint Review, review of exact original assessments from Result and Overview, and discovery of withdrawable external-conversation relationships for a selected Work in the shared Dashboard. Review completion records direction and ownership; quality acceptance remains separate. Planning outputs remain drafts without adopting scope or starting work. API and MCP clients also gain advisory workspace WIP and read-only scope-impact previews; these two features have no Dashboard UI. Existing permissions, drafts and original operation keys are preserved.",
-        "Connector 0.2.19／Desktop 0.1.15 在共用 Dashboard 加入引導式 Sprint Review、從 Result 與 Overview 檢視並審查精確的原始評估，以及為選定 Work 尋找可撤回的外部對話關聯。完成 Review 記錄方向與責任歸屬，品質驗收仍須另行進行；Planning 產出維持草稿，不採納範圍，也不啟動工作。API／MCP 用戶端另可使用 workspace WIP 建議上限及唯讀的範圍影響預覽，這兩項功能目前沒有 Dashboard UI。既有權限、草稿及原 operation key 均保留。",
+        "Connector 0.2.20 / Desktop 0.1.16 adds read-only fixed Scope and roadmap reports through API and MCP, and fixes operation-history paging, pages with many sources, operation results when audit writes fail, and concurrent local state checks.",
+        "Connector 0.2.20／Desktop 0.1.16 透過 API 與 MCP 提供唯讀的固定 Scope 與 roadmap 報告，並修正操作歷史分頁、多來源頁面、稽核寫入失敗時的操作結果，以及並行本機狀態檢查。",
         "p",
     )
     + bi(
-        "On Windows, quit Dashboard from its tray menu and install the 0.1.15 package while preserving application data. Existing unsigned test packages cannot use in-app signed updates. Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.19 sources; old-installer upgrades are separate. CI does not establish recovery on your computer or real BAT/model acceptance.",
-        "Windows 請從系統匣退出 Dashboard，再安裝 0.1.15 套件並保留應用程式資料。既有未簽章測試包不能使用內建簽章更新。目前候選版的升級 fixture 使用由 0.2.12 與 0.2.19 固定發布來源建出的核心，舊安裝器的完整升級另有範圍；CI 不代表已修復你的電腦或通過真 BAT／模型驗收。",
+        "On Windows, quit Dashboard from its tray menu and install the 0.1.16 package while preserving application data. Existing unsigned test packages cannot use in-app signed updates. Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.19 sources; old-installer upgrades are separate. CI does not establish recovery on your computer or real BAT/model acceptance.",
+        "Windows 請從系統匣退出 Dashboard，再安裝 0.1.16 套件並保留應用程式資料。既有未簽章測試包不能使用內建簽章更新。目前候選版的升級 fixture 使用由 0.2.12 與 0.2.19 固定發布來源建出的核心，舊安裝器的完整升級另有範圍；CI 不代表已修復你的電腦或通過真 BAT／模型驗收。",
         "p",
     )
     + bi(
@@ -484,7 +484,7 @@ parts.append(
         "p",
     )
     + bi("Stable", "穩定版", "p")
-    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.19 --channel-check stable</code></pre>'
+    + '<pre class="install-command" tabindex="0" aria-label="Stable installer arguments / 穩定版安裝器參數"><code>--tag v0.2.20 --channel-check stable</code></pre>'
     + bi("Prerelease", "預覽版", "p")
     + '<pre class="install-command" tabindex="0" aria-label="Preview installer arguments / 預覽版安裝器參數"><code>--tag v0.2.13-preview.20261022 --channel-check preview</code></pre>'
     + bi(
@@ -501,9 +501,9 @@ parts.append(
         "button light lang-zh",
     )
     + link(
-        repo + "/releases/tag/v0.2.19",
-        "Download stable 0.2.19 →",
-        "下載穩定版 0.2.19 →",
+        repo + "/releases/tag/v0.2.20",
+        "Download stable 0.2.20 →",
+        "下載穩定版 0.2.20 →",
         "text-link",
     )
     + link(

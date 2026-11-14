@@ -1,26 +1,14 @@
 # Better Agent Dashboard／Connector 實作狀態
 
-## 2026-11-13：Connector 0.2.20／Desktop 0.1.16 發布準備
+## Connector 0.2.20／Desktop 0.1.16 交付
 
-分支 `release/0.2.20-desktop-0.1.16` 準備套件、技能、身分 golden 與 native lock 的版本。
-主線已合併 #533、#538、#539、#540、#543 與 #547，涵蓋固定 Scope／roadmap
-報告讀取、私有狀態並行讀寫、原操作歷史 cursor、跨來源分頁，以及 audit 寫入
-失敗時保留原操作結果與雙語警告。最新穩定版升級 fixture 使用已發布的 0.2.19，
-保留 0.2.12 較早基準。這是發布準備，尚不代表發布、安裝或驗收；簽章、公證、
-signed updater feed、owner／真 BAT／模型及 R0–R5 驗收不因此完成。
-已發布下載文件與網站仍指向 0.2.19／0.1.15，待發布後另行更新。
-E00–E11、R0–R5、A01–A40、未修訂的 PM v1.2 生命週期待辦與 P0–P4 保持各自狀態。
+分支：`release/0.2.20-desktop-0.1.16` 的版本準備已整合。合併：#548；#533、#538、#539、#540、#543 與 #547 已先行合併。
+發布：[Connector 0.2.20／Desktop 0.1.16](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.20) 於 2026-11-14 03:15:03 UTC 發布，來源 `6b51f8dd679fb3759e3494de5466058a53128265`。該來源的 [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43540501748) 與 [desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43540501771) main/push 均於首次執行通過。升級核心基準為 0.2.12 與 0.2.19，不代表桌面安裝器升級驗收。
+安裝：沒有新增 owner 安裝證據。實機：沒有新增實體裝置或真 BAT／模型驗收。Linux／Windows 套件未簽章；macOS 採 ad-hoc 簽章且未公證；沒有 signed updater feed。圖庫仍為歷史 0.2.13／0.1.9。E00–E11、R0–R5、A01–A40、未修訂的 PM v1.2 生命週期待辦與 P0–P4 保持各自狀態。
 
-This branch prepares Connector 0.2.20 / Desktop 0.1.16 package, skill, identity
-golden and native lock versions. Main has merged #533, #538, #539, #540, #543 and #547: fixed
-Scope/roadmap report reads, concurrent private-state reads and writes, original
-operation-history cursors, cross-source pagination and preserved operation outcomes
-with bilingual warnings when later audit writes fail. The latest-stable upgrade
-fixture uses published 0.2.19 alongside the earlier 0.2.12 baseline. Publication,
-installation, signing, notarization, a signed updater feed and owner/live acceptance
-remain separate gates. Published download documentation and the site retain
-0.2.19 / 0.1.15 until publication. E00–E11, R0–R5, A01–A40, unrevised PM v1.2
-lifecycle requirements and P0–P4 retain their separate status.
+Branch: `release/0.2.20-desktop-0.1.16` preparation is integrated. Merged: #548, following #533, #538, #539, #540, #543 and #547.
+Released: [Connector 0.2.20 / Desktop 0.1.16](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.20) was published at 2026-11-14 03:15:03 UTC from `6b51f8dd679fb3759e3494de5466058a53128265`. The [backend CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43540501748) and [desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/43540501771) main/push runs passed on their first attempts. Core-upgrade baselines are 0.2.12 and 0.2.19; these do not establish desktop installer upgrade acceptance.
+Installed: no new owner installation evidence. Live-tested: no new physical-device or real BAT/model acceptance. Linux and Windows packages are unsigned; macOS is ad-hoc signed and not notarized; there is no signed updater feed. The gallery remains historical 0.2.13 / 0.1.9. E00–E11, R0–R5, A01–A40, unrevised PM v1.2 lifecycle requirements and P0–P4 retain their separate status.
 
 ## Connector 0.2.19／Desktop 0.1.15 交付
 
