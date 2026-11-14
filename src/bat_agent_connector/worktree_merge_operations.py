@@ -27,7 +27,7 @@ from .operations import (
 )
 from .orchestrate import MERGED_KINDS, _summ
 from .orchestration_operations import receipt, record
-from .safety import Audit
+from .safety import Audit, audit_error_outcome
 from .session_start_operations import _head, _tier
 
 ACTION = 'worktree.merge'
@@ -419,6 +419,7 @@ async def invoke(ctx, plan, name, channel, params):
     host, sid = plan['host'], plan['session_id']
     fleet, client = ctx.service.context['fleet'], ctx.service.context['fleet'].client(host)
     sent, checked = False, False
+    reply_outcome = None
     audit = Audit(fleet.config.safety)
     base = {'actor': ctx.actor, 'tool': 'api:' + ACTION, 'host': host, 'session_id': sid + '#merge'}
     async def before_frame():
@@ -439,14 +440,15 @@ async def invoke(ctx, plan, name, channel, params):
         audit.record(**base, channel=channel, phase='attempt', operation_id=ctx.operation_id)
         result = await client.invoke(channel, params, grant=grant, retry_on_disconnect=False,
             before_frame=before_frame, before_send=before_send, on_transport=on_transport)
+        reply_outcome = "error" if isinstance(result, dict) and result.get("success") is False else "unknown"
         if (not isinstance(result, dict) or result.get('success') is not True
                 or channel == 'worktree:merge' and any(result.get(k) != v for k, v in
                     {'strategy': 'merge', 'branchName': plan['worktree']['branchName'], 'sourceBranch': plan['worktree']['sourceBranch']}.items())):
             raise AmbiguousOutcome('BAT did not positively acknowledge the fixed effect')
-        audit.record(**base, channel=channel, phase='result', ok=True, operation_id=ctx.operation_id)
+        audit.record_after_effect(effect_sent=sent, effect_outcome="accepted", **base, channel=channel, phase='result', ok=True, operation_id=ctx.operation_id)
         return {'channel': channel, 'params': params, 'ack': result}
     except (Exception, asyncio.CancelledError) as exc:
-        audit.record(**base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
+        audit.record_after_effect(effect_outcome=reply_outcome or audit_error_outcome(exc), effect_sent=sent, **base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
         if sent:
             raise AmbiguousOutcome('sent merge effect is unproven; retain original receipts and both carriers') from exc
         if isinstance(exc, Cancelled):

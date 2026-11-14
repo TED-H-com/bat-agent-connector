@@ -25,7 +25,7 @@ from .operations import (
     StepFailed,
 )
 from .orchestrate import registry_permission_fields
-from .safety import Audit
+from .safety import Audit, audit_error_outcome, audit_reply_outcome
 from .session_start_operations import NAMESPACE, _head, _tier
 
 ACTION = 'session.failover'
@@ -414,9 +414,10 @@ async def _invoke(ctx, plan, name, channel, params, *, handoff=False):
     base = {'actor': ctx.actor, 'tool': 'api:session.failover', 'host': host, 'session_id': sid}
     ctx.set_refs(**{name + '_sent': False})
     sent = False
+    audit_sent = False
     bindings = None
     def fence():
-        nonlocal sent
+        nonlocal sent, audit_sent
         # Mark conservatively before either durable write. A partial local failure
         # never turns a potentially consumed handoff claim back into unsent proof.
         sent = True
@@ -425,6 +426,7 @@ async def _invoke(ctx, plan, name, channel, params, *, handoff=False):
         else:
             registry.update(host, sid, start_sent=True)
         ctx.set_refs(**{name + '_sent': True})
+        audit_sent = True
     async def final():
         nonlocal bindings
         if not handoff:
@@ -450,10 +452,14 @@ async def _invoke(ctx, plan, name, channel, params, *, handoff=False):
         grant = await resource_policy.authorize_shared_session(fleet, host, sid, plan['terminal'])
         result = await client.invoke(channel, params, grant=grant, retry_on_disconnect=False,
             before_frame=final, before_send=gate, on_transport=fence)
-        audit.record(**base, channel=channel, phase='result', ok=True)
+        outcome = (audit_reply_outcome(result.get('accepted', result.get('ok')) if isinstance(result, dict) else None)
+                   if handoff else audit_reply_outcome(result, key='ok'))
+        if not handoff and outcome == 'accepted' and result.get('sessionId') != sid:
+            outcome = 'unknown'
+        audit.record_after_effect(effect_sent=audit_sent, effect_outcome=outcome, **base, channel=channel, phase='result', ok=True)
         return result
     except (Exception, asyncio.CancelledError) as exc:
-        audit.record(**base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
+        audit.record_after_effect(effect_outcome=audit_error_outcome(exc), effect_sent=audit_sent, **base, channel=channel, phase='result', ok=False, error=type(exc).__name__)
         if sent:
             raise AmbiguousOutcome('failover frame crossed its durable fence; retain and read the original receipt') from exc
         if isinstance(exc, Cancelled):

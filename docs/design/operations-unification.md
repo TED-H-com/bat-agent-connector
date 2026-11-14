@@ -675,3 +675,51 @@ succeeded 之間；不增加 send frame 或 lifecycle transition。Event summary
 都是 `{"refs": {}}`。這會推進 event cursor、占用 event page，並增加 activity／timeline
 rows；不能宣稱 event bytes 或游標不變。False 與 true 各經一次 refs merge transaction
 提交，因此多兩次持久化寫入／commit；不代表新增 resource identity 或 send step。
+
+## Post-effect audit append failures
+
+`Audit.record` remains strict for intent records before an effect.
+`Audit.record_after_effect(effect_sent=..., effect_outcome=..., **fields)` is the single reviewed
+post-effect entry point for `result`, `append-terminal`, `rollback` and `record`.
+`effect_sent` is required at every call site. A frame's audit flag is set by its
+existing `on_transport` callback after preceding callback work completes. A helper
+may forward that callback to its exact frame (for example `workspace:save` in tab
+registration); it must not move guards, change `_roundtrip` or add a context side
+channel. Conservative recovery fences retain their original positions and meaning;
+they are not audit transport proof. A broad handler uses the frame's audit flag:
+false retains strict append behavior and creates no warning/event. Local testimony
+writes and rollback verified by absence use the completion evidence already present.
+
+`accepted` requires the path's own positive boolean acknowledgement or a completed
+local effect. Negative acknowledgement is `error`; a reply missing the required
+boolean is `unknown`. Preserve primary statuses/codes, including conservative
+uncertainty after a negative ACK.
+`OpContext.step` binds an execution-local warning sink with a shared open-scope
+lifetime. On scope exit it is invalidated before the ContextVar is reset, including
+copies inherited by child tasks. A live child can contribute to the enclosing step;
+a deferred child after exit is unbound and its append failure raises. Sibling and
+nested scopes retain independent lifetimes. This creates no pending audit obligation.
+Append failures at mkdir,
+open, write, flush or close cannot replace the effect's reply or exception. The
+sink buffers bounded warnings; step settlement writes `external_refs.audit_results`
+and one allowlisted `operation.audit_result_failed` event per stable effect ID in
+the same SQLite transaction as the step result. A Wait/cancellation exit without
+that result transaction persists the warning separately. Journal failures still
+follow the existing journal-failure path; this is not a second ledger or scheduler.
+
+Bindings cover task commands and legacy helpers awaited inside an operation step,
+including the coordinator's existing `task_dispatch` step. Autonomous task/legacy execution without that context retains
+strict append exceptions for now; it does not acquire a new command ledger.
+The original outcome, final-frame checks, locks and sent-effect reconciliation
+remain authoritative. An audit warning neither authorizes resend nor proves that
+an ACK/idle observation is completion. Same actor/key/envelope replays the original
+receipt, including after restart; a changed envelope still conflicts.
+
+Known limit: there is no pending audit obligation before dispatch. A crash between
+the effect and its result append (or between append failure and journal settlement)
+can leave no result line or warning, as it could before. Outcomes come from the
+operation journal, sent fences and readback, not completeness of the JSONL audit
+file. Simultaneous journal failure is the existing settlement gap, not an audit
+warning recovery mechanism. No schema/data step or historical refusal rewrite is
+introduced. Composite later pre-send refusals, generic journal settlement repair,
+and health/Attention/diagnostics aggregation remain separate follow-ups.
