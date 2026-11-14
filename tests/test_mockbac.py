@@ -111,9 +111,13 @@ async def test_pre_and_post_hello_refusals_are_connection_local(bac_mock):
 
 async def test_frame_id_and_size_boundaries(bac_mock):
     async with wire(bac_mock) as ws:
-        for mid in ('', 'x' * 129, '\0'):
-            reply = await call(ws, 'bac:hello', HELLO, mid)
-            assert reply['error']['code'] == 'INVALID_REQUEST'
+        for mid in ('', 'x' * 129, '\0', 7, 'x' * 600_000):
+            await ws.send(json.dumps({'type': 'invoke', 'id': mid, 'channel': 'bac:hello', 'params': HELLO}))
+            raw = await ws.recv()
+            reply = json.loads(raw)
+            assert reply['id'] is None
+            assert len(raw.encode('utf-8')) <= 524288
+            assert reply['result']['error']['code'] == 'INVALID_REQUEST'
         assert (await call(ws, 'bac:hello', HELLO, 'x' * 128))['ok']
         assert (await call(ws, 'bac:future\0', {}))['error'] == {
             'code': 'INVALID_REQUEST', 'message': 'Invalid BAC request',
@@ -124,3 +128,22 @@ async def test_frame_id_and_size_boundaries(bac_mock):
         for size, expected in ((65536, 'UNSUPPORTED_VERSION'), (65537, 'PAYLOAD_TOO_LARGE')):
             params = {'protocol': 'x' * (size - overhead), 'minor': 0}
             assert (await call(ws, 'bac:hello', params))['error']['code'] == expected
+
+
+async def test_reply_size_boundary_is_inclusive(bac_mock):
+    async with wire(bac_mock) as ws:
+        frame = {'type': 'invoke-result', 'id': 'case', 'result': ''}
+        overhead = len(json.dumps(frame, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
+        for size in (524288, 524289):
+            bac_mock.bac.hello_result = 'x' * (size - overhead)
+            await ws.send(json.dumps({'type': 'invoke', 'id': 'case', 'channel': 'bac:hello', 'params': HELLO}))
+            raw = await ws.recv()
+            reply = json.loads(raw)
+            assert reply['id'] == 'case'
+            if size == 524288:
+                assert len(raw.encode('utf-8')) == size
+                assert reply['result'] == bac_mock.bac.hello_result
+            else:
+                assert reply['result'] == {'ok': False, 'error': {
+                    'code': 'RESPONSE_TOO_LARGE', 'message': 'BAC result exceeds limit',
+                    'retryable': False, 'details': {'maxBytes': 524288}}}

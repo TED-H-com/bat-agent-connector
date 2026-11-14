@@ -61,6 +61,7 @@ class MockBac:
         messages = {
             "INVALID_REQUEST": "Invalid BAC request",
             "PAYLOAD_TOO_LARGE": "BAC request exceeds limit",
+            "RESPONSE_TOO_LARGE": "BAC result exceeds limit",
             "CONTEXT_NOT_SUPPORTED": "BAC requires a direct host connection",
             "UNSUPPORTED_VERSION": "Unsupported BAC protocol version",
             "HOST_MISMATCH": "Host identity changed",
@@ -135,6 +136,9 @@ class MockBac:
     async def handle(self, ws, frame, negotiated):
         self.frames.append(copy.deepcopy(frame))
         result, negotiated = self.reply(frame, negotiated)
+        mid = frame.get("id")
+        if not isinstance(mid, str) or "\0" in mid or not 1 <= len(mid.encode("utf-8")) <= 128:
+            mid = None
         if frame["channel"] == "bac:hello":
             self.hello_received.set()
             if self.close_hello:
@@ -143,12 +147,17 @@ class MockBac:
             if self.drop_hello:
                 return negotiated
             if self.invoke_error is not None:
-                await ws.send(json.dumps({"type": "invoke-error", "id": frame["id"],
+                await ws.send(json.dumps({"type": "invoke-error", "id": mid,
                                           "error": self.invoke_error}))
                 return negotiated
             if self.hello_result is not _BAC_DEFAULT:
                 result = self.hello_result
-        await ws.send(json.dumps({"type": "invoke-result", "id": frame["id"], "result": result}))
+        response = {"type": "invoke-result", "id": mid, "result": result}
+        encoded = json.dumps(response, separators=(",", ":"), ensure_ascii=False)
+        if len(encoded.encode("utf-8")) > 524288:
+            response["result"] = self.error("RESPONSE_TOO_LARGE", maxBytes=524288)
+            encoded = json.dumps(response, separators=(",", ":"), ensure_ascii=False)
+        await ws.send(encoded)
         return negotiated
 
 
