@@ -53,7 +53,7 @@ There are exactly two new files:
 
 The carrier kind is `pm-roadmap-report`. No caller can supply a path, ID or body.
 The service and host validate the same typed paths, manifest and exact receipt.
-The summed file bound is 512,000 bytes. Both mutation and readback encodings must
+The summed file bound is 512,000 bytes. Saving verifies every carrier receipt in the host's `_REVISIONS` file (`batc-pm-revisions.json`), bounded by `rev_load`'s `pm_read(..., maximum=4_000_000)` limit of 4,000,000 bytes; this history verification belongs to saving/reconciliation and never runs on report or receipt read paths. Both mutation and readback encodings must
 fit the existing 120,000-byte host-command limit. Neither bound is enlarged.
 The complete, unconditional carrier helper travels as plain normalized source in
 `python3 -c <source> <request>`; only request data is encoded. Assembly shortens
