@@ -74,6 +74,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "checkpoint_get": "observe", "checkpoint_preview": "observe", "integration_candidates": "observe",
            "integration_preview_get": "observe", "integration_get": "observe", "integrations_list": "observe",
            "pm_overview_get": "observe", "pm_dependencies_get": "observe", "pm_dependencies_revisions_list": "observe", "pm_dependencies_impact_get": "observe",
+           "pm_history_continuation_preview": "observe",
            "pm_history_excerpt_preview": "observe", "pm_history_excerpt_get": "observe",
            "pm_history_links_list": "observe", "pm_history_link_get": "observe", "pm_history_associations_list": "observe",
            "pm_history_cleanup_list": "observe",
@@ -342,6 +343,16 @@ class TaskDaemon:
 
     async def call_api(self, method: str, params: dict, principal: api_auth.Principal,
                        *, _observation_transport: dict | None = None) -> dict:
+        # Scope refusals must precede all resource/lineage reads, even when
+        # unvalidated parameters contain existing protected resource IDs.
+        scope = API_RPC.get(method, "?")
+        if method == "pm_history_continuation_preview":
+            from .pm_history_continuation import require_observe
+            require_observe(principal)
+        if scope != "?" and not principal.allows(scope):
+            raise OperationError("FORBIDDEN", f"{method} needs the {scope!r} scope", 403)
+        if method == "pm_history_continuation_preview" and (not isinstance(params, dict) or set(params) - {"entry"} != {"workspace_id", "body"}):
+            raise OperationError("INVALID_PARAMS", "Supply workspace_id and body", 422)
         from . import controller_authority
         from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard, cleanup_read_scopes
         cleanup_guard = nullcontext()
@@ -350,7 +361,12 @@ class TaskDaemon:
             cleanup_guard = cleanup_read_guard(self.ops, principal, {k: v for k, v in params.items() if k != 'entry'})
         with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal), cleanup_guard as cleanup_finalize:
             from .pm_source_lineage import read_request, read_response
-            if API_RPC.get(method) == "observe":
+            if method == "pm_history_continuation_preview":
+                from .pm_history_continuation import require_context_source
+                require_context_source(self.ops, principal, params.get('workspace_id'), params.get('body'))
+            # Continuation preview is a POST on HTTP (no generic read_request) and
+            # validates/authorizes every preview field itself; keep read_response below.
+            if API_RPC.get(method) == "observe" and method != "pm_history_continuation_preview":
                 read_request(self.journal.db, principal, params)
             result = await self._call_api_bound(method, params, principal,
                                                 _observation_transport=_observation_transport)
@@ -361,6 +377,9 @@ class TaskDaemon:
                              *, _observation_transport: dict | None = None) -> dict:
         """/rpc doors into OperationService and the inventory for MCP and CLI (same rules as /api/v1)."""
         scope = API_RPC[method]
+        if method == "pm_history_continuation_preview":
+            from .pm_history_continuation import require_observe
+            require_observe(principal)
         if scope != "?" and not principal.allows(scope):
             raise OperationError("FORBIDDEN", f"{method} needs the {scope!r} scope", 403)
         entry = params.pop("entry", None)
@@ -387,6 +406,9 @@ class TaskDaemon:
             else:
                 body = params
             return await pm_work_adopt_and_start.preview(self.ops, principal, wid, thread_id, body)
+        if method == "pm_history_continuation_preview":
+            from .pm_history_continuation import preview
+            return await preview(self.ops, principal, params["workspace_id"], params["body"])
         if method == "pm_work_start_preview":
             from . import pm_work_start
             params = dict(params)

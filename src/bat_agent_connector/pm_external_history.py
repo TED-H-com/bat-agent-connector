@@ -76,14 +76,22 @@ def current_grants(db, principal, workspace_id):
     require_member(db, principal, workspace_id)
 
 
-def preview(db, principal, workspace_id, source_id, entry_id, expected_content_digest, selection):
-    """Resolve only retained bytes; no collection, file access, write or ownership."""
+def _readable_source(db, grants, source_id):
+    """Prove the named source's current reader grant and retained binding."""
     from . import session_history
 
+    if not isinstance(source_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}', source_id):
+        raise unavailable()
+    source = next((s for s in grants if s['source_id'] == source_id), None)
+    if source is None or not session_history._row(db, source)['readable']:
+        raise unavailable()
+    return source
+
+
+def preview(db, principal, workspace_id, source_id, entry_id, expected_content_digest, selection):
+    """Resolve only retained bytes; no collection, file access, write or ownership."""
     with current_grants(db, principal, workspace_id) as grants:
-        source = next((s for s in grants if s['source_id'] == source_id), None)
-        if source is None or not session_history._row(db, source)['readable']:
-            raise unavailable()
+        _readable_source(db, grants, source_id)
         if (not isinstance(entry_id, str) or not re.fullmatch(r'shi_[0-9a-f]{32}', entry_id)
                 or not isinstance(expected_content_digest, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_content_digest)):
             raise invalid()
@@ -137,10 +145,16 @@ def resolve(db, principal, ref):
     """Verify all fields of a previously previewed reference against its original."""
     fields = {'schema', 'server_id', 'workspace_id', 'source_id', 'entry_id', 'source_digest',
         'content_digest', 'selection', 'excerpt_digest'}
-    if not isinstance(ref, dict) or set(ref) != fields or ref['schema'] != SCHEMA:
+    if not isinstance(ref, dict) or 'workspace_id' not in ref:
         raise invalid()
-    result = preview(db, principal, ref['workspace_id'], ref['source_id'], ref['entry_id'],
-        ref['content_digest'], ref['selection'])
-    if result['ref'] != ref:
-        raise changed()
-    return result
+    # Public callers already bind the explicit workspace before resolving a ref.
+    # A malformed ref cannot bypass the same source-access proof as preview.
+    with current_grants(db, principal, ref['workspace_id']) as grants:
+        _readable_source(db, grants, ref.get('source_id'))
+        if set(ref) != fields or ref['schema'] != SCHEMA:
+            raise invalid()
+        result = preview(db, principal, ref['workspace_id'], ref['source_id'], ref['entry_id'],
+            ref['content_digest'], ref['selection'])
+        if result['ref'] != ref:
+            raise changed()
+        return result

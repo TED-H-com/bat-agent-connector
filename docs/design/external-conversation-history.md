@@ -635,3 +635,7 @@ Synthetic shared-UI captures: [desktop source list](../review/ec11-external-hist
 [desktop reader](../review/ec11-external-history/detail-en-1440.png), and
 [Traditional Chinese phone reader](../review/ec11-external-history/detail-zh-TW-390.png).
 These contain fixture content only.
+
+The [selected-context/published-basis preview](external-history-continuation-preview.md)
+can now verify retained context and a separately selected published branch head.
+It does not attribute the commit to the external CLI or create derived Work.

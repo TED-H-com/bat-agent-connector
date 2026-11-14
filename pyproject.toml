@@ -58,6 +58,7 @@ path = "hatch_build.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bat_agent_connector"]
+exclude = ["/src/bat_agent_connector/build-info.json"]
 
 [tool.pytest.ini_options]
 tmp_path_retention_policy = "failed"

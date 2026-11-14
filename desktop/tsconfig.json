@@ -10,5 +10,6 @@
     "noEmit": true,
     "lib": ["ESNext", "DOM", "DOM.Iterable"]
   },
-  "include": ["src"]
+  "include": ["src", "suite"],
+  "exclude": ["suite/tests", "suite/playwright.config.ts", "suite/*.mjs"]
 }

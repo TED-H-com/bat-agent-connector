@@ -7,6 +7,8 @@ __pycache__/
 dist/
 desktop/dist-prototype/v1.3/
 desktop/dist-demo/
+/desktop/dist-suite/
+/desktop/dist-suite-harness/
 site/demo/
 site/prototype/
 build/
@@ -16,3 +18,15 @@ hosts.toml
 *.token
 *.enc.json
 .env
+
+# Desktop build outputs and local configuration
+desktop/**/node_modules/
+desktop/**/dist/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/**/playwright-report/
+desktop/**/test-results/
+desktop/**/*.local.json
+desktop/managed-runtime/*
+!desktop/managed-runtime/README.txt
+desktop/fleet-core/target/
