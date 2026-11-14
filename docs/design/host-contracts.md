@@ -8,18 +8,13 @@ feature, API, MCP, RPC, CLI, Dashboard field or schema is added.
 
 Authentication advertises only a protocol/minor pair; identity, build, features
 and limits arrive in hello. The host implementation is maintained separately in
-`TED-H-com/better-agent-terminal`. The mock and portable examples here specify
-that wire; they are not evidence about a real host build or its acceptance.
+`TED-H-com/better-agent-terminal`. Its host contract at
+`src-tauri/crates/bac-host-contracts/CONTRACT.md` is the wire authority. This
+page and the mock follow that contract; no test in this repository runs against
+a real host.
 The BAT transport reference is `81655b483ba6f2f6ce1f2158870613d8ec0215d4`,
 `src-tauri/src/remote_server.rs` (v2 auth and invoke dispatch). This reference
 identifies the transport, not a claim that the baseline already implements BAC.
-The Connector transport was inspected at `30b823db`.
-The validation order, reply table and limit map below were compared with the host
-implementation on the main branch of `TED-H-com/better-agent-terminal`
-(`src-tauri/crates/bac-host-contracts/CONTRACT.md`). Where this page and that contract
-disagree, the host contract is the wire authority and this page is corrected. No test in
-this repository runs against that host: the mock proves nothing about a real host, and the
-comparison is a comparison of texts, not live acceptance.
 
 ## Advertisement and request
 
@@ -106,6 +101,7 @@ client behavior; error envelopes still require the general types above.
 | --- | --- | --- |
 | `INVALID_REQUEST` | `Invalid BAC request` | `{"field": F}`; F is `frame`, `type`, `id`, `channel`, `params`, `params.protocol`, `params.minor` or `params.expectedHostId` |
 | `PAYLOAD_TOO_LARGE` | `BAC request exceeds limit` | `{"maxBytes": 65536}` |
+| `RESPONSE_TOO_LARGE` | `BAC result exceeds limit` | `{"maxBytes": 524288}` |
 | `CONTEXT_NOT_SUPPORTED` | `BAC requires a direct host connection` | `{}` |
 | `UNSUPPORTED_VERSION` | `Unsupported BAC protocol version` | `{"protocol": "bac/1", "minor": 0}` |
 | `HOST_MISMATCH` | `Host identity changed` | `{"hostId": <host identity>}` |
@@ -114,9 +110,7 @@ client behavior; error envelopes still require the general types above.
 | `NOT_OPTED_IN` | `Call bac:hello first` | `{}` |
 | `UNSUPPORTED_FEATURE` | `BAC feature is unavailable` | `{"feature": <flag name>}` |
 | `UNKNOWN_CHANNEL` | `Unknown BAC channel` | `{}` |
-
-The original hello contract also permits `INTERNAL_ERROR` with message
-`BAC request failed` and empty details.
+| `INTERNAL_ERROR` | `BAC request failed` | `{}` |
 
 Unknown envelope, success and build members are ignored. `bac.parse_envelope`
 is the single envelope parser. A valid error raises `BacReplyError`, carrying
@@ -145,7 +139,7 @@ features. Every reconnect starts fresh. The four completed states are:
 | Unsupported/malformed advertisement | `unsupported` | No hello or other BAC frame |
 | Valid hello success | `negotiated` | Store validated immutable value; no second hello |
 | Valid success naming a different host from the remembered `expectedHostId` | `unavailable`, `HOST_MISMATCH` | Client detects the mismatch itself, retains the original ID and emits the same single warning as an error envelope |
-| Error envelope: `INVALID_REQUEST`, `PAYLOAD_TOO_LARGE`, `CONTEXT_NOT_SUPPORTED`, `UNSUPPORTED_VERSION`, `HOST_MISMATCH`, `STORAGE_UNAVAILABLE`, `STORAGE_CORRUPT`, `INTERNAL_ERROR` | `unavailable`, reason is the code | Keep connection and existing read/guarded-write paths; no hello retry |
+| Error envelope: `INVALID_REQUEST`, `PAYLOAD_TOO_LARGE`, `RESPONSE_TOO_LARGE`, `CONTEXT_NOT_SUPPORTED`, `UNSUPPORTED_VERSION`, `HOST_MISMATCH`, `STORAGE_UNAVAILABLE`, `STORAGE_CORRUPT`, `INTERNAL_ERROR` | `unavailable`, reason is the code | Keep connection and existing read/guarded-write paths; no hello retry |
 | Other well-formed error code matching `[A-Z][A-Z_]{0,63}` | `unavailable`, preserve code | Same behavior; message/details do not select an outcome |
 | Malformed envelope, invalid error fields/code, invalid success value or unexpected reply type | `unavailable`, `invalid_reply` | Same behavior |
 | `invoke-error` | `unavailable`, `invoke_error` | Ignore raw host text for decisions and logging |
@@ -166,8 +160,7 @@ uninterpreted (unspecified for behavior), not another outcome or retry policy.
 Paths, overlong strings, non-strings and recognizable host identities are dropped
 silently; no identity, token, raw host message or raw details is logged. The existing
 transport timeout log may additionally record its generic timeout; connection
-loss retains existing connection diagnostics. There is no separate log-code
-registry to update.
+loss retains existing connection diagnostics.
 
 ## Identity and authorization boundaries
 
@@ -204,10 +197,7 @@ One conditional case asserts the exact `UNSUPPORTED_FEATURE` reply only when
 both with features off and with raised limits/features on (without implementing
 the features); `tests/test_bac.py` covers client negotiation, failures,
 identity memory, logs, isolation and unchanged guarded paths. Existing legacy
-tests retain their original expectations. A fixed-script comparison of this change with the previous main branch (connect, ping,
-read, guarded write, reconnect and terminal append against the default mock) recorded
-identical client frames; its records are not part of the repository.
-None of this proves the separately implemented host behaves identically.
+tests retain their original expectations.
 
 Before the first feature uses the negotiated state, decide:
 
