@@ -452,7 +452,7 @@ test('inspector shows visible schedule dates and milestone delta, links mileston
 
   await inspector.locator('a[href*="/requirements"]').click();
   await expect(page.locator('[data-pm-rtm]')).toBeVisible();
-  await expect(page.locator('[data-pm-rtm] [aria-selected="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-pm-rtm] [aria-current="true"]')).toHaveCount(1);
 
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/schedule`);
   const region = page.locator('[data-pm-schedule]');

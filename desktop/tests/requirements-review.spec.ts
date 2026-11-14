@@ -196,7 +196,7 @@ test('S7 Requirements resolves milestones and clears unknown selection through B
   await expect(page.locator('[data-work-inspector]')).toBeVisible();
   await page.evaluate(hash => {location.hash = hash;}, `#/pm/${f.ids.workspaceId}/requirements?select=missing`);
   await expect(page.locator('[data-work-inspector]')).toHaveCount(0);
-  await expect(page.locator('[data-rtm-requirement][aria-selected=true]')).toHaveCount(0);
+  await expect(page.locator('[data-rtm-requirement][aria-current=true]')).toHaveCount(0);
   await expect(page.locator('[data-pm-rtm] > [role=status]')).toContainText('Not in the current plan');
   await page.goBack(); await expect(page.locator('[data-work-inspector]')).toBeVisible();
   await page.evaluate(hash => {location.hash = hash;}, `#/pm/${f.ids.workspaceId}/requirements?select=milestone:design_review`);

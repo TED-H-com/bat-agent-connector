@@ -366,7 +366,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     if (!visible.length) return emptyState({title:t('res_no_match')});
     if (listMedia.matches) return h('div', {class: 'pm-agents-list', role: 'list'}, ...visible.map(listRow));
     return dataTable({
-      rows: visible, rowKey: 'source_id', selected,
+      label: t('ui_agents'), rows: visible, rowKey: 'source_id', selected,
       rowAttrs: row => ({'data-resource-row': row.source_id, 'data-resource-select': row.source_id}),
       onSelect(key) {selected = key; preference.selected = selected; signature = currentSignature(); renderInspector();},
       columns: [
@@ -539,8 +539,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
       selected = null; preference.selected = null; inspectorPanel = null;
       signature = currentSignature();
       const opener = stageRow(id);
-      if (opener?.getAttribute('role') === 'listitem') opener.removeAttribute('aria-current');
-      else if (opener) opener.setAttribute('aria-selected', 'false');
+      opener?.removeAttribute('aria-current');
       queueMicrotask(() => stageRow(id)?.focus());
     }});
     panel.dataset.resourceDetail = '';
