@@ -1,10 +1,10 @@
 // @ts-nocheck
 import assert from 'node:assert/strict';
-import {mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, truncateSync, readFileSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, truncateSync, readFileSync, lstatSync} from 'node:fs';
 import {join} from 'node:path';
 import {test} from 'node:test';
 import {testScratchRoot} from '../../tests/test-scratch.mjs';
-import {buildManifest, verifyManifest, treeSha256, MAX_FILE_BYTES, MAX_FILES, MAX_TOTAL_BYTES, MIME_TYPES} from '../manifest.mjs';
+import {assetEntryKind, buildManifest, verifyManifest, treeSha256, MAX_FILE_BYTES, MAX_FILES, MAX_TOTAL_BYTES, MIME_TYPES} from '../manifest.mjs';
 
 const provenance = {connectorVersion: '1.2.3', gitCommit: 'a'.repeat(40)};
 function withTree(run) {
@@ -65,7 +65,7 @@ test('verification rejects malformed, missing, added and changed assets', () => 
   rmSync(join(root, 'index.html')); assert.throws(() => verifyManifest(root, manifest));
 }));
 
-test('links, non-regular entries, bad names and unsupported extensions are refused', () => {
+test('links, invalid roots, bad names and unsupported extensions are refused', () => {
   for (const prepare of [
     root => symlinkSync('index.html', join(root, 'link.html')),
     root => symlinkSync('.', join(root, 'directory'), 'dir'),
@@ -78,17 +78,36 @@ test('links, non-regular entries, bad names and unsupported extensions are refus
     assert.throws(() => buildManifest(root, provenance));
     assert.throws(() => verifyManifest(root, manifest));
   });
+  withTree(root => {
+    const manifest = buildManifest(root, provenance), link = `${root}-link`;
+    try {
+      symlinkSync(root, link, 'dir');
+      assert.throws(() => buildManifest(link, provenance), /Asset root/);
+      assert.throws(() => verifyManifest(link, manifest), /Asset root/);
+      assert.throws(() => buildManifest(join(root, 'index.html'), provenance), /Asset root/);
+    } finally { rmSync(link, {force: true}); }
+  });
   for (const path of ['/index.html', '../index.html', 'a/../index.html', 'a\\b.js', 'a\0b.js', '\ud800.js']) {
     assert.throws(() => treeSha256([{path, content: Buffer.alloc(0)}]));
   }
   if (process.platform !== 'win32') withTree(root => {
+    const manifest = buildManifest(root, provenance);
     writeFileSync(Buffer.concat([Buffer.from(root + '/'), Buffer.from([0xff, 0x2e, 0x6a, 0x73])]), '');
     assert.throws(() => buildManifest(root, provenance), /UTF-8/);
+    assert.throws(() => verifyManifest(root, manifest), /UTF-8/);
   });
 });
 
+test('asset entry classifier rejects character devices', {skip: process.platform === 'win32'}, () => {
+  const device = lstatSync('/dev/null');
+  assert.equal(device.isCharacterDevice(), true);
+  assert.throws(() => assetEntryKind(device), /not a regular file/);
+});
+
 test('file limit accepts the boundary and refuses the next byte', () => withTree(root => {
-  const file = join(root, 'large.js'); writeFileSync(file, ''); truncateSync(file, MAX_FILE_BYTES);
+  const file = join(root, 'large.js'); writeFileSync(file, ''); truncateSync(file, MAX_FILE_BYTES - 1);
+  assert.doesNotThrow(() => buildManifest(root, provenance));
+  truncateSync(file, MAX_FILE_BYTES);
   const manifest = buildManifest(root, provenance);
   assert.equal(verifyManifest(root, manifest), true);
   truncateSync(file, MAX_FILE_BYTES + 1); assert.throws(() => buildManifest(root, provenance), /size limit/);
@@ -96,7 +115,9 @@ test('file limit accepts the boundary and refuses the next byte', () => withTree
 }));
 
 test('file count limit accepts the boundary and refuses the next file', () => withTree(root => {
-  for (let i = 1; i < MAX_FILES; i++) add(root, `${i}.js`);
+  for (let i = 1; i < MAX_FILES - 1; i++) add(root, `${i}.js`);
+  assert.equal(buildManifest(root, provenance).files.length, MAX_FILES - 1);
+  add(root, 'boundary.js');
   const manifest = buildManifest(root, provenance);
   assert.equal(manifest.files.length, MAX_FILES);
   assert.equal(verifyManifest(root, manifest), true);
@@ -109,6 +130,10 @@ test('total byte limit accepts the boundary and refuses the next byte', () => wi
   for (let i = 0; i < MAX_TOTAL_BYTES / MAX_FILE_BYTES; i++) {
     const file = join(root, `${i}.js`); writeFileSync(file, ''); truncateSync(file, MAX_FILE_BYTES);
   }
+  const last = join(root, `${MAX_TOTAL_BYTES / MAX_FILE_BYTES - 1}.js`);
+  truncateSync(last, MAX_FILE_BYTES - 1);
+  assert.doesNotThrow(() => buildManifest(root, provenance));
+  truncateSync(last, MAX_FILE_BYTES);
   const manifest = buildManifest(root, provenance);
   assert.equal(verifyManifest(root, manifest), true);
   writeFileSync(join(root, 'index.html'), 'x'); assert.throws(() => buildManifest(root, provenance), /tree exceeds/);

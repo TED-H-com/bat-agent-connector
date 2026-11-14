@@ -38,6 +38,13 @@ function lengthBytes(length) {
   return result;
 }
 
+export function assetEntryKind(stat) {
+  if (stat.isSymbolicLink()) refuse('Asset links are not allowed');
+  if (stat.isDirectory()) return 'directory';
+  if (!stat.isFile()) refuse('Asset entry is not a regular file');
+  return 'file';
+}
+
 export function treeSha256(entries) {
   const hash = createHash('sha256').update(DOMAIN);
   for (const entry of [...entries].sort(comparePaths)) {
@@ -60,12 +67,11 @@ function readTree(assetRoot) {
       const path = safePath(prefix ? `${prefix}/${name}` : name);
       const full = join(directory, name);
       const stat = lstatSync(full);
-      if (stat.isSymbolicLink()) refuse('Asset links are not allowed');
+      const kind = assetEntryKind(stat);
       const folded = path.toLowerCase();
       if (names.has(folded)) refuse('Asset paths collide after lower-casing');
       names.add(folded);
-      if (stat.isDirectory()) { walk(full, path); continue; }
-      if (!stat.isFile()) refuse('Asset entry is not a regular file');
+      if (kind === 'directory') { walk(full, path); continue; }
       mime(path);
       if (entries.length >= MAX_FILES) refuse('Too many asset files');
       if (stat.size > MAX_FILE_BYTES) refuse('Asset file exceeds size limit');

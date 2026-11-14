@@ -1,4 +1,4 @@
-"""Keep native build steps independent of allowlisted tests and suite sources."""
+"""Keep native fixture scripts independent of allowlisted tests and suite paths."""
 
 from __future__ import annotations
 
