@@ -243,7 +243,7 @@ No-hold actions:
 `pm.meeting.follow_up.record`, `pm.meeting.note`, `pm.message.append`, `pm.overview.assess`, `pm.plan.adopt`.
 `pm.plan.draft`, `pm.product_goal.revise`, `pm.project.bind`, `pm.quality.review.create`, `pm.quality.review.record`.
 `pm.quality.review.revoke`, `pm.release_baseline.register`, `pm.roadmap.baseline.set`, `pm.roadmap.forecast.set`, `pm.roadmap.observe`.
-`pm.run.analyze`, `pm.run.bat.analyze`, `pm.run.prepare`, `pm.session.quiescence.observe`, `pm.snapshot.create`.
+`pm.roadmap.report.materialize`, `pm.run.analyze`, `pm.run.bat.analyze`, `pm.run.prepare`, `pm.session.quiescence.observe`, `pm.snapshot.create`.
 `pm.spec.materialize`, `pm.sprint.cancel`, `pm.sprint.close`, `pm.sprint.create`, `pm.sprint.goal.revise`.
 `pm.sprint.select`, `pm.sprint.start`, `pm.thread.create`, `pm.thread.plan`, `pm.thread.plan.revise`.
 `pm.thread.rename`, `pm.wip_policy.save`, `pm.work.bind`, `pm.work_batch.evidence.record`, `pm.work_batch.start`.
