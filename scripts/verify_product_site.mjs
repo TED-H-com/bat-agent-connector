@@ -102,8 +102,8 @@ async function checkLayout(page, lang, width) {
         && visibleText('.install-current').includes(lang === 'en'
           ? 'There is no signed updater feed' : '沒有 signed updater feed'),
       upgradeBaselines: visibleText('.install-current').includes(lang === 'en'
-        ? 'Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.18 sources'
-        : '目前候選版的升級 fixture 使用由 0.2.12 與 0.2.18 固定發布來源建出的核心'),
+        ? 'Current candidate upgrade fixtures use cores built from pinned published 0.2.12 and 0.2.19 sources'
+        : '目前候選版的升級 fixture 使用由 0.2.12 與 0.2.19 固定發布來源建出的核心'),
       commandWrapping: commandBlocks.length === 2 && tokensUnbroken && inlineFlagsUnbroken,
       faqHangingIndent: faqAligned,
       updateScope: platformNote.includes(lang === 'en' ? 'Connector automatic updates' : 'Connector 自動更新')

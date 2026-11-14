@@ -22,7 +22,7 @@ from .errors import BatError, ConnectionLost, InvokeError, InvokeTimeout, TaskCo
 from .fleet import Fleet
 from .iso_time import parse_datetime
 from .redact import redact
-from .safety import Audit
+from .safety import Audit, audit_error_outcome, audit_reply_outcome
 from .summarize import clip, iso_local, summarize_message, summarize_pending, ts_to_ms
 
 MAX_LAST_N = 100
@@ -1112,6 +1112,10 @@ async def session_send(
                 channel="claude:client-resume",
                 phase="attempt",
             )
+            resume_transported = False
+            def resume_transport():
+                nonlocal resume_transported
+                resume_transported = True
             try:
                 # Reattach checks the task binding without submitting its prompt.
                 async def resume_frame():
@@ -1125,10 +1129,11 @@ async def session_send(
                 await c.invoke("claude:client-resume", params, grant=grant,
                                before_send=resume_gate if relay else (_task_guard.check if _task_guard else None),
                                **({"before_frame": resume_frame} if relay else {}),
-                               frame_guard=lambda frame: confinement.guard_resume_frame(host, sid, kind or "claude", frame))
+                               frame_guard=lambda frame: confinement.guard_resume_frame(host, sid, kind or "claude", frame),
+                               on_transport=resume_transport)
             except BatError as e:
                 log_error("bat-session", "session.resume.failed", e)
-                audit.record(
+                audit.record_after_effect(effect_sent=resume_transported, effect_outcome=audit_error_outcome(e),
                     actor=fleet.actor,
                     tool=tool,
                     host=host,
@@ -1182,11 +1187,14 @@ async def session_send(
                 _task_guard()
             elif before_invoke:
                 before_invoke()
+        send_transported = False
         def transported():
+            nonlocal send_transported
             if relay:
                 _operation_context.relay_send_transported = True
             if _on_transport is not None:
                 _on_transport()
+            send_transported = True
         try:
             if before_invoke:
                 before_invoke()
@@ -1194,10 +1202,10 @@ async def session_send(
                 "claude:send-message", {"sessionId": sid, "prompt": text, "clientMessageId": mid},
                 retry_on_disconnect=retry_on_disconnect and agent_kind(t.get("agentPreset")) == "claude",
                 before_send=send_gate if relay else (_task_guard or before_invoke), before_frame=verify_at_frame, grant=grant,
-                **({"on_transport": transported} if (relay or _on_transport is not None) else {}),
+                on_transport=transported,
             )
         except BatError as e:
-            audit.record(
+            audit.record_after_effect(effect_sent=send_transported, effect_outcome=audit_error_outcome(e),
                 actor=fleet.actor,
                 tool=tool,
                 host=host,
@@ -1212,7 +1220,7 @@ async def session_send(
         r = r if isinstance(r, dict) else {"result": r}
         if _task_guard and not isinstance(r.get("accepted", r.get("ok")), bool):
             raise ValueError("BAT send reply has no boolean acceptance result")
-        audit.record(
+        audit.record_after_effect(effect_sent=send_transported, effect_outcome=audit_reply_outcome(r.get("accepted", r.get("ok"))),
             actor=fleet.actor,
             tool=tool,
             host=host,
@@ -1303,10 +1311,15 @@ async def session_interrupt(
             mode=mode,
             phase="attempt",
         )
+        transported = False
+        def on_transport():
+            nonlocal transported
+            transported = True
         try:
-            r = await c.invoke(channel, {"sessionId": sid}, grant=grant, before_send=_task_guard)
+            r = await c.invoke(channel, {"sessionId": sid}, grant=grant, before_send=_task_guard,
+                               on_transport=on_transport)
         except BatError as e:
-            audit.record(
+            audit.record_after_effect(effect_sent=transported, effect_outcome=audit_error_outcome(e),
                 actor=fleet.actor,
                 tool="session_interrupt",
                 host=host,
@@ -1317,7 +1330,7 @@ async def session_interrupt(
                 error=_err(e),
             )
             raise
-        audit.record(
+        audit.record_after_effect(effect_sent=transported, effect_outcome=audit_reply_outcome(r),
             actor=fleet.actor,
             tool="session_interrupt",
             host=host,
@@ -1451,12 +1464,15 @@ async def session_answer(
             **detail,
         )
         transported = False
+        audit_transported = False
         def sent():
-            nonlocal transported
+            nonlocal transported, audit_transported
             transported = True
-            _operation_context.bulk_answer_transported = True
-            if _task_guard:
-                _task_guard.frames.append(True)
+            if bulk:
+                _operation_context.bulk_answer_transported = True
+                if _task_guard:
+                    _task_guard.frames.append(True)
+            audit_transported = True
         def final_guard():
             if _task_guard:
                 _task_guard.check()
@@ -1468,17 +1484,17 @@ async def session_answer(
             r = await c.invoke(channel, params, grant=grant,
                                before_send=final_guard if bulk else _task_guard,
                                before_frame=before_frame if bulk else None,
-                               on_transport=sent if bulk else None,
+                               on_transport=sent,
                                frame_guard=lambda _: confinement.guard_answer(
                                    host, sid, detail.get("permission_tool"),
                                    dont_ask_again=dont_ask_again, allow=permission == "allow"))
             if bulk and r is not True:
-                audit.record(actor=_operation_context.actor, tool="session_answer", host=host,
+                audit.record_after_effect(effect_sent=audit_transported, effect_outcome="error" if r is False else "unknown", actor=_operation_context.actor, tool="session_answer", host=host,
                              session_id=sid + "#answer", outcome="uncertain", phase="result", **detail)
                 raise AmbiguousOutcome("bulk answer did not return a literal true ACK")
         except (BatError, OSError, asyncio.TimeoutError) as e:
             if bulk:
-                audit.record(actor=_operation_context.actor, tool="session_answer", host=host,
+                audit.record_after_effect(effect_outcome=audit_error_outcome(e), effect_sent=audit_transported, actor=_operation_context.actor, tool="session_answer", host=host,
                              session_id=sid + "#answer", outcome="uncertain" if transported else "not_sent",
                              phase="result", **detail)
                 if transported:
@@ -1487,7 +1503,7 @@ async def session_answer(
                     raise StepFailed("BULK_NOT_SENT", "bulk answer was not sent; review connectivity before a new request") from e
             if not isinstance(e, InvokeError):
                 raise
-            audit.record(
+            audit.record_after_effect(effect_sent=audit_transported, effect_outcome=audit_error_outcome(e),
                 actor=_operation_context.actor if bulk else fleet.actor,
                 tool="session_answer",
                 host=host,
@@ -1498,7 +1514,7 @@ async def session_answer(
                 error=_err(e),
             )
             raise
-        audit.record(
+        audit.record_after_effect(effect_sent=audit_transported, effect_outcome=audit_reply_outcome(r if isinstance(r, bool) else None),
             actor=_operation_context.actor if bulk else fleet.actor,
             tool="session_answer",
             host=host,

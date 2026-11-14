@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Preview exact retained external context together with an independently verified
+  published branch head through HTTP, MCP and the desktop bridge. Preserve both
+  identities and bilingual refusal reasons without creating Work or attributing
+  the commit to the external CLI; continuation remains unavailable.
+
+### Fixed
+
+- Check RPC and MCP method scopes before reading resource lineage, so a token
+  without the required scope receives the same refusal for existing, missing or
+  extra resource IDs.
+
+## 0.2.20 / Desktop 0.1.16 (2026-11-13)
+
 - Let workspace members with observe access read a fixed Scope and roadmap report
   through the API or MCP. One exact Roadmap observation identifies the report,
   showing accepted requirements, baseline and forecast dates, dependencies,
@@ -26,16 +39,14 @@
   A row whose hidden source is identified through the page's host is now omitted
   instead of making the whole page fail with 404.
 
-- Preview exact retained external context together with an independently verified
-  published branch head through HTTP, MCP and the desktop bridge. Preserve both
-  identities and bilingual refusal reasons without creating Work or attributing
-  the commit to the external CLI; continuation remains unavailable.
+- Preserve the original operation result when its later audit record cannot be
+  written. Show a durable warning in English and Traditional Chinese without
+  inviting a duplicate send.
 
-### Fixed
-
-- Check RPC and MCP method scopes before reading resource lineage, so a token
-  without the required scope receives the same refusal for existing, missing or
-  extra resource IDs.
+- Advance both package versions and move the latest-stable core upgrade fixture
+  to published 0.2.19, retaining the earlier 0.2.12 baseline and existing identity,
+  workspace and history checks. Release preparation does not imply publication
+  or owner, native-installation or live BAT/model acceptance.
 
 ## 0.2.19 / Desktop 0.1.15 (2026-11-12)
 

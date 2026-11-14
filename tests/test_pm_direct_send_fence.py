@@ -18,6 +18,7 @@ start_ready = results.start_ready
 
 @pytest.mark.parametrize("when", ["before", "after"])
 async def test_audit_open_failure_distinguishes_transport(start_ready, mock, monkeypatch, when):
+    """On d62093b8, after fails these outcome assertions; before already passes."""
     w = start_ready
     ops = w["d"].ops
     att, _ = await closed_attempt(w, mock)
@@ -69,9 +70,18 @@ async def test_audit_open_failure_distinguishes_transport(start_ready, mock, mon
     print(facts)
     assert op["external_refs"].get("direct_send_dispatch") is (when == "after")
     assert frames == (0 if when == "before" else 1)
-    assert value["used"] == (0 if when == "before" else None), (
-        "REFUSED after an accepted frame is not unsent evidence"
-    )
+    if when == "before":
+        assert value["used"] == 0
+    else:
+        assert op["status"] == "succeeded"
+        assert op["error_code"] is None
+        warnings = op["external_refs"]["audit_results"]
+        assert len(warnings) == 1
+        assert next(iter(warnings.values())) == {
+            "state": "failed", "code": "AUDIT_RESULT_WRITE_FAILED", "phase": "result",
+            "failure_stage": "open", "effect_outcome": "accepted",
+        }
+        assert value["used"] == 1
 
 
 @pytest.mark.parametrize(
@@ -165,6 +175,32 @@ async def test_legacy_refused_without_transport_fence_is_unknown(start_ready, mo
     value = read(ops, w["target"], STARTER_OWNER)
     assert value["used"] is None
     assert value["coverage"]["reasons"] == ["coverage_unavailable"]
+
+
+async def test_historical_refused_after_direct_dispatch_is_unknown(start_ready, mock):
+    """Expected to pass on d62093b8: historical REFUSED is not proof of no effect."""
+    w = start_ready
+    ops = w["d"].ops
+    att, _ = await closed_attempt(w, mock)
+    sid = att["session_id"]
+    mock.metas[sid]["isStreaming"] = mock.states[sid]["isStreaming"] = True
+    op, _ = ops.create(STARTER_OWNER, action="session.send",
+        target={"host": "h1", "session_id": sid}, params={"text": "Synthetic historical refusal"},
+        preconditions={}, idempotency_key="historical-dispatched-refusal")
+    await settle_operations(ops)
+    op = ops.get(op["operation_id"])
+    assert (op["status"], op["error_code"]) == ("failed", "REFUSED")
+    # Seed the pre-fix historical receipt directly; do not resend or rewrite its outcome.
+    with ops.journal.tx():
+        ops.db.execute("UPDATE operations SET external_refs=json_set(external_refs, "
+                       "'$.direct_send_dispatch', json('true')) WHERE operation_id=?", (op["operation_id"],))
+    historical = ops.get(op["operation_id"])
+    assert (historical["status"], historical["error_code"]) == ("failed", "REFUSED")
+    assert historical["external_refs"]["direct_send_dispatch"] is True
+    value = read(ops, w["target"], STARTER_OWNER)
+    assert value["used"] is None
+    assert value["coverage"]["reasons"] == ["coverage_unavailable"]
+    assert ops.get(op["operation_id"]) == historical
 
 
 async def test_direct_wait_after_dispatch_fence_keeps_generic_failure(start_ready, mock, monkeypatch):
