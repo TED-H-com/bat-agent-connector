@@ -122,6 +122,7 @@ async def test_frame_id_and_size_boundaries(bac_mock):
         assert (await call(ws, 'bac:future\0', {}))['error'] == {
             'code': 'INVALID_REQUEST', 'message': 'Invalid BAC request',
             'retryable': False, 'details': {'field': 'channel'}}
+        assert (await call(ws, 'bac:' + 'x' * 125, {}))['error']['details'] == {'field': 'channel'}
         frame = {'type': 'invoke', 'id': 'case', 'channel': 'bac:hello',
                  'params': {'protocol': '', 'minor': 0}}
         overhead = len(json.dumps(frame, separators=(',', ':')).encode())

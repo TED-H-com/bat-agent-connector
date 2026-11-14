@@ -144,6 +144,79 @@ async def test_cancelled_hello_closes_connection_and_can_negotiate_again(host):
         await client.close()
 
 
+@pytest.mark.parametrize('failure', ['STORAGE_UNAVAILABLE', 'hello_timeout'])
+async def test_failed_first_hello_does_not_pin_identity_on_reconnect(host, failure):
+    host.bac.storage_error = 'STORAGE_UNAVAILABLE' if failure == 'STORAGE_UNAVAILABLE' else None
+    host.bac.drop_hello = failure == 'hello_timeout'
+    client = client_for(host, connect_timeout=.5)
+    try:
+        await client.connect()
+        assert client.bac.status == 'unavailable' and client.bac.reason == failure
+        assert client._bac_host_id is None
+        assert await client.invoke('app:get-version') == '9.9.9'
+        await client.close()
+        host.bac.storage_error = None
+        host.bac.drop_hello = False
+        await client.connect()
+        assert client.bac.status == 'negotiated'
+        assert client._bac_host_id == host.bac.host_id
+        assert len(host.bac.frames) == 2
+        assert all('expectedHostId' not in frame['params'] for frame in host.bac.frames)
+    finally:
+        await client.close()
+
+
+async def test_cancelled_concurrent_connect_allows_waiter_to_negotiate(host):
+    host.bac.drop_hello = True
+    client = client_for(host)
+    first = asyncio.create_task(client.connect())
+    second = None
+    try:
+        await asyncio.wait_for(host.bac.hello_received.wait(), 3)
+        second = asyncio.create_task(client.connect())
+        await asyncio.sleep(0)
+        assert not second.done()
+        host.bac.drop_hello = False
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        await asyncio.wait_for(second, 3)
+        assert client.connected and client.bac.status == 'negotiated'
+        assert len(host.bac.frames) == 2
+        assert 'expectedHostId' not in host.bac.frames[-1]['params']
+    finally:
+        first.cancel()
+        if second is not None:
+            second.cancel()
+        await asyncio.gather(*(task for task in (first, second) if task is not None), return_exceptions=True)
+        await client.close()
+
+
+async def test_close_immediately_after_hello_reply_does_not_pin_identity(host, monkeypatch):
+    client = client_for(host)
+    roundtrip = client._roundtrip
+    close_once = True
+
+    async def close_after_reply(frame, timeout, *args, **kwargs):
+        nonlocal close_once
+        reply = await roundtrip(frame, timeout, *args, **kwargs)
+        if frame.get('channel') == bac.HELLO_CHANNEL and close_once:
+            close_once = False
+            await client.close()
+        return reply
+
+    monkeypatch.setattr(client, '_roundtrip', close_after_reply)
+    try:
+        with pytest.raises(ConnectionLost):
+            await client.connect()
+        assert not client.connected and client.bac is None and client._bac_host_id is None
+        await client.connect()
+        assert client.bac.status == 'negotiated'
+        assert 'expectedHostId' not in host.bac.frames[-1]['params']
+    finally:
+        await client.close()
+
+
 async def test_reader_drains_event_flood_before_hello(host):
     host.flood_before_reply = 1024
     client = client_for(host, max_concurrency=1)
@@ -158,7 +231,7 @@ async def test_reader_drains_event_flood_before_hello(host):
         await client.close()
 
 
-ERROR_CODES = ['INVALID_REQUEST', 'PAYLOAD_TOO_LARGE', 'CONTEXT_NOT_SUPPORTED',
+ERROR_CODES = ['INVALID_REQUEST', 'PAYLOAD_TOO_LARGE', 'RESPONSE_TOO_LARGE', 'CONTEXT_NOT_SUPPORTED',
                'UNSUPPORTED_VERSION', 'HOST_MISMATCH', 'STORAGE_UNAVAILABLE',
                'STORAGE_CORRUPT', 'INTERNAL_ERROR']
 
@@ -344,6 +417,23 @@ def test_immutable_known_values_and_unknown_members():
     assert state.features['gitObserve'] and state.limits['requestBytes'] == 65536
     assert bac.parse_envelope({'ok': True, 'value': 4, 'future': True}) == 4
     assert bac.hello_state({'type': 'unexpected', 'result': {'ok': True, 'value': value}}).reason == 'invalid_reply'
+
+
+@pytest.mark.parametrize('key', ['product', 'revision', 'release', 'dirty'])
+def test_missing_build_fields_are_invalid(key):
+    value = MockBac().hello_value()
+    del value['build'][key]
+    state = bac.hello_state({'type': 'invoke-result', 'result': {'ok': True, 'value': value}})
+    assert state.status == 'unavailable' and state.reason == 'invalid_reply'
+
+
+@pytest.mark.parametrize('dirty', [True, False])
+def test_dirty_boolean_and_zero_limit_are_valid(dirty):
+    value = MockBac().hello_value()
+    value['build']['dirty'] = dirty
+    value['limits'] = {'x': 0}
+    state = bac.validate_hello(value)
+    assert state.build.dirty is dirty and state.limits == {'x': 0}
 
 
 def test_envelope_error_carries_diagnostics_with_redacted_exception_text():
