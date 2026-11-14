@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -108,6 +109,56 @@ def test_pinned_unicode_generator_and_runtime_properties():
     assert layout.contains(ord('🫨'), layout.ucd.WIDE)
     assert layout.contains(0x1E4EC, layout.ucd.MARK)
     assert list(layout.clusters('e\U0001e4ec')) == ['e\U0001e4ec']
+
+
+def test_ascii_fast_path_table_constant():
+    assert layout._ASCII_SINGLE_CLUSTER is True
+    assert set(layout._ASCII_ESCAPE) == {code for code in range(128) if layout.contains(code, layout._ESCAPE)}
+
+
+def test_ascii_fast_path_matches_reference():
+    contains, _ESCAPE, MAX_CLUSTER, clusters = layout.contains, layout._ESCAPE, layout.MAX_CLUSTER, layout.clusters
+
+    def literal(value):
+        text = str(value).replace('\r\n', '\n').replace('\r', '\n').expandtabs(4)
+        return ''.join(f'\\u{ord(c):04x}' if contains(ord(c), _ESCAPE) else c for c in text)
+
+    def normalize(value):
+        # Escaping pathological clusters is part of all three formats, not SVG-only.
+        return ''.join(cluster if len(cluster) <= MAX_CLUSTER else ''.join(f'\\u{ord(c):04x}' for c in cluster)
+                       for cluster in clusters(literal(value)))
+
+    alphabet = (
+        *(chr(c) for c in range(32)),
+        '\r', '\n', '\t', '\x7f', '\r\n',
+        *(chr(c) for c in range(0x20, 0x7F)),
+        *(chr(c) for c in range(0x80, 0xA0)),
+        '漢', '字',
+        '\u0300', '\u0301', '\u20d0', '\U0001e4ec',
+        '\ufe0e', '\ufe0f', '\U000e0100',
+        '\U0001f3fb', '\U0001f3ff',
+        '\u200d',
+        '\U0001f1f9', '\U0001f1fc',
+        '\u061c', '\u200e', '\u200f', '\u202a', '\u202e', '\u2066', '\u2069',
+        '\ufdd0', '\ufdef', '\ufffe', '\uffff', '\U0001fffe', '\U0010ffff',
+        '\ud800',
+    )
+    ascii_alphabet = tuple(token for token in alphabet if token.isascii())
+    rng = random.Random(20261114)
+    samples = []
+    for index in range(2400):
+        pool = alphabet if index < 2000 else ascii_alphabet
+        target = rng.randint(0, 200)
+        pieces, size = [], 0
+        while size < target:
+            token = rng.choice(pool)
+            if size + len(token) > target:
+                token = token[:target - size]
+            pieces.append(token)
+            size += len(token)
+        samples.append(''.join(pieces))
+    for item in [*samples, '', '\n', 'a' + '\u0301' * 33, 12345]:
+        assert (layout.literal(item), layout.normalize(item)) == (literal(item), normalize(item))
 
 
 def reconstruct(content, original):

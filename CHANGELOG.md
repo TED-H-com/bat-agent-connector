@@ -6,6 +6,7 @@
   encrypted-configuration filenames, additional conversation-share links, SSH
   key fingerprints, Connector tokens, private and tailnet IPv4 addresses, and
   e-mail addresses.
+- Roadmap reports render plain ASCII text faster; the output is unchanged.
 
 - Keep existing BAT hosts working as before while checking the identity and
   version of hosts that support the suite's new connection handshake. This
