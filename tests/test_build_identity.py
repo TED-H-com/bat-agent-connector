@@ -1,12 +1,13 @@
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 import tarfile
 import time
 import zipfile
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -167,6 +168,7 @@ def test_update_source_verification_accepts_only_producer_provenance(clean_wheel
     ("dirty", None), ("override", "HEAD"), ("malformed", "not-a-commit"),
     ("too-long", "b" * 64), ("no-git", None), ("archive-override", "b" * 40),
     ("staged", None), ("deleted", None), ("dirty-override", "b" * 40),
+    ("untracked-package", None), ("untracked-other", None), ("ignored", None),
 ])
 def test_wheel_build_commit_sources(tmp_path, mode, override):
     repo, head = _source_repo(tmp_path, mode)
@@ -179,10 +181,17 @@ def test_wheel_build_commit_sources(tmp_path, mode, override):
         _command(["git", "add", "README.md"], cwd=repo, env=_build_env(tmp_path))
     if mode == "deleted":
         (repo / "src/bat_agent_connector/cli.py").unlink()
+    if mode in {"untracked-package", "untracked-other", "ignored"}:
+        relative = {"untracked-package": "src/bat_agent_connector/untracked.py",
+                    "untracked-other": "untracked.txt", "ignored": "__pycache__/fixture.pyc"}[mode]
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture\n")
     if mode in {"no-git", "archive-override"}:
         shutil.rmtree(repo / ".git")
     wheel = _build(repo, tmp_path, commit=override)
     expected = {"dirty": None, "staged": None, "deleted": None, "dirty-override": None,
+                "untracked-package": None, "untracked-other": None,
                 "no-git": None, "override": head,
                 "archive-override": "b" * 40}.get(mode, head)
     assert _installed_identity(wheel, tmp_path) == {
@@ -271,13 +280,23 @@ def test_sdist_preserves_provenance_without_borrowing_an_enclosing_checkout(tmp_
         assert sum(name.endswith("src/bat_agent_connector/build-info.json") for name in names) == 1
         assert any(name.endswith("hatch_build.py") for name in names)
         assert any(name.endswith("skills/bat-agent-connector/SKILL.md") for name in names)
+        info = next(name for name in names if name.endswith("src/bat_agent_connector/build-info.json"))
+        sdist_commit = json.loads(archive.extractfile(info).read())["commit"]
     # First exercise the real frontend's sdist extraction, then extract the same
     # producer archive under an unrelated Git checkout. Neither may relabel it.
     wheel = _build(sdist, tmp_path)
     with zipfile.ZipFile(wheel) as archive:
+        assert "bat_agent_connector/build-info.json" not in archive.namelist()
+        assert json.loads(archive.read("bat_agent_connector/skill/build-info.json"))["commit"] == sdist_commit
         assert archive.read("bat_agent_connector/skill/SKILL.md") == (
             repo / "skills/bat-agent-connector/SKILL.md"
         ).read_bytes()
+        from_sdist = set(archive.namelist())
+    direct_output = tmp_path / "direct-build"
+    direct_output.mkdir()
+    direct_wheel = _build(repo, direct_output)
+    with zipfile.ZipFile(direct_wheel) as archive:
+        assert set(archive.namelist()) == from_sdist
     assert _installed_identity(wheel, tmp_path) == {
         "version": __version__, "commit": None if dirty else head, "source": "package"}
     foreign = tmp_path / "foreign-checkout"
@@ -417,3 +436,132 @@ def test_update_source_verification_tolerates_legacy_location(clean_wheel, tmp_p
     (package / "build-info.json").write_text(json.dumps({"commit": None}))
     with pytest.raises(UpdateError, match="installed_identity_mismatch"):
         verify_source_package(repo / "src/bat_agent_connector", package, head)
+
+
+def _load_hook(monkeypatch):
+    if importlib.util.find_spec("hatchling") is None:
+        interface = ModuleType("hatchling.builders.hooks.plugin.interface")
+        interface.BuildHookInterface = object
+        for name, module in (
+            ("hatchling", ModuleType("hatchling")),
+            ("hatchling.builders", ModuleType("hatchling.builders")),
+            ("hatchling.builders.hooks", ModuleType("hatchling.builders.hooks")),
+            ("hatchling.builders.hooks.plugin", ModuleType("hatchling.builders.hooks.plugin")),
+            ("hatchling.builders.hooks.plugin.interface", interface),
+        ):
+            monkeypatch.setitem(sys.modules, name, module)
+    path = Path(__file__).resolve().parents[1] / "hatch_build.py"
+    spec = importlib.util.spec_from_file_location("test_hatch_build_hook", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_managed_runtime_builder():
+    path = Path(__file__).resolve().parents[1] / "desktop/scripts/build-managed-runtime.py"
+    spec = importlib.util.spec_from_file_location("test_managed_runtime_builder", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("mode", [
+    "clean",
+    "tracked-change",
+    "untracked",
+    "untracked-hidden",
+    "ignored",
+    "ignored-hidden",
+    "override-equal",
+    "override-different",
+    "not-a-checkout",
+    "not-a-checkout-override",
+])
+def test_managed_runtime_build_commit_parity_with_hook(tmp_path, monkeypatch, mode):
+    for key in ("BATC_BUILD_COMMIT", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+        monkeypatch.delenv(key, raising=False)
+    hook = _load_hook(monkeypatch)
+    builder = _load_managed_runtime_builder()
+    repo, head = _source_repo(tmp_path, mode)
+    other = "b" * 40 if head != "b" * 40 else "c" * 40
+    if mode in {"untracked-hidden", "ignored-hidden"}:
+        _command(["git", "-C", str(repo), "config", "status.showUntrackedFiles", "no"],
+                 cwd=tmp_path, env=_build_env(tmp_path))
+    if mode == "tracked-change":
+        with (repo / "README.md").open("a") as stream:
+            stream.write("\nTracked change.\n")
+    elif mode in {"untracked", "untracked-hidden"}:
+        (repo / "untracked.txt").write_text("untracked\n")
+    elif mode in {"ignored", "ignored-hidden"}:
+        cache = repo / "__pycache__"
+        cache.mkdir()
+        (cache / ("x.pyc" if mode == "ignored-hidden" else "fixture.pyc")).write_text("ignored\n")
+    elif mode == "override-equal":
+        monkeypatch.setenv("BATC_BUILD_COMMIT", head)
+    elif mode == "override-different":
+        monkeypatch.setenv("BATC_BUILD_COMMIT", other)
+    elif mode in {"not-a-checkout", "not-a-checkout-override"}:
+        shutil.rmtree(repo / ".git")
+        if mode == "not-a-checkout-override":
+            monkeypatch.setenv("BATC_BUILD_COMMIT", other)
+    expected = {
+        "clean": head,
+        "ignored": head,
+        "ignored-hidden": head,
+        "override-equal": head,
+        "not-a-checkout-override": other,
+    }.get(mode)
+    builder_commit = builder._build_commit(repo)
+    hook_commit = hook._build_commit(repo)
+    assert builder_commit == hook_commit == expected
+
+
+def test_managed_runtime_build_commit_format_rules_and_outputs(tmp_path, monkeypatch):
+    for key in ("BATC_BUILD_COMMIT", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+        monkeypatch.delenv(key, raising=False)
+    builder = _load_managed_runtime_builder()
+    repo, head = _source_repo(tmp_path, "managed-runtime-format")
+    build_dir = repo / "build" / "managed-runtime"
+    output_dir = repo / "desktop" / "managed-runtime"
+    real_run = subprocess.run
+
+    def fake_run(args, **kwargs):
+        if len(args) >= 3 and args[1:3] == ["-m", "PyInstaller"]:
+            executable = "batc-managed-runtime" + (".exe" if sys.platform == "win32" else "")
+            dist = build_dir / "dist"
+            dist.mkdir(parents=True, exist_ok=True)
+            (dist / executable).write_bytes(b"fixture runtime\n")
+            return SimpleNamespace(returncode=0)
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(builder, "ROOT", repo)
+    monkeypatch.setattr(builder, "BUILD", build_dir)
+    monkeypatch.setattr(builder, "OUTPUT", output_dir)
+    monkeypatch.setattr(builder, "importlib", SimpleNamespace(
+        metadata=SimpleNamespace(version=lambda name: "6.22.3" if name == "pyinstaller" else __version__)))
+    monkeypatch.setattr(builder, "subprocess", SimpleNamespace(
+        run=fake_run, CalledProcessError=subprocess.CalledProcessError))
+
+    monkeypatch.setenv("BATC_BUILD_COMMIT", head.upper())
+    with pytest.raises(ValueError, match="BATC_BUILD_COMMIT must be a full commit hash"):
+        builder._build_commit(repo)
+    with pytest.raises(SystemExit, match="BATC_BUILD_COMMIT must be a full commit hash"):
+        builder.main()
+
+    monkeypatch.setenv("BATC_BUILD_COMMIT", "b" * 64)
+    assert builder._build_commit(repo) is None
+
+    monkeypatch.delenv("BATC_BUILD_COMMIT", raising=False)
+    builder.main()
+    assert json.loads((build_dir / "build-info.json").read_text()) == {"commit": head}
+    assert json.loads((output_dir / "manifest.json").read_text())["build_commit"] == head
+
+    (repo / "untracked.txt").write_text("untracked\n")
+    monkeypatch.setenv("BATC_BUILD_COMMIT", head)
+    builder.main()
+    assert json.loads((build_dir / "build-info.json").read_text()) == {"commit": None}
+    assert json.loads((output_dir / "manifest.json").read_text())["build_commit"] is None
+
+    shutil.rmtree(repo / ".git")
+    monkeypatch.setenv("BATC_BUILD_COMMIT", "b" * 64)
+    assert builder._build_commit(repo) == "b" * 64

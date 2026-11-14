@@ -179,6 +179,7 @@ class ApiV1:
             pm_quality_reviews,
             pm_release_baselines,
             pm_roadmap,
+            pm_roadmap_report_materialization,
             pm_run_operations,
             pm_snapshots,
             pm_spec_materialization,
@@ -217,6 +218,7 @@ class ApiV1:
         pm_overview_assessments.install(daemon.ops)
         pm_work_packages.install(daemon.ops)
         pm_spec_materialization.install(daemon.ops)
+        pm_roadmap_report_materialization.install(daemon.ops)
         pm_work_batches.install(daemon.ops)
         pm_lifecycle.install(daemon.ops)
         pm_issue_mappings.install(daemon.ops)
@@ -251,6 +253,7 @@ class ApiV1:
         self.routes = [
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/overview", self.pm_overview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/resources", self.pm_resources, "observe"),
+            ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-continuation-preview", self.pm_history_continuation_preview, "observe"),
             ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-excerpt-preview", self.pm_history_excerpt_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/history-excerpts/(?P<excerpt_id>hxe_[0-9a-f]{64})", self.pm_history_excerpt_get, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/external-links", self.pm_history_links_list, "observe"),
@@ -355,6 +358,8 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches/(?P<batch_id>pmbt_[0-9a-f]{32})", self.pm_work_batch, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-findings/current", self.pm_maintenance_findings_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/spec-materializations", self.pm_spec_materializations, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/roadmap-report-materializations", self.pm_roadmap_report_materializations, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/roadmap-report-materializations/(?P<materialization_id>pmrpt_[0-9a-f]{32})", self.pm_roadmap_report_materialization, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/spec-materializations/(?P<materialization_id>pmsp_[0-9a-f]{32})", self.pm_spec_materialization, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages", self.pm_work_packages, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})", self.pm_work_package, "observe"),
@@ -610,6 +615,9 @@ class ApiV1:
                 if fn == self.pm_history_cleanup_list:
                     from .pm_external_history_links import cleanup_read_scopes
                     cleanup_read_scopes(principal)
+                if fn == self.pm_history_continuation_preview:
+                    from .pm_history_continuation import require_observe
+                    require_observe(principal)
                 if scope and not principal.allows(scope):
                     raise ApiError(403, "FORBIDDEN", f"this route needs the {scope!r} scope")
             if fn in {self.messages, self.session_wait}:
@@ -631,13 +639,14 @@ class ApiV1:
                       self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_quality_assessment, self.pm_work_quality, self.pm_pr_publication,
                       self.pm_work_batches, self.pm_work_batch, self.pm_maintenance_findings_current,
                       self.pm_spec_materializations, self.pm_spec_materialization,
+                      self.pm_roadmap_report_materializations, self.pm_roadmap_report_materialization,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
                       self.pm_work_profiles, self.pm_work_profile, self.pm_work_profile_readiness,
                       self.pm_maintenance_reviews, self.pm_maintenance_review_current, self.pm_maintenance_review, self.pm_maintenance_review_events,
                       self.pm_maintenance_checks, self.pm_maintenance_check_current, self.pm_maintenance_check, self.pm_maintenance_schedule,
                       self.pm_ahp_adapters, self.pm_ahp_observations, self.pm_ahp_observation_current, self.pm_ahp_observation,
                       self.pm_overview, self.pm_dependencies, self.pm_dependency_revisions, self.pm_dependency_impact,
-                      self.pm_history_excerpt_preview, self.pm_history_excerpt_get, self.pm_history_links_list, self.pm_history_cleanup_list,
+                      self.pm_history_continuation_preview, self.pm_history_excerpt_preview, self.pm_history_excerpt_get, self.pm_history_links_list, self.pm_history_cleanup_list,
                       self.pm_history_link_get, self.pm_history_associations_list, self.pm_history_sources, self.pm_history, self.pm_resources, self.pm_register, self.pm_register_row, self.pm_schedule, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
                       self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
@@ -857,7 +866,7 @@ class ApiV1:
             integer_fields.add("version")
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_history_get", "pm_history_links_list", "pm_history_associations_list", "pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_history_get", "pm_history_links_list", "pm_history_associations_list", "pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_work_inputs_list", "pm_spec_materializations_list", "pm_roadmap_report_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_ahp_observations_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -1099,6 +1108,13 @@ class ApiV1:
     async def pm_maintenance_findings_current(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_maintenance_findings_current_get", query, workspace_id=workspace_id)
 
+    async def pm_roadmap_report_materializations(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_roadmap_report_materializations_list", query, workspace_id=workspace_id)
+
+    async def pm_roadmap_report_materialization(self, principal, query, workspace_id, materialization_id, **_):
+        return self._pm_read(principal, "pm_roadmap_report_materialization_get", query,
+                             workspace_id=workspace_id, materialization_id=materialization_id)
+
     async def pm_spec_materializations(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_spec_materializations_list", query, workspace_id=workspace_id)
 
@@ -1143,6 +1159,11 @@ class ApiV1:
 
     async def pm_dependency_impact(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_dependencies_impact_get", query, workspace_id=workspace_id)
+
+    async def pm_history_continuation_preview(self, principal, query, body, workspace_id, **_):
+        self._exact_query(query, set())
+        from .pm_history_continuation import preview
+        return 200, await preview(self.daemon.ops, principal, workspace_id, body)
 
     async def pm_history_excerpt_preview(self, principal, query, body, workspace_id, **_):
         self._exact_query(query, set())
@@ -1367,6 +1388,7 @@ class ApiV1:
         from . import (
             pm_attempt_result_reads,
             pm_plan_impact,
+            pm_roadmap_report_materialization,
             pm_roadmap_reports,
             pm_work_adopt_and_start,
             pm_work_follow_up,
@@ -1383,7 +1405,7 @@ class ApiV1:
                                and (a.name not in {pm_work_start.ACTION, pm_work_adopt_and_start.ACTION} or all(principal.allows(s) for s in pm_work_start.REQUIRED_SCOPES))
                                and (a.name != "pm.maintenance.repair" or principal.allows("observe") and principal.allows("manage"))
                                and (a.name not in {"pm.maintenance.repair.evidence.record", *pm_quality_reviews.ACTIONS} or principal.allows("observe"))
-                               and (a.name not in {"pm.spec.materialize", "pm.work_batch.start", "pm.work_batch.evidence.record"}
+                               and (a.name not in {"pm.spec.materialize", pm_roadmap_report_materialization.ACTION, "pm.work_batch.start", "pm.work_batch.evidence.record"}
                                     or principal.allows("observe") and principal.allows("start"))
                                and (a.name not in {"artifact.capture", "artifact.capture.managed", "session.approve_pending"} or principal.allows("observe"))}
                    for a in self.daemon.ops.actions.values()]
@@ -1520,8 +1542,11 @@ class ApiV1:
                                                       "not_undone": list(r.rollback.not_undone)}} for r in gh_cfg.recipes.values()]}
 
         pm_features = result['features']['pm_workspaces']
+        report_save_available = pm_roadmap_report_materialization.ACTION in self.daemon.ops.actions
+        if report_save_available:
+            pm_features['roadmap_report_materialization'] = pm_roadmap_report_materialization.capabilities()
         if all(pm_features[name] for name in ('roadmap', 'brief_snapshots', 'plan_drafting')):
-            pm_features['roadmap_report'] = pm_roadmap_reports.capabilities()
+            pm_features['roadmap_report'] = {**pm_roadmap_reports.capabilities(), 'materialization': report_save_available}
         return 200, result
 
     async def repository_preview(self, principal, body, **_):

@@ -25,6 +25,36 @@ OUTPUT = ROOT / "desktop" / "managed-runtime"
 BUILD = ROOT / "build" / "managed-runtime"
 
 
+def _git(root, *args):
+    git = shutil.which("git")
+    if git is None:
+        raise FileNotFoundError("Git unavailable")
+    return subprocess.run(  # noqa: S603 -- fixed Git subcommands, no shell
+        [git, "-C", str(root), *args], check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def _build_commit(root):
+    raw = os.environ.get("BATC_BUILD_COMMIT")
+    override = _commit(raw) if raw else None
+    if raw and override is None:
+        raise ValueError("BATC_BUILD_COMMIT must be a full commit hash")
+    root = Path(root).resolve()
+    try:
+        checkout = Path(_git(root, "rev-parse", "--show-toplevel")).resolve() == root
+        if checkout:
+            # A candidate SHA must never label modified or untracked inputs, including
+            # when supplied explicitly by the packaging environment.
+            if _git(root, "status", "--porcelain", "--untracked-files=normal"):
+                return None
+            head = _commit(_git(root, "rev-parse", "HEAD"))
+            return head if override is None or override == head else None
+    except (OSError, subprocess.CalledProcessError):
+        if (root / ".git").exists():
+            return None  # A checkout whose cleanliness cannot be proved.
+    return override
+
+
 def write_payload(source, payload):
     with source.open("rb") as reader, payload.open("wb") as raw:
         with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as writer:
@@ -60,11 +90,12 @@ def main() -> None:
     executable = "batc-managed-runtime" + (".exe" if sys.platform == "win32" else "")
     BUILD.mkdir(parents=True, exist_ok=True)
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    commit = os.environ.get("BATC_BUILD_COMMIT")
-    if commit and _commit(commit) is None:
-        raise SystemExit("BATC_BUILD_COMMIT must be a full commit hash")
+    try:
+        commit = _build_commit(ROOT)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from None
     build_info = BUILD / "build-info.json"
-    build_info.write_text(json.dumps({"commit": commit or None}) + "\n", encoding="utf-8")
+    build_info.write_text(json.dumps({"commit": commit}) + "\n", encoding="utf-8")
     subprocess.run(  # noqa: S603 - fixed locked build tool and repository-owned entry point
         [
             sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile",
@@ -88,7 +119,7 @@ def main() -> None:
     architecture = {"AMD64": "x86_64", "arm64": "aarch64"}.get(platform.machine(), platform.machine())
     document = write_manifest(OUTPUT, source, payload,
                               runtime_version=importlib.metadata.version("bat-agent-connector"),
-                              build_commit=commit or None,
+                              build_commit=commit,
                               platform_name={"darwin": "macos", "win32": "windows"}.get(sys.platform, sys.platform),
                               architecture=architecture, executable=executable)
     print(f"Bundled central {document['runtime_version']} ({document['platform']}/{architecture})")

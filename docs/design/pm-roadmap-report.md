@@ -263,11 +263,14 @@ identical bytes on every authorized read; withdrawal produces refusal instead.
 
 `features.pm_workspaces.roadmap_report` advertises version, exact read, required
 scope, template/renderer versions, formats/locales, source/withdrawal policy,
-byte/page bounds and Unicode version. `materialization:false` and
-`native_save:false` distinguish renderer availability from those later features.
+byte/page bounds and Unicode version. `materialization` is derived from the same `ACTION in ops.actions` check that
+advertises `features.pm_workspaces.roadmap_report_materialization`. The read
+remains read-only; saving is a separate explicit operation. `native_save:false`
+continues to describe the unavailable native destination workflow.
 It is omitted unless all existing `roadmap`, `brief_snapshots`, and `plan_drafting`
 availability flags are true; no additional availability predicate is introduced.
-No `roadmap_report_materialization` capability is added here.
+The [materialization contract](pm-roadmap-report-materialization.md) defines the
+owned Git save and its source-authorized receipt readers.
 
 ## Validation and remaining work
 
@@ -279,9 +282,8 @@ Unicode pagination, 32/33-panel and exact UTF-8/JSON boundaries, transport/scope
 and no writes. Existing Brief/roadmap/snapshot/source tests remain applicable.
 CI is not real PM judgment, native dialog or installed-device acceptance.
 
-PR B must separately define explicit `pm.roadmap.report.materialize`, typed carrier
-kind `pm-roadmap-report`, `pmrpt_` receipts, original-key reconciliation and the
-unchanged carrier limits. Before effects it must specify where frozen bytes live,
-prove operation/event/summary/receipt reads cannot expose them, and document
-retention/cleanup, following spec materialization. PR A supplies no byte-storage
-or materialization authority. Dashboard/native work remains a subsequent PR.
+The separate [materialization contract](pm-roadmap-report-materialization.md)
+defines `pm.roadmap.report.materialize`, typed carrier kind `pm-roadmap-report`,
+`pmrpt_` receipts, private frozen bytes, original-operation recovery and unchanged
+carrier limits. Rendering grants no write authority. Dashboard/native saving and
+publication remain later work.

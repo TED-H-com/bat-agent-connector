@@ -36,10 +36,14 @@ def _union(*tables):
 _EXTEND = _union(ucd.MARK, ucd.VARIATION, ucd.MODIFIER, ucd.ZWJ)
 _WIDE = _union(ucd.WIDE, ucd.REGIONAL)
 _ESCAPE = _union(ucd.CONTROL, ucd.BIDI, ucd.NONCHARACTER, ucd.SURROGATE)
+_ASCII_ESCAPE = {code: f'\\u{code:04x}' for code in range(128) if contains(code, _ESCAPE)}
+_ASCII_SINGLE_CLUSTER = not any(contains(code, _EXTEND) or contains(code, ucd.REGIONAL) for code in range(128))
 
 
 def literal(value):
     text = str(value).replace('\r\n', '\n').replace('\r', '\n').expandtabs(4)
+    if text.isascii():
+        return text.translate(_ASCII_ESCAPE)
     return ''.join(f'\\u{ord(c):04x}' if contains(ord(c), _ESCAPE) else c for c in text)
 
 
@@ -65,8 +69,11 @@ def clusters(value):
 
 def normalize(value):
     # Escaping pathological clusters is part of all three formats, not SVG-only.
+    text = literal(value)
+    if _ASCII_SINGLE_CLUSTER and text.isascii():
+        return text
     return ''.join(cluster if len(cluster) <= MAX_CLUSTER else ''.join(f'\\u{ord(c):04x}' for c in cluster)
-                   for cluster in clusters(literal(value)))
+                   for cluster in clusters(text))
 
 
 def wrap(value, columns):

@@ -116,9 +116,10 @@ READ_TOOLS = [
     "pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get", "pm_quality_reviews_list", "pm_quality_review_get", "pm_quality_assessment_get", "pm_work_quality_get", "pm_pr_publication_get",
     "pm_work_batches_list", "pm_work_batch_get", "pm_maintenance_findings_current_get",
     "pm_spec_materializations_list", "pm_spec_materialization_get",
+    "pm_roadmap_report_materializations_list", "pm_roadmap_report_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
-    "pm_history_excerpt_preview", "pm_history_excerpt_get", "pm_history_links_list", "pm_history_link_get", "pm_history_associations_list", "pm_history_cleanup_list",
+    "pm_history_continuation_preview", "pm_history_excerpt_preview", "pm_history_excerpt_get", "pm_history_links_list", "pm_history_link_get", "pm_history_associations_list", "pm_history_cleanup_list",
     "pm_overview_get", "pm_dependencies_get", "pm_dependencies_revisions_list", "pm_dependencies_impact_get", "pm_resources_get", "pm_history_sources_list", "pm_history_get", "pm_register_list", "pm_register_get", "pm_schedule_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
     "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
     "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
@@ -780,6 +781,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read configured immutable findings and current freshness; does not authorize repairs."""
         return await pm_daemon("pm_maintenance_findings_current_get", workspace_id=workspace_id)
 
+    async def pm_roadmap_report_materializations_list(workspace_id: str, after: StrictInt = 0, limit: StrictInt = 20) -> dict[str, Any]:
+        """Original report Git receipts with current source access. Follow next_after even on an empty page."""
+        return await pm_daemon("pm_roadmap_report_materializations_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_roadmap_report_materialization_get(workspace_id: str, materialization_id: str) -> dict[str, Any]:
+        """One original report Git receipt and metadata; never the private frozen report or manifest bytes."""
+        return await pm_daemon("pm_roadmap_report_materialization_get", workspace_id=workspace_id, materialization_id=materialization_id)
+
     async def pm_spec_materializations_list(workspace_id: str, package_id: str | None = None, after: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read immutable owned spec receipts, optionally for one exact package; never write or execute."""
         return await pm_daemon("pm_spec_materializations_list", workspace_id=workspace_id, package_id=package_id, after=after, limit=limit)
@@ -823,6 +832,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
     async def pm_overview_get(workspace_id: str) -> dict[str, Any]:
         """Read live visible project status: confirmed adopted goal (governance.goal before goal/value/problem), progress with stable blocker impacts across plan revisions, pending attention and up to five recent decided plan/governance items with register refs. Incomplete decision totals stay null; inspect coverage. Separate from fixed saved reports; never collects or dispatches."""
         return await pm_daemon("pm_overview_get", workspace_id=workspace_id)
+
+    async def pm_history_continuation_preview(workspace_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Read selected retained context with an independently verified published basis; creates no Work."""
+        return await pm_daemon("pm_history_continuation_preview", workspace_id=workspace_id, body=body)
 
     async def pm_history_excerpt_preview(workspace_id: str, source_id: str, entry_id: str, expected_content_digest: str, selection: dict[str, Any]) -> dict[str, Any]:
         """Read fixed history material under current workspace and explicit source access."""
@@ -1326,10 +1339,11 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_maintenance_repairs_list, pm_maintenance_repair_current_get, pm_maintenance_repair_get, pm_quality_reviews_list, pm_quality_review_get, pm_quality_assessment_get, pm_work_quality_get, pm_pr_publication_get,
                pm_work_batches_list, pm_work_batch_get, pm_maintenance_findings_current_get,
                pm_spec_materializations_list, pm_spec_materialization_get,
+               pm_roadmap_report_materializations_list, pm_roadmap_report_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
                pm_overview_get, pm_dependencies_get, pm_dependencies_revisions_list, pm_dependencies_impact_get,
-               pm_history_excerpt_preview, pm_history_excerpt_get, pm_history_links_list, pm_history_link_get, pm_history_associations_list,
+               pm_history_continuation_preview, pm_history_excerpt_preview, pm_history_excerpt_get, pm_history_links_list, pm_history_link_get, pm_history_associations_list,
                pm_resources_get, pm_history_sources_list, pm_history_get, pm_register_list, pm_register_get, pm_schedule_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
                pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
                pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
@@ -1350,6 +1364,12 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 
+    _strict_tool_arguments(mcp, "pm_roadmap_report_materializations_list",
+        string_parameters=frozenset({"workspace_id"}))
+    _strict_tool_arguments(mcp, "pm_roadmap_report_materialization_get",
+        string_parameters=frozenset({"workspace_id", "materialization_id"}))
+    _strict_tool_arguments(mcp, "pm_history_continuation_preview",
+        string_parameters=frozenset({"workspace_id"}))
     _strict_tool_arguments(mcp, "pm_roadmap_report_get",
         string_parameters=frozenset({"workspace_id", "observation_revision_id", "format", "locale"}))
     _strict_tool_arguments(mcp, "pm_workspace_wip_get",

@@ -462,6 +462,15 @@ class OperationService:
 
     def list(self, *, statuses: list[str] | None = None, actor: str | None = None, action: str | None = None,
              before: float | None = None, before_id: str | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
+        from contextlib import nullcontext
+
+        from .pm_source_reads import scope
+        with scope(self.db, principal) if principal is not None else nullcontext():
+            return self._list(statuses=statuses, actor=actor, action=action, before=before,
+                              before_id=before_id, limit=limit, principal=principal)
+
+    def _list(self, *, statuses: list[str] | None = None, actor: str | None = None, action: str | None = None,
+             before: float | None = None, before_id: str | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
         limit = max(1, min(200, int(limit)))
         before, before_id = operation_cursor(before, before_id)
         sql, args = "SELECT * FROM operations WHERE 1=1", []
@@ -486,8 +495,21 @@ class OperationService:
         next_before = ops[-1]["created_at"] if len(rows) > limit else None
         next_before_id = ops[-1]["operation_id"] if len(rows) > limit else None
         if principal is not None:
+            from . import pm_report_read_work
             from .pm_access import visible
-            ops = [op for op in ops if visible(self.db, principal, op)]
+            from .pm_source_reads import record
+            selected = []
+            with pm_report_read_work.scope(self.db) as work:
+                examined = None
+                for op in ops:
+                    if examined is not None and work.stopped:
+                        next_before, next_before_id = examined['created_at'], examined['operation_id']
+                        break
+                    with work.record(), record(self.db, principal):
+                        if visible(self.db, principal, op):
+                            selected.append(op)
+                    examined = op
+            ops = selected
         return {"operations": ops, "next_before": next_before, "next_before_id": next_before_id}
 
     def _transition(self, operation_id: str, status: str, *, reason: str | None = None,

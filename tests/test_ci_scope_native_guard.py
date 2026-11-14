@@ -1,4 +1,4 @@
-"""Keep native build steps and their import closure independent of allowlisted TS."""
+"""Keep native fixture scripts independent of allowlisted tests and suite paths."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from scripts.desktop_fixture_inputs import workflow_steps
 
 ROOT = Path(__file__).resolve().parents[1]
 REMOVE_ALLOWLIST = "Remove desktop/tests/**/*.ts from the native allowlist."
+REMOVE_SUITE_ALLOWLIST = "Remove desktop/suite/ from the native allowlist."
 SCRIPT_PATH = re.compile(r'''[^\s"'`;|&()<>]+\.(?:mjs|cjs|js|py|ts|swift|ps1)\b''')
 NPM_RUN = re.compile(r"\bnpm\s+run\s+([\w:-]+)")
 JS_IMPORT = re.compile(r'''\b(?:import|export)\s+(?:[^;]*?\s+from\s+)?["'](\.[^"']+)["']''')
@@ -25,12 +26,14 @@ JS_LITERAL_ARGUMENT = re.compile(r'''(["'`])([^"'`]+)\1\s*\)''')
 def build_scripts(root: Path) -> set[Path]:
     job = yaml.safe_load((root / ".github/workflows/desktop.yml").read_text())["jobs"]["build"]
     tests = (root / "desktop/tests").resolve()
+    suite = (root / "desktop/suite").resolve()
     scripts: set[Path] = set()
     npm_seen: set[tuple[Path, str]] = set()
 
     def collect(command: str, cwd: Path) -> None:
         for match in SCRIPT_PATH.finditer(command):
             path = (cwd / match.group()).resolve()
+            assert not path.is_relative_to(suite), f"{REMOVE_SUITE_ALLOWLIST} Direct step: {match.group()}"
             if not path.is_relative_to(tests):
                 continue
             assert path.suffix != ".ts", f"{REMOVE_ALLOWLIST} Direct step: {match.group()}"
@@ -50,7 +53,7 @@ def build_scripts(root: Path) -> set[Path]:
     return scripts
 
 
-def resolve_import(path: Path) -> Path:
+def resolve_import(path: Path, root: Path) -> Path:
     # Explicit extensions are normal ESM usage; also catch extensionless require.
     assert path.suffix != ".ts", f"{REMOVE_ALLOWLIST} Imported file: {path.name}"
     candidates = [path] if path.suffix else [
@@ -59,11 +62,14 @@ def resolve_import(path: Path) -> Path:
     ]
     resolved = next((candidate for candidate in candidates if candidate.is_file()), None)
     assert resolved is not None, f"Cannot trace relative native import: {path.name}"
+    assert not resolved.resolve().is_relative_to((root / "desktop/suite").resolve()), (
+        f"{REMOVE_SUITE_ALLOWLIST} Imported file: {resolved.name}"
+    )
     assert resolved.suffix != ".ts", f"{REMOVE_ALLOWLIST} Imported file: {resolved.name}"
     return resolved
 
 
-def relative_imports(script: Path) -> set[Path]:
+def relative_imports(script: Path, root: Path) -> set[Path]:
     source = script.read_text(encoding="utf-8")
     imports = set()
     if script.suffix in {".mjs", ".js", ".cjs"}:
@@ -78,7 +84,7 @@ def relative_imports(script: Path) -> set[Path]:
                 specifiers.append(argument[2])
         for specifier in specifiers:
             specifier = specifier.split("?", 1)[0].split("#", 1)[0]
-            imports.add(resolve_import((script.parent / specifier).resolve()))
+            imports.add(resolve_import((script.parent / specifier).resolve(), root))
     elif script.suffix == ".py":
         for node in ast.walk(ast.parse(source)):
             if isinstance(node, ast.ImportFrom) and node.level:
@@ -87,7 +93,7 @@ def relative_imports(script: Path) -> set[Path]:
                     directory = directory.parent
                 modules = [node.module] if node.module else [alias.name for alias in node.names]
                 for module in modules:
-                    imports.add(resolve_import(directory.joinpath(*module.split("."))))
+                    imports.add(resolve_import(directory.joinpath(*module.split(".")), root))
     return imports
 
 
@@ -99,7 +105,7 @@ def native_dependency_closure(root: Path) -> set[Path]:
         assert script.suffix != ".ts", f"{REMOVE_ALLOWLIST} Script: {script.name}"
         if script not in visited:
             visited.add(script)
-            pending.extend(relative_imports(script) - visited)
+            pending.extend(relative_imports(script, root) - visited)
     return visited
 
 
@@ -155,6 +161,18 @@ def test_guard_rejects_typescript_in_local_composite_action(tmp_path):
         {'shell': 'bash', 'run': 'node desktop/tests/helper.ts'},
     ]}}))
     with pytest.raises(AssertionError, match=re.escape(REMOVE_ALLOWLIST)):
+        native_dependency_closure(tmp_path)
+
+
+@pytest.mark.parametrize("direct", [True, False])
+def test_guard_rejects_suite_scripts_in_native_build_closure(tmp_path, direct):
+    tests = fixture_repository(tmp_path, "node suite/entry.mjs" if direct else "node tests/entry.mjs")
+    suite = tmp_path / "desktop/suite"
+    suite.mkdir()
+    (suite / "entry.mjs").write_text("export const value = 1;\n")
+    if not direct:
+        (tests / "entry.mjs").write_text('import "../suite/entry.mjs";\n')
+    with pytest.raises(AssertionError, match=re.escape(REMOVE_SUITE_ALLOWLIST)):
         native_dependency_closure(tmp_path)
 
 

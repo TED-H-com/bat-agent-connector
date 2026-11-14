@@ -39,6 +39,7 @@ on:
       - "tests/fixtures/connector-update-facts.json"
       - "tests/fixtures/desktop-update-candidate.json"
       - "tests/fixtures/errlog.json"
+      - "tests/fixtures/history-continuation-preview.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-discovery.json"
@@ -163,6 +164,7 @@ on:
       - "tests/fixtures/connector-update-facts.json"
       - "tests/fixtures/desktop-update-candidate.json"
       - "tests/fixtures/errlog.json"
+      - "tests/fixtures/history-continuation-preview.json"
       - "tests/fixtures/managed-bootstrap.json"
       - "tests/fixtures/managed-runtime-identity.json"
       - "tests/fixtures/managed-setup-discovery.json"
@@ -313,6 +315,7 @@ jobs:
       - name: Check generated browser assets
         run: npm run check:browser
       - run: npm test
+      - run: npm run test:suite
 
   browser-ui:
     name: browser-ui (${{ matrix.shard }}/5)
@@ -365,6 +368,12 @@ jobs:
       # The static server reads the committed dashboard assets; no Vite/native build needed.
       - name: Shared browser and native-transport UI tests
         run: npx playwright test --shard=${{ matrix.shard }}/5 --reporter=line,html
+      - name: Build suite frontend fixture
+        if: matrix.shard == 1
+        run: npm run build:suite -- --harness
+      - name: Suite frontend UI tests
+        if: matrix.shard == 1
+        run: npx playwright test -c suite/playwright.config.ts --reporter=line
       - name: Preserve failed browser UI evidence
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

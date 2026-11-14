@@ -169,13 +169,11 @@ async def test_exact_assessment_observe_scope_refusals_keep_adapter_error_format
     old_rpc = await rpc(w, auth, REVIEW, previous)
     new_rpc = await rpc(w, auth, METHOD, params)
     assert old_rpc == {'error': 'FORBIDDEN', 'message': f"{REVIEW} needs the 'observe' scope"}
-    # RPC checks referenced sources before its method scope check. Preserve
-    # the same refusal as the existing source-bound Work quality read.
+    assert new_rpc == {'error': 'FORBIDDEN', 'message': f"{METHOD} needs the 'observe' scope"}
     baseline = 'pm_work_quality_get'
     work_params = {'workspace_id': w['workspace_id'], 'work_item_id': w['review']['work_item_id']}
     source_refusal = await rpc(w, auth, baseline, work_params)
-    assert source_refusal['error'] == 'NOT_FOUND' and set(source_refusal) == {'error', 'message'}
-    assert new_rpc == source_refusal
+    assert source_refusal == {'error': 'FORBIDDEN', 'message': f"{baseline} needs the 'observe' scope"}
     server, fleet = mcp(w, monkeypatch, auth)
     try:
         with pytest.raises(ToolError) as old:
@@ -183,6 +181,7 @@ async def test_exact_assessment_observe_scope_refusals_keep_adapter_error_format
         with pytest.raises(ToolError) as new:
             await server.call_tool(METHOD, params)
         assert str(new.value) == str(old.value).replace(baseline, METHOD)
+        assert str(new.value).endswith(f"FORBIDDEN: {METHOD} needs the 'observe' scope")
         assert '403' not in str(new.value)
     finally:
         await fleet.close()
