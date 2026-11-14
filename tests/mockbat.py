@@ -86,17 +86,17 @@ class MockBac:
         def fail(code, **details):
             return self.error(code, **details), negotiated
 
-        if channel != "bac:hello" and not negotiated:
+        if isinstance(channel, str) and channel != "bac:hello" and not negotiated:
             return fail("NOT_OPTED_IN")
-        if set(frame) - {"type", "id", "channel", "params", "contextId"}:
-            return fail("INVALID_REQUEST", field="frame")
         if frame.get("type") != "invoke":
             return fail("INVALID_REQUEST", field="type")
         mid = frame.get("id")
         if not isinstance(mid, str) or "\0" in mid or not 1 <= len(mid.encode()) <= 128:
             return fail("INVALID_REQUEST", field="id")
-        if not isinstance(channel, str) or "\0" in channel:
+        if not isinstance(channel, str) or "\0" in channel or len(channel.encode("utf-8")) > 128:
             return fail("INVALID_REQUEST", field="channel")
+        if set(frame) - {"type", "id", "channel", "params", "contextId"}:
+            return fail("INVALID_REQUEST", field="frame")
         params = frame.get("params")
         if not isinstance(params, dict):
             return fail("INVALID_REQUEST", field="params")
@@ -121,7 +121,9 @@ class MockBac:
             if protocol != "bat-remote/v2" or params["protocol"] != "bac/1" or params["minor"] != 0:
                 return fail("UNSUPPORTED_VERSION", protocol="bac/1", minor=0)
             if self.storage_error:
-                return fail(self.storage_error, reason=self.storage_reason)
+                details = ({"reason": self.storage_reason}
+                           if self.storage_error in {"STORAGE_UNAVAILABLE", "STORAGE_CORRUPT"} else {})
+                return fail(self.storage_error, **details)
             if "expectedHostId" in params and params["expectedHostId"] != self.host_id:
                 return self.error("HOST_MISMATCH", hostId=self.host_id), False
             return {"ok": True, "value": self.hello_value()}, True
@@ -139,7 +141,7 @@ class MockBac:
         mid = frame.get("id")
         if not isinstance(mid, str) or "\0" in mid or not 1 <= len(mid.encode("utf-8")) <= 128:
             mid = None
-        if frame["channel"] == "bac:hello":
+        if frame.get("channel") == "bac:hello":
             self.hello_received.set()
             if self.close_hello:
                 await ws.close()
@@ -372,7 +374,8 @@ class MockBat:
                             }
                         )
                     )
-                if self.bac is not None and f.get("channel", "").startswith("bac:"):
+                channel = f.get("channel")
+                if self.bac is not None and isinstance(channel, str) and channel.startswith("bac:"):
                     negotiated = await self.bac.handle(ws, f, negotiated, proto)
                     continue
                 try:

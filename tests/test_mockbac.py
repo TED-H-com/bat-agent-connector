@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from websockets.asyncio.client import connect
 
-from tests.mockbat import TOKEN, MockBat
+from tests.mockbat import TOKEN, MockBac, MockBat
 
 CASES = json.loads((Path(__file__).parent / 'fixtures/bac/hello-cases.json').read_text())
 HELLO = {'protocol': 'bac/1', 'minor': 0}
@@ -163,3 +163,49 @@ async def test_legacy_protocol_does_not_advertise_or_negotiate(bac_mock):
             'code': 'UNSUPPORTED_VERSION', 'message': 'Unsupported BAC protocol version',
             'retryable': False, 'details': {'protocol': 'bac/1', 'minor': 0}}}
         assert (await call(ws, 'bac:future', {}))['error']['code'] == 'NOT_OPTED_IN'
+
+
+@pytest.mark.parametrize(('changes', 'field'), [
+    ({'type': 'event', 'args': []}, 'type'),
+    ({'id': '', 'args': []}, 'id'),
+    ({'channel': 'bac:' + 'x' * 125, 'args': []}, 'channel'),
+    ({'args': []}, 'frame'),
+])
+def test_common_shape_validation_order(changes, field):
+    frame = {'type': 'invoke', 'id': 'case', 'channel': 'bac:hello', 'params': HELLO, **changes}
+    result, _ = MockBac().reply(frame, True, 'bat-remote/v2')
+    assert result['error']['details'] == {'field': field}
+
+
+@pytest.mark.parametrize('missing', ['id', 'channel'])
+async def test_direct_handle_missing_required_key_returns_error(missing):
+    class Socket:
+        async def send(self, data):
+            self.reply = json.loads(data)
+
+    frame = {'type': 'invoke', 'id': 'case', 'channel': 'bac:hello', 'params': HELLO}
+    del frame[missing]
+    socket = Socket()
+    assert await MockBac().handle(socket, frame, False, 'bat-remote/v2') is False
+    assert socket.reply['result']['error']['details'] == {'field': missing}
+    if missing == 'id':
+        assert socket.reply['id'] is None
+
+
+async def test_internal_storage_error_has_no_reason(bac_mock):
+    bac_mock.bac.storage_error = 'INTERNAL_ERROR'
+    async with wire(bac_mock) as ws:
+        result = await call(ws, 'bac:hello', HELLO)
+        assert result == {'ok': False, 'error': {'code': 'INTERNAL_ERROR',
+                           'message': 'BAC request failed', 'retryable': False, 'details': {}}}
+        assert (await call(ws, 'bac:future', {}))['error']['code'] == 'NOT_OPTED_IN'
+
+
+@pytest.mark.parametrize('channel', [None, 7, ['bac:hello']])
+async def test_non_string_channel_keeps_legacy_dispatch_path(bac_mock, channel):
+    async with wire(bac_mock) as ws:
+        await ws.send(json.dumps({'type': 'invoke', 'id': 'case', 'channel': channel, 'params': {}}))
+        reply = json.loads(await ws.recv())
+        assert reply['id'] == 'case'
+        assert reply['type'] in {'invoke-result', 'invoke-error'}
+        assert not bac_mock.bac.frames
