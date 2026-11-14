@@ -19,6 +19,8 @@ HELLO_CHANNEL = "bac:hello"
 HELLO_ID = "bac-hello-1"
 FEATURES = ("workspaceRead", "workspaceAddTerminal", "sessionLocate", "gitObserve")
 _HOST_ID = re.compile(r"h_[0-9a-f]{32}")
+_BUILD_REVISION = re.compile(r"(?:[0-9a-f]{40}|unknown)")
+_BUILD_RELEASE = re.compile(r"[ -~]{1,64}")
 _ERROR_CODE = re.compile(r"[A-Z][A-Z_]{0,63}")
 _STORAGE_REASON = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
@@ -88,7 +90,9 @@ def validate_hello(value: Any) -> BacState:
             or value["minor"] != MINOR or not isinstance(host_id, str)
             or not _HOST_ID.fullmatch(host_id) or not isinstance(build, dict)
             or build.get("product") != "bac" or not isinstance(build.get("revision"), str)
-            or not isinstance(build.get("release"), str) or "dirty" not in build
+            or not _BUILD_REVISION.fullmatch(build["revision"])
+            or not isinstance(build.get("release"), str) or not _BUILD_RELEASE.fullmatch(build["release"])
+            or "dirty" not in build
             or (build["dirty"] is not None and type(build["dirty"]) is not bool)
             or not isinstance(features, dict) or not isinstance(limits, dict)):
         raise ValueError("invalid_reply")

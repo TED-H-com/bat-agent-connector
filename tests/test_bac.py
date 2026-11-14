@@ -359,6 +359,39 @@ def test_envelope_error_carries_diagnostics_with_redacted_exception_text():
     assert TOKEN not in error.message
 
 
+@pytest.mark.parametrize(('revision', 'release'), [
+    ('unknown', 'dev'), ('0' * 40, ' '), ('abcdef0123' * 4, '~' * 64),
+])
+def test_valid_build_text_boundaries(revision, release):
+    value = MockBac().hello_value()
+    value['build'].update(revision=revision, release=release)
+    state = bac.validate_hello(value)
+    assert (state.build.revision, state.build.release) == (revision, release)
+
+
+@pytest.mark.parametrize(('key', 'text'), [
+    ('revision', 'a' * 41), ('revision', 'A' * 40), ('revision', 'a' * 39),
+    ('release', ''), ('release', 'a' * 65), ('release', 'x\ny'), ('release', 'é'),
+])
+def test_invalid_build_text_is_unavailable(key, text):
+    value = MockBac().hello_value()
+    value['build'][key] = text
+    state = bac.hello_state({'type': 'invoke-result', 'result': {'ok': True, 'value': value}})
+    assert state.status == 'unavailable' and state.reason == 'invalid_reply'
+
+
+def test_error_details_are_deep_copied_and_message_is_bounded_after_redaction():
+    register_secret(TOKEN)
+    details = {'nested': [{'value': 'original'}]}
+    message = TOKEN + MockBac().host_id + 'x' * 400
+    error = BacReplyError('INTERNAL_ERROR', message, False, details)
+    details['nested'][0]['value'] = 'changed'
+    assert error.details == {'nested': [{'value': 'original'}]}
+    assert len(error.message) == 300
+    assert error.message.startswith('<redacted><host-id>')
+    assert TOKEN not in str(error) and MockBac().host_id not in str(error)
+
+
 @pytest.mark.parametrize('code', ['A', 'A' * 64, 'FUTURE_ERROR'])
 def test_unknown_valid_error_codes_are_preserved(code):
     result = MockBac.error('INTERNAL_ERROR')

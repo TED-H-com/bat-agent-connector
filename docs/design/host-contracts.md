@@ -79,8 +79,9 @@ type Reply<T> = {ok: true; value: T} | {ok: false; error: {
 Hello's success value contains `protocol: "bac/1"`, integer `minor: 0`, a
 `hostId` matching `h_` followed by 32 lowercase hex digits, and:
 
-- `build`: `product: "bac"`, string `revision`, string `release`, and `dirty`
-  equal to a boolean or null. All four known members are required.
+- `build`: `product: "bac"`; `revision` is 40 lowercase hexadecimal digits or
+  `unknown`; `release` is 1–64 printable ASCII bytes; `dirty` is a boolean or
+  null. All four known members are required.
 - `features`: an object with the known boolean flags `workspaceRead`,
   `workspaceAddTerminal`, `sessionLocate`, `gitObserve`. A missing known flag
   becomes false; a present non-boolean is invalid. Unknown flags are ignored.
@@ -117,7 +118,8 @@ is the single envelope parser. A valid error raises `BacReplyError`, carrying
 `code`, redacted `message`, `retryable` and diagnostic `details`. Invalid wire
 raises `ValueError("invalid_reply")`. Message text and details never determine
 negotiation behavior. Exception text uses the existing secret redactor and
-masks host identities; raw details are never interpolated into exception text or logs.
+masks host identities; messages are truncated to 300 characters after redaction.
+Details are copied and never interpolated into exception text or logs.
 
 `client.bac` is an immutable `BacState` after a completed connect. Nested build,
 features and limits are immutable copies. Before connect and after explicit or
