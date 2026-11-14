@@ -14,6 +14,7 @@ import yaml
 from scripts.ci_complete import verify_manifests
 from scripts.ci_scope import FULL_PYTHONS, native_builds, select_scope
 from scripts.ci_sharding import collection_digest
+from scripts.desktop_fixture_inputs import filters, triggered
 
 try:
     import tomllib
@@ -83,6 +84,16 @@ def test_python_tooling_and_fixture_data_keep_full_matrix(path):
 ])
 def test_each_native_allowlist_entry(path):
     assert select_scope([path])[:2] == (["3.10"], "none")
+
+
+def test_suite_only_change_runs_frontend_and_browser_without_native_build():
+    path = "desktop/suite/core-transport.ts"
+    assert select_scope([path])[:2] == (["3.10"], "none")
+    assert native_builds(select_scope([path])[1]) == []
+    assert all(triggered([path], patterns) for patterns in filters(ROOT).values())
+    workflow = yaml.safe_load((ROOT / ".github/workflows/desktop.yml").read_text())
+    for name in ("frontend", "browser-ui"):
+        assert "if" not in workflow["jobs"][name]
 
 
 @pytest.mark.parametrize("path", [
