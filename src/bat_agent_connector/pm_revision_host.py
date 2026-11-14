@@ -17,7 +17,7 @@ import zlib
 from contextlib import ExitStack
 
 if __name__ != "__main__":
-    from .pm_revision_paths import rev_paths
+    from .pm_revision_paths import REPORT_FIELDS, REPORT_KIND, report_manifest, rev_paths
     from .pm_worktree_host import pm_carrier as _base_carrier
     from .pm_worktree_host import (
         pm_directory,
@@ -33,6 +33,7 @@ else:
 
 _REVISIONS = "batc-pm-revisions.json"
 _REV_PATH = re.compile(r"(?:docs/pm/revisions/pmrev_[0-9a-f]{32}/plan\.(?:json|md)|"
+    r"docs/pm/reports/pmrpt_[0-9a-f]{32}/(?:report\.(?:md|html|svg)|manifest\.json)|"
     r"openspec/changes/pm-[0-9a-f]{32}/revisions/pmwp_[0-9a-f]{32}/(?:package\.json|proposal\.md|requirements\.md|design\.md|tasks\.md|manifest\.json)|"
     r"docs/pm/specs/pm-[0-9a-f]{32}/revisions/pmwp_[0-9a-f]{32}\.json)")
 
@@ -84,6 +85,14 @@ def rev_load(req):
                     or row["state"] == "complete" and not re.fullmatch(r"[0-9a-f]{64}", row["index_after"])):
                 raise ValueError("PM_REVISION_MANIFEST_CHANGED")
             expected_paths = rev_paths(receipt)
+            if receipt.get("artifact_kind") == REPORT_KIND:
+                expected_fields = {"workspace_id", "revision_id", "operation_id", "document_digest", "file_digests",
+                    "binding_id", "commit_sha", "tree_sha", "status", *REPORT_FIELDS}
+                if (set(receipt) != expected_fields or receipt["status"] != "verified"
+                        or receipt["revision_id"] != "pmrpt_" + receipt["operation_id"][3:]
+                        or not re.fullmatch(r"[0-9a-f]{64}", receipt["document_digest"])
+                        or any(not re.fullmatch(r"[0-9a-f]{64}", digest) for digest in receipt["file_digests"].values())):
+                    raise ValueError("PM_REVISION_MANIFEST_CHANGED")
             if set(receipt["file_digests"]) != expected_paths:
                 raise ValueError("PM_REVISION_MANIFEST_CHANGED")
             operations.add(receipt["operation_id"])
@@ -196,6 +205,11 @@ def rev_request(req):
                 or set(data["files"]) != rev_paths(data)):
             raise ValueError("PM_REVISION_INVALID")
         files = {path: content.encode() for path, content in data["files"].items()}
+        if data.get("artifact_kind") == REPORT_KIND:
+            if set(data) != {"workspace_id", "revision_id", "files", "file_digests", "document_digest",
+                            "operation_id", "expected_parent", "timestamp", "binding_id", *REPORT_FIELDS}:
+                raise ValueError("PM_REVISION_INVALID")
+            report_manifest(data)
         if (sum(map(len, files.values())) > 512_000
                 or {path: hashlib.sha256(content).hexdigest() for path, content in files.items()} != data["file_digests"]
                 or hashlib.sha256(rev_json(data["file_digests"])).hexdigest() != data["document_digest"]):
@@ -312,6 +326,8 @@ def rev_transaction(req, *, write):
     receipt = {key: data[key] for key in ("workspace_id", "revision_id", "operation_id", "document_digest", "file_digests", "binding_id")}
     if data.get("artifact_kind") == "pm-spec":
         receipt.update({key: data[key] for key in ("artifact_kind", "change_id", "package_id")})
+    elif data.get("artifact_kind") == REPORT_KIND:
+        receipt.update({key: data[key] for key in REPORT_FIELDS})
     receipt.update(tree_sha=tree, status="verified")
     proposed = {"receipt": receipt, "parent": data["expected_parent"], "timestamp": data["timestamp"],
                 "state": "prepared", "request_digest": digest, "index_before": rev_index(req)}

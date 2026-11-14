@@ -492,6 +492,8 @@ def test_every_registered_daemon_action_is_explicitly_classified(tmp_path, monke
         assert host_git.SETUP_ACTIONS.isdisjoint(host_git.JOURNAL_ONLY_ACTIONS)
         assert host_git.HOST_EFFECT_ACTIONS.isdisjoint(host_git.JOURNAL_ONLY_ACTIONS)
         classified = host_git.SETUP_ACTIONS | host_git.HOST_EFFECT_ACTIONS | host_git.JOURNAL_ONLY_ACTIONS
+        from bat_agent_connector import pm_roadmap_report_materialization
+        assert pm_roadmap_report_materialization.ACTION in daemon.ops.actions
         registered = set(daemon.ops.actions)
         assert registered == classified, {
             "unclassified": sorted(registered - classified),
