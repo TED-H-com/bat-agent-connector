@@ -7,7 +7,7 @@ from dataclasses import replace
 
 import pytest
 
-from bat_agent_connector import mcp_server
+from bat_agent_connector import mcp_server, pm_history_continuation
 from bat_agent_connector import pm_external_history as refs
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.session_history_config import HistoryConfig, HistorySource
@@ -96,6 +96,7 @@ async def test_unavailable_matrix_has_identical_raw_refusals(access, monkeypatch
     server, fleet = mcp_server.build_server(d.fleet.config, principal_only=True)
     before = db_snapshot(d.ops.db)
     expected_code = 'FORBIDDEN' if role == 'no-observe' else 'PM_HISTORY_SOURCE_UNAVAILABLE'
+    expected_message = ' / '.join(pm_history_continuation.REASONS[expected_code])
     bodies = {transport: [] for transport in ('http', 'rpc', 'mcp')}
     try:
         for target in ('existing', 'missing-workspace', 'missing-source'):
@@ -128,8 +129,9 @@ async def test_unavailable_matrix_has_identical_raw_refusals(access, monkeypatch
                 finally:
                     d.ops.db.set_trace_callback(None)
                 if error:
-                    assert error['code'] == expected_code
-                    assert ' / ' in error['message']
+                    assert error == {'code': expected_code, 'message': expected_message}
+                    envelope = {'error': error} if transport == 'http' else {'error': expected_code, 'message': expected_message}
+                    assert raw == json.dumps(envelope, ensure_ascii=False).encode()
                 bodies[transport].append(raw)
                 assert not any('session_history_entries' in statement or 'pm_project' in statement for statement in sql)
                 if role in ('owner', 'admin') and target != 'missing-workspace' and shape != 'reference-type':
