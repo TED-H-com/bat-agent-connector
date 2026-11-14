@@ -7,6 +7,12 @@
   key fingerprints, Connector tokens, private and tailnet IPv4 addresses, and
   e-mail addresses.
 
+- Release validation refuses source and wheel archives that contain files not
+  tracked at the release commit.
+
+- Wheels no longer contain a second build-provenance file beside the package modules;
+  published wheels 0.2.14–0.2.20 contain it.
+
 - Keep existing BAT hosts working as before while checking the identity and
   version of hosts that support the suite's new connection handshake. This
   does not enable any new host actions.
