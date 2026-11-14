@@ -6,6 +6,9 @@
   the owned PM Git carrier through a durable operation. Read its original receipt
   over HTTP, RPC or MCP with current source access; bounded pages preserve cursor
   progress, and recovery keeps the original operation and frozen bytes.
+- Keep existing BAT hosts working as before while checking the identity and
+  version of hosts that support the suite's new connection handshake. This
+  does not enable any new host actions.
 
 ## 0.2.20 / Desktop 0.1.16 (2026-11-13)
 

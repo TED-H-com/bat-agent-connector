@@ -4,22 +4,22 @@
 
 ## 選擇相符的安裝包
 
-2026 年 11 月 13 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.19)為 Connector **0.2.19**／desktop **0.1.15**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
+2026 年 11 月 14 日核對的最新[穩定版下載](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.20)為 Connector **0.2.20**／desktop **0.1.16**，完整來源記錄於 `release-manifest.json`。[已發布預覽版（prerelease）](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.13-preview.20261022)為 Connector **0.2.13**／desktop **0.1.9**，來源 `437ee6a7143a82e32eae1d6a008203b2df072aaf`。下載所選版本的相符平台套件及其 `release-manifest.json`、`SHA256SUMS`。每版各有 wheel、sdist、deb、兩個 DMG、Windows 安裝器、來源清單與校驗碼，共八檔。CI 與安裝 fixture 不代表原生或實機驗收。
 
-Connector 0.2.19／Desktop 0.1.15 在共用 Dashboard 加入引導式 Sprint Review、從 Result 與 Overview 檢視並審查精確的原始評估，以及為選定 Work 尋找可撤回的外部對話關聯。完成 Review 記錄方向與責任歸屬，品質驗收仍須另行進行；Planning 產出維持草稿，不採納範圍，也不啟動工作。API／MCP 用戶端另可使用 workspace WIP 建議上限及唯讀的範圍影響預覽，這兩項功能目前沒有 Dashboard UI。既有權限、草稿及原 operation key 均保留。前版的外部對話關聯及對話保存仍保留。分支、合併、發布、安裝與實機驗證分別見[交付狀態](product/implementation-status.md)。下方首次啟動步驟描述 0.2.19；下載套件不代表已安裝或實機驗收。
+Connector 0.2.20／Desktop 0.1.16 透過 API 與 MCP 提供唯讀的固定 Scope 與 roadmap 報告，並修正操作歷史分頁、多來源頁面、稽核寫入失敗時的操作結果，以及並行本機狀態檢查。前版的外部對話關聯及對話保存仍保留。分支、合併、發布、安裝與實機驗證分別見[交付狀態](product/implementation-status.md)。下方首次啟動步驟描述 0.2.20；下載套件不代表已安裝或實機驗收。
 
-| 平台 | 穩定版 0.1.15 資產 | 預覽版 0.1.9 資產 | 格式 |
+| 平台 | 穩定版 0.1.16 資產 | 預覽版 0.1.9 資產 | 格式 |
 | --- | --- | --- | --- |
-| Windows x64 | `better-agent-dashboard_0.1.15_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
-| Mac Apple Silicon | `better-agent-dashboard_0.1.15_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
-| Mac Intel | `better-agent-dashboard_0.1.15_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
-| Linux | `better-agent-dashboard_0.1.15_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
+| Windows x64 | `better-agent-dashboard_0.1.16_windows_x64.exe` | `better-agent-dashboard_0.1.9_windows_x64.exe` | NSIS `.exe` |
+| Mac Apple Silicon | `better-agent-dashboard_0.1.16_macos_arm64.dmg` | `better-agent-dashboard_0.1.9_macos_arm64.dmg` | `.dmg` |
+| Mac Intel | `better-agent-dashboard_0.1.16_macos_x64.dmg` | `better-agent-dashboard_0.1.9_macos_x64.dmg` | `.dmg` |
+| Linux | `better-agent-dashboard_0.1.16_linux_amd64.deb` | `better-agent-dashboard_0.1.9_linux_amd64.deb` | `.deb` |
 
 請使用發布頁的相符平台資產；另行提供的 GitHub Actions 候選 artifact 可能要求登入，也會到期。Linux 與 Windows 套件未簽章；macOS 採 ad-hoc 簽章，未公證。沒有 signed updater feed。本版不新增 owner 安裝、實體裝置或真 BAT／模型驗收證據。Linux 原生憑證持久儲存仍不在本次交付範圍；GitHub 發布標記不等於實機穩定性通過。
 
 ### 更新既有桌面安裝
 
-Windows 請下載 `better-agent-dashboard_0.1.15_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
+Windows 請下載 `better-agent-dashboard_0.1.16_windows_x64.exe`，從系統匣退出 Dashboard，再執行安裝器。保留既有應用程式資料，不刪除 Connector journal 或憑證。既有未簽章測試包無法透過內建簽章更新安裝；其他平台使用上表的相符套件。
 
 目前候選版檢查分別由 Connector 0.2.12 與 0.2.19 的固定發布來源建置舊核心，再升級至候選版，核對原身分、資料與操作保留。候選版的 Connector 版本必須較高；同版本比較會被拒絕。已發布的 0.2.19 使用 0.2.12 與 0.2.18 基準。這些核心 fixture 未執行舊桌面安裝器到新安裝器的完整升級，也不代表已在你的機器修復；最終來源與已通過的 CI 證據見[交付狀態](product/implementation-status.md)。
 
@@ -226,7 +226,7 @@ Dashboard 登入欄位不能填 BAT remote token。
 兩個已發布版本都含驗證安裝器；啟動腳本與安裝須使用同一 tag。穩定版：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.19/scripts/install.sh | sh -s -- --tag v0.2.19 --channel-check stable
+curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.20/scripts/install.sh | sh -s -- --tag v0.2.20 --channel-check stable
 ```
 
 預覽版：
@@ -235,7 +235,10 @@ curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.
 curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.13-preview.20261022/scripts/install.sh | sh -s -- --tag v0.2.13-preview.20261022 --channel-check preview
 ```
 
-`--channel-check stable` 拒絕預覽版；預設 `preview` 可接受穩定版與預覽版。
+將 `~/.local/bin` 加入 PATH。`--dry-run` 不寫入，只驗證發布中繼資料；
+`--verify-only` 不寫入，只驗證既有安裝與收據。`--channel-check stable` 拒絕預覽版；
+預設 `preview` 可接受穩定版與預覽版，更新器依該通道提供符合條件的較新版本。
+`--root /absolute/private/version-directory` 選擇新的版本目錄；以 root 執行須加上 `--allow-root`。
 Linux 加上 `--enable-updates` 才會登記所選通道並啟用使用者排程，取得該通道符合條件的較新版本；
 否則依印出的收據、登記與排程指令操作。安裝前提及收據流程見[英文安裝說明](getting-started.md#2-install-connector)，通道與回退見[更新指南](connector-updates.md)。
 
@@ -250,6 +253,9 @@ batc --help
 
 ### 3. 配置 BAT 存取
 
+Linux 操作者可搭配既有可信 SSH aliases 與 Bitwarden 或命令來源，使用選填的
+[使用者 SSH 通道與 token 檔案配置工具](../contrib/linux/README.md)。
+
 這台主機已有 BAT desktop profiles 時：
 
 ```bash
@@ -258,6 +264,14 @@ batc hosts
 ```
 
 匯入會寫出 `~/.config/bat-agent-connector/hosts.toml`，預設關閉 writes；保存 endpoint、固定 TLS 指紋及 **token 參照**，不複製 token 值。`batc hosts` 會探測已配置主機，成功不代表 Git／部署也就緒。
+
+共用預設值可放在公開的 `hosts.toml`，私人主機定義放在有效設定檔旁、未追蹤的
+`hosts.d/90-private.toml`；有效設定檔由 `BATC_CONFIG` 選擇，未設定時由 `BATC_CONFIG_DIR`
+選擇。有 fragment 時可沒有基礎檔。非隱藏的 `*.toml` fragments 依檔名詞彙順序載入：
+table 遞迴合併，後面的 scalar 與 array 取代先前值；同一主機出現在多個檔案是錯誤。
+Fragment 必須是私人一般檔案而非符號連結，在支援的平台由目前使用者擁有，且在 POSIX
+上不給群組或其他使用者權限（`chmod 600`）；只使用 `token_ref`，不可存放 token 值。
+`batc import-bat` 仍只寫入 `hosts.toml`。
 
 Profile 位於別處可用 `batc import-bat --profiles-dir /path/to/profiles`；加 `--output -` 預覽。不要只為跳過既有設定而加 `--force`。
 

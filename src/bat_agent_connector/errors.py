@@ -29,6 +29,22 @@ class InvokeError(BatError):
     """The host returned invoke-error."""
 
 
+class BacReplyError(BatError):
+    """A validated BAC error envelope. Details are diagnostics, never decisions."""
+
+    def __init__(self, code: str, message: str, retryable: bool, details: dict) -> None:
+        import copy
+        import re
+
+        from .redact import redact
+
+        self.code = code
+        self.message = re.sub(r"h_[0-9a-f]{32}", "<host-id>", redact(message))[:300]
+        self.retryable = retryable
+        self.details = copy.deepcopy(details)
+        super().__init__(f"{code}: {self.message}")
+
+
 class InvokeTimeout(BatError):
     pass
 

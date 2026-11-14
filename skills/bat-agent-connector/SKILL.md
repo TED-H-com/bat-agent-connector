@@ -1316,7 +1316,7 @@ deferred flags are not authority to apply a setting under a new caller or sessio
 | Preview fixed permission prompts (observe, daemon) | `approval_preview(host, workspace?)` | `batc approve-pending HOST --dry-run` |
 | Approve an explicit reviewed selection (operate + observe, daemon) | `approve_pending(host, preview_token, selection, expected_fingerprint, idempotency_key?, confirm=true)` | `batc approve-pending HOST --preview-file FILE --selection JSON --key KEY --confirm` |
 | Change a session's permissions (write, daemon) | `session_set_permissions(host, session_id, mode, idempotency_key?, control_version?, confirm=true)` | `batc permissions HOST SID --mode default --key KEY --confirm` |
-| Continue a fixed standalone Claude source with Codex (start + operate) | `session_failover(host, session_id \| all_exhausted=true, confirm=true, dry_run?, tail_messages?, idempotency_key?)` | `batc failover HOST [SID] --all-exhausted --key KEY --confirm` |
+| Continue a fixed standalone Claude source with Codex (start + operate) | `session_failover(host, session_id \| all_exhausted=true, confirm=true, dry_run?, model?, force?, workspace?, instructions?, archive_only?, tail_messages?, idempotency_key?)` | `batc failover HOST [SID] --all-exhausted --key KEY --confirm` |
 | Reviewed resource cleanup (daemon, cleanup scope) | `cleanup_preview` → `cleanup_apply(confirm=true)` | `batc resource-cleanup preview` → `apply --confirm` |
 | Retained content / permanent cleanup history (observe) | `cleanup_retained`, `cleanup_tombstones` | `batc resource-cleanup retained`, `history` |
 | Legacy evaluation only | `session_cleanup(host, dry_run=true)` | `batc cleanup HOST` |
@@ -1647,8 +1647,10 @@ an independent record, not a replay guarantee. Read-only MCP installations omit 
   was sent. Cancellation after a positive ACK may finish local receipt bookkeeping without another frame.
   Without a key, each call is independent; keep the returned operation ID. Batch selection is bounded and
   fixed before dispatch; a retry does not select newer sessions or text. Report old → new session id and
-  actual operation status, then track the successor. The central adapter does not offer forced or
-  archive-only failover. Preserve an unproven source and use its existing evidence and reviewed cleanup.
+  actual operation status, then track the successor. `force=true` bypasses only the quota-exhausted
+  classification, not the writer, task ownership, confinement or other safety gates. `archive_only=true`
+  requires one explicit source and marks the successor with the archive cleanup policy; use reviewed cleanup
+  to reclaim resources. Preserve an unproven source and use its existing evidence and reviewed cleanup.
 - **Permissions**: answer one fixed pending prompt through `session.answer`, and use `session.permissions`
   for an explicit mode change when authorized. For multiple prompts use the reviewed bulk workflow below;
   apply without its fixed preview and explicit selection refuses with `BULK_PREVIEW_REQUIRED`.

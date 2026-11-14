@@ -1,22 +1,21 @@
 # Connector automatic updates / Connector 自動更新
 
-Connector **0.2.15** includes automatic updates (introduced in 0.2.7). Start with the
-[published stable release](https://github.com/TED-H-com/bat-agent-connector/releases/tag/v0.2.15)
-and its matching source manifest and checksums.
+Connector includes automatic updates since 0.2.7. Start with the
+[latest stable release](https://github.com/TED-H-com/bat-agent-connector/releases/latest),
+its [manifest](https://github.com/TED-H-com/bat-agent-connector/releases/latest/download/release-manifest.json)
+and [checksums](https://github.com/TED-H-com/bat-agent-connector/releases/latest/download/SHA256SUMS).
 
-This release adds background saved-conversation retention and explicit PM summaries
-of fixed saved versions (#498), plus optional read-only host deployment observations
-(#495). The enrolled Connector updater applies the new core to future launches;
-it does not replace the desktop application. Desktop 0.1.11 uses the separate manual
+The enrolled Connector updater applies the new core to future launches;
+it does not replace the desktop application. The desktop uses the separate manual
 package update described in the [installation guide](getting-started.md#update-an-existing-desktop).
-The release's bundled-core fixtures build older cores from pinned published
-0.2.12 and 0.2.14 sources before upgrading them; old desktop installer upgrades are separate.
-exact source/CI and their validation scope are recorded in [delivery status](product/implementation-status.md).
+Bundled-core upgrade fixtures build older cores from pinned published sources named
+in each release's notes; old desktop installer upgrades are separate. Exact source/CI
+and their validation scope are recorded in [delivery status](product/implementation-status.md).
 Existing processes keep their loaded version until their ordinary restart.
 
 The [verified operator installer](getting-started.md#2-install-connector)
 produces `rollout-receipt.json` in its private version directory after verifying
-the real installation. The v0.2.15 tag contains this installer; the plain `uv tool install` alternative does not
+the real installation. Use a published tag containing this installer; the plain `uv tool install` alternative does not
 produce an enrollment receipt. On Linux retain this receipt and use its printed
 absolute path below. `--enable-updates` runs enrollment and scheduling for you. Enrollment verifies
 the receipt, installed source, canonical skill and the published release channel.
@@ -88,14 +87,15 @@ application configuration remain unchanged.
 
 ## 發布與使用邊界
 
-Connector 自 0.2.7 起提供 Linux 使用者層級自動更新，目前穩定版為 0.2.15。
-本版加入背景對話保存、明確請求的固定版本 PM 摘要（#498）及選填的主機部署唯讀觀察（#495）。
-Connector 更新供下次啟動使用，不會替換桌面程式；Desktop 0.1.11 另依
+Connector 自 0.2.7 起提供 Linux 使用者層級自動更新。請從[最新穩定版](https://github.com/TED-H-com/bat-agent-connector/releases/latest)、
+其[來源清單](https://github.com/TED-H-com/bat-agent-connector/releases/latest/download/release-manifest.json)
+及[校驗碼](https://github.com/TED-H-com/bat-agent-connector/releases/latest/download/SHA256SUMS)開始。
+Connector 更新供下次啟動使用，不會替換桌面程式；桌面程式另依
 [安裝指南](getting-started.zh-TW.md#更新既有桌面安裝)手動更新。
-bundled-core fixture 先由 0.2.12 與 0.2.14 固定發布來源建置舊核心再升級；
+bundled-core 升級 fixture 先由各版發布說明所列的固定發布來源建置舊核心再升級；
 舊桌面安裝器的完整升級另有範圍。最終來源／CI
 見[交付狀態](product/implementation-status.md)；既有程序仍載入原版，直到正常重啟。
-本版的驗證安裝器會產生 `rollout-receipt.json`。保留收據，再用上方指令
+已發布 tag 中的驗證安裝器會產生 `rollout-receipt.json`。保留收據，再用上方指令
 選擇 `preview` 或 `stable` 並啟用排程。未知或被自行修改的安裝不會被接管。
 
 每小時自動檢查，最多錯開 15 分鐘。無人登入的主機需確認使用者 systemd
@@ -167,3 +167,54 @@ from this repository. The dry run validates state, installation provenance and
 release metadata without writes. Activation uses the existing updater transaction;
 the previous current release remains available for rollback. Pending updater
 transactions must finish before repair. Existing sessions are not restarted.
+
+## 發布者檢查清單
+
+每次散布程式碼變更都使用新的三段式 Connector 版本。從固定的已發布 tag 建置，
+通過必要 CI 與套件 fixture 後，將以下區段加入該版既有的 `release-manifest.json`：
+
+```json
+"connector_update": {
+  "protocol": 1,
+  "compatibility_epoch": 1,
+  "python": "3.13",
+  "canonical_skill_sha256": "<發布 commit 中 skills/bat-agent-connector/SKILL.md 的 SHA-256>"
+}
+```
+
+清單保留 format 1、固定 repository URL、發布 tag、`source_commit`、
+`versions.connector`、產物摘要與 `validation.status: "passed"`，並以 GitHub
+SHA-256 摘要將其上傳為發布資產。套件版本的發布資產與清單不可變更；
+發布錯誤須用新套件版本修正。不相容的資料／啟動器變更須使用新的 compatibility
+epoch 並經檢視遷移，不能透過 epoch 1 自動套用。沒有此區段的既有版本會被忽略。
+
+在磁碟上執行真實套件 fixture：
+
+```bash
+uv run python scripts/validate_connector_update.py --receipt "$HOME/agent-work/tmp/update-proof/receipt.json"
+```
+
+Fixture 使用真實鎖定套件安裝兩個本機的已發布 tag 替身，驗證所有套件檔與 canonical
+skill，並執行實際登記、升級、啟動器與回退。已載入的 interpreter 保留原身分，
+新啟動的程序取得新版本；journal sentinel 保持不變。重複 stage 會使用已驗證的安裝，
+不重新擷取。此流程不連接 BAT、不執行模型，也不修改既有安裝。
+
+## 修復由更新器管理的安裝
+
+v0.2.12 主機在 v0.2.14 發布後，`batc-update` journal 可能每小時回報
+`{"status": "failed", "code": "installed_source_mismatch"}`。Wheel 新增的
+`bat_agent_connector/build-info.json` provenance 會被舊更新器與來源樹比對。
+v0.2.16 以後將 wheel provenance 放在 `bat_agent_connector/skill/build-info.json`，
+不列入舊版來源比對；該版本在其通道發布後，這些主機會在下一次每小時排程自動修復。
+
+一般重新安裝會以 `already_update_managed` 拒絕已登記的安裝。若要明確手動修復，
+請從所需版本下載 `install_connector.py`，並將 `vX` 換成實際 tag：
+
+```sh
+python3 install_connector.py --tag vX --repair-managed --dry-run
+python3 install_connector.py --tag vX --repair-managed
+```
+
+修復需要 Linux、私人且有效的更新器狀態，以及此 repository 的 uv tool Git 安裝。
+Dry run 只驗證狀態、安裝來源及發布中繼資料，不進行寫入。啟用時使用既有更新器
+交易，原本的目前版本仍可供回退。待處理的更新交易必須先完成；既有 sessions 不會重啟。
