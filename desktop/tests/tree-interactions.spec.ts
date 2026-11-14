@@ -67,5 +67,10 @@ for (const native of [false, true]) {
     await page.keyboard.press('Escape');
     await row.getByRole('button', {name: 'More', exact: true}).click();
     await expect(drawer.getByRole('button', {name: 'Rename', exact: true})).toBeVisible();
+    await expect(drawer.getByRole('textbox', {name: 'Rename', exact: true})).toHaveValue('One');
+    await page.evaluate(() => localStorage.setItem('batc.lang', 'zh-TW'));
+    await page.reload();
+    await row.getByRole('button', {name: '更多', exact: true}).click();
+    await expect(drawer.getByRole('textbox', {name: '改名', exact: true})).toHaveValue('One');
   });
 }

@@ -1999,7 +1999,7 @@ async function viewSession(main, host, sid, context = null) {
   const pending = h("div", { class: "session-asking-region", "data-pending-controls": "" });
   const status = h("div", { class: "muted session-status" });
   const scope = `send.${host}.${sid}`, draftKey = `batc.draft.${connection.namespace}.${scope}`;
-  const box = h("textarea", { placeholder: t("send_placeholder") });
+  const box = h("textarea", { placeholder: t("send_placeholder"), "aria-label": t("send_placeholder") });
   try { box.value = localStorage.getItem(draftKey) || ""; } catch { /* unavailable */ }
   box.oninput = () => { try { localStorage.setItem(draftKey, box.value); } catch { /* unavailable */ } };
   const queue = h("input", { type: "checkbox" });
@@ -2736,7 +2736,7 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
   let ticket = 0; // a withdrawn session's late list or preview never paints
   const row = cp => rows.get(cp.checkpoint_id) || rows.set(cp.checkpoint_id, buildRow(cp)).get(cp.checkpoint_id);
   const buildRow = cp => {
-    const instr = h("textarea", { placeholder: t("continue_placeholder") });
+    const instr = h("textarea", { placeholder: t("continue_placeholder"), "aria-label": t("continue_placeholder") });
     const agent = h("select", { "aria-label": t("checkpoint_agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
     const out = h("div", { class: "muted session-checkpoint-result" });
     const draft = attachmentDraft(`continue.${cp.checkpoint_id}`, instr, cp.artifacts || []);
@@ -2801,7 +2801,7 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
     } catch (e) { if (mine === ticket) list.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => load().catch(() => {})}, {within:list})); }
   };
   const pick = h("select", { "aria-label": t("commit"), hidden: true });
-  const note = h("textarea", { placeholder: t("checkpoint_note_placeholder"), hidden: true });
+  const note = h("textarea", { placeholder: t("checkpoint_note_placeholder"), "aria-label": t("checkpoint_note_placeholder"), hidden: true });
   let previewFailed = false, recording = false;
   // Preview and the record handler both decide availability. A preview that finishes mid-record must not disable the button.
   let applyCreateAvailability = () => {};
@@ -3406,7 +3406,7 @@ function integrationPanel(pr, reloadCard, source = null) {
     if (op.status === "succeeded") {box.closeReview(); reloadCard(integrationStatus(op, {}));} // the card shows the new head
     else if (["TARGET_HEAD_CHANGED", "SOURCE_CHANGED"].includes(op.error_code)) { await freshHead(); runPreview(); }
   };
-  const branch = h("input", { placeholder: t("branch_on_github") });
+  const branch = h("input", { placeholder: t("branch_on_github"), "aria-label": t("branch_on_github") });
   (async () => {
     try {
       const query = new URLSearchParams({host: target.host});
@@ -4349,8 +4349,8 @@ async function viewProjects(main) {
           else await change(msg, "project.pin", { project_id: p.project_id }, { pinned: !before }, { before }, `project.pin.${p.project_id}`);
           render();
         };
-        const rename = h("input", { value: p.name, maxlength: 80 });
-        const sub = h("input", { placeholder: t("new_sub_project"), maxlength: 80 });
+        const rename = h("input", { value: p.name, maxlength: 80, "aria-label": t("rename") });
+        const sub = h("input", { placeholder: t("new_sub_project"), "aria-label": t("new_sub_project"), maxlength: 80 });
         const d = recordDrawer(
           h("div", { class: "filters" }, rename, h("button", { class: "secondary", onclick: async () => {
             const ok = await change(msg, "project.update", { project_id: p.project_id }, { name: rename.value.trim() },
@@ -4533,8 +4533,8 @@ async function viewProject(main, pid) {
         else await change(rowMsg, "work_item.pin", { work_item_id: w.work_item_id }, { pinned: !before }, { before }, `wi.pin.${w.work_item_id}`);
         render();
       };
-      const child = h("input", { placeholder: t("new_child_item"), maxlength: 120 });
-      const branch = h("input", { placeholder: t("new_branch_item"), maxlength: 120 });
+      const child = h("input", { placeholder: t("new_child_item"), "aria-label": t("new_child_item"), maxlength: 120 });
+      const branch = h("input", { placeholder: t("new_branch_item"), "aria-label": t("new_branch_item"), maxlength: 120 });
       const retained = workDrafts.get(w.work_item_id);
       if (retained) {child.value = retained.child; branch.value = retained.branch;}
       const create = (input, params, scope) => h("button", { class: "secondary", onclick: async () => {
@@ -4648,10 +4648,10 @@ async function viewWorkItem(main, wid) {
   };
   let draft = null; // the edit form's values after a stale save, put back into the reloaded form
   // Fields made once and moved into each render: a re-render never throws away what is being typed.
-  const newStep = h("input", { placeholder: t("new_step"), maxlength: 300 });
+  const newStep = h("input", { placeholder: t("new_step"), "aria-label": t("new_step"), maxlength: 300 });
   const kind = h("select", {}, ...["session", "checkpoint", "operation", "task", "pull_request", "github_source"].map(k =>
     h("option", { value: k }, t("link_" + k))));
-  const ref = h("input", { placeholder: t("link_ref_hint") });
+  const ref = h("input", { placeholder: t("link_ref_hint"), "aria-label": t("link_ref_hint") });
   kind.onchange = () => { ref.placeholder = t("link_ref_" + kind.value); };
   kind.onchange();
   const results = state.caps?.features?.work_item_results?.version === 1 ? resultSourcesPanel({h, t, api,
@@ -4825,7 +4825,7 @@ function continueFrom(w, checkpointId, notice, children = []) {
   const text = [w.title, w.goal, w.request && `${t("request")}:\n${w.request}`, w.acceptance && `${t("acceptance")}:\n${w.acceptance}`,
     w.steps.length ? `${t("steps_title")}:\n${w.steps.map(s => `- [${s.done ? "x" : " "}] ${s.text}`).join("\n")}` : ""]
     .filter(Boolean).join("\n\n");
-  const instr = h("textarea", {}, text);
+  const instr = h("textarea", { "aria-label": t("start_from_checkpoint") }, text);
   const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
   const out = h("div", {"data-work-start-status": ""});
   const draft = attachmentDraft(`continue.${checkpointId}.${w.work_item_id}`, instr, (w.attachments || []).filter(x => x.role === "input"));

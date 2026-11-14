@@ -106,3 +106,25 @@ test('every literal t(...) key in desktop/src exists in en and zh-TW, and shared
     assert.deepEqual(placeholders(STRINGS['zh-TW'][key]), placeholders(STRINGS.en[key]), `Placeholder mismatch for ${key}`);
   }
 });
+
+test('project rename input, checkpoint continuation textarea, and placeholder fields in app.js have accessible names in en and zh-TW', () => {
+  const appSource = readFileSync(fileURLToPath(new URL('../src/app.js', import.meta.url)), 'utf8');
+  assert.ok(appSource.includes('const rename = h("input", { value: p.name, maxlength: 80, "aria-label": t("rename") });'));
+  assert.ok(appSource.includes('const instr = h("textarea", { "aria-label": t("start_from_checkpoint") }, text);'));
+  for (const key of [
+    'rename',
+    'start_from_checkpoint',
+    'send_placeholder',
+    'continue_placeholder',
+    'checkpoint_note_placeholder',
+    'branch_on_github',
+    'new_sub_project',
+    'new_child_item',
+    'new_branch_item',
+    'new_step',
+    'link_ref_hint',
+  ]) {
+    assert.ok(STRINGS.en[key]?.trim(), `Missing English accessible name for ${key}`);
+    assert.ok(STRINGS['zh-TW'][key]?.trim(), `Missing zh-TW accessible name for ${key}`);
+  }
+});
