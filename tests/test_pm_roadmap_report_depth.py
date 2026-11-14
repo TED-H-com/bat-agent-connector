@@ -18,7 +18,7 @@ from tests.test_pm_discussions import act, prepared, record
 from tests.test_pm_evidence import capture
 from tests.test_pm_roadmap import READER, milestone, revision
 from tests.test_pm_roadmap_report_api import READ, daemon, served, server_for  # noqa: F401
-from tests.test_pm_roadmap_report_review import document, fault, raw_http
+from tests.test_pm_roadmap_report_faults import document, fault, raw_http
 from tests.test_pm_roadmap_report_sources import ops as ops_fixture
 from tests.test_pm_run_api import unpack
 from tests.test_pm_snapshots import adopt, adoption, draft, snapshot, work_for

@@ -17,7 +17,7 @@ from tests.test_api_v1 import token
 from tests.test_pm_api import OWNER
 from tests.test_pm_evidence_api import capture, prepared
 from tests.test_pm_roadmap_report_api import anchor, daemon, served  # noqa: F401
-from tests.test_pm_roadmap_report_review import document, fault, raw_http
+from tests.test_pm_roadmap_report_faults import document, fault, raw_http
 from tests.test_pm_roadmap_report_schema import inventory, world
 from tests.test_pm_roadmap_report_sources import READER, ops, selected  # noqa: F401
 from tests.test_work_items import act

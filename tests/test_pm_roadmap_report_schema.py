@@ -17,7 +17,7 @@ from tests.test_api_v1 import token
 from tests.test_pm_evidence import capture, link, task
 from tests.test_pm_roadmap import OWNER, READER, mapped, revision
 from tests.test_pm_roadmap_report_api import daemon, served  # noqa: F401
-from tests.test_pm_roadmap_report_review import document, fault, raw_http
+from tests.test_pm_roadmap_report_faults import document, fault, raw_http
 from tests.test_pm_roadmap_report_sources import ops as ops_fixture
 from tests.test_pm_snapshots import adopt, adoption, draft, snapshot
 
