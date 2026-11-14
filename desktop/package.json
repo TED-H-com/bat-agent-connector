@@ -23,6 +23,7 @@
     "test:central": "node tests/central-integration.mjs",
     "test:two-service-isolation": "node --experimental-strip-types tests/two-service-isolation.mjs",
     "test:managed-recovery-reset": "node --experimental-strip-types tests/two-service-isolation.mjs --managed",
+    "test:managed-browser": "node tests/managed-browser-integration.mjs",
     "test:attention": "node tests/attention-integration.mjs",
     "tauri": "tauri",
     "test:cleanup": "node tests/cleanup-integration.mjs",

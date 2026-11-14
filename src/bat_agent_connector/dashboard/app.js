@@ -17536,11 +17536,11 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false, overl
 		dispose: dock ? destroy : close
 	});
 }
-function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, compactBelow = 0, rowAttrs } = {}) {
+function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, compactBelow = 0, rowAttrs, label } = {}) {
 	const compact = () => compactRow && (matchMedia("(max-width: 799px)").matches || root.clientWidth < compactBelow);
 	const keyFor = (row) => typeof rowKey === "function" ? rowKey(row) : row[rowKey];
 	const hasSelection = rows.some((row) => keyFor(row) === selected);
-	const tbody = h$1("tbody"), table = h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-hidden": "true" }) : null, ...columns.map((column) => h$1("th", {
+	const tbody = h$1("tbody"), table = h$1("table", { "aria-label": label || null }, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-hidden": "true" }) : null, ...columns.map((column) => h$1("th", {
 		scope: "col",
 		"data-column": column.key,
 		"data-secondary": column.secondary || null,
@@ -17548,7 +17548,9 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 	}, column.label)))), tbody);
 	const root = h$1("div", {
 		class: "ui-data-table" + (compactRow ? " ui-data-table-responsive" : ""),
-		tabindex: compactRow ? null : 0
+		tabindex: compactRow ? null : 0,
+		role: !compactRow && label ? "region" : null,
+		"aria-label": !compactRow && label ? label : null
 	}, table), controls = [];
 	rows.forEach((row, i) => {
 		const key = keyFor(row), active = key === selected;
@@ -17558,7 +17560,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 			...extra,
 			"data-row-key": key,
 			tabindex: active || !hasSelection && i === 0 ? 0 : -1,
-			"aria-selected": String(active),
+			"aria-current": active ? "true" : null,
 			onclick: (event) => {
 				if (!event.target.closest("button, a, input, select")) {
 					if (compact() && toggleExpansion) {
@@ -17571,7 +17573,8 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		function select() {
 			controls.forEach((node) => {
 				node.tabIndex = node === tr ? 0 : -1;
-				node.setAttribute("aria-selected", String(node === tr));
+				if (node === tr) node.setAttribute("aria-current", "true");
+				else node.removeAttribute("aria-current");
 			});
 			onSelect(key, row);
 		}
@@ -30348,6 +30351,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			role: "list"
 		}, ...visible.map(listRow));
 		return dataTable({
+			label: t("ui_agents"),
 			rows: visible,
 			rowKey: "source_id",
 			selected,
@@ -30633,9 +30637,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				preference.selected = null;
 				inspectorPanel = null;
 				signature = currentSignature();
-				const opener = stageRow(id);
-				if (opener?.getAttribute("role") === "listitem") opener.removeAttribute("aria-current");
-				else if (opener) opener.setAttribute("aria-selected", "false");
+				stageRow(id)?.removeAttribute("aria-current");
 				queueMicrotask(() => stageRow(id)?.focus());
 			}
 		});
@@ -36458,11 +36460,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		}, t("wv_retry")));
 	}
 	function markSelection() {
-		for (const row of tables.querySelectorAll("[data-row-key]")) {
-			row.setAttribute("aria-selected", String(row.dataset.rowKey === selected));
-			if (row.dataset.rowKey === currentRequirement) row.setAttribute("aria-current", "true");
-			else row.removeAttribute("aria-current");
-		}
+		for (const row of tables.querySelectorAll("[data-row-key]")) if (row.dataset.rowKey === selected || row.dataset.rowKey === currentRequirement) row.setAttribute("aria-current", "true");
+		else row.removeAttribute("aria-current");
 		for (const node of tables.querySelectorAll("[data-rtm-select]")) node.setAttribute("aria-pressed", String(node.dataset.rtmSelect === selected));
 	}
 	function workRow(card) {
@@ -36510,8 +36509,9 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			if (!groups.has(key)) groups.set(key, []);
 			groups.get(key).push(req);
 		}
-		const tableFor = (requirements) => {
+		const tableFor = (requirements, label) => {
 			const table = dataTable({
+				label,
 				rows: requirements.map((req) => ({
 					...req,
 					title: req.text
@@ -36597,13 +36597,14 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		tables.replaceChildren();
 		for (const [label, rows] of [...groups].sort(([a], [b]) => a ? b ? 0 : -1 : b ? 1 : 0)) {
 			const ids = milestoneFor(rows[0]).map((row) => row.milestone_id).sort().join(",");
+			const groupTitle = label || t("wv_unassigned", { n: rows.length });
 			if (group.value !== "none") tables.append(h$1("h2", {
 				class: "pm-requirement-group",
 				tabindex: -1,
 				"data-rtm-group": group.value + ":" + (group.value === "milestone" ? ids : label),
 				"data-rtm-milestones": ids
-			}, label || t("wv_unassigned", { n: rows.length })));
-			tables.append(tableFor(rows));
+			}, groupTitle));
+			tables.append(tableFor(rows, group.value === "none" ? t("ui_requirements") : groupTitle));
 		}
 		const unassigned = cards.filter((card) => !requirements.some((req) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id))).filter((card) => matches(null, [card]));
 		const orphanIssues = issues.filter((row) => !cards.some((card) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id)).filter((row) => !query || joinLabel([
@@ -36835,6 +36836,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 			return;
 		}
+		currentRequirement = null;
 		currentMilestone = null;
 		const card = cards.find((row) => row.work_item_id === id), requirement = plan?.document?.requirements?.find((row) => row.id === id);
 		if (!card && !requirement) {
@@ -37322,6 +37324,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 				heading: "h3"
 			}));
 			else item.catalogBox.append(dataTable({
+				label: t("ahp_title"),
 				columns: [{
 					key: "check",
 					label: "",
@@ -42361,7 +42364,6 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				class: "reg-list-row",
 				"data-row-key": row.row_id,
 				"aria-current": current ? "true" : null,
-				"aria-selected": current ? "true" : null,
 				tabindex: current || !hasSelection && index === 0 ? 0 : -1,
 				onclick: () => openRow(row)
 			}, h("span", { class: "reg-list-title" }, dash(displayTitle(row))), listMeta(row), nextStep(row) ? h("span", { class: "reg-list-next" }, row.next_step) : null);
@@ -42478,6 +42480,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			}
 		];
 		tableHost.replaceChildren(dataTable({
+			label: t("ui_issues"),
 			columns,
 			rows: shown,
 			rowKey: "row_id",
@@ -71000,6 +71003,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		if (!rows.length) list.replaceChildren(emptyState({ title: t(before === null ? "operations_empty" : "operations_empty_page") }));
 		else if (!shown.length) list.replaceChildren(emptyState({ title: t("global_no_match") }));
 		else list.replaceChildren(dataTable({
+			label: t("nav_operations"),
 			columns,
 			rows: shown,
 			rowKey: "operation_id",

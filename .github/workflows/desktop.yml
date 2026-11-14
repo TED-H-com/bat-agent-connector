@@ -686,6 +686,12 @@ jobs:
         if: runner.os == 'Linux'
         timeout-minutes: 5
         run: node tests/managed-setup-browser-integration.mjs
+      - name: Managed browser handoff and restart continuity
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: |
+          npm run test:managed-browser
+          BATC_TEST_LOCALE=zh-TW npm run test:managed-browser
       - name: Preserve packaged managed setup evidence
         if: runner.os == 'Linux' && always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
