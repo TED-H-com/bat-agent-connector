@@ -63,6 +63,11 @@ test('verification rejects malformed, missing, added and changed assets', () => 
   rmSync(join(root, 'extra.js')); writeFileSync(join(root, 'index.html'), 'NO');
   assert.throws(() => verifyManifest(root, manifest));
   rmSync(join(root, 'index.html')); assert.throws(() => verifyManifest(root, manifest));
+  add(root, 'index.html', 'ok'); add(root, 'app.js', 'console.log(1);');
+  const multi = buildManifest(root, provenance);
+  assert.throws(() => verifyManifest(root, {...multi, files: [...multi.files].reverse()}), /does not match the tree/);
+  rmSync(join(root, 'app.js'));
+  assert.throws(() => verifyManifest(root, multi), /does not match the tree/);
 }));
 
 test('links, invalid roots, bad names and unsupported extensions are refused', () => {
@@ -71,6 +76,7 @@ test('links, invalid roots, bad names and unsupported extensions are refused', (
     root => symlinkSync('.', join(root, 'directory'), 'dir'),
     root => add(root, 'bad.map'), root => add(root, 'bad.txt'), root => add(root, 'back\\slash.js'),
     root => {add(root, 'Case.js'); add(root, 'case.js');},
+    root => {add(root, 'Ä.js'); add(root, 'ä.js');},
     root => {add(root, 'Directory/one.js'); add(root, 'directory/two.js');},
   ]) withTree(root => {
     const manifest = buildManifest(root, provenance);
