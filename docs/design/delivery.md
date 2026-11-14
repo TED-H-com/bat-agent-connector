@@ -487,7 +487,7 @@ UI 用真實 daemon API＋FakeGitHub／MockBat／fake verifier 驗收 zh-TW、en
 
 各部分完成前跑 `uv run ruff check .`、`uv run pytest -q` 全套。Phase 1 同跑基線，不聲稱新驗收已實作。真實 repo／environment 接入由 orchestrator 另授權，本 clone 不呼叫 GitHub mutation、不推送、不開 PR。
 
-環境卡的 Playwright runner 為 `tests/manual/delivery_dashboard.mjs`，fixture 為 `tests/manual/delivery_dashboard_fixture.py`。從 repo root 跑 `uv run python tests/manual/delivery_dashboard_fixture.py`，另一終端以已安裝的 Playwright 執行 `BATC_PLAYWRIGHT_MODULE=/tmp/batc-confinement-playwright/node_modules/playwright node tests/manual/delivery_dashboard.mjs`；也可用 BATC_PLAYWRIGHT_MODULE／BATC_CHROMIUM／BATC_BROWSER_FIXTURE／BATC_BROWSER_OUTPUT 指向自己的安裝與 temp 輸出。只用 synthetic IDs／SHA／保留 example domain；fixture 控制 listener 不在產品 router。
+環境卡的 Playwright runner 為 `tests/manual/delivery_dashboard.mjs`，fixture 為 `tests/manual/delivery_dashboard_fixture.py`。從 repo root 跑 `BATC_BROWSER_FIXTURE=/path/to/fixture.json uv run python tests/manual/delivery_dashboard_fixture.py`，另一終端以已安裝的 Playwright 與同一個 `BATC_BROWSER_FIXTURE` 執行 `BATC_BROWSER_FIXTURE=/path/to/fixture.json BATC_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright node tests/manual/delivery_dashboard.mjs`；也可用 BATC_PLAYWRIGHT_MODULE／BATC_CHROMIUM／BATC_BROWSER_OUTPUT 指向自己的安裝與輸出目錄。只用 synthetic IDs／SHA／保留 example domain；fixture 控制 listener 不在產品 router。
 
 | Part B 環境卡驗收（en／zh-TW × 390／768／1440 px） | 實際 case／test 名稱 |
 |---|---|

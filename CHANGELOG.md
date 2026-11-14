@@ -22,6 +22,11 @@
   the owned PM Git carrier through a durable operation. Read its original receipt
   over HTTP, RPC or MCP with current source access; bounded pages preserve cursor
   progress, and recovery keeps the original operation and frozen bytes.
+
+- Show translated fallback reason text in the Dashboard, name the history section on
+  English "load more" buttons in Meetings, and give Dashboard text fields accessible
+  names in English and Traditional Chinese.
+
 - Keep existing BAT hosts working as before while checking the identity and
   version of hosts that support the suite's new connection handshake. This
   does not enable any new host actions.

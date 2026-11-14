@@ -1,7 +1,6 @@
-"""Regression probes adapted from the independent roadmap report review (F1–F5, N1–N2).
+"""Roadmap report fault-injection regressions for source integrity, escaping, and legacy adoptions.
 
-Fault injection is restricted to these temporary journals. Expected behavior replaces
-review characterization assertions; the original product triggers are preserved.
+Fault injection is restricted to these temporary journals.
 """
 from __future__ import annotations
 
@@ -54,7 +53,7 @@ async def raw_http(port, path, auth):
     return int(headers.split(b' ')[1]), body
 
 
-async def test_f1_malformed_authority_has_identical_raw_404(served, monkeypatch):  # noqa: F811
+async def test_malformed_authority_has_identical_raw_404(served, monkeypatch):  # noqa: F811
     d, port = served
     target, *_ = await planning(d.ops)
     plan = await draft(d.ops, target)
@@ -111,7 +110,7 @@ async def test_f1_malformed_authority_has_identical_raw_404(served, monkeypatch)
             assert await raw_http(port, path, auth) == expected
 
 
-async def test_f2_missing_named_operations_and_exact_snapshot_adoption_refuse(ops):  # noqa: F811
+async def test_missing_named_operations_and_exact_snapshot_adoption_refuse(ops):  # noqa: F811
     chosen = await selected(ops)
     fixed = read(ops, chosen)
     closure = sources._Closure(ops, READER, chosen[0]['workspace_id']).collect(chosen[3]['revision_id'])
@@ -141,7 +140,7 @@ async def test_f2_missing_named_operations_and_exact_snapshot_adoption_refuse(op
             sources.load_fixed(*args)
 
 
-async def test_f3_complete_escape_set_from_real_admission(ops):  # noqa: F811
+async def test_complete_escape_set_from_real_admission(ops):  # noqa: F811
     chosen = await selected(ops)
     wid = chosen[0]['workspace_id']
     title = 'Title\u061c\u200e\u200f\ufdd0\ufdef'
@@ -164,7 +163,7 @@ async def test_f3_complete_escape_set_from_real_admission(ops):  # noqa: F811
     assert layout.normalize('\ud800\udfff') == '\\ud800\\udfff'
 
 
-async def test_f4_capability_uses_each_existing_dependency_flag(served):  # noqa: F811
+async def test_capability_uses_each_existing_dependency_flag(served):  # noqa: F811
     d, port = served
     auth = token(d, OWNER.actor, 'observe')
     for action, flag in [('pm.roadmap.baseline.set', 'roadmap'), ('pm.snapshot.create', 'brief_snapshots'), ('pm.plan.draft', 'plan_drafting')]:
@@ -178,7 +177,7 @@ async def test_f4_capability_uses_each_existing_dependency_flag(served):  # noqa
             d.ops.actions[action] = removed
 
 
-async def test_f5_future_template_before_v1_proof(ops):  # noqa: F811
+async def test_future_template_before_v1_proof(ops):  # noqa: F811
     chosen = await selected(ops)
     closure = sources._Closure(ops, READER, chosen[0]['workspace_id']).collect(chosen[3]['revision_id'])
     saved, observed = closure[3]['document'], closure[0]['document']
@@ -195,7 +194,7 @@ async def test_f5_future_template_before_v1_proof(ops):  # noqa: F811
         assert error.value.status == 409
 
 
-async def test_n1_authorized_relationship_mismatches_never_filter_silently(ops):  # noqa: F811
+async def test_authorized_relationship_mismatches_never_filter_silently(ops):  # noqa: F811
     chosen = await selected(ops)
     original = sources._Closure(ops, READER, chosen[0]['workspace_id']).collect(chosen[3]['revision_id'])
     for case in ('evidence', 'milestone', 'quality', 'adoption'):
@@ -215,7 +214,7 @@ async def test_n1_authorized_relationship_mismatches_never_filter_silently(ops):
         assert error.value.status == 409
 
 
-async def test_n2_all_legacy_adoptions_are_canonical_and_required(ops, monkeypatch):  # noqa: F811
+async def test_all_legacy_adoptions_are_canonical_and_required(ops, monkeypatch):  # noqa: F811
     chosen = await selected(ops)
     original = dict(ops.db.execute('SELECT * FROM pm_plan_adoptions').fetchone())
     duplicate = dict(original)
@@ -223,7 +222,7 @@ async def test_n2_all_legacy_adoptions_are_canonical_and_required(ops, monkeypat
     result = json.loads(duplicate['result'])
     result.update(decision_id=duplicate['decision_id'], commit_operation_id=duplicate['operation_id'])
     duplicate['result'] = json.dumps(result)
-    # Synthetic legacy duplicate has real operation-row existence, as required by F2.
+    # Synthetic legacy duplicate has real operation-row existence.
     operation = dict(ops.db.execute('SELECT * FROM operations WHERE operation_id=?', (original['operation_id'],)).fetchone())
     operation.update(operation_id=duplicate['operation_id'], idem_key='legacy-duplicate')
     for table, row in [('operations', operation), ('pm_plan_adoptions', duplicate)]:
