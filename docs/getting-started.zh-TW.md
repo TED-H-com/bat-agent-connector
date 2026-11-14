@@ -235,7 +235,10 @@ curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.
 curl -fsSL https://raw.githubusercontent.com/TED-H-com/bat-agent-connector/v0.2.13-preview.20261022/scripts/install.sh | sh -s -- --tag v0.2.13-preview.20261022 --channel-check preview
 ```
 
-`--channel-check stable` 拒絕預覽版；預設 `preview` 可接受穩定版與預覽版。
+將 `~/.local/bin` 加入 PATH。`--dry-run` 不寫入，只驗證發布中繼資料；
+`--verify-only` 不寫入，只驗證既有安裝與收據。`--channel-check stable` 拒絕預覽版；
+預設 `preview` 可接受穩定版與預覽版，更新器依該通道提供符合條件的較新版本。
+`--root /absolute/private/version-directory` 選擇新的版本目錄；以 root 執行須加上 `--allow-root`。
 Linux 加上 `--enable-updates` 才會登記所選通道並啟用使用者排程，取得該通道符合條件的較新版本；
 否則依印出的收據、登記與排程指令操作。安裝前提及收據流程見[英文安裝說明](getting-started.md#2-install-connector)，通道與回退見[更新指南](connector-updates.md)。
 
@@ -250,6 +253,9 @@ batc --help
 
 ### 3. 配置 BAT 存取
 
+Linux 操作者可搭配既有可信 SSH aliases 與 Bitwarden 或命令來源，使用選填的
+[使用者 SSH 通道與 token 檔案配置工具](../contrib/linux/README.md)。
+
 這台主機已有 BAT desktop profiles 時：
 
 ```bash
@@ -258,6 +264,14 @@ batc hosts
 ```
 
 匯入會寫出 `~/.config/bat-agent-connector/hosts.toml`，預設關閉 writes；保存 endpoint、固定 TLS 指紋及 **token 參照**，不複製 token 值。`batc hosts` 會探測已配置主機，成功不代表 Git／部署也就緒。
+
+共用預設值可放在公開的 `hosts.toml`，私人主機定義放在有效設定檔旁、未追蹤的
+`hosts.d/90-private.toml`；有效設定檔由 `BATC_CONFIG` 選擇，未設定時由 `BATC_CONFIG_DIR`
+選擇。有 fragment 時可沒有基礎檔。非隱藏的 `*.toml` fragments 依檔名詞彙順序載入：
+table 遞迴合併，後面的 scalar 與 array 取代先前值；同一主機出現在多個檔案是錯誤。
+Fragment 必須是私人一般檔案而非符號連結，在支援的平台由目前使用者擁有，且在 POSIX
+上不給群組或其他使用者權限（`chmod 600`）；只使用 `token_ref`，不可存放 token 值。
+`batc import-bat` 仍只寫入 `hosts.toml`。
 
 Profile 位於別處可用 `batc import-bat --profiles-dir /path/to/profiles`；加 `--output -` 預覽。不要只為跳過既有設定而加 `--force`。
 

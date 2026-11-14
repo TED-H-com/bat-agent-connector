@@ -42,9 +42,9 @@ The connector therefore:
 | Tool | Tier | Guard rails |
 |---|---|---|
 | `worktree_status`, `session_worktree_status` | read | Only reads (`worktree:status`, `git:status/branch/getRoot`). |
-| `session_start(host, workspace, agent, confirm, prompt?, model?, use_worktree=true, title?)` | orchestrate | `use_worktree=false` only inside a managed root; a worktree in a human clone only while `shared_clone_worktrees = true`; the host-chosen worktree path must be under `.bat-worktrees`. `confirm`, per-host cap `orchestrate_max_sessions` (default 4) counted from the registry, hourly write cap, audit. Rolls back the fresh worktree if the session fails to start. Custom branch names are not supported by BAT 3.2.12. |
+| `session_start(host, workspace, agent, confirm, prompt?, model?, use_worktree=true, title?)` | orchestrate | A standalone durable start requires a new worktree; `use_worktree=false` is refused with `START_WORKTREE_REQUIRED`. A worktree in a human clone is allowed only while `shared_clone_worktrees = true`; the host-chosen worktree path must be under `.bat-worktrees`. `confirm`, per-host cap `orchestrate_max_sessions` (default 4) counted from the registry, hourly write cap, audit. Rolls back the fresh worktree if the session fails to start. Custom branch names are not supported by BAT 3.2.12. |
 | `worktree_merge(host, session_id, confirm)` | orchestrate | Refuses (`DESTINATION_MANUAL`) unless the main checkout is inside a managed root. Merges only if `mergedKind == ahead`, session idle, worktree clean, main checkout clean **and already on the source branch** (so BAT never switches branches there). Otherwise returns the reason and changes nothing. Never forced. |
-| `worktree_remove(host, session_id, confirm, delete_branch=false, allow_unmerged=false, discard_uncommitted=false)` | orchestrate | Refuses if the session is streaming, if the worktree has uncommitted changes (unless `discard_uncommitted`), or if `delete_branch` and the branch has unmerged commits (unless `allow_unmerged`). The session itself is not stopped. |
+| `worktree_remove(host, session_id, confirm, delete_branch=false, allow_unmerged=false, discard_uncommitted=false)` | orchestrate | Disabled legacy action: after its existing tier and resource checks, it refuses with `LEGACY_WORKTREE_REMOVE_DISABLED`. Use `cleanup_preview` / `cleanup_apply` or `batc resource-cleanup preview` / `apply`. |
 | `batc fanout PLAN.md [--start ...]` | CLI helper | Splits a markdown plan (`- [ ]` items, numbered items, `##` headings) into task prompts; `--start` needs `--confirm` and is capped by `max_start_per_call`. |
 
 | `session_failover(...)` | orchestrate | Only for connector-managed sessions in a folder the connector owns, and only for sessions classified `quota_exhausted` (unless `force`), never while streaming; one successor per session and worktree (atomic registry reservation); `max_start_per_call` for `all_exhausted`; the old registry entry becomes `superseded` and is stopped only after the handoff is acknowledged. |
@@ -95,6 +95,6 @@ the host's main checkout, and pushing or opening a PR is left to the host's own 
 5. Merge the clean ones with `worktree_merge` when the workspace is a managed clone; otherwise leave the branch for a
    pull request. For `diverged` branches ask the session to rebase first.
 6. Preview with `batc resource-cleanup preview`, review every item and its retention reasons, then apply that
-   exact preview with a stable key. `worktree_remove` remains a separate explicit action and refuses resources
-   reserved or already cleaned. Fanout stops the planner session and keeps its worktree for reviewed cleanup.
+   exact preview with a stable key. The legacy `worktree_remove` action is disabled. Fanout stops the planner
+   session and keeps its worktree for reviewed cleanup.
    Report receipts and retained content to the user.

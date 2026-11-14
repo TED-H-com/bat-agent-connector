@@ -39,6 +39,12 @@ def bundle_repo(tmp_path):
         target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / relative, target)
+    for _, _, link in generator.markdown_targets((tmp_path / generator.SOURCE).read_text()):
+        relative = generator.relative_file(link)
+        if relative:
+            target = (tmp_path / generator.SOURCE).parent / relative[0]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch()
     return tmp_path
 
 
@@ -62,14 +68,16 @@ def test_shared_workflow_cases_use_real_generator_validation(bundle_repo, accept
             generator.render(bundle_repo)
 
 
-def test_all_adapters_preserve_exact_canonical_workflow_and_digest(clean_wheel):
+def test_all_adapters_preserve_canonical_workflow_and_digest(clean_wheel):
     source = (ROOT / generator.SOURCE).read_bytes()
     body = source.decode().split("\n---\n", 1)[1]
     for relative, expected in generator.render(ROOT).items():
         assert (ROOT / relative).read_bytes() == expected
         text = expected.decode()
         embedded = text.split("<!-- BEGIN CANONICAL WORKFLOW -->\n", 1)[1]
-        assert embedded.removesuffix("<!-- END CANONICAL WORKFLOW -->\n") == body
+        assert embedded.removesuffix("<!-- END CANONICAL WORKFLOW -->\n") == generator.rewrite_links(
+            body, ROOT / generator.SOURCE, ROOT / relative
+        )
         assert f'canonical_sha256: "{hashlib.sha256(source).hexdigest()}"' in text
         assert f'canonical_source: "{generator.SOURCE.as_posix()}"' in text
         assert "GENERATED" in text
@@ -77,6 +85,36 @@ def test_all_adapters_preserve_exact_canonical_workflow_and_digest(clean_wheel):
     _, _, _, wheel = clean_wheel
     with zipfile.ZipFile(wheel) as archive:
         assert archive.read("bat_agent_connector/skill/SKILL.md") == source
+
+
+def test_rewrite_links_preserves_targets_and_fragments_for_nested_adapter(bundle_repo):
+    source = bundle_repo / generator.SOURCE
+    destination = bundle_repo / "skills/grokbot/bat-agent-connector/SKILL.md"
+    text = ("[guide](../../docs/design/cleanup.md#review) "
+            "![image](<../../docs/a file.png#part>) [web](https://example.com/a) "
+            "[mail](mailto:a@example.com) [here](#top) [root](/docs/a)\n"
+            "[reference]: ../../docs/guide.md#section\n"
+            "`[example](missing.md)`\n```md\n[example](missing.md)\n```\n")
+    assert generator.rewrite_links(text, source, destination) == (
+        "[guide](../../../docs/design/cleanup.md#review) "
+        "![image](<../../../docs/a file.png#part>) [web](https://example.com/a) "
+        "[mail](mailto:a@example.com) [here](#top) [root](/docs/a)\n"
+        "[reference]: ../../../docs/guide.md#section\n"
+        "`[example](missing.md)`\n```md\n[example](missing.md)\n```\n"
+    )
+
+
+@pytest.mark.parametrize("broken_in", ["canonical", "adapter"])
+def test_check_reports_broken_relative_links_in_existing_files(bundle_repo, broken_in):
+    assert run_generator(bundle_repo).returncode == 0
+    relative = (generator.SOURCE if broken_in == "canonical"
+                else Path("skills/grokbot/bat-agent-connector/SKILL.md"))
+    path = bundle_repo / relative
+    path.write_text(path.read_text() + "\n[missing](missing.md#fragment)\n")
+    out = run_generator(bundle_repo, "--check")
+    assert out.returncode == 1
+    assert "Broken relative links:" in out.stderr
+    assert str(path) in out.stderr and "missing.md#fragment" in out.stderr
 
 
 def test_generation_is_deterministic_and_check_never_repairs_drift(bundle_repo):
