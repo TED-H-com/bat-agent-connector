@@ -457,7 +457,7 @@ claim this backend caps work or reserves capacity.
 
 When `features.pm_workspaces.guided_sprint_review.version` is 1, the optional
 `review_basis` on `pm.meeting.draft` freezes selected Result receipts, exact
-feedback and unresolved evidence. Use the [guided Review contract](../../docs/design/pm-sprint-review.md)
+feedback and unresolved evidence. Use the [guided Review contract](../../../docs/design/pm-sprint-review.md)
 for exact selectors and bounds. Reported completion never establishes acceptance.
 Link each proposal with `review_proposal_ref` on `pm.governance.record`; an actual
 owner records direction through `pm.governance.decide`. Completion requires
@@ -1708,7 +1708,7 @@ Use `cleanup_preview(target={kind: work_item|checkpoint|integration|task|host, .
   Use cleanup_tombstones to find original IDs, location, reasons and PR destinations,
   cleanup_retained to read actual retained refs. Restore is not currently exposed; no tool can revive a runtime.
   Legacy session_cleanup is read-only evaluation; apply always returns LEGACY_CLEANUP_DISABLED. auto_cleanup is
-  deprecated and cannot enable writes. Do not set up a housekeeping sweep. See [cleanup.md](../../docs/design/cleanup.md).
+  deprecated and cannot enable writes. Do not set up a housekeeping sweep. See [cleanup.md](../../../docs/design/cleanup.md).
 
 When `features.cleanup_task` is true, use `{kind: "task", task_id: "FULL_ID"}`. All owners must
 be terminal with matching versions, settled commands and no live/unknown consumers. A terminal
@@ -1756,7 +1756,7 @@ do not silently replace the precondition. `TASK_BINDING_MISMATCH` / `TASK_STATE_
 cannot accept that control. `TASK_OWNER_UNAVAILABLE` means contact the existing owner; `OWNER_CONFLICT` tells you
 which daemon already owns the fleet. Never start a second authority with another journal. Explicit task pause
 may request a journaled abort; low-level interrupt cannot bypass pause or verification. See
-[operations unification](../../docs/design/operations-unification.md) (Part A); other legacy-tool operations,
+[operations unification](../../../docs/design/operations-unification.md) (Part A); other legacy-tool operations,
 no-key sentinel and null effect projections remain Part B.
 
 A pause or control-version change during trusted verification cancels that run without saving its evidence.
