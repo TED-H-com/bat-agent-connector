@@ -49,6 +49,21 @@ def test_bat_source_policy_is_a_shared_native_build_input(desktop_inputs):
     assert 'tests/fixtures/bat-source-policy-v1.json' in desktop_inputs['files']
 
 
+def test_suite_playwright_command_discovers_its_specs_and_server_only(tmp_path):
+    desktop = tmp_path / 'desktop'
+    desktop.mkdir()
+    workflow = tmp_path / '.github/workflows/desktop.yml'
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text('jobs:\n  browser-ui:\n    defaults:\n      run:\n        working-directory: desktop\n'
+                        '    steps:\n      - run: npx playwright test -c suite/playwright.config.ts --reporter=line\n')
+    (desktop / 'package.json').write_text(json.dumps({'scripts': {}}))
+    tracked = {'desktop/suite/playwright.config.ts', 'desktop/suite/tests/example.spec.ts',
+               'desktop/suite/tests/suite-server.mjs', 'desktop/tests/unrelated.spec.ts'}
+    discovered = command_inputs(tmp_path, tracked)['browser-ui']
+    assert {'desktop/suite/tests/example.spec.ts', 'desktop/suite/tests/suite-server.mjs'} <= discovered
+    assert 'desktop/tests/unrelated.spec.ts' not in discovered
+
+
 @pytest.mark.parametrize('path,pattern,expected', [
     ('desktop/src/app.js', 'desktop/**', True),
     ('desktop/src/app.js', 'desktop/*', False),
