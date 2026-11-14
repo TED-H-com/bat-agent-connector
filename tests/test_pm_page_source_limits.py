@@ -224,7 +224,7 @@ def test_single_part_refusal_and_new_runs_visibility_cost(sources):
     assert len(calls) == 1
     calls.clear()
     lineage.read_response(db, OWNER, page)
-    assert len(calls) == 64
+    assert len(calls) == 1
 
 
 def page_rows(value, inherited_host=None):
@@ -258,9 +258,9 @@ def visibility_calls(monkeypatch):
 
 
 @pytest.mark.parametrize('shape,counts', [
-    ('shared_operations', (65, 64)),
+    ('shared_operations', (65, 1)),
     ('returned_bootstrap', (192, 64)),
-    ('inherited_session', (1, 64)),
+    ('inherited_session', (1, 1)),
 ])
 def test_returned_page_exact_costs(sources, monkeypatch, shape, counts):
     """All return on 447da212; the corrected-cost assertions fail there."""
@@ -288,6 +288,135 @@ def test_returned_page_exact_costs(sources, monkeypatch, shape, counts):
     assert len(calls) <= len(rows) + 1 and all(len(ids) <= 64 for ids in calls)
     if shape != 'inherited_session':
         assert inherited == 0 and len(roots) <= len(before_roots)
+
+
+@pytest.mark.parametrize('distinct', [1, 2, 63, 64, 65])
+def test_barrier_evaluates_each_distinct_completed_root_once(sources, distinct):
+    db, _, calls = sources
+    value = {'operations': [row(i % distinct) for i in range(2 * max(64, distinct))]}
+    assert lineage.read_response(db, OWNER, value) == value
+    assert len(calls) == len(set(calls)) == distinct
+
+
+@pytest.mark.parametrize('count,width', [(2, 1025), (50, 43), (100, 43)])
+def test_barrier_rows_own_their_node_budget_despite_page_total(sources, monkeypatch, count, width):
+    from bat_agent_connector import pm_source_reads as reads
+    db, _, _ = sources
+    def visible(db, principal, identities):
+        return all(reads.check(db, principal, 'barrier-fixture', (identity, n), lambda: True)
+                   for identity in identities for n in range(width))
+    monkeypatch.setattr(lineage, '_visible_roots', visible)
+    value = {'operations': [row(i) for i in range(count)]}
+    assert lineage.read_response(db, OWNER, value) == value
+    # The same independent node guard still hides a single unprovable row.
+    width = reads.MAX_NODES
+    one = {'operations': [row(0)]}
+    assert outcome(lineage.read_response, db, one) == outcome(namespace()['read_response'], db, one)
+    assert not lineage.read_response(db, OWNER, one)['operations']
+
+
+@pytest.mark.parametrize('incomplete', ['refusal', 'node_limit'])
+def test_barrier_retries_uncompleted_proof_with_the_later_rows_budget(sources, monkeypatch, incomplete):
+    from bat_agent_connector import pm_read_cache
+    from bat_agent_connector import pm_source_reads as reads
+    db, _, calls = sources
+    def visible(db, principal, identities):
+        calls.extend(identities)
+        if len(calls) == 1:
+            if incomplete == 'refusal':
+                pm_read_cache.refuse()
+            else:
+                assert not all(reads.check(db, principal, 'fixture-limit', n, lambda: True)
+                               for n in range(reads.MAX_NODES))
+            return False
+        return True
+    monkeypatch.setattr(lineage, '_visible_roots', visible)
+    value = {'operations': [dict(row(0), position=1), dict(row(0), position=2)]}
+    result = lineage.read_response(db, OWNER, value)
+    assert result['operations'] == [value['operations'][1]]
+    assert calls == [oid(0), oid(0)]
+
+
+@pytest.mark.parametrize('code', ['PM_SOURCE_READ_CHANGED', 'PM_SOURCE_LINEAGE_LIMIT'])
+def test_exception_is_not_a_completed_root_proof_for_a_later_record(sources, monkeypatch, code):
+    from bat_agent_connector import pm_source_reads as reads
+    db, _, calls = sources
+    def visible(db, principal, identities):
+        calls.extend(identities)
+        if len(calls) == 1:
+            raise OperationError(code, 'Incomplete fixture proof', 409)
+        return True
+    monkeypatch.setattr(lineage, '_visible_roots', visible)
+    # An actual barrier propagates this exception for the whole page. At the
+    # primitive boundary, catching it must not publish a proof for another row.
+    with reads.scope(db, OWNER):
+        with pytest.raises(OperationError), reads.record(db, OWNER):
+            lineage.visible_roots(db, OWNER, {oid(0)})
+        with reads.record(db, OWNER):
+            assert lineage.visible_roots(db, OWNER, {oid(0)})
+    assert calls == [oid(0), oid(0)]
+
+
+def test_hidden_root_is_proven_once_and_remains_hidden_in_every_row(sources):
+    db, hidden, calls = sources
+    hidden.add(oid(0))
+    result = lineage.read_response(db, OWNER, {'operations': [row(0) for _ in range(100)]})
+    assert result == {'operations': [], 'source_visibility_filtered': True}
+    assert calls == [oid(0)]
+
+
+def test_two_response_barriers_share_no_proof_after_withdrawal(sources):
+    db, hidden, calls = sources
+    value = {'operations': [row(0), row(0)]}
+    assert lineage.read_response(db, OWNER, value) == value
+    hidden.add(oid(0))
+    assert lineage.read_response(db, OWNER, value) == {'operations': [], 'source_visibility_filtered': True}
+    assert calls == [oid(0), oid(0)]
+
+
+@pytest.mark.parametrize('change', ['mutation', 'commit'])
+def test_barrier_rejects_changed_snapshot_and_closes_its_scope(sources, monkeypatch, change):
+    db, _, _ = sources
+    original = lineage._visible_roots
+    def changed(db, principal, identities):
+        if change == 'mutation':
+            db.execute("UPDATE operations SET action=action")
+        else:
+            db.commit()
+        return True
+    monkeypatch.setattr(lineage, '_visible_roots', changed)
+    with pytest.raises(OperationError) as error:
+        lineage.read_response(db, OWNER, {'operations': [row(0)]})
+    assert error.value.code == 'PM_SOURCE_READ_CHANGED'
+    monkeypatch.setattr(lineage, '_visible_roots', original)
+    assert lineage.read_response(db, OWNER, {'operations': [row(0)]}) == {'operations': [row(0)]}
+
+
+async def test_barrier_rejects_a_same_task_scope_carried_across_a_loop_turn(sources):
+    import asyncio
+
+    from bat_agent_connector import pm_source_reads as reads
+    db, _, _ = sources
+    with pytest.raises(OperationError) as error, reads.scope(db, OWNER):
+        await asyncio.sleep(0)
+        lineage.read_response(db, OWNER, {'operations': [row(0)]})
+    assert error.value.code == 'PM_SOURCE_READ_CHANGED'
+    assert lineage.read_response(db, OWNER, {'operations': [row(0)]}) == {'operations': [row(0)]}
+
+
+def test_report_receipts_require_the_complete_page_shape(sources):
+    db, _, _ = sources
+    records = [{**row(i), 'kind': 'roadmap_report_materialization',
+                'materialization_id': f'pmrpt_{i:032x}', 'workspace_id': 'ws_fixture'} for i in range(65)]
+    page = {'version': 1, 'workspace_id': 'ws_fixture', 'materializations': records,
+            'next_after': 2**63 - 1, 'source_visibility_filtered': False}
+    assert lineage.read_response(db, OWNER, page) == page
+    for value in ({'materializations': records}, {'materialization': {'nested': records}},
+                  {**page, 'version': True}, {**page, 'source_visibility_filtered': 'false'},
+                  {**page, 'materializations': [{**r, 'kind': 'other'} for r in records]}):
+        assert outcome(lineage.read_response, db, value) == ('error', LIMIT)
+    oversized = {**page, 'materializations': [{**records[0], 'nested': records}]}
+    assert outcome(lineage.read_response, db, oversized) == ('error', LIMIT)
 
 
 def test_fixed_seed_reference_equivalence(sources, monkeypatch):

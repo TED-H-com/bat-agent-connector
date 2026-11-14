@@ -747,6 +747,12 @@
         "allowed": false
       },
       {
+        "action": "pm.roadmap.report.materialize",
+        "scope": "manage",
+        "summary": "Save one fixed report in the owned PM Git carrier",
+        "allowed": false
+      },
+      {
         "action": "pm.execution.runtime.observe",
         "scope": "observe",
         "summary": "Read the original selected batch turn without sending input",
@@ -1335,6 +1341,7 @@
             "pm.release_baseline.register",
             "pm.roadmap.baseline.set",
             "pm.roadmap.forecast.set",
+            "pm.roadmap.report.materialize",
             "pm.run.analyze",
             "pm.run.bat.analyze",
             "pm.run.prepare",
@@ -1889,6 +1896,27 @@
         "spec_sources": true,
         "meetings": true,
         "dispatch": false,
+        "roadmap_report_materialization": {
+          "version": 1,
+          "action": "pm.roadmap.report.materialize",
+          "kind": "roadmap_report_materialization",
+          "reads": [
+            "pm_roadmap_report_materializations_list",
+            "pm_roadmap_report_materialization_get"
+          ],
+          "required_scopes": [
+            "observe",
+            "manage",
+            "start"
+          ],
+          "immutable": true,
+          "owned_git_chain": true,
+          "max_generated_bytes": 512000,
+          "max_response_bytes": 2000000,
+          "default_limit": 20,
+          "max_limit": 50,
+          "execution_authorized": false
+        },
         "roadmap_report": {
           "version": 1,
           "read": "pm_roadmap_report_get",
@@ -1915,7 +1943,7 @@
           "max_response_bytes": 2000000,
           "max_svg_pages": 32,
           "unicode_version": "15.1.0",
-          "materialization": false,
+          "materialization": true,
           "native_save": false
         }
       },

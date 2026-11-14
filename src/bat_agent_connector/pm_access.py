@@ -198,6 +198,10 @@ def event_visible(db, principal, event):
         from .pm_work_batches import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["kind"].startswith("pm.roadmap.report."):
+        from .pm_roadmap_report_materialization import source_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and source_visible(db, principal, {"operation_id": operation_id})
     if event["kind"].startswith("pm.spec."):
         from .pm_spec_materialization import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
@@ -283,4 +287,16 @@ def event_visible(db, principal, event):
 
 
 def filter_events(db, principal, page):
-    return {**page, "events": [event for event in page["events"] if event_visible(db, principal, event)]}
+    from . import pm_report_read_work
+    from .pm_source_reads import record, scope
+    with scope(db, principal), pm_report_read_work.scope(db) as work:
+        events = []
+        examined = None
+        for event in page["events"]:
+            if examined is not None and work.stopped:
+                return {**page, 'events': events, 'next_cursor': examined['seq'], 'has_more': True}
+            with work.record(), record(db, principal):
+                if event_visible(db, principal, event):
+                    events.append(event)
+            examined = event
+        return {**page, "events": events}

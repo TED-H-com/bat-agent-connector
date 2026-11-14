@@ -18,6 +18,10 @@
 - Wheels no longer contain a second build-provenance file beside the package modules;
   published wheels 0.2.14–0.2.20 contain it.
 
+- Let workspace contributors and owners save one exact rendered roadmap report to
+  the owned PM Git carrier through a durable operation. Read its original receipt
+  over HTTP, RPC or MCP with current source access; bounded pages preserve cursor
+  progress, and recovery keeps the original operation and frozen bytes.
 - Keep existing BAT hosts working as before while checking the identity and
   version of hosts that support the suite's new connection handshake. This
   does not enable any new host actions.

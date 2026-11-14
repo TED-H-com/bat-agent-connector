@@ -48,7 +48,12 @@ def _changed():
 
 def _parent_scope(db, principal):
     parent, identity = _READ.get(), _identity(db, principal)
-    if parent is not None and parent['open']:
+    # A synchronous copied context can retain a closed middle frame while its
+    # ancestor is still traversing. Recover that ancestor before validating or
+    # allocating a record budget; closed frames never revive their own grants.
+    while parent is not None and not parent['open']:
+        parent = parent['parent']
+    if parent is not None:
         if not _valid(parent):
             raise _changed()
         if parent['identity'] != identity and parent['scope_depth'] >= MAX_DEPTH:
@@ -62,7 +67,7 @@ def validate_scope(db, principal):
 
 
 @contextmanager
-def scope(db, principal):
+def scope(db, principal, *, _record=False):
     """Join only a live same-caller synchronous scope; otherwise open a new one.
 
 Callers perform source reads only. No await, transaction boundary or
@@ -70,8 +75,13 @@ write belongs inside this scope. A loop turn, mutation, closed transaction or
 copied asynchronous context invalidates reuse rather than granting access.
 """
     parent, identity = _parent_scope(db, principal)
+    # A different principal opens a private state with no active nodes of its
+    # own. Carry the enclosing walk through every such frame, not its grants.
+    inherited_live = bool(parent and parent['open'] and (
+        parent['inherited_live'] or parent['active'] or parent['remembering'] or pm_read_cache.is_guarded()))
     if parent is not None and parent['open']:
-        if parent['identity'] == identity:
+        _record = _record and not inherited_live
+        if parent['identity'] == identity and not _record:
             yield parent
             if not _valid(parent):
                 raise _changed()
@@ -90,12 +100,13 @@ copied asynchronous context invalidates reuse rather than granting access.
         if owned:
             db.execute('BEGIN')
         db.execute('SAVEPOINT ' + anchor)
-        state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True,
+        state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True, 'parent': parent,
             'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {}, 'history': history,
             'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
             'guard_contexts': {}, 'partial_sources': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
             'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
-            'budget': parent['budget'] if parent and parent['open'] else {'nodes': 0}}
+            'inherited_live': inherited_live,
+            'budget': parent['budget'] if parent and parent['open'] and not _record else {'nodes': 0}}
         token = _READ.set(state)
         # Establish the WAL read point before any nested source predicate.
         db.execute('SELECT name FROM sqlite_schema LIMIT 1').fetchone()
@@ -154,6 +165,18 @@ copied asynchronous context invalidates reuse rather than granting access.
             handle.cancel()
         if token is not None:
             _READ.reset(token)
+
+
+def record(db, principal):
+    """Start a collection row's traversal, sharing only snapshot/completed cache.
+
+    Lists call this at each row boundary. Nested lists inside a live traversal
+    keep its budget across the whole scope chain, even through principal changes.
+    Copied closed frames retain ancestry, not liveness after every ancestor ends.
+    Principal-specific guards and partial answers remain in their own states.
+    Fresh states keep refused/partial answers private to their original record.
+    """
+    return scope(db, principal, _record=True)
 
 
 def _guard_context(db, principal):

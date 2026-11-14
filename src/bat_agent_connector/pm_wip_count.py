@@ -120,6 +120,7 @@ LINEAGE_ACTIONS = {
     "pm.roadmap.baseline.set": "no_hold",
     "pm.roadmap.forecast.set": "no_hold",
     "pm.roadmap.observe": "no_hold",
+    "pm.roadmap.report.materialize": "no_hold",
     "pm.run.analyze": "no_hold",
     "pm.run.bat.analyze": "no_hold",
     "pm.run.prepare": "no_hold",
