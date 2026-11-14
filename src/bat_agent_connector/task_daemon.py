@@ -350,6 +350,8 @@ class TaskDaemon:
             require_observe(principal)
         if scope != "?" and not principal.allows(scope):
             raise OperationError("FORBIDDEN", f"{method} needs the {scope!r} scope", 403)
+        if method == "pm_history_continuation_preview" and (not isinstance(params, dict) or set(params) - {"entry"} != {"workspace_id", "body"}):
+            raise OperationError("INVALID_PARAMS", "Supply workspace_id and body", 422)
         from . import controller_authority
         from .pm_external_history_links import CLEANUP_READ, cleanup_read_guard, cleanup_read_scopes
         cleanup_guard = nullcontext()
@@ -405,8 +407,6 @@ class TaskDaemon:
             return await pm_work_adopt_and_start.preview(self.ops, principal, wid, thread_id, body)
         if method == "pm_history_continuation_preview":
             from .pm_history_continuation import preview
-            if set(params) != {"workspace_id", "body"}:
-                raise OperationError("INVALID_PARAMS", "Supply workspace_id and body", 422)
             return await preview(self.ops, principal, params["workspace_id"], params["body"])
         if method == "pm_work_start_preview":
             from . import pm_work_start

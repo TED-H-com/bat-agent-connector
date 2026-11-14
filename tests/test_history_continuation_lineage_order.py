@@ -12,7 +12,16 @@ from bat_agent_connector.operations import OperationError
 from bat_agent_connector.session_history_config import HistoryConfig
 from tests.test_api_v1 import token
 from tests.test_history_continuation_access import db_snapshot, malformed, request_body, retain
-from tests.test_rpc_scope_order import daemon, pm, protected, raw_post, ready, served, world  # noqa: F401
+from tests.test_rpc_scope_order import (  # noqa: F401
+    authentication_sql,
+    daemon,
+    pm,
+    protected,
+    raw_post,
+    ready,
+    served,
+    world,
+)
 from tests.test_work_items import act
 
 
@@ -153,4 +162,56 @@ async def test_current_grant_unknown_ref_keys_match_http_across_transports(linea
                 assert db_snapshot(d.ops.db) == before
                 replies.append(raw)
             assert replies[0] == replies[1]
+    assert len(mock.invokes) == frame_at
+
+
+async def test_outer_rpc_and_mcp_fields_refused_before_grant_or_db_read(lineage_context):
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    d, port, oid, _, wid, source, ref, auth, server, mock, _ = lineage_context
+    frame_at = len(mock.invokes)
+    auth_sql = authentication_sql(d, auth)
+    valid_body = request_body(copy.deepcopy(ref))
+    rpc_cases = [
+        {'workspace_id': wid},
+        {'body': copy.deepcopy(valid_body)},
+        {'workspace_id': wid, 'body': copy.deepcopy(valid_body), 'extra': 'unexpected'},
+        {'workspace_id': wid, 'body': copy.deepcopy(valid_body), 'operation_id': oid},
+    ]
+    for readers in ((source.readers[0],), ('different-reader',)):
+        d.history_collector.config = HistoryConfig(10, (replace(source, readers=readers),))
+        before = db_snapshot(d.ops.db)
+        for params in rpc_cases:
+            sql = []
+            d.ops.db.set_trace_callback(sql.append)
+            try:
+                status, raw = await raw_post(port, '/rpc', auth,
+                    {'method': 'pm_history_continuation_preview', 'params': params})
+            finally:
+                d.ops.db.set_trace_callback(None)
+            assert status == 400
+            assert json.loads(raw) == {'error': 'INVALID_PARAMS', 'message': 'Supply workspace_id and body'}
+            assert sql == auth_sql
+            assert db_snapshot(d.ops.db) == before
+
+    d.history_collector.config = HistoryConfig(10, (source,))
+    before = db_snapshot(d.ops.db)
+    mcp_cases = [
+        ({'workspace_id': wid}, ('body', 'Field required')),
+        ({'body': copy.deepcopy(valid_body)}, ('workspace_id', 'Field required')),
+        ({'workspace_id': wid, 'body': copy.deepcopy(valid_body), 'extra': 'unexpected'}, ('extra_forbidden',)),
+    ]
+    for args, markers in mcp_cases:
+        sql = []
+        d.ops.db.set_trace_callback(sql.append)
+        try:
+            with pytest.raises(ToolError) as exc:
+                await server.call_tool('pm_history_continuation_preview', args)
+        finally:
+            d.ops.db.set_trace_callback(None)
+        text = str(exc.value)
+        for marker in markers:
+            assert marker in text
+        assert sql == []
+        assert db_snapshot(d.ops.db) == before
     assert len(mock.invokes) == frame_at
