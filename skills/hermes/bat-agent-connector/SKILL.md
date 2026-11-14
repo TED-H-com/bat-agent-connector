@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "869e94b351cc20240d75c458d84b8dcb88e201b48f242a2e556b7c6ad2ea625d"
+  canonical_sha256: "b23fb05053a714cde351a82500eea392b8a59e9ee9576d8d27f02112ab07a5ff"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -102,11 +102,14 @@ Show the old source/entry/selection and the separate repository/host/workspace/S
 the exact excerpt, its coverage, descriptor digest and bilingual readiness reasons.
 The preview makes one BAT `workspace:load` request through the read-only client.
 That client may resend this read-only frame after a busy reply, up to three attempts,
-and records transport failures in the Connector's own error log (the log file and
-its adjacent lock file); no other file is created or changed. The preview creates
+and records transport failures in the Connector's own error log. The only files
+that may change are `errors.jsonl`, its companion lock, `errors.jsonl.1`–`.4`
+when appends exceed the size limit, and the atomic-replacement temporary file,
+which is removed before the call returns. The preview creates
 no business records, invokes no Git, collects nothing and spends nothing.
 中文：一次唯讀請求遇 busy 時可依既有上限嘗試三次，傳輸失敗會記錄中央錯誤日誌
-及旁邊的 lock 檔，不變更其他檔案。
+（`errors.jsonl`、其 lock、超過大小上限時的 `.1`–`.4` 輪替檔，以及呼叫返回前
+移除的原子替換暫存檔），不變更其他檔案。
 A hidden or revoked
 source gives generic unavailable; withdrawal/regrant during a read invalidates it.
 A moved branch head is refused, never replaced silently. A lost preview reply may be

@@ -7,7 +7,7 @@ import hashlib
 import pytest
 
 from bat_agent_connector import client as bat_client
-from bat_agent_connector import work_items
+from bat_agent_connector import errlog, work_items
 from tests.test_api_v1 import daemon, served, token  # noqa: F401
 from tests.test_history_continuation_access import db_snapshot, request_body, retain
 from tests.test_pm_work_packages import OWNER, pm, ready, world  # noqa: F401
@@ -27,7 +27,7 @@ def files(root):
 
 
 @pytest.mark.parametrize('mode,frames,status', [('busy-once', 2, 200), ('busy-exhausted', 3, 409),
-    ('invoke-error', 1, 409), ('timeout', 1, 409)])
+    ('invoke-error', 1, 409), ('timeout', 1, 409), ('rotation', 1, 409)])
 async def test_real_read_client_frames_and_diagnostics(ready, tmp_path, monkeypatch, mock, diagnostic_path, mode, frames, status):  # noqa: F811
     w = ready
     d, wid = w['d'], w['workspace_id']
@@ -56,6 +56,12 @@ async def test_real_read_client_frames_and_diagnostics(ready, tmp_path, monkeypa
         pytest.fail('Preview must not run a Git command')
 
     monkeypatch.setattr(d.ops.context['git_runner'], 'run', no_git)
+    if mode == 'rotation':
+        monkeypatch.setattr(errlog, 'LIMIT', 2048)
+        diagnostic_path.parent.mkdir()
+        diagnostic_path.write_bytes(b'x' * 2048)
+        for index in range(1, 5):
+            diagnostic_path.with_name(f'errors.jsonl.{index}').write_text(f'previous-{index}\n')
     if mode == 'timeout':
         real_timeout = bat_client.timeout_for
         monkeypatch.setattr(bat_client, 'timeout_for', lambda channel: 0.05 if channel == 'workspace:load' else real_timeout(channel))
@@ -80,7 +86,14 @@ async def test_real_read_client_frames_and_diagnostics(ready, tmp_path, monkeypa
     assert not any(s.lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE', 'CREATE', 'REPLACE')) for s in sql)
     after = files(tmp_path)
     changed = {p for p in after.keys() | disk_before.keys() if after.get(p) != disk_before.get(p)}
-    # The logger owns both the JSONL and its companion interprocess lock file.
-    assert changed == {'diagnostics/errors.jsonl', 'diagnostics/.errors.jsonl.lock'}
+    # The logger owns the active JSONL, its companion lock, and its rotated files.
+    expected = {'diagnostics/errors.jsonl', 'diagnostics/.errors.jsonl.lock'}
+    if mode == 'rotation':
+        expected.update(f'diagnostics/errors.jsonl.{index}' for index in range(1, 5))
+        assert diagnostic_path.with_name('errors.jsonl.1').read_bytes() == b'x' * 2048
+        for index in range(2, 5):
+            assert diagnostic_path.with_name(f'errors.jsonl.{index}').read_text() == f'previous-{index - 1}\n'
+        assert {path.name for path in diagnostic_path.parent.iterdir()} == {path.split('/')[-1] for path in expected}
+    assert changed == expected
     assert diagnostic_path.is_file()
     assert not d.inventory.fleet.client('h1')._pending
