@@ -71,6 +71,7 @@ test('links, non-regular entries, bad names and unsupported extensions are refus
     root => symlinkSync('.', join(root, 'directory'), 'dir'),
     root => add(root, 'bad.map'), root => add(root, 'bad.txt'), root => add(root, 'back\\slash.js'),
     root => {add(root, 'Case.js'); add(root, 'case.js');},
+    root => {add(root, 'Directory/one.js'); add(root, 'directory/two.js');},
   ]) withTree(root => {
     const manifest = buildManifest(root, provenance);
     prepare(root);

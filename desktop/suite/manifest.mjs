@@ -61,12 +61,12 @@ function readTree(assetRoot) {
       const full = join(directory, name);
       const stat = lstatSync(full);
       if (stat.isSymbolicLink()) refuse('Asset links are not allowed');
-      if (stat.isDirectory()) { walk(full, path); continue; }
-      if (!stat.isFile()) refuse('Asset entry is not a regular file');
-      mime(path);
       const folded = path.toLowerCase();
       if (names.has(folded)) refuse('Asset paths collide after lower-casing');
       names.add(folded);
+      if (stat.isDirectory()) { walk(full, path); continue; }
+      if (!stat.isFile()) refuse('Asset entry is not a regular file');
+      mime(path);
       if (entries.length >= MAX_FILES) refuse('Too many asset files');
       if (stat.size > MAX_FILE_BYTES) refuse('Asset file exceeds size limit');
       if (total + stat.size > MAX_TOTAL_BYTES) refuse('Asset tree exceeds size limit');
