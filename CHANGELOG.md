@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep existing BAT hosts working as before while checking the identity and
+  version of hosts that support the suite's new connection handshake. This
+  does not enable any new host actions.
+
 ## 0.2.20 / Desktop 0.1.16 (2026-11-13)
 
 - Let workspace members with observe access read a fixed Scope and roadmap report

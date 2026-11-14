@@ -2,12 +2,17 @@
 
 Only channels listed here can ever leave this process. Read channels are always
 allowed. Write channels are allowed only when the host config enables writes.
+Handshake channels are sent only during connection establishment, after an exact
+capability advertisement; they are never available through invoke or guard_read.
 Everything else (stop/reset/kill sessions, pty writes, file ops, settings,
 workspace save, runtime installs, app updates, account/auth flows, ...) is
 rejected before a frame is sent.
 """
 
 from __future__ import annotations
+
+# Only the connection handshake may send bac:hello. No BAC feature is exposed.
+HANDSHAKE_CHANNELS = frozenset({"bac:hello"})
 
 # Channels that stay in the `agent:` namespace on the server (not folded to `claude:`).
 AGENT_NATIVE = frozenset(
@@ -165,6 +170,8 @@ def check_allowed(channel: str, *, allow_writes: bool, allow_orchestrate: bool =
     from .errors import ChannelNotAllowed
 
     c = canonical(channel)
+    if c.startswith("bac:"):
+        raise ChannelNotAllowed("BAC channels are not available through invoke")
     if c in READ_CHANNELS:
         return c
     if c in WRITE_CHANNELS:

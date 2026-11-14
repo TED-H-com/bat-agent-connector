@@ -15,8 +15,11 @@ connector deliberately exposes a small subset:
 | read | on | `workspace:load`, `claude:get-session-meta/state`, `claude:load-archived`, `claude:list-sessions`, `worktree:status`, `git:status/branch/getRoot`, version/profile/notification reads |
 | write | off (`writes = true`) | `claude:send-message`, `claude:client-resume`, `claude:interrupt-turn`, `claude:abort-session`, `claude:resolve-ask-user`, `claude:resolve-permission` |
 | orchestrate | off (`orchestrate = true`, needs writes) | `claude:start-session`, `worktree:create/merge/remove/rehydrate`; `workspace:save` only via the append-only tab helper when `orchestrate_register_tabs = true` |
+| connection handshake | only after an exact compatible `bac` advertisement | `bac:hello`; never callable through invoke or guard reads, in any tier |
 
 Everything else is rejected in the client core before a frame is written (see `channels.py` and `tests/test_client.py`).
+The [host handshake contract](docs/design/host-contracts.md) adds no feature action or
+permission. Hosts without the capability receive the existing frames unchanged.
 
 Tiers say which channels may leave the process; the resource policy says which sessions and folders they may touch.
 Sessions a person created in BAT are read-only through every tool, whatever the tier (see
