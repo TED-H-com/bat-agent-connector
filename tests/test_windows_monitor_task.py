@@ -27,11 +27,16 @@ def powershell(script, *arguments):
     for index, value in enumerate(arguments):
         env[f'BATC_TASK_FIXTURE_{index}'] = str(value)
         script += f' $env:BATC_TASK_FIXTURE_{index}'
-    return hidden_process.run(
+    result = hidden_process.run(
         [str(executable), '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
          '-Command', script],
-        check=True, capture_output=True, text=True, timeout=60, env=env,
-    ).stdout
+        check=False, capture_output=True, text=True, timeout=60, env=env,
+    )
+    assert result.returncode == 0, (
+        f'PowerShell exited with {result.returncode}\n'
+        f'stdout:\n{result.stdout}\nstderr:\n{result.stderr}'
+    )
+    return result.stdout
 
 
 @pytest.mark.skipif(os.name != 'nt', reason='Windows Task Scheduler definition cmdlets')
@@ -51,14 +56,14 @@ def test_upgrade_repairs_existing_task_without_changing_other_settings(tmp_path)
     script = r"""& { param($repair)
 $ErrorActionPreference = 'Stop'
 $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$script:task = [pscustomobject]@{
+$global:task = [pscustomobject]@{
     Principal = [pscustomobject]@{ UserId = $sid; LogonType = 'Interactive' }
     Actions = @([pscustomobject]@{ Execute = 'C:\Example\better-agent-dashboard.exe'; Arguments = '--fleet-supervisor --fleet-config "C:\Example\fleet.json"' })
     Settings = [pscustomobject]@{ Hidden = $false; RestartCount = 999 }
 }
-$script:writes = 0
-function Get-ScheduledTask { param($TaskPath,$TaskName,$ErrorAction) return $script:task }
-function Set-ScheduledTask { param($InputObject) $script:writes++; if (!$InputObject.Settings.Hidden) { throw 'not hidden' } }
+$global:writes = 0
+function Get-ScheduledTask { param($TaskPath,$TaskName,$ErrorAction) return $global:task }
+function Set-ScheduledTask { param($InputObject) $global:writes++; if (!$InputObject.Settings.Hidden) { throw 'not hidden' } }
 $before = $task | ConvertTo-Json -Depth 5
 & $repair -ExePath 'C:\Example\better-agent-dashboard.exe'
 if ($writes -ne 1 -or !$task.Settings.Hidden) { throw 'upgrade did not repair' }
@@ -69,7 +74,7 @@ $task.Settings.Hidden = $true
 & $repair -ExePath 'C:\Other\better-agent-dashboard.exe'
 $task.Principal.UserId = 'S-1-5-18'
 & $repair -ExePath 'C:\Example\better-agent-dashboard.exe'
-$script:task = $null
+$global:task = $null
 & $repair -ExePath 'C:\Example\better-agent-dashboard.exe'
 if ($writes -ne 1) { throw 'unexpected task write' }
 } """
