@@ -46,7 +46,7 @@ def _build_commit(root):
         if checkout:
             # A candidate SHA must never label modified or untracked inputs, including
             # when supplied explicitly by the packaging environment.
-            if _git(root, "status", "--porcelain"):
+            if _git(root, "status", "--porcelain", "--untracked-files=normal"):
                 return None
             return _matching_commit(_commit(_git(root, "rev-parse", "HEAD")), override)
     except (OSError, subprocess.CalledProcessError):

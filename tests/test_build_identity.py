@@ -469,7 +469,9 @@ def _load_managed_runtime_builder():
     "clean",
     "tracked-change",
     "untracked",
+    "untracked-hidden",
     "ignored",
+    "ignored-hidden",
     "override-equal",
     "override-different",
     "not-a-checkout",
@@ -482,15 +484,18 @@ def test_managed_runtime_build_commit_parity_with_hook(tmp_path, monkeypatch, mo
     builder = _load_managed_runtime_builder()
     repo, head = _source_repo(tmp_path, mode)
     other = "b" * 40 if head != "b" * 40 else "c" * 40
+    if mode in {"untracked-hidden", "ignored-hidden"}:
+        _command(["git", "-C", str(repo), "config", "status.showUntrackedFiles", "no"],
+                 cwd=tmp_path, env=_build_env(tmp_path))
     if mode == "tracked-change":
         with (repo / "README.md").open("a") as stream:
             stream.write("\nTracked change.\n")
-    elif mode == "untracked":
+    elif mode in {"untracked", "untracked-hidden"}:
         (repo / "untracked.txt").write_text("untracked\n")
-    elif mode == "ignored":
+    elif mode in {"ignored", "ignored-hidden"}:
         cache = repo / "__pycache__"
         cache.mkdir()
-        (cache / "fixture.pyc").write_text("ignored\n")
+        (cache / ("x.pyc" if mode == "ignored-hidden" else "fixture.pyc")).write_text("ignored\n")
     elif mode == "override-equal":
         monkeypatch.setenv("BATC_BUILD_COMMIT", head)
     elif mode == "override-different":
@@ -502,6 +507,7 @@ def test_managed_runtime_build_commit_parity_with_hook(tmp_path, monkeypatch, mo
     expected = {
         "clean": head,
         "ignored": head,
+        "ignored-hidden": head,
         "override-equal": head,
         "not-a-checkout-override": other,
     }.get(mode)
