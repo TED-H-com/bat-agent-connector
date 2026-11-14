@@ -139,7 +139,7 @@ def require_observe(principal):
         raise _error('FORBIDDEN', 403)
 
 
-def _context(ops, principal, wid, ref):
+def _context_workspace(ops, principal, wid, ref):
     # Do this before any repository/project detail, including for administrators.
     require_observe(principal)
     if not _matches(wid, r'ws_[0-9a-f]{32}'):
@@ -147,6 +147,21 @@ def _context(ops, principal, wid, ref):
     pm_external_history_links._member(ops.db, principal, wid)
     if not isinstance(ref, dict) or ref.get('workspace_id') != wid:
         raise refs.unavailable()
+
+
+def require_context_source(ops, principal, wid, body):
+    """Prove preview source access before RPC inspects untrusted lineage IDs."""
+    ref = body.get('context_ref') if isinstance(body, dict) else None
+    try:
+        _context_workspace(ops, principal, wid, ref)
+        with refs.current_grants(ops.db, principal, wid) as grants:
+            refs._readable_source(ops.db, grants, ref.get('source_id'))
+    except OperationError as exc:
+        raise _localized(exc) from None
+
+
+def _context(ops, principal, wid, ref):
+    _context_workspace(ops, principal, wid, ref)
     selected = refs.resolve(ops.db, principal, ref)
     if not any(p['kind'] == 'text' and p['text'] for p in selected['content']['parts']):
         raise _error('PM_EXTERNAL_CONTEXT_UNUSABLE')

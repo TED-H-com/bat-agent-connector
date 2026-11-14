@@ -358,6 +358,9 @@ class TaskDaemon:
             cleanup_guard = cleanup_read_guard(self.ops, principal, {k: v for k, v in params.items() if k != 'entry'})
         with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal), cleanup_guard as cleanup_finalize:
             from .pm_source_lineage import read_request, read_response
+            if method == "pm_history_continuation_preview":
+                from .pm_history_continuation import require_context_source
+                require_context_source(self.ops, principal, params.get('workspace_id'), params.get('body'))
             if API_RPC.get(method) == "observe":
                 read_request(self.journal.db, principal, params)
             result = await self._call_api_bound(method, params, principal,
