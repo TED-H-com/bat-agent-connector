@@ -76,6 +76,7 @@ deployment_id environment_key generation provider_terminal run_id run_attempt ro
 release_id provider_url is_current last_verified
 cancel_requested would_merge files_may_be_truncated write_acknowledged observed_intent read_refused
 conflict_before_write conflict_after_write pushed local_checkouts_changed advisory_only abort_current ready stale attention
+effect_id phase failure_stage effect_outcome
 """.split())
 
 writer_context = ContextVar("observation_writer_context", default=None)
@@ -110,6 +111,18 @@ def summary(value, *, pr=False):
         for k, v in value.items():
             if k not in SUMMARY_FIELDS or k in PRIVATE_FIELDS:
                 continue
+            if k in {"effect_id", "phase", "failure_stage", "effect_outcome"}:
+                if value.get("code") != "AUDIT_RESULT_WRITE_FAILED":
+                    continue
+                from .safety import AUDIT_EFFECT_OUTCOMES, AUDIT_FAILURE_STAGES, POST_EFFECT_PHASES
+                if k == "effect_id":
+                    if not isinstance(v, str) or not re.fullmatch(r"[0-9a-f]{64}", v):
+                        continue
+                elif not isinstance(v, str) or v not in {
+                    "phase": POST_EFFECT_PHASES, "failure_stage": AUDIT_FAILURE_STAGES,
+                    "effect_outcome": AUDIT_EFFECT_OUTCOMES,
+                }[k]:
+                    continue
             if k in {"reason", "previous_reason"} and v is not None:
                 if not isinstance(v, str) or v not in SUMMARY_REASONS:
                     continue

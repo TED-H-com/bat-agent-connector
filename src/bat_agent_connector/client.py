@@ -569,7 +569,8 @@ class BatClient:
 
     async def append_workspace_terminal(self, profile_id: str, terminal: dict, *, grant: WriteGrant | None,
                                         retries: int = 3, before_send: Callable[[], None] | None = None,
-                                        before_frame: Callable[[], Awaitable[None]] | None = None) -> dict:
+                                        before_frame: Callable[[], Awaitable[None]] | None = None,
+                                        on_transport: Callable[[], None] | None = None) -> dict:
         """Append ONE terminal (tab) to the host's workspace document, append-only.
 
         BAT only offers a whole-document ``workspace:save``. To stay append-only we:
@@ -628,7 +629,7 @@ class BatClient:
                 check_grant(grant, self.host.name, "workspace:save", {"sessionId": tid})
             saved = await self._invoke_checked(
                 "workspace:save", {"profileId": profile_id, "data": json.dumps(new_doc)}, None,
-                before_send=save_gate, before_frame=before_frame
+                before_send=save_gate, before_frame=before_frame, on_transport=on_transport
             )
             _, after = await load()
             ids_after = {t.get("id") for t in after.get("terminals") or [] if isinstance(t, dict)}

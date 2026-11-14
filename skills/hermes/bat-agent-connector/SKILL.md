@@ -1,7 +1,7 @@
 ---
 name: bat-agent-connector
 description: Use this when you need to check on, read, wait for, or (only when explicitly enabled and asked) nudge Claude Code / Codex agent sessions running in Better Agent Terminal (BAT), or fan a project plan out into parallel BAT worktree sessions.
-version: 0.2.19
+version: 0.2.20
 license: MIT
 metadata:
   workflow_version: "2026-10-18.2"
@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "934a119b289384c8a21931ca21d2693d50d8f5488486358f222b2127ec57dfc0"
+  canonical_sha256: "dbd2ae64152086090bbc3659e435b4b4f03111accc44da6c9eff853ca9a249a9"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -64,6 +64,15 @@ may still expose direct Fleet tools that do not enforce API principal scopes.
    a short or empty page is not the end. Look up the original operation this way after a lost reply;
    replay only the identical request with the original key and actor to recover its receipt. Never use a new key,
    restart a session, or clear a claim to resolve an uncertain result. Preserve reserved IDs and external refs.
+   An operation that succeeded with `external_refs.audit_results` / `AUDIT_RESULT_WRITE_FAILED` is still
+   the original accepted effect. Do not send it again. Read the warning and repair the audit storage.
+   The Connector explicitly checks the effect's transport signal at each audit site; a recovery fence
+   alone does not establish dispatch. Pre-frame audit failure remains strict without a result warning.
+   Warning sinks expire with their operation scope, including inherited task contexts. An `accepted`
+   warning requires the effect's positive boolean ACK (or proven local completion); negative ACKs are
+   `error` and missing required booleans are `unknown`. Warnings never change the primary outcome.
+   The warning does not change a known error or make an unknown result safe to retry.
+   操作成功但帶有稽核警告時，仍是原本已接受的效果；勿再次傳送。請閱讀警告並修復稽核儲存。
 5. Choose the supported workflow: work-item updates manage records; a direct managed session runs bounded work;
    a Task Service recipe uses the discovered `work_submit` schema and the person's exact `original_words`.
    Reconnecting does not create another task or re-split an existing one. Apply only the workflows whose tools and

@@ -1,3 +1,4 @@
+import {operationAuditStrings} from './operation-audit-strings.js';
 import {healthStrings} from './health-strings.js';
 import {sessionArchiveStrings} from './session-archive-strings.js';
 import {connectionOperationStrings} from './connection-operation-strings.js';
@@ -44,6 +45,7 @@ import {FLEET_STRINGS} from './fleet-strings.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 export const STRINGS = {
   "zh-TW": {
+    ...operationAuditStrings['zh-TW'],
     ...sessionArchiveStrings['zh-TW'],
     deploy_field_engine: "引擎",
     deploy_field_name: "名稱",
@@ -1221,6 +1223,7 @@ export const STRINGS = {
     integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。",
   },
   en: {
+    ...operationAuditStrings.en,
     ...sessionArchiveStrings.en,
     deploy_field_engine: "engine",
     deploy_field_name: "name",
