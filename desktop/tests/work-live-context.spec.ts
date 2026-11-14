@@ -23,7 +23,9 @@ test('explicit live context survives a different last workspace and reload', asy
   await expect(page.locator('[data-follow-up-input]')).toBeVisible();
   await page.reload();
   await page.locator('[data-follow-up-input]').fill('Continue this exact work');
+  const sent = f.follow.posts.length;
   await page.getByRole('button', {name: 'Send next', exact: true}).click();
+  await expect.poll(() => f.follow.posts.length).toBe(sent + 1);
   expect(f.follow.posts.at(-1).body.target).toEqual({workspace_id: WS, work_item_id: WI});
   expect(f.follow.posts.at(-1).body.preconditions).toEqual({expected_attempt_id: ATTEMPT});
   await page.getByRole('button', {name: 'Results', exact: true}).click();
@@ -80,7 +82,9 @@ test('a newer Attempt never replaces the selected Result or send precondition', 
   await expect.poll(() => f.follow.reads.length).toBeGreaterThan(readCount);
   // The fixture emits nothing else before this explicit send.
   await expect.poll(() => f.follow.reads.some(path => /^GET \/events\?.*after=1(?:&|$)/.test(path))).toBe(true);
+  const sent = f.follow.posts.length;
   await page.getByRole('button', {name: 'Send next', exact: true}).click();
+  await expect.poll(() => f.follow.posts.length).toBe(sent + 1);
   expect(f.follow.posts.at(-1).body.preconditions).toEqual({expected_attempt_id: ATTEMPT});
   expect(f.follow.reads.filter(path => path.includes('/work-attempts/')).every(path => path.includes(ATTEMPT))).toBe(true);
 });
@@ -163,7 +167,9 @@ test('Board Open live output reaches the exact Work, next input and fixed Result
   await expect(link).toHaveAttribute('href', `#/session/demo/search-results?from=board&workspace=${workspaceId}&work=${workId(1)}&attempt=${ATTEMPT}`);
   await link.click();
   await page.locator('[data-follow-up-input]').fill('Add the retry case');
+  const sent = f.follow.posts.length;
   await page.getByRole('button', {name: 'Send next', exact: true}).click();
+  await expect.poll(() => f.follow.posts.length).toBe(sent + 1);
   expect(f.follow.posts.at(-1).body.target).toEqual({workspace_id: workspaceId, work_item_id: workId(1)});
   expect(f.follow.posts.at(-1).body.preconditions).toEqual({expected_attempt_id: ATTEMPT});
   await page.getByRole('button', {name: 'Results', exact: true}).click();

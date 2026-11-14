@@ -280,7 +280,9 @@ test('an idempotency conflict retries the original key', async ({page}) => {
   const conflict = f.follow.posts.at(-1).idempotency_key;
   const body = f.follow.posts.at(-1).body;
   f.follow.failPost = null;
+  const sent = f.follow.posts.length;
   await check.click();
+  await expect.poll(() => f.follow.posts.length).toBe(sent + 1);
   expect(f.follow.posts.at(-1).idempotency_key).toBe(conflict);
   expect(f.follow.posts.at(-1).body).toEqual(body);
 });
