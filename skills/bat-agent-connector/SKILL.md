@@ -70,9 +70,11 @@ Show the old source/entry/selection and the separate repository/host/workspace/S
 the exact excerpt, its coverage, descriptor digest and bilingual readiness reasons.
 The preview makes one BAT `workspace:load` request through the read-only client.
 That client may resend this read-only frame after a busy reply, up to three attempts,
-and records transport failures in the Connector's own error log. The preview creates
+and records transport failures in the Connector's own error log (the log file and
+its adjacent lock file); no other file is created or changed. The preview creates
 no business records, invokes no Git, collects nothing and spends nothing.
-中文：一次唯讀請求遇 busy 時可依既有上限嘗試三次，傳輸失敗會記錄中央錯誤日誌。
+中文：一次唯讀請求遇 busy 時可依既有上限嘗試三次，傳輸失敗會記錄中央錯誤日誌
+及旁邊的 lock 檔，不變更其他檔案。
 A hidden or revoked
 source gives generic unavailable; withdrawal/regrant during a read invalidates it.
 A moved branch head is refused, never replaced silently. A lost preview reply may be

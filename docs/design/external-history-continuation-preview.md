@@ -14,9 +14,11 @@ It reuses `repository_sync.source_preview` unchanged: it makes one read-only
 the existing published continuation preview. The shared client may resend that
 read-only frame after a busy reply, up to its existing bound of three attempts
 (`client.py`, `_invoke_checked`). Only `workspace:load` invoke frames are sent.
-The client records transport failures in the Connector's own error log; its retry
-and logging behavior are unchanged. 中文：預覽發出一次唯讀請求；共用 client 遇到
-busy 回覆可在既有三次嘗試上限內重送同一種唯讀 frame，並記錄傳輸錯誤日誌。
+The client records transport failures in the Connector's own error log: the log
+file and the lock file the logger keeps next to it. No other file is created or
+changed by this read. Its retry and logging behavior are unchanged. 中文：預覽發出
+一次唯讀請求；共用 client 遇到 busy 回覆可在既有三次嘗試上限內重送同一種唯讀
+frame，並記錄傳輸錯誤日誌（包含日誌檔及旁邊的 lock 檔）；不變更其他檔案。
 The exact workspace folder remains part of the existing binding digest;
 there is no cache, caller assertion or reduced digest. Manual and foreign sessions
 and worktrees remain read-only.
