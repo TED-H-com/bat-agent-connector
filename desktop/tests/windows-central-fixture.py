@@ -12,7 +12,8 @@ temporary = Path(tempfile.mkdtemp(prefix="windows-central-", dir=root))
 try:
     result = subprocess.run(  # noqa: S603 - fixed repository fixture selectors
         [sys.executable, "-m", "pytest", "-q", "--basetemp", str(temporary),
-         "tests/test_platform_files.py", "tests/test_windows_central.py"],
+         "tests/test_platform_files.py", "tests/test_windows_central.py",
+         "tests/test_windows_monitor_task.py", "tests/test_e2e_windows_named_pipe.py"],
         cwd=Path(__file__).resolve().parents[2],
     )
     raise SystemExit(result.returncode)
