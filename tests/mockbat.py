@@ -79,7 +79,7 @@ class MockBac:
         return copy.deepcopy({"protocol": "bac/1", "minor": 0, "hostId": self.host_id,
                               "build": self.build, "features": self.features, "limits": self.limits})
 
-    def reply(self, frame, negotiated):
+    def reply(self, frame, negotiated, protocol):
         """Return (envelope, new connection state) in host validation order."""
         channel = frame.get("channel")
 
@@ -118,7 +118,7 @@ class MockBac:
         if "contextId" in frame:
             return fail("CONTEXT_NOT_SUPPORTED")
         if channel == "bac:hello":
-            if params["protocol"] != "bac/1" or params["minor"] != 0:
+            if protocol != "bat-remote/v2" or params["protocol"] != "bac/1" or params["minor"] != 0:
                 return fail("UNSUPPORTED_VERSION", protocol="bac/1", minor=0)
             if self.storage_error:
                 return fail(self.storage_error, reason=self.storage_reason)
@@ -133,9 +133,9 @@ class MockBac:
         # No feature implementation in this handshake-only mock.
         return fail("INTERNAL_ERROR")
 
-    async def handle(self, ws, frame, negotiated):
+    async def handle(self, ws, frame, negotiated, protocol):
         self.frames.append(copy.deepcopy(frame))
-        result, negotiated = self.reply(frame, negotiated)
+        result, negotiated = self.reply(frame, negotiated, protocol)
         mid = frame.get("id")
         if not isinstance(mid, str) or "\0" in mid or not 1 <= len(mid.encode("utf-8")) <= 128:
             mid = None
@@ -334,7 +334,8 @@ class MockBat:
             return
         proto = self.protocol if "bat-remote/v2" in (first.get("protocols") or []) else "bat-remote/legacy-v1"
         capabilities = {}
-        if self.bac is not None and self.bac.advertisement is not _BAC_MISSING:
+        if (proto == "bat-remote/v2" and self.bac is not None
+                and self.bac.advertisement is not _BAC_MISSING):
             capabilities["bac"] = copy.deepcopy(self.bac.advertisement)
         negotiated = False
         await ws.send(
@@ -372,7 +373,7 @@ class MockBat:
                         )
                     )
                 if self.bac is not None and f.get("channel", "").startswith("bac:"):
-                    negotiated = await self.bac.handle(ws, f, negotiated)
+                    negotiated = await self.bac.handle(ws, f, negotiated, proto)
                     continue
                 try:
                     res = self.dispatch(f["channel"], f.get("params") or {})

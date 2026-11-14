@@ -147,3 +147,19 @@ async def test_reply_size_boundary_is_inclusive(bac_mock):
                 assert reply['result'] == {'ok': False, 'error': {
                     'code': 'RESPONSE_TOO_LARGE', 'message': 'BAC result exceeds limit',
                     'retryable': False, 'details': {'maxBytes': 524288}}}
+
+
+async def test_legacy_protocol_does_not_advertise_or_negotiate(bac_mock):
+    bac_mock.bac.storage_error = 'STORAGE_UNAVAILABLE'
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    async with connect(bac_mock.url, ssl=ctx, compression=None, proxy=None) as ws:
+        await ws.send(json.dumps({'type': 'auth', 'id': 'auth-1', 'token': TOKEN, 'protocols': []}))
+        auth = json.loads(await ws.recv())
+        assert auth['protocol'] == 'bat-remote/legacy-v1'
+        assert 'bac' not in auth['capabilities']
+        assert await call(ws, 'bac:hello', HELLO) == {'ok': False, 'error': {
+            'code': 'UNSUPPORTED_VERSION', 'message': 'Unsupported BAC protocol version',
+            'retryable': False, 'details': {'protocol': 'bac/1', 'minor': 0}}}
+        assert (await call(ws, 'bac:future', {}))['error']['code'] == 'NOT_OPTED_IN'
