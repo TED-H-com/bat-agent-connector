@@ -158,10 +158,8 @@ fn validate_history_continuation_preview(
     let doc: HistoryContinuationPreview =
         serde_json::from_value(value.clone()).map_err(|_| invalid)?;
     // Match Python's whitespace set, including its four extra C0 separators.
-    let blank = |s: &str| {
-        s.chars()
-            .all(|c| c.is_whitespace() || matches!(c, '\u{1c}'..='\u{1f}'))
-    };
+    let python_whitespace = |c: char| c.is_whitespace() || matches!(c, '\u{1c}'..='\u{1f}');
+    let blank = |s: &str| s.chars().all(python_whitespace);
     let bounded = |s: &str, max: usize| !blank(s) && s.chars().count() <= max;
     let single_line = |s: &str, max: usize| {
         bounded(s, max)
@@ -207,10 +205,11 @@ fn validate_history_continuation_preview(
             .len()
             != doc.requirement_ids.len()
         || !bounded(&doc.new_work.title, 120)
+        // Title follows the Work rule, including Python whitespace at the edges.
         || doc
             .new_work
             .title
-            .trim()
+            .trim_matches(python_whitespace)
             .chars()
             .any(|c| matches!(c, '\0'..='\u{1f}' | '\u{7f}' | '\u{2028}' | '\u{2029}'))
         || !work_text(&doc.new_work.goal, 20000)

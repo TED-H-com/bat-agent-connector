@@ -86,8 +86,13 @@ C0/C1 controls (U+0000–001F and U+007F–009F), and U+2028/U+2029 line separat
 Goal and acceptance retain existing Work text rules: empty text is allowed,
 CRLF/CR is counted after conversion to LF, and C0 controls other than tab/LF/CR
 and DEL are refused. Instruction also uses those Work text rules, requires
-nonblank text and has a 4,000-codepoint raw bound. Title retains the existing
-Work title validation and the preview's 120-codepoint raw bound. Retained context
+nonblank text and has a 4,000-codepoint raw bound. Title follows the Work title rule:
+the raw input must be nonblank and at most 120 codepoints, then Python whitespace is
+stripped from both ends and the remaining 1–120 codepoints must not contain C0,
+U+007F, U+2028 or U+2029; it is the one single-line field that accepts C1 controls,
+because Work accepts them. 中文：title 先檢查原始輸入非空白且至多 120 個 codepoint，
+再去除兩端 Python 空白；剩餘 1–120 個 codepoint 不得含 C0、U+007F、U+2028 或
+U+2029；依 Work 規則，title 是唯一接受 C1 控制字元的單行欄位。Retained context
 is never normalized by these request-field checks.
 
 URLs, cwd, paths, credentials, native session IDs, checkpoint IDs, ownership or
