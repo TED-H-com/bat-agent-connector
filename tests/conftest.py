@@ -31,7 +31,7 @@ def isolated_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("BATC_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("BATC_TEST_TOKEN", TOKEN)
     monkeypatch.delenv("BATC_DEVICE_ID", raising=False)
-    git_config = tmp_path / "gitconfig"
+    git_config = tmp_path.parent / f".gitconfig-{tmp_path.name}"
     git_config.write_text("")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(git_config))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -41,6 +41,7 @@ def isolated_dirs(tmp_path, monkeypatch):
     try:
         yield tmp_path
     finally:
+        git_config.unlink(missing_ok=True)
         shutil.rmtree(tmp_path, ignore_errors=True)
 
 
