@@ -44,7 +44,8 @@ class Service:
 
 
 @pytest.fixture
-def fixture(tmp_path):
+def fixture(tmp_path, monkeypatch):
+    monkeypatch.setattr(b, "TRUSTED_ROOT", tmp_path)
     state = tmp_path / "state"
     state.mkdir(mode=0o700)
     database = state / "tasks.sqlite3"
@@ -365,3 +366,96 @@ with (state / "task-daemon.lock").open("rb") as lock:
         except subprocess.TimeoutExpired:
             child.kill()
             child.wait(timeout=5)
+
+
+def test_trusted_root_at_tmp_path_still_refuses_group_writable_directory_below_it(tmp_path, monkeypatch):
+    assert b.TRUSTED_ROOT == Path("/")
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    os.chmod(outer, 0o775)
+    trusted = outer / "trusted"
+    trusted.mkdir()
+    os.chmod(trusted, 0o700)
+    sub = trusted / "sub"
+    sub.mkdir()
+    os.chmod(sub, 0o700)
+    leaf = sub / "item"
+    leaf.write_text("ok")
+    os.chmod(leaf, 0o600)
+
+    monkeypatch.setattr(b, "TRUSTED_ROOT", trusted)
+    info = b._secure_path(leaf, os.getuid())
+    assert info.st_ino == leaf.stat().st_ino
+
+    os.chmod(sub, 0o775)
+    with pytest.raises(b.Refused, match="BOOTSTRAP_STATE_UNPROVEN"):
+        b._secure_path(leaf, os.getuid())
+
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    os.chmod(nested, 0o700)
+    state = nested / "state"
+    state.mkdir()
+    os.chmod(state, 0o700)
+    monkeypatch.setattr(b, "TRUSTED_ROOT", tmp_path)
+    assert b._secure_path(state, os.getuid(), directory=True).st_ino == state.stat().st_ino
+
+    os.chmod(nested, 0o775)
+    with pytest.raises(b.Refused, match="BOOTSTRAP_STATE_UNPROVEN"):
+        b._secure_path(state, os.getuid(), directory=True)
+
+
+class _RootOwnedDirProxy:
+    def __init__(self, path: Path, root_dir: Path):
+        self._path = path
+        self._root_dir = root_dir
+
+    @property
+    def parents(self):
+        return tuple(_RootOwnedDirProxy(parent, self._root_dir) for parent in self._path.parents)
+
+    def lstat(self):
+        st = self._path.lstat()
+        if self._path != self._root_dir:
+            return st
+        return os.stat_result((
+            st.st_mode,
+            st.st_ino,
+            st.st_dev,
+            st.st_nlink,
+            0,
+            st.st_gid,
+            st.st_size,
+            st.st_atime,
+            st.st_mtime,
+            st.st_ctime,
+        ))
+
+    def __eq__(self, other):
+        return self._path == other._path if isinstance(other, _RootOwnedDirProxy) else self._path == other
+
+    def __hash__(self):
+        return hash(self._path)
+
+
+def test_trusted_root_preserves_root_owned_sticky_directory_rule(tmp_path, monkeypatch):
+    monkeypatch.setattr(b, "TRUSTED_ROOT", tmp_path)
+    sticky = tmp_path / "sticky"
+    sticky.mkdir()
+    os.chmod(sticky, 0o1777)
+    leaf = sticky / "item"
+    leaf.write_text("ok")
+    os.chmod(leaf, 0o600)
+
+    if os.getuid() != 0:
+        with pytest.raises(b.Refused, match="BOOTSTRAP_STATE_UNPROVEN"):
+            b._secure_path(leaf, os.getuid())
+
+    assert b._secure_path(_RootOwnedDirProxy(leaf, sticky), os.getuid()).st_ino == leaf.stat().st_ino
+
+    with pytest.raises(b.Refused, match="BOOTSTRAP_STATE_UNPROVEN"):
+        b._secure_path(_RootOwnedDirProxy(sticky, sticky), os.getuid(), directory=True)
+
+    os.chmod(sticky, 0o777)
+    with pytest.raises(b.Refused, match="BOOTSTRAP_STATE_UNPROVEN"):
+        b._secure_path(_RootOwnedDirProxy(leaf, sticky), os.getuid())

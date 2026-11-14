@@ -29,6 +29,7 @@ MAX_DATABASE = 256 * 1024 * 1024
 MAX_WAL = 64 * 1024 * 1024
 SYSTEMCTL = "/usr/bin/systemctl"
 SERVER_RECIPE = Path("/etc/bat-agent-connector/bootstrap-v1.json")
+TRUSTED_ROOT = Path("/")
 PROPERTIES = (
     "Id", "LoadState", "ActiveState", "SubState", "MainPID", "FragmentPath", "DropInPaths",
     "NeedDaemonReload", "Environment", "EnvironmentFiles", "PassEnvironment", "UnsetEnvironment",
@@ -82,7 +83,10 @@ def _path(value):
 
 
 def _secure_path(path, uid, directory=False):
-    for parent in [*reversed(path.parents), path]:
+    ancestors = [*reversed(path.parents), path]
+    if TRUSTED_ROOT in ancestors:
+        ancestors = ancestors[ancestors.index(TRUSTED_ROOT):]
+    for parent in ancestors:
         info = parent.lstat()
         if stat.S_ISLNK(info.st_mode) or info.st_uid not in {0, uid} or info.st_mode & 0o022 and not (parent != path and info.st_uid == 0 and info.st_mode & stat.S_ISVTX):
             raise Refused("BOOTSTRAP_STATE_UNPROVEN")
