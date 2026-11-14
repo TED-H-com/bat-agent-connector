@@ -268,7 +268,7 @@ test('work item Start agent work moves focus to the operation', async ({browser}
     await page.getByRole('button', {name: 'Start agent work from this checkpoint', exact: true}).click();
     await live;
     await expect.poll(() => state.sourceReads).toBe(1);
-    await page.locator('.drawer:not([hidden]) textarea').fill('Ship the notes from this checkpoint.');
+    await page.locator('.drawer:not([hidden])').getByRole('textbox', {name: 'Start agent work from this checkpoint', exact: true}).fill('Ship the notes from this checkpoint.');
     const go = await press(page, 'Start agent work');
     await expect.poll(async () => ({...await snap(page, 'Start agent work', '[data-work-start-status]'), posts})).toEqual({
       active: 'button', ariaDisabled: 'true', ariaBusy: 'true', disabled: false, posts: 1});
@@ -288,6 +288,10 @@ test('work item Start agent work moves focus to the operation', async ({browser}
       };
     }, startId)).toEqual({href: '#/op/' + startId, ariaDisabled: null, ariaBusy: null, disabled: true});
     expect(posts).toBe(1);
+    await page.evaluate(() => localStorage.setItem('batc.lang', 'zh-TW'));
+    await page.reload();
+    await page.getByRole('button', {name: '從這個版本派工', exact: true}).click();
+    await expect(page.locator('.drawer:not([hidden])').getByRole('textbox', {name: '從這個版本派工', exact: true})).toBeVisible();
     expect(harness.errors).toEqual([]);
   } finally {held.release(); await harness.context.close();}
 });

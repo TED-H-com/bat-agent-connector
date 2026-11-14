@@ -29,11 +29,18 @@ MAX_BYTES = 512 * 1024 * 1024
 MAX_TREE = 128 * 1024 * 1024
 READ_ERRORS = (OSError, ValueError, TypeError, KeyError, AttributeError,
                zipfile.BadZipFile, tarfile.TarError, subprocess.SubprocessError)
+WHEEL_HOOK_ENTRIES = {
+    "bat_agent_connector/skill/build-info.json": None,
+    "bat_agent_connector/skill/SKILL.md": "skills/bat-agent-connector/SKILL.md",
+}
+WHEEL_METADATA_NAMES = frozenset({
+    "METADATA", "WHEEL", "RECORD", "entry_points.txt", "licenses/LICENSE", "licenses/THIRD_PARTY_NOTICES.md",
+})
 
 
 class EvidenceError(ValueError):
-    def __init__(self, status, reason):
-        self.status, self.reason = status, reason
+    def __init__(self, status, reason, details=None):
+        self.status, self.reason, self.details = status, reason, details
         super().__init__(reason)
 
 
@@ -143,6 +150,35 @@ def _package(path, wheel):
     return files, package, version, _commit(info.get("commit"))
 
 
+def _check_package_members(files, prefix, *, wheel, source, commit):
+    tracked = set(filter(None, _git(source, "ls-tree", "-r", "-z", "--name-only", commit).decode().split("\0")))
+    if wheel:
+        roots = {name.split("/")[0] for name in files if name.split("/")[0].endswith(".dist-info")}
+        _require(len(roots) == 1, "PACKAGE_METADATA_UNAVAILABLE")
+        metadata = next(iter(roots)) + "/"
+
+        def allowed(name):
+            if name in WHEEL_HOOK_ENTRIES:
+                source_name = WHEEL_HOOK_ENTRIES[name]
+                return source_name is None or source_name in tracked
+            if name.startswith(prefix):
+                return "src/" + name in tracked
+            return name.startswith(metadata) and name[len(metadata):] in WHEEL_METADATA_NAMES
+    else:
+        base = prefix.removesuffix("src/bat_agent_connector/")
+
+        def allowed(name):
+            if not name.startswith(base):
+                return False
+            relative = name[len(base):]
+            return relative in tracked or relative in {"PKG-INFO", "src/bat_agent_connector/build-info.json"}
+
+    unexpected = [name for name in files if not allowed(name)]
+    if unexpected:
+        raise EvidenceError("differs", "ARCHIVE_MEMBER_UNTRACKED",
+                            {"member": unexpected[0][:256], "count": len(unexpected)})
+
+
 def _source_files(component, root):
     if component == "readme":
         names = ("README.md", "README.zh-TW.md")
@@ -226,7 +262,7 @@ def _write_files(directory, files):
 
 def _check_source(component, artifact, source_files, candidate, source_repo):
     if component in {"wheel", "sdist", "dashboard"}:
-        files, prefix, version, _ = _package(artifact, component != "sdist")
+        files, prefix, version, commit = _package(artifact, component != "sdist")
         expected_prefix = "src/bat_agent_connector/"
         expected = {name[len(expected_prefix):]: data for name, data in source_files.items() if name.startswith(expected_prefix)}
         actual = {name[len(prefix):]: data for name, data in files.items() if name.startswith(prefix)}
@@ -235,6 +271,7 @@ def _check_source(component, artifact, source_files, candidate, source_repo):
             actual = {k: v for k, v in actual.items() if k.startswith("dashboard/")}
             _require(expected and expected == actual, "DASHBOARD_SOURCE_DIFFERS", "differs")
         else:
+            _check_package_members(files, prefix, wheel=component == "wheel", source=source_repo, commit=commit)
             _require(version == tomllib.loads(source_files["pyproject.toml"].decode())["project"]["version"],
                      "PACKAGE_VERSION_DIFFERS", "differs")
             with tempfile.TemporaryDirectory(prefix="release-source-", dir=os.environ.get("TMPDIR")) as scratch:
@@ -310,11 +347,14 @@ def validate(candidate, receipts, *, source, required=COMPONENTS):
             row.update(status="matches", reason="CLAIM_AND_BYTES_MATCH")
         except EvidenceError as exc:
             row.update(status=exc.status, reason=exc.reason)
+            if exc.details is not None:
+                row["details"] = exc.details
         except UpdateError:
             row.update(status="differs", reason="PACKAGE_SOURCE_DIFFERS")
         except READ_ERRORS:
             row.update(status="unknown", reason="ARTIFACT_OR_PRODUCER_RECORD_UNAVAILABLE")
         rows.append(row)
-    refusals = [{k: row[k] for k in ("component", "status", "reason")} for row in rows if row["status"] != "matches"]
+    refusals = [{k: row[k] for k in ("component", "status", "reason", "details") if k in row}
+                for row in rows if row["status"] != "matches"]
     return {"format": 1, "candidate": candidate, "required": required, "scope": "required_receipts",
             "one_candidate": not refusals, "components": rows, "refusals": refusals}

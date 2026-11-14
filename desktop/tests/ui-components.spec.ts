@@ -12,7 +12,7 @@ async function mount(page: any) {
       ui.disclosure({label: 'Sources', body: h('p', {}, 'Source evidence'), key: 'test-sources'}),
       ui.button({label: 'Remount', onClick: () => {root.querySelector('details')!.replaceWith(ui.disclosure({label: 'Sources', body: 'Source evidence', key: 'test-sources'}));}}),
       ui.metric({label: 'Unknown metric'}), ui.metric({label: 'Known zero', value: 0}),
-      ui.dataTable({columns: [{key: 'title', label: 'Work'}, {key: 'number', label: 'Count', numeric: true}], rows: [{id: 'one', title: 'First work', number: 0}, {id: 'two', title: 'Second work'}], rowKey: 'id', expandable: row => row.title + ' details'}));
+      ui.dataTable({label: 'Work items', selected: 'one', columns: [{key: 'title', label: 'Work'}, {key: 'number', label: 'Count', numeric: true}], rows: [{id: 'one', title: 'First work', number: 0}, {id: 'two', title: 'Second work'}], rowKey: 'id', expandable: row => row.title + ' details'}));
     for (const status of Object.keys(ui.statusVocabulary)) root.append(ui.statusPill(status));
   });
 }
@@ -43,8 +43,17 @@ for (const width of [390, 900, 1440]) test(`inspector closes and returns focus a
 test('disclosure remembers open state; table rows navigate and expand; unknown differs from zero', async ({page}) => {
   await mount(page); await page.getByText('Sources', {exact: true}).click(); await page.getByRole('button', {name: 'Remount'}).click();
   await expect(page.locator('details')).toHaveAttribute('open', ''); await expect(page.getByText('Source evidence')).toBeVisible();
+  await expect(page.getByRole('table', {name: 'Work items', exact: true})).toBeVisible();
+  await expect(page.getByRole('region', {name: 'Work items', exact: true})).toHaveClass(/ui-data-table/);
+  await expect(page.locator('[data-row-key][aria-current="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-row-key="one"]')).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('[data-row-key="two"]')).not.toHaveAttribute('aria-current');
+  await expect(page.locator('.ui-data-table [aria-selected]')).toHaveCount(0);
   await page.locator('[data-row-key="one"]').focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
-  await expect(page.locator('[data-row-key="two"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-row-key][aria-current="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-row-key="two"]')).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('[data-row-key="one"]')).not.toHaveAttribute('aria-current');
+  await expect(page.locator('.ui-data-table [aria-selected]')).toHaveCount(0);
   await page.getByRole('button', {name: 'Expand Second work'}).click(); await expect(page.getByText('Second work details')).toBeVisible();
   await expect(page.locator('.ui-metric').first()).toContainText('—Unknown'); await expect(page.locator('.ui-metric').nth(1)).toContainText('0');
 });
@@ -204,10 +213,12 @@ test('compact table rows have one target and preserve expansion when resized', a
   await page.evaluate(async () => {
     const {dataTable} = await import('/src/ui/components.js');
     const {h} = await import('/src/ui/dom.js');
-    document.querySelector('.ui-data-table')!.replaceWith(dataTable({columns: [{key: 'title', label: 'Work'}],
+    document.querySelector('.ui-data-table')!.replaceWith(dataTable({label: 'Compact items', columns: [{key: 'title', label: 'Work'}],
       rows: [{id: 'compact', title: 'Compact work'}], rowKey: 'id', selected: 'nested-work', compactRow: row => h('span', {}, row.title),
       expandable: () => 'Saved criteria', onSelect: key => {document.body.dataset.selection = key;}}));
   });
+  await expect(page.locator('.ui-data-table')).not.toHaveAttribute('role');
+  await expect(page.locator('.ui-data-table')).not.toHaveAttribute('aria-label');
   const row = page.locator('[data-row-key=compact]');
   await expect(row).toHaveAttribute('tabindex', '0');
   await expect(row.locator('button')).toBeHidden(); await row.focus(); await page.keyboard.press('Enter');

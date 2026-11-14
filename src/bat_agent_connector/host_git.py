@@ -191,6 +191,7 @@ HOST_EFFECT_ACTIONS = frozenset({
     "pm.run.prepare",
     "pm.session.quiescence.observe",
     "pm.spec.materialize",
+    "pm.roadmap.report.materialize",
     "repository.continue",
     "session.answer",
     "session.approve_pending",

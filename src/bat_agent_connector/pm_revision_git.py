@@ -24,16 +24,21 @@ def step_receipt(value):
 
 def request(ctx, plan, revision, expected_parent):
     spec = isinstance(revision, dict) and revision.get("artifact_kind") == "pm-spec"
+    report = isinstance(revision, dict) and revision.get("artifact_kind") == pm_revision_paths.REPORT_KIND
     fields = {"workspace_id", "revision_id", "files", "file_digests", "document_digest"}
     if spec:
         fields |= {"artifact_kind", "change_id", "package_id"}
+    if report:
+        fields |= set(pm_revision_paths.REPORT_FIELDS)
     if (not isinstance(revision, dict) or set(revision) != fields
             or revision["workspace_id"] != plan["pm_workspace_id"]
-            or not isinstance(revision["revision_id"], str) or not re.fullmatch(r"pmsp_[0-9a-f]{32}" if spec else _REVISION, revision["revision_id"])
+            or not isinstance(revision["revision_id"], str) or not re.fullmatch(r"pmrpt_[0-9a-f]{32}" if report else r"pmsp_[0-9a-f]{32}" if spec else _REVISION, revision["revision_id"])
             or not isinstance(expected_parent, str) or not repository_sync.SHA.fullmatch(expected_parent)):
         raise OperationError("PM_REVISION_INVALID", "Fixed revision files and parent commit are required", 422)
     try:
         paths = pm_revision_paths.rev_paths(revision)
+        if report:
+            pm_revision_paths.report_manifest({**revision, "operation_id": ctx.operation_id})
     except (KeyError, TypeError, ValueError):
         raise OperationError("PM_REVISION_INVALID", "Only fixed owned revision paths can be committed", 422) from None
     if not isinstance(revision["files"], dict) or set(revision["files"]) != paths:
@@ -52,16 +57,19 @@ def request(ctx, plan, revision, expected_parent):
 
 
 def _spec_receipt(fixed, value):
-    if fixed.get("artifact_kind") != "pm-spec":
+    report = fixed.get("artifact_kind") == pm_revision_paths.REPORT_KIND
+    if fixed.get("artifact_kind") != "pm-spec" and not report:
         return value
+    fields = pm_revision_paths.REPORT_FIELDS if report else ("artifact_kind", "change_id", "package_id")
     expected = {key: fixed[key] for key in ("workspace_id", "revision_id", "operation_id", "document_digest",
-        "file_digests", "binding_id", "artifact_kind", "change_id", "package_id")}
+        "file_digests", "binding_id", *fields)}
     expected["status"] = "verified"
     if (not isinstance(value, dict) or set(value) != set(expected) | {"commit_sha", "tree_sha"}
-            or any(value.get(key) != item for key, item in expected.items())
+            or any(value.get(key) != item or type(value.get(key)) is not type(item) for key, item in expected.items())
             or any(not isinstance(value.get(key), str) or not re.fullmatch(r"[0-9a-f]{40}", value[key])
                    for key in ("commit_sha", "tree_sha"))):
-        raise NeedsAttention("PM_GIT_RECEIPT_INVALID", "The original exact spec Git receipt cannot yet be verified")
+        raise NeedsAttention("PM_GIT_RECEIPT_INVALID", "The original exact Git receipt cannot yet be verified" if report
+                             else "The original exact spec Git receipt cannot yet be verified")
     return value
 
 
@@ -89,7 +97,10 @@ async def commit_revision(ctx, plan, revision_files, *, expected_parent, check):
     result = await ctx.step("pm.revision.commit",
         commit,
         request={key: value for key, value in fixed.items() if key != "files"}, reconcile=reconcile)
-    return step_receipt(result)
+    result = step_receipt(result)
+    # Even a succeeded private step must match this frozen report before the
+    # report service records a completed fact. Legacy plan/spec behavior stays.
+    return _spec_receipt(fixed, result) if fixed.get("artifact_kind") == pm_revision_paths.REPORT_KIND else result
 
 
 async def verify_revision(ctx, plan, revision_files, *, source_operation_id, check):

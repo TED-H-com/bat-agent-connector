@@ -95,7 +95,7 @@ test(`loading has its own status until dependency history settles ${locale}`, as
 });
 });
 
-test('BLOCKER-2: graph activation, Escape and live reads retain logical focus', async ({page}) => {
+test('graph activation, Escape and live reads retain logical focus', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   const harness = await mount(page);
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
@@ -116,7 +116,7 @@ test('BLOCKER-2: graph activation, Escape and live reads retain logical focus', 
   expect(harness.posts).toEqual([]);
 });
 
-for (const width of [768, 390]) test(`BLOCKER-3: refreshed list sheet returns focus at ${width}`, async ({page}) => {
+for (const width of [768, 390]) test(`refreshed list sheet returns focus at ${width}`, async ({page}) => {
   await page.setViewportSize({width, height: 900});
   const harness = await mount(page);
   const pick = page.locator(`[data-dep-pick="${ids.api}|${ids.keys.pytest}"]`);
@@ -127,7 +127,7 @@ for (const width of [768, 390]) test(`BLOCKER-3: refreshed list sheet returns fo
   await expect(pick).toBeFocused();
 });
 
-test('SF-6: valid selection semantics and heading hierarchy', async ({page}) => {
+test('valid selection semantics and heading hierarchy', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page);
   await expect(page.locator('[data-dep-view] button[aria-selected]')).toHaveCount(0);
@@ -143,7 +143,7 @@ test('SF-6: valid selection semantics and heading hierarchy', async ({page}) => 
   await expect(node).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('M1: graph keyboard follows visual column and row order', async ({page}) => {
+test('graph keyboard follows visual column and row order', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page);
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
@@ -163,7 +163,7 @@ test('M1: graph keyboard follows visual column and row order', async ({page}) =>
 
 for (const locale of ['en', 'zh-TW'] as const) test.describe(locale, () => {
   test.use({locale: locale === 'zh-TW' ? 'zh-TW' : 'en-US'});
-  test(`BLOCKER-4: component facts and named dependency evidence ${locale}`, async ({page}) => {
+  test(`component facts and named dependency evidence ${locale}`, async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     await mount(page, {locale});
     await page.locator(`[data-dep-focus="row:${ids.api}"]`).click();
@@ -180,7 +180,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(locale, () => {
     await expect(pytest).toContainText('api/uv.lock @ c0ffee1');
   });
 
-  test(`BLOCKER-5: declarations count and bounded impact explains coverage ${locale}`, async ({page}) => {
+  test(`declarations count and bounded impact explains coverage ${locale}`, async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const harness = await mount(page, {
       locale,
@@ -204,7 +204,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(locale, () => {
     expect(harness.posts).toEqual([]);
   });
 
-  test(`SF-4: capture details explain catalog gaps and unreadable parent path ${locale}`, async ({page}) => {
+  test(`capture details explain catalog gaps and unreadable parent path ${locale}`, async ({page}) => {
     await mount(page, {locale, projection: doc => ({...doc, catalog_reasons: ['tree_limit', 'file_limit', 'component_limit'],
       projection_omitted_collections: ['files'], cross_repository: {status: 'partial', complete: false, reason: 'selection_budget'},
       unreadable_paths: [{kind: 'entry', path: null, parent_path: 'services/secret-submodule', reason: 'unsupported_tree_entry'}]})});
@@ -218,7 +218,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(locale, () => {
     await expect(details.locator('[data-dep-file="services/secret-submodule"]')).toContainText(locale === 'en' ? 'Unsupported tree entry' : '不支援的目錄項目');
   });
 
-  test(`SF-8: discussion names dependency or component and captured commit ${locale}`, async ({page}) => {
+  test(`discussion names dependency or component and captured commit ${locale}`, async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     await mount(page, {locale});
     for (const [focus, name] of [[`col:${ids.keys.pytest}`, 'pytest'], [`row:${ids.api}`, 'membership-api']]) {
@@ -233,7 +233,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(locale, () => {
   });
 });
 
-test('SF-1: uncaptured inventory has no partial badge, zero chips or freshness claim', async ({page}) => {
+test('uncaptured inventory has no partial badge, zero chips or freshness claim', async ({page}) => {
   await mount(page, {projection: doc => ({...doc, capture: {revision_id: null, status: 'unknown'}, reason: 'not_captured',
     components: [], dependencies: {}, edges: [], declared: [], counts: null})});
   await expect(page.locator('.ui-page-header [data-status=partial]')).toHaveCount(0);
@@ -243,7 +243,7 @@ test('SF-1: uncaptured inventory has no partial badge, zero chips or freshness c
   await expect(page.locator('[data-dep-view]')).toContainText('Not captured yet');
 });
 
-for (const status of [403, 404, 409, 413]) test(`BLOCKER-7: failed read ${status} clears options, forms and all source surfaces`, async ({page}) => {
+for (const status of [403, 404, 409, 413]) test(`failed read ${status} clears options, forms and all source surfaces`, async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   const harness = await mount(page, {manage: true});
   const declare = page.locator('[data-pm-action="pm.dependencies.declare"]');
@@ -278,7 +278,7 @@ for (const status of [403, 404, 409, 413]) test(`BLOCKER-7: failed read ${status
   expect(harness.posts).toEqual([]);
 });
 
-test('SF-3 part 1: open inspector rereads impact and preserves its focused action', async ({page}) => {
+test('open inspector rereads impact and preserves its focused action', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   let version = 1;
   const harness = await mount(page, {impact: doc => ({...doc, components: [{...doc.components[0], name: `affected-${version}`}], counts: {components: 1, basis: 'returned_components', partial: true}})});
@@ -298,7 +298,7 @@ test('SF-3 part 1: open inspector rereads impact and preserves its focused actio
 
 test.describe('zh-TW draft', () => {
 test.use({locale: 'zh-TW'});
-test('SF-5: inferred draft restores translated relations and record form stays on page', async ({page}) => {
+test('inferred draft restores translated relations and record form stays on page', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page, {locale: 'zh-TW', manage: true});
   // Use stable form fields here; the locale-specific option copy is checked after reload.
@@ -321,7 +321,7 @@ test('SF-5: inferred draft restores translated relations and record form stays o
 });
 
 
-test('M2: relation form labels source and declaration with a single primary action', async ({page}) => {
+test('relation form labels source and declaration with a single primary action', async ({page}) => {
   await mount(page, {manage: true});
   await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();
   await expect(page.locator('[data-dep-source-commit]')).toHaveText('Captured at c0ffee1');
@@ -331,7 +331,7 @@ test('M2: relation form labels source and declaration with a single primary acti
   await expect(page.locator('[data-dep-record] button.primary[type=submit]')).toHaveCount(1);
 });
 
-for (const filter of ['relation', 'evidence', 'search']) test(`BLOCKER-6: graph filters cross-repository nodes by ${filter}`, async ({page}) => {
+for (const filter of ['relation', 'evidence', 'search']) test(`graph filters cross-repository nodes by ${filter}`, async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page);
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
@@ -358,7 +358,7 @@ function largeDocument(doc: Document) {
   return doc;
 }
 
-test('SF-2: matrix column cap keeps every shown component represented', async ({page}) => {
+test('matrix column cap keeps every shown component represented', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page, {projection: largeDocument});
   await expect(page.locator('[data-dep-matrix] tbody tr')).toHaveCount(12);
@@ -373,7 +373,7 @@ test('SF-2: matrix column cap keeps every shown component represented', async ({
   await expect(page.locator('[data-dep-list] .dep-group')).toHaveCount(0);
 });
 
-for (const width of [1440, 390]) test(`SF-2: bounded graph and list expose loaded limits at ${width}`, async ({page}) => {
+for (const width of [1440, 390]) test(`bounded graph and list expose loaded limits at ${width}`, async ({page}) => {
   await page.setViewportSize({width, height: 900});
   await mount(page, {projection: largeDocument});
   if (width === 390) {
@@ -390,7 +390,7 @@ for (const width of [1440, 390]) test(`SF-2: bounded graph and list expose loade
   await expect(page.locator('[data-dep-show-rows]')).toBeVisible();
 });
 
-test('SF-7: graph shows relation and evidence legend', async ({page}) => {
+test('graph shows relation and evidence legend', async ({page}) => {
   await mount(page);
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
   await expect(page.locator('[data-dep-legend]')).toBeVisible();
@@ -401,7 +401,7 @@ test('SF-7: graph shows relation and evidence legend', async ({page}) => {
 
 for (const locale of ['en', 'zh-TW'] as const) test.describe(`polish ${locale}`, () => {
   test.use({locale: locale === 'zh-TW' ? 'zh-TW' : 'en-US'});
-  test('BLOCKER-1: capture reason wraps outside header actions', async ({page}) => {
+  test('capture reason wraps outside header actions', async ({page}) => {
     await page.setViewportSize({width: 390, height: 844});
     await mount(page, {locale});
     const hint = page.locator('[data-dep-capture-reason]');
@@ -414,7 +414,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(`polish ${locale}`,
     expect(refresh!.x + refresh!.width).toBeLessThanOrEqual(390);
   });
 
-  test('M4: Graph label and omitted-relation copy describe the selection', async ({page}) => {
+  test('Graph label and omitted-relation copy describe the selection', async ({page}) => {
     let omit = false;
     const harness = await mount(page, {locale, projection: doc => omit ? {...doc, edges: [], declared: []} : doc});
     await expect(page.getByRole('radio', {name: locale === 'en' ? 'Graph' : '關係圖', exact: true})).toBeVisible();
@@ -426,7 +426,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(`polish ${locale}`,
   });
 });
 
-for (const width of [1440, 768, 390]) test(`SF-9: form and graph controls meet target sizes at ${width}`, async ({page}) => {
+for (const width of [1440, 768, 390]) test(`form and graph controls meet target sizes at ${width}`, async ({page}) => {
   await page.setViewportSize({width, height: 900});
   await mount(page, {manage: true});
   await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();
@@ -451,7 +451,7 @@ for (const width of [1440, 768, 390]) test(`SF-9: form and graph controls meet t
   }
 });
 
-test('VP-3: graph uses the available width and has a roomy zoom bar', async ({page}) => {
+test('graph uses the available width and has a roomy zoom bar', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page);
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
@@ -462,7 +462,7 @@ test('VP-3: graph uses the available width and has a roomy zoom bar', async ({pa
   expect(bar!.height).toBeGreaterThanOrEqual(32);
 });
 
-test('VP-4: selected matrix cell centres and frames its badge', async ({page}) => {
+test('selected matrix cell centres and frames its badge', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page);
   const cell = page.locator(`[data-dep-cell="${ids.api}|${ids.keys.pytest}"]`);
@@ -476,7 +476,7 @@ test('VP-4: selected matrix cell centres and frames its badge', async ({page}) =
   expect(style.gap).toBeGreaterThanOrEqual(4);
 });
 
-test('M3: dark selected chips use the readable text token and meet 4.5 to 1', async ({page}) => {
+test('dark selected chips use the readable text token and meet 4.5 to 1', async ({page}) => {
   await page.emulateMedia({reducedMotion: 'reduce'});
   await mount(page);
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
@@ -494,7 +494,7 @@ test('M3: dark selected chips use the readable text token and meet 4.5 to 1', as
 });
 
 
-test('P1: selection dims unrelated edges and keyboard focus does not', async ({page}) => {
+test('selection dims unrelated edges and keyboard focus does not', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page);
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
@@ -547,7 +547,7 @@ test('P1: selection dims unrelated edges and keyboard focus does not', async ({p
   await expect(other).toHaveAttribute('data-dep-mark', 'dim');
 });
 
-test('P2: another repository keeps its own node, legend and counts', async ({page}) => {
+test('another repository keeps its own node, legend and counts', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page);
   await expect(page.locator('[data-dep-relation=contract]')).toHaveText('Contract 1');
@@ -569,7 +569,7 @@ test('P2: another repository keeps its own node, legend and counts', async ({pag
   await expect(page.locator('[data-dep-peer]')).toHaveCount(0);
 });
 
-test('P2: a peer without a repository name says it is another repository', async ({page}) => {
+test('a peer without a repository name says it is another repository', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page, {projection: doc => ({...doc, external_components: doc.external_components.map(row => ({...row, repository: ''}))})});
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
@@ -583,12 +583,12 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(`dependency clarity
     ? {partial: 'Partial: only the loaded graph was checked; peer selection stopped early, and one manifest could not be read.', none: 'None listed in this capture. More may exist.', omitted: 'More were omitted.', recorded: 'None recorded in this capture', contract: 'Contract version', reference: 'Reference version', service: 'Service version', range: 'Allowed range', other: 'Other repository'}
     : {partial: '部分：只檢查了已載入的關係圖；跨儲存庫選取提前結束，而且有一份清單檔無法讀取。', none: '這次擷取沒有列出。可能還有其他。', omitted: '還有未列入的。', recorded: '這次擷取沒有記錄', contract: '契約版本', reference: '參考版本', service: '服務版本', range: '允許範圍', other: '其他儲存庫'};
 
-  test('P2 legend names the other repository', async ({page}) => {
+  test('legend names the other repository', async ({page}) => {
     await mount(page, {locale});
     await expect(page.locator('[data-dep-legend]')).toContainText(locale === 'en' ? 'Other repository' : copy.other);
   });
 
-  test('P3 to P6: title, partial sentence, tests and kind labels', async ({page}) => {
+  test('title, partial sentence, tests and kind labels', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     await mount(page, {locale, projection: doc => ({...doc, edges: doc.edges.map(edge => edge.dependency_key === ids.keys.smtp ? {...edge, version: '2'} : edge)})});
     await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.contract}"]`).click();
@@ -624,14 +624,14 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(`dependency clarity
     await expect(panel.locator('[data-dep-tests-note=omitted]')).toHaveText(copy.omitted);
   });
 
-  test('P5: a complete capture with no matching hint says none were recorded', async ({page}) => {
+  test('a complete capture with no matching hint says none were recorded', async ({page}) => {
     await mount(page, {locale, projection: doc => ({...doc, omitted_hints: 0, projection_omitted_collections: []})});
     await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.contract}"]`).click();
     await expect(page.locator('[data-dep-tests-note=none]')).toHaveText(copy.recorded);
     await expect(page.locator('[data-dep-tests]')).not.toContainText(copy.none);
   });
 
-  test('P6: the narrow list labels a bare contract version and the same peer', async ({page}) => {
+  test('the narrow list labels a bare contract version and the same peer', async ({page}) => {
     await page.setViewportSize({width: 390, height: 844});
     await mount(page, {locale});
     const row = page.locator(`[data-dep-pick="${ids.api}|${ids.keys.contract}"]`);
@@ -695,7 +695,7 @@ if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as 
 }
 
 
-test('BLOCKER-5: distinct declarations sharing a captured relation count and render', async ({page}) => {
+test('distinct declarations sharing a captured relation count and render', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page, {projection: doc => ({...doc, declared: [...doc.declared, {...doc.declared[0],
     declaration_id: doc.declared[0].declaration_id.slice(0, -1) + '2', dependency_key: ids.keys.httpx,
@@ -708,7 +708,7 @@ test('BLOCKER-5: distinct declarations sharing a captured relation count and ren
   await expect(page.locator(`[data-dep-dependency-row="${ids.keys.httpx}"]`)).toHaveCount(2);
 });
 
-test('BLOCKER-7: late impact cannot revive withdrawn data', async ({page}) => {
+test('late impact cannot revive withdrawn data', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   let release: (() => void) | undefined;
   const harness = await mount(page, {manage: true, impact: doc => new Promise(resolve => {release = () => resolve(doc);})});
@@ -727,7 +727,7 @@ test('BLOCKER-7: late impact cannot revive withdrawn data', async ({page}) => {
   expect(harness.posts).toEqual([]);
 });
 
-for (const width of [1440, 1000, 390]) test(`VP-1: bounded relation form uses responsive columns at ${width}`, async ({page}) => {
+for (const width of [1440, 1000, 390]) test(`bounded relation form uses responsive columns at ${width}`, async ({page}) => {
   await page.setViewportSize({width, height: 900});
   await mount(page, {manage: true});
   await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();

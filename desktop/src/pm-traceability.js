@@ -104,8 +104,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   }
   function markSelection() {
     for (const row of tables.querySelectorAll('[data-row-key]')) {
-      row.setAttribute('aria-selected', String(row.dataset.rowKey === selected));
-      if (row.dataset.rowKey === currentRequirement) row.setAttribute('aria-current', 'true'); else row.removeAttribute('aria-current');
+      if (row.dataset.rowKey === selected || row.dataset.rowKey === currentRequirement) row.setAttribute('aria-current', 'true'); else row.removeAttribute('aria-current');
     }
     for (const node of tables.querySelectorAll('[data-rtm-select]')) node.setAttribute('aria-pressed', String(node.dataset.rtmSelect === selected));
   }
@@ -137,8 +136,8 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       const key = group.value === 'milestone' ? milestoneFor(req).map(row => row.title).join(' · ') : group.value === 'phase' ? t('wv_phase_unknown') : '';
       if (!groups.has(key)) groups.set(key, []); groups.get(key).push(req);
     }
-    const tableFor = requirements => {
-      const table = dataTable({rows: requirements.map(req => ({...req, title: req.text})), rowKey: 'id', selected, expanded,
+    const tableFor = (requirements, label) => {
+      const table = dataTable({label, rows: requirements.map(req => ({...req, title: req.text})), rowKey: 'id', selected, expanded,
         onToggle: (id, open) => {if (open) expanded.add(id); else expanded.delete(id); preference.expanded = [...expanded];},
         onSelect: (id, row) => {tables.querySelector(`[data-row-key="${CSS.escape(id)}"]`)?.focus(); void select(id);},
         expandable: req => h('div', {class: 'pm-requirement-expanded'}, h('h2', {}, t('wv_criteria')),
@@ -173,9 +172,10 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     tables.replaceChildren();
     for (const [label, rows] of [...groups].sort(([a], [b]) => a ? b ? 0 : -1 : b ? 1 : 0)) {
       const ids = milestoneFor(rows[0]).map(row => row.milestone_id).sort().join(',');
+      const groupTitle = label || t('wv_unassigned', {n: rows.length});
       if (group.value !== 'none') tables.append(h('h2', {class: 'pm-requirement-group', tabindex: -1,
-        'data-rtm-group': group.value + ':' + (group.value === 'milestone' ? ids : label), 'data-rtm-milestones': ids}, label || t('wv_unassigned', {n: rows.length})));
-      tables.append(tableFor(rows));
+        'data-rtm-group': group.value + ':' + (group.value === 'milestone' ? ids : label), 'data-rtm-milestones': ids}, groupTitle));
+      tables.append(tableFor(rows, group.value === 'none' ? t('ui_requirements') : groupTitle));
     }
     const unassigned = cards.filter(card => !requirements.some(req => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id)))
       .filter(card => matches(null, [card]));
@@ -268,7 +268,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       if (heading) {heading.tabIndex = -1; heading.focus(); heading.scrollIntoView({block: 'nearest'});}
       return;
     }
-    currentMilestone = null;
+    currentRequirement = null; currentMilestone = null;
     const card = cards.find(row => row.work_item_id === id), requirement = plan?.document?.requirements?.find(row => row.id === id);
     if (!card && !requirement) {const withdrawn = selected === id; selected = null; preference.selected = null; currentRequirement = null; closeRetaining(); markSelection(); status.textContent = t('wv_not_in_plan'); if (withdrawn) {writeSelection(null); viewHeading()?.focus();} return;}
     if (selected !== id || !retain || requirement) historyPanel.withdraw(); else historyPanel.suspend();

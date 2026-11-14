@@ -103,7 +103,7 @@ export const pmMeetingStrings = {
     pm_meeting_name:'Meeting title', pm_meeting_kind:'Discussion type', pm_meeting_started_help:'Review and Retrospective require a Sprint that has actually started.',
     pm_meeting_create:'Create meeting draft', pm_meeting_new:'New discussion', pm_meeting_partial:'The source list is incomplete. Narrow the workspace or retry before creating a record.',
     pm_meeting_history:'History', pm_meeting_history_notes:'Discussion notes', pm_meeting_history_follow_ups:'Follow-up results',
-    pm_meeting_history_contexts:'Context revisions', pm_meeting_history_drafts:'Draft revisions', pm_meeting_more:'Load more'
+    pm_meeting_history_contexts:'Context revisions', pm_meeting_history_drafts:'Draft revisions', pm_meeting_more:'{kind}: load more'
   },
   'zh-TW': {
     ...pmPanelStrings['zh-TW'],

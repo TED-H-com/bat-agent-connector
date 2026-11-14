@@ -1,6 +1,6 @@
 """Serve the real Dashboard/API with synthetic GitHub, BAT and runtime evidence.
 
-Run from the repository root: uv run python tests/manual/delivery_dashboard_fixture.py.
+Run from the repository root: BATC_BROWSER_FIXTURE=/path/to/fixture.json uv run python tests/manual/delivery_dashboard_fixture.py.
 The separate loopback control listener belongs only to this browser fixture.
 """
 
@@ -8,6 +8,8 @@ import asyncio
 import contextlib
 import json
 import os
+import shutil
+import signal
 import sys
 import tempfile
 import time
@@ -30,7 +32,12 @@ from tests.test_deployments import deployed, source_on_main
 
 
 async def main():
-    folder = Path(tempfile.mkdtemp(prefix="delivery-card-"))
+    fixture_env = os.environ.get("BATC_BROWSER_FIXTURE", "").strip()
+    if not fixture_env:
+        raise SystemExit("BATC_BROWSER_FIXTURE must be set to the fixture JSON file path.")
+    fixture_path = Path(fixture_env).resolve()
+    fixture_path.parent.mkdir(parents=True, exist_ok=True)
+    folder = Path(tempfile.mkdtemp(prefix="delivery-card-", dir=fixture_path.parent))
     os.environ.update(
         FAKE_GH_TOKEN=GH_TOKEN,
         BATC_TEST_TOKEN=BAT_TOKEN,
@@ -254,10 +261,15 @@ async def main():
         "viewer": viewer,
         "folder": str(folder),
     }
-    Path(os.environ.get("BATC_BROWSER_FIXTURE", "/tmp/delivery-card-fixture.json")).write_text(json.dumps(info))
+    fixture_path.write_text(json.dumps(info))
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        with contextlib.suppress(NotImplementedError):
+            loop.add_signal_handler(sig, stop.set)
     print("fixture ready", flush=True)
     try:
-        await asyncio.Event().wait()
+        await stop.wait()
     finally:
         worker.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -268,6 +280,8 @@ async def main():
         await mock.stop()
         gh.stop()
         d.journal.close()
+        fixture_path.unlink(missing_ok=True)
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 if __name__ == "__main__":

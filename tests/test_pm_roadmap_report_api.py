@@ -68,9 +68,9 @@ async def test_all_bytes_default_selectors_capability_and_no_effects(served, mon
         assert await d.call_api(READ, fields.copy(), OWNER) == first
         assert unpack(await server.call_tool(READ, fields)) == first
         caps = (await http(port, 'GET', '/api/v1/capabilities', tok=auth))[1]['features']['pm_workspaces']
-        assert caps['roadmap_report'] == pm_roadmap_reports.capabilities()
-        assert 'roadmap_report_materialization' not in caps
-        assert not caps['roadmap_report']['materialization']
+        assert caps['roadmap_report'] == {**pm_roadmap_reports.capabilities(), 'materialization': True}
+        assert caps['roadmap_report_materialization']['action'] == 'pm.roadmap.report.materialize'
+        assert caps['roadmap_report']['materialization']
         assert d.ops.db.total_changes == before
         await anchor(d, workspace['workspace_id'])
         assert (await http(port, 'GET', path, tok=auth))[1] == first

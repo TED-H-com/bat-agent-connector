@@ -5,10 +5,10 @@ import time
 
 import pytest
 
+from bat_agent_connector import pm_report_read_work, pm_source_lineage
 from bat_agent_connector import pm_roadmap_report_layout as l
 from bat_agent_connector import pm_roadmap_report_sources as s
 from bat_agent_connector import pm_roadmap_reports as r
-from bat_agent_connector import pm_source_lineage
 from bat_agent_connector.operations import OperationError
 from tests.test_pm_evidence import capture
 from tests.test_pm_roadmap import mapped, revision
@@ -24,8 +24,8 @@ def exact_text_bytes(n, tail="漢🫨"):
     return "x" * (n - len(tail.encode())) + tail
 
 
-def test_exact_authorization_budgets():
-    c = s._Closure(None, None, None)
+def test_exact_authorization_budgets(ops):
+    c = s._Closure(ops, None, None)
     for _ in range(2000):
         c.charge()
     assert c.records == 2000
@@ -33,15 +33,29 @@ def test_exact_authorization_budgets():
         c.charge()
     assert e.value.status == 404
     for tail in ("漢", "🫨", "漢🫨"):
-        c = s._Closure(None, None, None)
+        c = s._Closure(ops, None, None)
         value = exact_text_bytes(16_000_000 - 2, tail)
         c.charge(value)
         assert c.bytes == 16_000_000
         with pytest.raises(OperationError, match="PM_REPORT_SOURCE_UNAVAILABLE"):
             c.charge("")
-        c = s._Closure(None, None, None)
+        c = s._Closure(ops, None, None)
         with pytest.raises(OperationError, match="PM_REPORT_SOURCE_UNAVAILABLE"):
             c.charge(value + "x")
+    with pm_report_read_work.scope(ops.db) as work:
+        c = s._Closure(ops, None, None)
+        for value in ("plain", "漢", "🫨"):
+            c.charge(value)
+        assert work.records == c.records == 3
+        assert work.bytes == c.bytes
+    with pm_report_read_work.scope(ops.db) as work:
+        c = s._Closure(ops, None, None)
+        for _ in range(2000):
+            c.charge()
+        with pytest.raises(OperationError, match="PM_REPORT_SOURCE_UNAVAILABLE"):
+            c.charge()
+        assert work.records == c.records == 2001
+        assert work.bytes == c.bytes == 0
     print("auth records 2000 allowed / 2001 concealed; actual bytes 16000000 allowed / 16000001 concealed")
 
 

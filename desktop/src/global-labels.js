@@ -119,6 +119,7 @@ const ACTIONS = {
   'pm.run.prepare': 'action_pm_run_prepare',
   'pm.snapshot.create': 'action_pm_snapshot_create',
   'pm.spec.materialize': 'action_pm_spec_materialize',
+  'pm.roadmap.report.materialize': 'action_pm_roadmap_report_materialize',
   'pm.sprint.cancel': 'action_pm_sprint_cancel',
   'pm.sprint.close': 'action_pm_sprint_close',
   'pm.sprint.create': 'action_pm_sprint_create',

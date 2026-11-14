@@ -114,7 +114,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     if (!rows.length) list.replaceChildren(emptyState({title: t(before === null ? 'operations_empty' : 'operations_empty_page')}));
     else if (!shown.length) list.replaceChildren(emptyState({title: t('global_no_match')}));
     else list.replaceChildren(dataTable({
-      columns, rows: shown, rowKey: 'operation_id', selected: memory.selected,
+      label: t('nav_operations'), columns, rows: shown, rowKey: 'operation_id', selected: memory.selected,
       compactRow: op => h('div', {class:'global-op-compact'},
         h('div', {class:'global-op-compact-title'}, h('strong', {}, actionLabel(op.action)), statusPill(operationStatusKey(op.status))),
         h('div', {class:'ui-meta'}, operationTargetText(op), op.actor ? ' · ' + op.actor : null, op.created_at ? [' · ', timeStamp(op.created_at)] : null)),

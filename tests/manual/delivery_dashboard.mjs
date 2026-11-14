@@ -5,8 +5,13 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+const fixturePath = process.env.BATC_BROWSER_FIXTURE?.trim();
+if (!fixturePath) {
+  console.error('BATC_BROWSER_FIXTURE must be set to the fixture JSON file path.');
+  process.exit(1);
+}
 const { chromium } = createRequire(import.meta.url)(process.env.BATC_PLAYWRIGHT_MODULE || 'playwright');
-const fixture = JSON.parse(await fs.readFile(process.env.BATC_BROWSER_FIXTURE || '/tmp/delivery-card-fixture.json', 'utf8'));
+const fixture = JSON.parse(await fs.readFile(fixturePath, 'utf8'));
 const output = process.env.BATC_BROWSER_OUTPUT || '/tmp/delivery-card-shots';
 await fs.mkdir(output, { recursive: true });
 const browser = await chromium.launch({

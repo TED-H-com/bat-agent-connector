@@ -178,6 +178,7 @@ for (const {locale, width, dark} of layouts) {
     await expect(page.locator('h1')).toContainText(fixture.copy.sessionReview);
     await page.goto('/dashboard/#/operations');
     await expect(page.getByRole('heading', {level: 1, name: words.operations})).toBeVisible();
+    await expect(page.getByRole('table', {name: words.operations, exact: true})).toBeVisible();
     const search = page.getByRole('searchbox', {name: locale === 'zh-TW' ? '搜尋操作' : 'Search operations'});
     await search.fill('checkpoint');
     await expect(page.locator(`[data-row-key="${UNCERTAIN_OPERATION}"]`)).toBeVisible();

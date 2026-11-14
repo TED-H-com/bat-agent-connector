@@ -2,6 +2,8 @@
 import asyncio
 import contextvars
 import sqlite3
+from contextlib import ExitStack
+from dataclasses import replace
 
 import pytest
 
@@ -295,3 +297,142 @@ def test_alternating_principals_cannot_reset_traversal_bound(db, monkeypatch):
     with pytest.raises(OperationError, match='fresh snapshot'):
         cycle(0)
     assert len(calls) == 5 and not db.in_transaction
+
+
+def test_collection_records_share_completed_proof_not_traversal_budget(db, monkeypatch):
+    monkeypatch.setattr(reads, 'MAX_NODES', 2)
+    calls = []
+    with reads.scope(db, OWNER):
+        for index in range(4):
+            with reads.record(db, OWNER) as state:
+                assert state['budget']['nodes'] == 0
+                assert decision(db, calls=calls)
+                assert reads.check(db, OWNER, 'original', str(index), lambda: True)
+        assert calls == [OWNER.credential_id]
+    assert not db.in_transaction
+
+
+def test_record_boundary_cannot_reset_live_recursion_or_cross_principal_budget(db, monkeypatch):
+    monkeypatch.setattr(reads, 'MAX_NODES', 1)
+    other = Principal('another-reader', OWNER.scopes)
+    with reads.scope(db, OWNER):
+        def nested():
+            with reads.record(db, OWNER) as state:
+                assert state['budget']['nodes'] == 1
+                assert not reads.check(db, OWNER, 'original', 'outer', lambda: True)
+                with reads.record(db, other) as child:
+                    assert child['budget'] is state['budget']
+                    assert not reads.check(db, other, 'original', 'inner', lambda: True)
+            return False
+        with reads.record(db, OWNER):
+            assert not reads.check(db, OWNER, 'original', 'outer', nested)
+        # The previous record's traversal-dependent refusal is not a page decision.
+        with reads.record(db, OWNER) as state:
+            assert not state['active'] and not state['refused']
+            assert reads.check(db, OWNER, 'original', 'outer', lambda: True)
+
+
+def test_record_boundary_keeps_live_guard_and_rejects_changed_page(db):
+    with pytest.raises(OperationError, match='PM_SOURCE_READ_CHANGED'), reads.scope(db, OWNER) as page:
+        with pm_read_cache.guarded(), reads.record(db, OWNER) as record:
+            assert record is page
+        db.execute('UPDATE original_source SET visible=0')
+        with pytest.raises(OperationError, match='PM_SOURCE_READ_CHANGED'):
+            with reads.record(db, OWNER):
+                pytest.fail('Changed page must not start a new traversal')
+
+
+def test_completed_proofs_save_budget_but_never_replace_source_authorization(db):
+    db.execute("INSERT INTO original_source VALUES('hidden',0)")
+    denied = Principal(OWNER.actor, OWNER.scopes, credential_id='denied-credential')
+    def leaf(principal, index):
+        return reads.check(db, principal, 'original_root', str(index),
+                           lambda: principal.credential_id == OWNER.credential_id)
+    def big(principal):
+        return reads.check(db, principal, 'original_root', 'big',
+                           lambda: all(leaf(principal, i) for i in range(reads.MAX_NODES)))
+    assert not big(OWNER)  # Root plus 2,048 leaves exceeds the unchanged cold guard.
+    with reads.scope(db, OWNER):
+        with reads.record(db, OWNER):
+            assert leaf(OWNER, 0)
+        with reads.record(db, OWNER) as state:
+            assert big(OWNER)
+            assert state['budget']['nodes'] == reads.MAX_NODES
+        with reads.record(db, denied):
+            assert not big(denied)  # No completed grant crosses credentials.
+        with reads.record(db, OWNER):
+            assert not reads.check(db, OWNER, 'original_root', 'hidden-root', lambda:
+                big(OWNER) and reads.check(db, OWNER, 'original_root', 'hidden', lambda:
+                    bool(db.execute("SELECT visible FROM original_source WHERE id='hidden'").fetchone()[0])))
+
+
+@pytest.mark.parametrize('closed_frames', [0, 1, 3])
+def test_copied_context_preserves_live_ancestor_budget_then_becomes_independent(db, closed_frames):
+    other = replace(OWNER, credential_id='copied-reader')
+    saved = []
+    with reads.scope(db, OWNER) as outer:
+        def nested():
+            for index in range(reads.MAX_NODES - 1):
+                assert reads.check(db, OWNER, 'leaf', str(index), lambda: True)
+            assert outer['budget']['nodes'] == reads.MAX_NODES
+
+            def child():
+                with reads.record(db, other) as row:
+                    assert row['budget'] is outer['budget']
+                    assert row['inherited_live']
+                    assert not reads.check(db, other, 'new-proof', 'new', lambda: True)
+
+            with ExitStack() as stack:
+                for index in range(max(1, closed_frames)):
+                    stack.enter_context(reads.scope(db, replace(other, credential_id=f'middle-{index}')))
+                copied = contextvars.copy_context()
+                if not closed_frames:
+                    copied.run(child)  # Ordinary open-middle control.
+            if closed_frames:
+                copied.run(child)
+            saved.append(copied)
+            return True
+        assert reads.check(db, OWNER, 'root', 'outer', nested)
+    assert not outer['open']
+
+    def independent():
+        with reads.record(db, other) as row:
+            assert not row['inherited_live']
+            assert row['budget'] is not outer['budget'] and row['budget']['nodes'] == 0
+            assert reads.check(db, other, 'new-proof', 'new', lambda: True)
+    saved[0].run(independent)  # Exactly the same copy after the ancestor closes.
+
+
+@pytest.mark.parametrize('switch', ['actor', 'credential'])
+def test_copied_closed_scope_shares_live_budget_without_principal_grants(db, switch):
+    other = replace(OWNER, **({'actor': 'other-reader'} if switch == 'actor' else {'credential_id': 'other-key'}))
+    with reads.scope(db, OWNER) as outer:
+        def nested():
+            assert reads.check(db, OWNER, 'permission', 'source', lambda: True)
+            outer['visibility']['sentinel'] = True
+            with reads.scope(db, replace(OWNER, credential_id='closed-middle')):
+                copied = contextvars.copy_context()
+            def child():
+                with reads.record(db, other) as row:
+                    assert row['budget'] is outer['budget'] and row['inherited_live']
+                    assert row['memo'] is not outer['memo'] and ('permission', 'source') not in row['memo']
+                    assert row['visibility'] is not outer['visibility'] and not row['visibility']
+                    assert not reads.check(db, other, 'permission', 'source', lambda: False)
+            copied.run(child)
+            assert reads.check(db, OWNER, 'permission', 'source', lambda: False)
+            return True
+        assert reads.check(db, OWNER, 'root', 'outer', nested)
+
+
+def test_nested_idle_records_each_allocate_an_independent_budget(db):
+    charged = []
+    with reads.scope(db, OWNER), reads.record(db, OWNER) as outer:
+        for index in range(2):
+            who = replace(OWNER, credential_id=f'independent-nested-{index}')
+            with reads.scope(db, who), reads.record(db, who) as inner:
+                assert inner['budget'] is not outer['budget']
+                for node in range(reads.MAX_NODES):
+                    assert reads.check(db, who, 'bound-probe', str(node), lambda: True)
+                charged.append(inner['budget']['nodes'])
+        assert outer['budget']['nodes'] == 0
+    assert sum(charged) == 2 * reads.MAX_NODES

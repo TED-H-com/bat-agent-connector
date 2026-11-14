@@ -192,6 +192,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.work_batch.'):
         from .pm_work_batches import operation_visible as batch_visible
         return batch_visible(db, principal, op)
+    if op['action'] == 'pm.roadmap.report.materialize':
+        from .pm_roadmap_report_materialization import source_visible
+        return source_visible(db, principal, op)
     if op['action'] == 'pm.spec.materialize':
         from .pm_spec_materialization import operation_visible as spec_visible
         return spec_visible(db, principal, op)

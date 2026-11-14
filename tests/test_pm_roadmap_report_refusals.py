@@ -1,4 +1,4 @@
-"""Exact R2 product triggers, adapted only from characterization to required refusals."""
+"""Roadmap report reference shape, milestone proof, and empty-baseline adoption regressions."""
 import copy
 
 import pytest
@@ -12,7 +12,7 @@ from tests.test_pm_plans import OWNER, planning
 from tests.test_pm_roadmap import revision
 from tests.test_pm_roadmap_report_api import daemon as daemon_fixture
 from tests.test_pm_roadmap_report_api import served as served_fixture
-from tests.test_pm_roadmap_report_review import document, fault, raw_http
+from tests.test_pm_roadmap_report_faults import document, fault, raw_http
 from tests.test_pm_roadmap_report_sources import READER, selected
 from tests.test_pm_roadmap_report_sources import ops as ops_fixture
 from tests.test_pm_snapshots import draft, snapshot
@@ -65,7 +65,6 @@ async def test_maintenance_reference_scalar_gap_http(served, monkeypatch):
                 out = await raw_http(port, path, auth)
                 expected = generic
                 assert out == expected
-                print('maintenance id', type(bad).__name__, condition, out)
 
 async def test_proof_shapes_and_legacy(ops):
     chosen = await selected(ops)
@@ -75,7 +74,6 @@ async def test_proof_shapes_and_legacy(ops):
         c[0]['document']['milestones'] = bad
         c[0]['document_digest'] = s.digest(c[0]['document'])
         out = result(lambda: s._verify(c))
-        print('observation milestone shape', repr(bad), out)
         assert out == ('domain', 409, 'PM_REPORT_SOURCE_CHANGED')
     c = copy.deepcopy(base)
     del c[0]['document']['milestones'][0]['quality_context']
@@ -84,7 +82,6 @@ async def test_proof_shapes_and_legacy(ops):
     projected = s.project(c)
     assert 'quality' not in projected['observation']['document']['milestones'][0]['actual']
     assert projected['observation']['document']['milestones'][0]['actual']['actual_finish_date'] is None
-    print('legacy missing quality context remains unassessed')
 
 async def test_exact_accepted_adoption_in_empty_baseline(ops):
     chosen = await selected(ops)
@@ -105,7 +102,6 @@ async def test_exact_accepted_adoption_in_empty_baseline(ops):
         for fmt in r.FORMATS:
             assert r.render_fixed(omitted, locale=locale, format=fmt)['output_digest'] != r.render_fixed(
                 after, locale=locale, format=fmt)['output_digest']
-    print('Empty milestone baseline retains its exact accepted adoption; omission changes all six output digests')
 
 async def test_relationship_scalar_mismatches_and_malformed_http(ops, served):
     chosen = await selected(ops)
@@ -137,8 +133,7 @@ async def test_relationship_scalar_mismatches_and_malformed_http(ops, served):
             value['milestones'] = bad
             document(d.ops, 'pm_roadmap_revisions', 'revision_id', obs['revision_id'], value)
             d.ops.db.execute('UPDATE pm_roadmap_revisions SET document_digest=? WHERE revision_id=?', (s.digest(value), obs['revision_id']))
-            status, body = await raw_http(port, path, token(d, OWNER.actor, 'observe'))
-            print('malformed authorized milestones', repr(bad), status, body)
+            status, _ = await raw_http(port, path, token(d, OWNER.actor, 'observe'))
             assert status == 409
 
 async def test_evidence_fact_reference_shape_gap(served):
@@ -165,5 +160,4 @@ async def test_evidence_fact_reference_shape_gap(served):
                 damaged['facts'][field] = bad
                 document(d.ops, 'pm_evidence', 'evidence_id', evidence['evidence_id'], damaged)
                 status, body = await raw_http(port, path, token(d, OWNER.actor, 'observe'))
-                print('evidence authority scalar', field, type(bad).__name__, status, body)
                 assert status == 404 and b'PM_REPORT_SOURCE_UNAVAILABLE' in body

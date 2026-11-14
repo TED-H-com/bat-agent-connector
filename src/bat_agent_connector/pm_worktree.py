@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import re
 import shlex
+import tokenize
 import uuid
 import zlib
+from functools import lru_cache
 from importlib import resources
 
 from . import checkpoints, controller_authority, native_carrier, pm_workspace, repository_sync
@@ -115,16 +118,73 @@ def _host_source() -> str:
     return shared + "\n" + drafts + "\n" + paths + "\n" + (resources.files(__package__) / "pm_revision_host.py").read_text()
 
 
-async def _host_call(ctx, plan, phase, *, check, snapshot=None, revision=None):
-    request = {**plan, "phase": phase, "active_operation_id": ctx.operation_id, **{key: plan["config"][key] for key in ("managed_root", "remote_url")}}
+@lru_cache(maxsize=1)
+def _normalize_host_source(source: str) -> str:
+    """Shrink only indentation and comment-only lines, preserving literal bytes/lines.
+
+    Python 3.10 tokenizes an f-string as one STRING; newer versions expose its
+    parts. Protect the entire outer f-string in either case. Irregular block
+    indentation is left alone rather than introducing ambiguous tab/space levels.
+    Cache only immutable code, keyed by the exact assembled source; no request
+    or authority enters this one-entry cache. Source edits cannot reuse old code.
+    """
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, SyntaxError):
+        # Tokenizer versions disagree on when invalid indentation is rejected.
+        # Preserve unprocessable input exactly; the host compiler still rejects it.
+        return source
+    protected = set()
+    comments = set()
+    fstrings = []
+    regular = True
+    for token in tokens:
+        name = tokenize.tok_name[token.type]
+        if name == "FSTRING_START":
+            fstrings.append(token.start[0])
+        elif name == "FSTRING_END":
+            start = fstrings.pop()
+            protected.update(range(start + 1, token.end[0] + 1))
+        elif token.type == tokenize.STRING:
+            protected.update(range(token.start[0] + 1, token.end[0] + 1))
+        elif token.type == tokenize.COMMENT and not fstrings:
+            if not token.line[:token.start[1]].strip(" \t\f"):
+                comments.add(token.start[0])
+        elif token.type == tokenize.INDENT and not fstrings:
+            regular = regular and not token.string.strip(" ") and len(token.string) % 4 == 0
+    lines = io.StringIO(source).readlines()
+    for number, line in enumerate(lines, 1):
+        if number in protected:
+            continue
+        if number in comments:
+            lines[number - 1] = line[len(line.rstrip("\r\n")):]
+        elif regular and line.strip():
+            prefix = line[:len(line) - len(line.lstrip(" \t\f"))]
+            if not prefix.strip(" "):
+                count = len(prefix)
+                lines[number - 1] = "\t" * (count // 4) + " " * (count % 4) + line[count:]
+    return "".join(lines)
+
+
+def host_script(operation_id, plan, phase, *, snapshot=None, revision=None):
+    """The exact bounded wire encoding, also used by local report preflight."""
+    request = {**plan, "phase": phase, "active_operation_id": operation_id, **{key: plan["config"][key] for key in ("managed_root", "remote_url")}}
     if snapshot is not None:
         request["snapshot"] = snapshot
     if revision is not None:
         request["revision"] = revision
     arg = base64.b64encode(zlib.compress(json.dumps(request).encode(), level=9)).decode()
-    script = "python3 -c " + shlex.quote(_host_source()) + " " + shlex.quote(arg)
+    # One unconditional helper understands the entire plan/spec/report chain.
+    # Keep code readable on the host without consuming legacy intent capacity.
+    source = _normalize_host_source(_host_source())
+    script = "python3 -c " + shlex.quote(source) + " " + shlex.quote(arg)
     if len(script.encode()) > 120_000:
         raise OperationError("PM_SNAPSHOT_TOO_LARGE", "The bounded snapshot exceeds the host transport limit", 422)
+    return script
+
+
+async def _host_call(ctx, plan, phase, *, check, snapshot=None, revision=None):
+    script = host_script(ctx.operation_id, plan, phase, snapshot=snapshot, revision=revision)
     async def locked_check():
         await _guard(ctx, plan, check)
         if phase == "fetch":

@@ -14,6 +14,7 @@ from . import (
     pm_evidence,
     pm_plans,
     pm_read_cache,
+    pm_report_read_work,
     pm_roadmap,
     pm_roadmap_quality,
     pm_snapshots,
@@ -72,11 +73,15 @@ class _Closure:
         self.records, self.bytes = 0, 0
 
     def charge(self, value=None):
+        before = self.bytes
         self.records += 1
-        if value is not None:
-            self.bytes += len(canonical(value).encode('utf-8'))
-        if self.records > MAX_AUTH_RECORDS or self.bytes > MAX_AUTH_BYTES:
-            raise unavailable()
+        try:
+            if value is not None:
+                self.bytes += len(canonical(value).encode('utf-8'))
+            if self.records > MAX_AUTH_RECORDS or self.bytes > MAX_AUTH_BYTES:
+                raise unavailable()
+        finally:
+            pm_report_read_work.charge(self.ops.db, 1, self.bytes - before)
 
     def operations(self, ids):
         for identity in sorted({reference(identity) for identity in ids}):
@@ -126,6 +131,7 @@ class _Closure:
         return adoptions[value['decision_id']]
 
     def collect(self, identity):
+        pm_report_read_work.observation(self.ops.db, self.principal, self.wid, identity)
         observation = self.roadmap(identity)
         doc = observation['document']
         shapes.require(shapes.AUTHORITY['observation'], doc, authority=True)
