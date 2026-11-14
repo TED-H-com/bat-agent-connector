@@ -6,21 +6,20 @@ capability detection and connection negotiation only. Python Connector / Task
 Service remains the authority for policy, operations and scheduling. No BAC
 feature, API, MCP, RPC, CLI, Dashboard field or schema is added.
 
-The wire follows the November 13, 2026 handshake decision, which narrows the
-Stage A host specification (§1.2 and §9): authentication advertises only a
-protocol/minor pair; identity, build, features and limits arrive in hello.
-The host implementation is maintained separately in
+Authentication advertises only a protocol/minor pair; identity, build, features
+and limits arrive in hello. The host implementation is maintained separately in
 `TED-H-com/better-agent-terminal`. The mock and portable examples here specify
 that wire; they are not evidence about a real host build or its acceptance.
-The specification's transport reference is BAT
-`81655b483ba6f2f6ce1f2158870613d8ec0215d4`,
-`src-tauri/src/remote_server.rs` (v2 auth and invoke dispatch). This is an
-indirect source reference from that specification, not a claim that the baseline
-already implements BAC. The Connector transport was inspected at `30b823db`.
-The lead subsequently compared the validation order, reply table and full limit
-map below against the host implementation and supplied the round 1b corrections.
-This worker has not inspected or run that host branch. The mock proves nothing
-about a real host; the comparison is specification provenance, not live acceptance.
+The BAT transport reference is `81655b483ba6f2f6ce1f2158870613d8ec0215d4`,
+`src-tauri/src/remote_server.rs` (v2 auth and invoke dispatch). This reference
+identifies the transport, not a claim that the baseline already implements BAC.
+The Connector transport was inspected at `30b823db`.
+The validation order, reply table and limit map below were compared with the host
+implementation on the main branch of `TED-H-com/better-agent-terminal`
+(`src-tauri/crates/bac-host-contracts/CONTRACT.md`). Where this page and that contract
+disagree, the host contract is the wire authority and this page is corrected. No test in
+this repository runs against that host: the mock proves nothing about a real host, and the
+comparison is a comparison of texts, not live acceptance.
 
 ## Advertisement and request
 
@@ -192,7 +191,7 @@ channel is authorized by prefix. No feature channel is added to an allow-list.
 The host's pre-hello `NOT_OPTED_IN`, post-hello `UNSUPPORTED_FEATURE` and
 `UNKNOWN_CHANNEL` refusals are exercised solely through raw mock-wire tests.
 
-## Evidence and next-slice questions
+## Tests and open questions
 
 `tests/fixtures/bac/hello-cases.json` contains language-independent hello examples,
 including validation precedence and connection situations. It documents whole
@@ -205,8 +204,9 @@ One conditional case asserts the exact `UNSUPPORTED_FEATURE` reply only when
 both with features off and with raised limits/features on (without implementing
 the features); `tests/test_bac.py` covers client negotiation, failures,
 identity memory, logs, isolation and unchanged guarded paths. Existing legacy
-tests retain their original expectations. A separate fixed-script comparison
-against an archived `origin/main` captures exact client frames as worker evidence.
+tests retain their original expectations. A fixed-script comparison of this change with the previous main branch (connect, ping,
+read, guarded write, reconnect and terminal append against the default mock) recorded
+identical client frames; its records are not part of the repository.
 None of this proves the separately implemented host behaves identically.
 
 Before the first feature uses the negotiated state, decide:
@@ -220,6 +220,6 @@ Before the first feature uses the negotiated state, decide:
 - How each exact feature channel binds existing scopes, grants, final-frame
   checks and durable operation reconciliation. Hello itself grants none of them.
 
-This is a P1 handshake increment only. P0–P4 completion, E00–E11, R0–R5,
-A01–A40 and open v1.2 lifecycle requirements retain their separate evidence and
-acceptance gates. No merge, installation, native build or live test is claimed.
+This is a P1 handshake increment only. The product roadmap and lifecycle
+requirements retain their separate acceptance gates. No installation, native
+build or live test is claimed.
