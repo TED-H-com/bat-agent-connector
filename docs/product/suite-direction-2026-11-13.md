@@ -1,8 +1,8 @@
 # 單一產品方向：BAT 相容分支＋內嵌 Dashboard
 
-日期：2026-11-13。來源：產品負責人當日的口頭決議與後續澄清。本頁記錄決議、相容規則、
+日期：2026-11-13。本頁記錄產品決策、相容規則、
 被取代與保留的既有決策，以及分期。**這是方向與規則，不是完成、安裝或實機驗收聲明。**
-分期內容在各期開工前仍須經設計審查；本頁列出的分期是 lead 依授權提出的順序。
+各期的設計仍須審查；實作順序見「分期」與「順序」。
 
 ## 決議
 
@@ -15,10 +15,9 @@
 3. **保留上游手機 app。** 上游 app 對我們的主機照常運作，不重做。本產品新增的功能在手機上
    以行動版網頁提供。
 4. **與上游保持相容，同時加入我們的功能**（規則見下節）。持續合併上游發行版。
-5. 暫定產品名稱為「Better Agent Terminal – Full Project Suite」（負責人提出，首次公開建置前
-   確認）。程式識別碼不沿用上游識別碼。macOS／Windows 簽章由負責人日後處理；
+5. 暫定產品名稱為「Better Agent Terminal – Full Project Suite」（首次公開建置前確認）。程式識別碼不沿用上游識別碼。macOS／Windows 簽章由負責人日後處理；
    既有桌面簽章與生命週期門檻不變。
-6. Repository 結構及與 v1.3 的先後順序授權 lead 判斷（見「結構」「順序」）。
+6. Repository 結構及與 v1.3 的先後順序見「結構」與「順序」。
 
 ## 相容規則
 
@@ -27,7 +26,8 @@
 **連線相容（上游 client 不受影響）**
 
 - 上游 `bat-remote/v2` 的 channel、event、payload、錯誤與限制，在所追蹤的上游版本上行為不變。
-- `serverVersion` 回報所追蹤的上游版本；本產品的版本與建置識別只出現在新增的 capability 內。
+- `serverVersion` 回報所追蹤的上游版本；auth 的 `bac` capability 僅宣告協定版本，
+  本產品的版本與建置識別由新增的 `bac:hello` 回覆提供。
 - 新功能只使用 `bac:*` channel 與驗證結果中一個新增的 `bac` capability。本產品的事件只送給
   明確啟用的 client。
 - 從未使用 `bac` 的 client 看到的行為須與上游相同：以同一份腳本 client 分別對上游
@@ -70,6 +70,9 @@
   判定相容。
 
 ## 分期
+
+主機合約：[Connector 握手合約](../design/host-contracts.md)記錄 P1 第一段的 capability
+偵測、hello、記憶中的身分及降級行為；此段不啟用任何主機功能，也不是 P1 完成或實機驗收。
 
 各期的驗收都分開回報 branch、merged、installed、live-tested；CI 不是實機驗收。
 

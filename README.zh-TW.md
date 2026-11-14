@@ -79,8 +79,6 @@ Connector 請依[驗證安裝器說明](docs/getting-started.zh-TW.md#2-安裝-c
 
 已登記的更新器在 `stable` 提供符合條件的較新穩定版，在 `preview` 提供符合條件的較新穩定版或預覽版；穩定通道不會提供本預覽版。後續開發包可從 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 取得，須核對成功的平台 job 與來源；Actions artifacts 可能到期。
 
-[Connector 自動更新](docs/connector-updates.md)適用於已核對的 Linux 使用者安裝。啟用後每小時檢查已發布版本，更新供下一次啟動使用；既有 MCP、central 與 BAT 程序繼續執行。
-
 | 入口 | 套件／本機能力 | 界線 |
 | --- | --- | --- |
 | Windows x64 | `desktop-Windows-unsigned`：NSIS、打包中央、系統匣、Credential Manager、Fleet | 未正式簽署的驗證包；Windows Fleet 負責連線及 BAT 啟動。 |
@@ -90,7 +88,13 @@ Connector 請依[驗證安裝器說明](docs/getting-started.zh-TW.md#2-安裝-c
 
 桌面包會準備相符 Python runtime、私人背景中央、資料與個人身分。
 
+[Connector 自動更新](docs/connector-updates.md)適用於已驗證的 Linux 使用者安裝。登記後，每小時排程會安裝符合條件的版本，供下次啟動使用；既有 MCP、central 與 BAT 程序繼續執行。
+
 新安裝先選擇「提供本機工作區」、「使用既有服務」或「兩者兼有」；既有安裝保留原連線與身分。使用本機 Connector 時，開啟**準備開始工作 → 1. 連線至 BAT**，核對連線資料，按**預覽連線**，再按**套用連線**。成功後按**查看工作階段**。儲存庫綁定與驗證命令預設收合，工作需要時再設定。
+
+Managed 工作的 `BATC_TASK_SETTINGS` 須保持私人，權限設為 0600。依專案配置
+`[task_service.base_branches]`，依 task 主機配置 `[verification.ssh_hosts]`（使用已配置的 base branch 時必填），
+並在 `[verification.commands]` 配置可信測試。
 
 **加入既有中央是明確選擇的進階路徑。** 連線失敗不會另外建立專案資料庫，關閉 Dashboard 視窗也不會停止中央工作。
 
@@ -152,7 +156,7 @@ Connector 對人工 session 與 worktree 保持唯讀。Unknown 資源必須有�
 | 使用產品 | [首次使用](docs/getting-started.zh-TW.md) · [Windows Fleet](docs/windows.zh-TW.md) |
 | 了解進度 | [進度報告](docs/product/implementation-status.md) · [PM 狀態](docs/product/pm-v1.2-status.md) · [10 月 17 日報告](docs/product/progress-2026-10-17.md) |
 | 接續開發 | [本輪交接](docs/handoff/2026-10-14-docs-ux-v2.md) · [已採用計畫](docs/product/pm-v1.2-plan.md) · [架構決策](docs/product/realignment-v2.md) |
-| 接入 Agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
+| 接入 Agent | [Agent skills](docs/agent-skills.md) · [Automation API](docs/automation-api.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
 | 查交付能力 | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |
 
 ```bash

@@ -6,6 +6,9 @@
   published branch head through HTTP, MCP and the desktop bridge. Preserve both
   identities and bilingual refusal reasons without creating Work or attributing
   the commit to the external CLI; continuation remains unavailable.
+- Keep existing BAT hosts working as before while checking the identity and
+  version of hosts that support the suite's new connection handshake. This
+  does not enable any new host actions.
 
 ### Fixed
 
