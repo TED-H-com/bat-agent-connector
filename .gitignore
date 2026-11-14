@@ -16,3 +16,15 @@ hosts.toml
 *.token
 *.enc.json
 .env
+
+# Desktop build outputs and local configuration
+desktop/**/node_modules/
+desktop/**/dist/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/**/playwright-report/
+desktop/**/test-results/
+desktop/**/*.local.json
+desktop/managed-runtime/*
+!desktop/managed-runtime/README.txt
+desktop/fleet-core/target/
