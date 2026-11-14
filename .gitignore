@@ -7,6 +7,8 @@ __pycache__/
 dist/
 desktop/dist-prototype/v1.3/
 desktop/dist-demo/
+/desktop/dist-suite/
+/desktop/dist-suite-harness/
 site/demo/
 site/prototype/
 build/

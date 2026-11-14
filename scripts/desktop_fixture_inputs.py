@@ -158,7 +158,11 @@ def command_inputs(root, tracked):
                 assert script in package, f'Unknown desktop npm script: {script}'
                 collect(package[script], root / 'desktop')
             if 'playwright test' in command:
-                found.update(path for path in tracked if path.startswith('desktop/tests/') and path.endswith('.spec.ts'))
+                if 'suite/playwright.config.ts' in command:
+                    found.update(path for path in tracked if path.startswith('desktop/suite/tests/')
+                                 and (path.endswith('.spec.ts') or path == 'desktop/suite/tests/suite-server.mjs'))
+                else:
+                    found.update(path for path in tracked if path.startswith('desktop/tests/') and path.endswith('.spec.ts'))
 
         steps = list(workflow_steps(root, job))
         for step, directory, source in steps:

@@ -40,7 +40,7 @@ def native_safe(path: str) -> bool:
     # test_ci_scope_native_guard.py guards this. Other fixture scripts/data stay out.
     # Dashboard assets use the separate Linux level; notices are Tauri resources.
     return (
-        path.startswith(("desktop/src/", "docs/"))
+        path.startswith(("desktop/src/", "desktop/suite/", "docs/"))
         or (path.startswith("desktop/tests/") and path.endswith(".ts"))
         or path in NATIVE_SAFE_DOCS
     )
