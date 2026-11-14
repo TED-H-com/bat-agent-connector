@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Dashboard data tables now have accessible names and mark the current row with `aria-current` for assistive technology.
+- CI now runs the managed browser check in English and Traditional Chinese.
 - Preview exact retained external context together with an independently verified
   published branch head through HTTP, MCP and the desktop bridge. Preserve both
   identities and bilingual refusal reasons without creating Work or attributing
