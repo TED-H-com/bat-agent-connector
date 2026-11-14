@@ -173,18 +173,37 @@ async def test_coordinator_tick_verifying(tmp_path, monkeypatch):
     )
 
     adapter = FakeAdapter()
+    verify_calls = []
+
+    async def mock_run_verification(task):
+        verify_calls.append(task["task_id"])
+        return {
+            "source": "observed_runner",
+            "candidate_commit": "c1",
+            "tree_hash": "t1",
+            "command": "test",
+            "exit_code": 0,
+            "log_ref": "log1",
+            "output_sha256": "sha1",
+        }
+
+    adapter.run_verification = mock_run_verification
     coordinator = TaskCoordinator(journal, adapter)
 
     import bat_agent_connector.task_control as task_control
 
     monkeypatch.setattr(task_control, "require_authority", lambda task: True)
 
-    async def mock_verify(task):
-        pass
-
-    coordinator._verify_and_review = mock_verify
-
-    await coordinator._tick("task_1")
+    result = await coordinator._tick("task_1")
+    assert verify_calls == ["task_1"]
+    assert result["state"] == "done"
+    assert result["verification_commit"] == "c1"
+    assert result["verification_tree"] == "t1"
+    assert result["result"] == "Trusted tests passed on the clean candidate"
+    assert result["delivered"] == 1
+    assert journal.get("task_1")["state"] == "done"
+    assert journal.observed_verification("task_1")["exit_code"] == 0
+    assert any(e["kind"] == "delivered" for e in journal.events("task_1"))
 
 
 @pytest.mark.asyncio

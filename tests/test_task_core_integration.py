@@ -1,8 +1,12 @@
 import asyncio
+import json
 
 import pytest
 
+from bat_agent_connector import controller_authority
+from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.config import Config
+from bat_agent_connector.operations import OpContext, OperationService, StepFailed
 from bat_agent_connector.task_core import TaskCoordinator
 from bat_agent_connector.task_journal import Journal
 
@@ -27,10 +31,11 @@ class FakeFleet:
 async def test_coordinator_integration(tmp_path):
     journal = Journal(tmp_path / "test.db")
     memory_db = journal.db
+    authority = controller_authority.binding(memory_db, Principal("operator", frozenset({"operate"})))
 
     # insert dummy task
     memory_db.execute(
-        "INSERT INTO tasks (task_id, idem_key, engine, recipe, payload_hash, project, host, workspace, original_words, acceptance, state, paused, control_version, submitted_at, updated_at, session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (task_id, idem_key, engine, recipe, payload_hash, project, host, workspace, original_words, acceptance, state, paused, control_version, submitted_at, updated_at, session_id, controller_authority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             "task_1",
             "k1",
@@ -40,7 +45,7 @@ async def test_coordinator_integration(tmp_path):
             "project1",
             "host1",
             "workspace1",
-            100,
+            "implement feature",
             "auto",
             "running",
             0,
@@ -48,33 +53,55 @@ async def test_coordinator_integration(tmp_path):
             0.0,
             0.0,
             "session_1",
+            json.dumps(authority),
         ),
     )
 
     adapter = FakeAdapter()
+    verify_calls = []
+
+    async def mock_read(task, session_id, turn_marker=None):
+        return {
+            "streaming": False,
+            "pending": False,
+            "turn_done": True,
+            "turn_started": True,
+            "turn_attribution": "correlated",
+            "messages": [{"role": "assistant", "text": "BAT-STATUS: MILESTONE"}],
+        }
+
+    async def mock_run_verification(task):
+        verify_calls.append(task["task_id"])
+        return {
+            "source": "observed_runner",
+            "candidate_commit": "c1",
+            "tree_hash": "t1",
+            "command": "test",
+            "exit_code": 0,
+            "log_ref": "log1",
+            "output_sha256": "sha1",
+        }
+
+    adapter.read = mock_read
+    adapter.run_verification = mock_run_verification
 
     coordinator = TaskCoordinator(journal, adapter)
 
-    # Needs to return dummy routes
-    journal.routes = lambda task_id: []
+    t1 = await coordinator.tick("task_1")
+    assert t1["state"] == "verifying"
+    assert t1["verifying_started_at"] is not None
+    assert journal.get("task_1")["state"] == "verifying"
+    assert verify_calls == []
 
-    # Fake verification remaining
-    coordinator.verification_remaining = lambda task: 10
-
-    # We can't easily run the real _tick background loop without dependencies,
-    # but we can call it directly to test integration.
-    # However we need some setup for controller_authority.
-
-    import contextlib
-
-    @contextlib.contextmanager
-    def mock_use(*args, **kwargs):
-        yield
-
-    # Since we can't easily monkeypatch in a fixture without passing it,
-    # we'll just test the methods on TaskCoordinator directly.
-    task = journal.get("task_1")
-    assert task["state"] == "running"
+    t2 = await coordinator.tick("task_1")
+    assert verify_calls == ["task_1"]
+    assert t2["state"] == "done"
+    assert t2["verification_commit"] == "c1"
+    assert t2["verification_tree"] == "t1"
+    assert t2["delivered"] == 1
+    assert t2["result"] == "Trusted tests passed on the clean candidate"
+    assert journal.get("task_1")["state"] == "done"
+    assert journal.observed_verification("task_1")["exit_code"] == 0
 
 
 @pytest.mark.asyncio
@@ -167,7 +194,7 @@ async def test_coordinator_integration_recover_unsent(tmp_path, monkeypatch):
             "project1",
             "host1",
             "workspace1",
-            100,
+            "100",
             "auto",
             "running",
             0,
@@ -178,47 +205,85 @@ async def test_coordinator_integration_recover_unsent(tmp_path, monkeypatch):
         ),
     )
 
-    # insert send command
+    # insert send command linked to an operation whose dispatch step already failed
     memory_db.execute(
         "INSERT INTO commands (task_id, command_id, idem_key, kind, status, session_id, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("task_1", "cmd1", "k2", "send", "uncertain", "session_1", "{}", 0.0, 0.0),
+        (
+            "task_1",
+            "cmd1",
+            "k2",
+            "send",
+            "uncertain",
+            "session_1",
+            json.dumps({"operation_id": "op_1", "purpose": "continue", "control_version": 1}),
+            0.0,
+            0.0,
+        ),
+    )
+
+    ops = OperationService(journal)
+    memory_db.execute(
+        "INSERT INTO operations (operation_id, actor, entry, idem_key, request_hash, action, target, params, preconditions, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "op_1",
+            "operator",
+            "http",
+            "idem_op_1",
+            "req_hash",
+            "session.send",
+            json.dumps({"task_id": "task_1"}),
+            json.dumps({"text": "continue"}),
+            json.dumps({"control_version": 1}),
+            "running",
+            0.0,
+            0.0,
+        ),
+    )
+    memory_db.execute(
+        "INSERT INTO operation_steps (operation_id, seq, name, status, request, error, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "op_1",
+            1,
+            "task_dispatch",
+            "failed",
+            json.dumps({"command_id": "cmd1"}),
+            json.dumps({"code": "REFUSED", "message": "before bat frame"}),
+            0.0,
+            1.0,
+        ),
     )
 
     adapter = FakeAdapter()
+    adapter_calls = []
 
-    # mock read
     async def mock_read(task, session_id, turn_marker=None):
+        adapter_calls.append(("read", session_id))
         return {"streaming": False, "pending": False}
 
+    async def mock_send(task, session_id, text, message_id):
+        adapter_calls.append(("send", session_id))
+        return {}
+
     adapter.read = mock_read
+    adapter.send = mock_send
 
     coordinator = TaskCoordinator(journal, adapter)
-
-    # Needs to return a valid command object
-    def mock_command(task_id, command_id):
-        return {"command_id": "cmd1", "kind": "send", "status": "uncertain", "payload": "{}"}
-
-    journal.command = mock_command
-
-    import contextlib
-
-    import bat_agent_connector.controller_authority
-
-    @contextlib.contextmanager
-    def mock_use(*args, **kwargs):
-        yield
-
-    import bat_agent_connector.task_control
-
-    monkeypatch.setattr(bat_agent_connector.controller_authority, "use", mock_use)
-    monkeypatch.setattr(bat_agent_connector.task_control, "require_authority", lambda task: True)
+    context = OpContext(ops, ops._row("op_1"))
 
     task = journal.get("task_1")
-    cmd = mock_command("task_1", "cmd1")
-    await coordinator._recover_unsent_send(task, cmd)
+    cmd = journal.command_get("cmd1")
+    with pytest.raises(StepFailed) as exc_info:
+        await coordinator._recover_unsent_send(task, cmd, operation=context)
 
-    # Actually wait for the background update to be processed if any.
-    await asyncio.sleep(0)
+    assert exc_info.value.code == "REFUSED"
+    assert exc_info.value.message == "before bat frame"
+    assert journal.command_get("cmd1")["status"] == "rejected"
+    assert journal.get("task_1")["state"] == "running"
+    assert adapter_calls == []
+    assert any(
+        e["kind"] == "command_rejected" and json.loads(e["body"])["command_id"] == "cmd1"
+        for e in journal.events("task_1")
+    )
 
 
 @pytest.mark.asyncio
