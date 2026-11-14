@@ -182,7 +182,15 @@ class TaskCoordinator:
         return authority(self, ctx, item)
 
     def _lock(self, host: str, sid: str) -> asyncio.Lock:
-        return self._writers.setdefault((host, sid), asyncio.Lock())
+        key = (host, sid)
+        if key not in self._writers:
+            self._writers[key] = asyncio.Lock()
+        return self._writers[key]
+
+    def _task_lock(self, task_id: str) -> asyncio.Lock:
+        if task_id not in self._task_locks:
+            self._task_locks[task_id] = asyncio.Lock()
+        return self._task_locks[task_id]
 
     async def session_control(self, task_id: str, host: str, sid: str, action: str,
                               params: dict, fn) -> dict:
@@ -212,7 +220,7 @@ class TaskCoordinator:
         admitted = check(self.journal, task_id, host, sid, action, params.get("control_version"), command_id=prior_command_id)
         params = {**params, "control_version": admitted["control_version"]}
         # Pause commits independently of this lock, so it can invalidate an in-flight verifier/send.
-        async with self._task_locks.setdefault(task_id, asyncio.Lock()):
+        async with self._task_lock(task_id):
             task = check(self.journal, task_id, host, sid, action, params["control_version"], command_id=prior_command_id)
             async with self._lock(host, sid):
                 task = check(self.journal, task_id, host, sid, action, task["control_version"], command_id=prior_command_id)
@@ -362,7 +370,7 @@ class TaskCoordinator:
             return await self._tick_bound(task_id)
 
     async def _tick_bound(self, task_id: str) -> dict:
-        async with self._task_locks.setdefault(task_id, asyncio.Lock()):
+        async with self._task_lock(task_id):
             try:
                 return await self._tick(task_id)
             except (TaskControlRefused, ResourceReadOnly) as exc:
@@ -1196,7 +1204,7 @@ class TaskCoordinator:
                               candidate_commit: str | None = None, tree_hash: str | None = None,
                               next_prompt: str | None = None, token_hash: str | None = None, operation=None) -> dict:
         """An explicit operator attestation for one uncertain command, never a replay."""
-        async with self._task_locks.setdefault(task_id, asyncio.Lock()):
+        async with self._task_lock(task_id):
             task = self.journal.get(task_id)
             command = self.journal.command_get(command_id)
             expected_version = operation.effective_preconditions.get("control_version", task["control_version"]) if operation else None
