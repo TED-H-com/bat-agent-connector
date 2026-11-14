@@ -10,6 +10,7 @@
   encrypted-configuration filenames, additional conversation-share links, SSH
   key fingerprints, Connector tokens, private and tailnet IPv4 addresses, and
   e-mail addresses.
+- Roadmap reports render plain ASCII text faster; the output is unchanged.
 
 - Release validation refuses source and wheel archives that contain files not
   tracked at the release commit.
