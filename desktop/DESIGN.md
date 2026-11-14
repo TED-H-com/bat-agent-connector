@@ -168,7 +168,7 @@ Icons come from `ui/icons.js`: locally vendored Lucide SVG geometry, 24×24 view
 | `agentMark` | CLI name; local initials for Codex, Claude, Grok, Gemini, BAT, PM |
 | `menu` | `{button,items:[{label,icon,href,onSelect,disabled,key}]}`; arrows, Escape, outside click, focus return; dispose on unmount |
 | `inspector` | `{title,onClose,returnFocus,dock,overlay}`; append returned node, then append content to `.body`; `.close()` restores focus; ordinary panels dispose by closing; docked panels retain mounting on narrow close and destroy on dispose |
-| `dataTable` | `{columns:[{key,label,numeric,render}],rows,rowKey,selected,onSelect,expandable}`; sticky headers, 44px rows, keyboard row navigation and optional expansion |
+| `dataTable` | `{columns:[{key,label,numeric,render}],rows,rowKey,selected,onSelect,expandable,label}`; sticky headers, 44px rows, keyboard row navigation and optional expansion; `label` names the table and its scroll region, and the selected row carries `aria-current` |
 
 The inspector occupies 400px at ≥1200px, overlays from the right at 800–1199px,
 and becomes a full-screen sheet with Back below 800px. Tool drawers over Discussions
@@ -879,7 +879,7 @@ The summary is one 120px strip of three blocks. At 800px and below it collapses
 into a Trends disclosure directly under the toolbar, closed until opened, and the
 rows become a list (title, one meta line, next step) instead of the wide table.
 The list is a list, a list item, and a button. The selected button sets
-`aria-current` and `aria-selected`.
+`aria-current`.
 
 A refresh keeps the pages already loaded, up to twenty, and keeps a selected row
 until that row's own detail read says it is gone. Overlapping refreshes of the
@@ -1154,7 +1154,7 @@ link, binding only exact work item refs.
 
 搜尋欄統一使用 `searchField()`，保留輸入節點與草稿，32px 高、前置搜尋圖示，提示為 Search／搜尋。工具列篩選器使用相同 32px 邊框樣式，空間不足時在自己的欄內換行。`segmented()` 以共享 ResizeObserver 測量容器與選項寬度；不足時改為保留相同選項與狀態的 select，寬度恢復後還原按鈕與鍵盤焦點。
 
-共享 `dataTable()` 以 `secondary: true` 標記次要欄。`ui-table` 容器小於 900px 時收起，詳細資料仍保留在 inspector；標題與識別碼不在字中斷行，完整欄位內容置於 title。Operations 在 800px 以下改為單一互動列。全寬 sheet 不留左側邊線，rail 背景延伸至文件底，頁尾目的地以 aria-current 顯示目前頁面。
+共享 `dataTable()` 以 `secondary: true` 標記次要欄。`label` 為表格與其捲動區域命名，選取的列以 `aria-current` 標示。`ui-table` 容器小於 900px 時收起，詳細資料仍保留在 inspector；標題與識別碼不在字中斷行，完整欄位內容置於 title。Operations 在 800px 以下改為單一互動列。全寬 sheet 不留左側邊線，rail 背景延伸至文件底，頁尾目的地以 aria-current 顯示目前頁面。
 
 事件頁的多筆通知共用尚未開始的讀取；一旦開始便釋放共用位置，較晚事件仍需自己的讀取，ACK 仍等候結果。`cross-view-events.spec.ts` 用 20 筆混合事件固定請求預算：PM 一般頁 28、Requirements 48、Session 24、Pending 18、Delivery 12、Operations／Settings／Projects 8，另驗證最後事件後有讀取且不重載 workspace／thread。Projects 頁和 rail 各自讀一次專案清單。尚未登入的首次設定頁不訂閱事件。
 

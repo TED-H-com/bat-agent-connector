@@ -326,22 +326,22 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false,
   });
   return Object.assign(root, {body, close, open, dispose: dock ? destroy : close});
 }
-export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, compactBelow = 0, rowAttrs} = {}) {
+export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, compactBelow = 0, rowAttrs, label} = {}) {
   const compact = () => compactRow && (matchMedia('(max-width: 799px)').matches || root.clientWidth < compactBelow);
   const keyFor = row => typeof rowKey === 'function' ? rowKey(row) : row[rowKey];
   const hasSelection = rows.some(row => keyFor(row) === selected);
-  const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-hidden': 'true'}) : null,
+  const tbody = h('tbody'), table = h('table', {'aria-label': label || null}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-hidden': 'true'}) : null,
     ...columns.map(column => h('th', {scope: 'col', 'data-column': column.key, 'data-secondary': column.secondary || null, class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
-  const root = h('div', {class: 'ui-data-table' + (compactRow ? ' ui-data-table-responsive' : ''), tabindex: compactRow ? null : 0}, table), controls = [];
+  const root = h('div', {class: 'ui-data-table' + (compactRow ? ' ui-data-table-responsive' : ''), tabindex: compactRow ? null : 0, role: !compactRow && label ? 'region' : null, 'aria-label': !compactRow && label ? label : null}, table), controls = [];
   rows.forEach((row, i) => {
     const key = keyFor(row), active = key === selected;
     const extra = typeof rowAttrs === 'function' ? rowAttrs(row) || {} : {};
     let toggleExpansion;
     const tr = h('tr', {...extra, 'data-row-key': key, tabindex: active || !hasSelection && i === 0 ? 0 : -1,
-      'aria-selected': String(active), onclick: event => {if (!event.target.closest('button, a, input, select')) {
+      'aria-current': active ? 'true' : null, onclick: event => {if (!event.target.closest('button, a, input, select')) {
         if (compact() && toggleExpansion) {tr.focus(); toggleExpansion();} else select();
       }}});
-    function select() {controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1; node.setAttribute('aria-selected', String(node === tr));}); onSelect(key, row);}
+    function select() {controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1; if (node === tr) node.setAttribute('aria-current', 'true'); else node.removeAttribute('aria-current');}); onSelect(key, row);}
     if (expandable) {
       const open = expanded.has(key);
       const detail = h('tr', {hidden: !open, class: 'ui-data-table-detail'}, h('td', {colspan: columns.length + 1}, typeof expandable === 'function' ? expandable(row) : ''));

@@ -391,7 +391,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       const current = row.row_id === selected;
       const hasSelection = shown.some(item => item.row_id === selected);
       const button = h('button', {type: 'button', class: 'reg-list-row', 'data-row-key': row.row_id,
-        'aria-current': current ? 'true' : null, 'aria-selected': current ? 'true' : null,
+        'aria-current': current ? 'true' : null,
         tabindex: current || !hasSelection && index === 0 ? 0 : -1, onclick: () => openRow(row)},
         h('span', {class: 'reg-list-title'}, dash(displayTitle(row))), listMeta(row),
         nextStep(row) ? h('span', {class: 'reg-list-next'}, row.next_step) : null);
@@ -437,7 +437,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       {key: 'next', label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(nextStep(row)))},
       {key: 'related', secondary:true, label: t('reg_col_related'), render: row => relatedChips(row, 2)},
     ];
-    tableHost.replaceChildren(dataTable({columns, rows: shown, rowKey: 'row_id', selected, onSelect: (_key, row) => openRow(row)}));
+    tableHost.replaceChildren(dataTable({label: t('ui_issues'), columns, rows: shown, rowKey: 'row_id', selected, onSelect: (_key, row) => openRow(row)}));
     if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({preventScroll: true});
     const scroller = tableHost.querySelector('.ui-data-table');
     if (scroller) scroller.scrollTop = scroll;

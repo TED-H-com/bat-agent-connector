@@ -634,7 +634,7 @@ test('issues keeps loaded pages and the selected row across a view change', asyn
   await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
   await openView(page, 'issues');
   await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(12);
-  await expect(page.locator(`[data-row-key="${copy.rows.risk}"]`)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator(`[data-row-key="${copy.rows.risk}"]`)).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('[data-reg-inspector]')).toBeVisible();
   await expect(page.locator('[data-reg-inspector]')).toContainText(copy.labels.risk);
   expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);

@@ -89,7 +89,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
       item.catalogBox.append(h('div',{class:'pm-tool-head'},e.catalog_complete?null:statusPill('partial'),stamp(item.catalog.document.finished_at)));
       if(list.some(uri=>!e.catalog.some(s=>s.resource===uri)))item.catalogBox.append(h('p',{class:'muted'},t('ahp_selection_unavailable')));
       if(!pageRows.length)item.catalogBox.append(emptyState({title:t('ahp_no_sessions'),heading:'h3'}));
-      else item.catalogBox.append(dataTable({columns:[
+      else item.catalogBox.append(dataTable({label:t('ahp_title'),columns:[
         {key:'check',label:'',render:s=>{
           const box=h('input',{type:'checkbox',value:s.resource,'aria-label':`${t('ahp_select')} ${s.title}`});
           box.addEventListener('change',()=>{if(item.observe.locked()||!canRead())return;const before=selectedUris(),values=box.checked?[...before,s.resource]:before.filter(uri=>uri!==s.resource);

@@ -75,7 +75,7 @@
 .reg-list-title { font-size: var(--fs-body); font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .reg-list-row:hover { background: var(--surface-2); }
 .reg-list-row[aria-current=true]:hover { background: var(--selected-row); }
-.pm-shell [data-pm-register] .ui-data-table tr[aria-selected=true] > td { background: var(--selected-row); }
+.pm-shell [data-pm-register] .ui-data-table tr[aria-current=true] > td { background: var(--selected-row); }
 .reg-list-meta { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px 6px; min-width: 0; overflow: hidden; font-size: var(--fs-small); color: var(--text-2); }
 .reg-list-meta > span:not(.ui-pill) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reg-list-meta > .reg-list-type,
