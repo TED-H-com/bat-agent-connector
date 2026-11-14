@@ -316,11 +316,7 @@ class ObservedVerifier:
 
     def _log(self, task: dict, kind: str = "") -> tuple[Path, int]:
         artifacts = Path(self.settings.artifact_dir or state_dir() / "task-artifacts")
-        if platform_files.WINDOWS:
-            platform_files.ensure_private_directory(artifacts)
-        else:
-            artifacts.mkdir(parents=True, exist_ok=True, mode=0o700)
-            artifacts.chmod(0o700)
+        platform_files.make_private_dirs(artifacts)
         log_path = artifacts / (str(task["task_id"]) + kind + "-" + uuid.uuid4().hex + ".log")
         return log_path, platform_files.open_private_file(log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
 
