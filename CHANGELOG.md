@@ -6,6 +6,8 @@
   version of hosts that support the suite's new connection handshake. This
   does not enable any new host actions.
 
+- Run the Windows and Linux sandbox tests in CI, and allow local test runs when an ancestor of the temporary directory is group-writable.
+
 ## 0.2.20 / Desktop 0.1.16 (2026-11-13)
 
 - Let workspace members with observe access read a fixed Scope and roadmap report
