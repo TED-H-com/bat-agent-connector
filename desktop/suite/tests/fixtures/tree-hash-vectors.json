@@ -1,0 +1,51 @@
+[
+  {
+    "name": "empty tree",
+    "entries": [],
+    "sha256": "6ebf434f71c3f520a6cc576a7040eddf5f6e99e125674c8da0196056584d5b7b"
+  },
+  {
+    "name": "one file",
+    "entries": [
+      {
+        "path": "index.html",
+        "content": "Dashboard\n"
+      }
+    ],
+    "sha256": "cdbeb93a378ab0675ffad24230598d86e2bd9aedac1c6700a99c8a5c9971efa3"
+  },
+  {
+    "name": "creation order differs",
+    "entries": [
+      {
+        "path": "z.js",
+        "content": "z"
+      },
+      {
+        "path": "a.css",
+        "content": "a"
+      }
+    ],
+    "sha256": "d2bab49844223390c45af9155b9eb1497c932992cf056a300cf7c6fef644d9cb"
+  },
+  {
+    "name": "non-ASCII path",
+    "entries": [
+      {
+        "path": "資料/頁面.html",
+        "content": "Hello 世界"
+      }
+    ],
+    "sha256": "5ecb0e52498bd149001dc267ef7447b33a78e3ca3991fe6ffa6a3f1fde55f169"
+  },
+  {
+    "name": "zero-length file",
+    "entries": [
+      {
+        "path": "empty.json",
+        "content": ""
+      }
+    ],
+    "sha256": "a0a8ac0b681e7df019b413b3e90a689862d1bc6df3f2ed2c163207483aa6b4bc"
+  }
+]
