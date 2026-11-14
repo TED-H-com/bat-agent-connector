@@ -65,15 +65,17 @@ Returns `True` if orchestration is enabled for the given `host`.
 
 #### `any_writes`
 ```python
+@property
 def any_writes(self) -> bool
 ```
-Returns `True` if writes are enabled on any configured host.
+Access as `fleet.any_writes`. Returns `True` if writes are enabled on any configured host.
 
 #### `any_orchestrate`
 ```python
+@property
 def any_orchestrate(self) -> bool
 ```
-Returns `True` if orchestration is enabled on any configured host.
+Access as `fleet.any_orchestrate`. Returns `True` if orchestration is enabled on any configured host.
 
 #### `client`
 ```python
