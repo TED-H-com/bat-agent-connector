@@ -100,8 +100,9 @@ conversation links and machine-specific incident logs outside the repository. Pu
 author and license attribution should remain intact.
 
 Run `python scripts/check_public_content.py` before publishing. It checks tracked files
-for private configuration filenames, shared conversation links and non-example home
-paths, and prints locations without matched values. It cannot recognize every private
+for private configuration filenames, shared conversation links, non-example home paths,
+SSH key fingerprints, Connector tokens, private or tailnet IPv4 addresses and e-mail
+addresses, and prints locations without matched values. It cannot recognize every private
 hostname or deployment narrative: review those manually, including images and GitHub
 text. Changing current files does not remove information from Git history or old copies.
 
