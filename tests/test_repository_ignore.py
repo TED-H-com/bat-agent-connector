@@ -22,3 +22,9 @@ def test_root_is_the_only_tracked_ignore_file(git_checkout):
     result = subprocess.run([git_checkout, "ls-files", "-z", "--", "*.gitignore", ".gitignore"], cwd=ROOT,
                             check=True, capture_output=True)
     assert result.stdout.split(b"\0") == [b".gitignore", b""]
+
+
+def test_no_tracked_file_is_ignored(git_checkout):
+    result = subprocess.run([git_checkout, "ls-files", "-ci", "--exclude-standard", "-z"], cwd=ROOT,
+                            check=True, capture_output=True)
+    assert result.stdout == b""

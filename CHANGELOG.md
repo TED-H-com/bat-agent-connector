@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Release validation refuses source and wheel archives that contain files not
+  tracked at the release commit.
+
 - Wheels no longer contain a second build-provenance file beside the package modules;
   published wheels 0.2.14–0.2.20 contain it, and updaters from 0.2.12 or earlier
   refuse such an installation.

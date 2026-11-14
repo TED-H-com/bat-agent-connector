@@ -395,6 +395,148 @@ def test_validation_only_reads_inputs_and_runs_fixed_local_git(candidates, monke
         assert snapshot() == before
 
 
+def test_check_package_members_accepts_tracked_and_allowed_generated_names(candidates):
+    from scripts.release_identity import WHEEL_METADATA_NAMES, _check_package_members, _git
+    a, _ = candidates()
+    tracked = [name for name in _git(a["source"], "ls-tree", "-r", "-z", "--name-only", a["sha"]).decode().split("\0")
+               if name]
+    base = f"bat_agent_connector-{__version__}/"
+    sdist_prefix = base + "src/bat_agent_connector/"
+    sdist_tracked = [base + name for name in tracked]
+    _check_package_members(sdist_tracked, sdist_prefix, wheel=False, source=a["source"], commit=a["sha"])
+    _check_package_members(
+        sdist_tracked + [base + "PKG-INFO", base + "src/bat_agent_connector/build-info.json"],
+        sdist_prefix, wheel=False, source=a["source"], commit=a["sha"],
+    )
+
+    dist_info = f"bat_agent_connector-{__version__}.dist-info/"
+    wheel_tracked = [name.removeprefix("src/") for name in tracked if name.startswith("src/bat_agent_connector/")]
+    _check_package_members(
+        wheel_tracked + [dist_info + "METADATA"],
+        "bat_agent_connector/", wheel=True, source=a["source"], commit=a["sha"],
+    )
+    _check_package_members(
+        wheel_tracked + [
+            "bat_agent_connector/skill/build-info.json",
+            "bat_agent_connector/skill/SKILL.md",
+            *[dist_info + item for item in sorted(WHEEL_METADATA_NAMES)],
+        ],
+        "bat_agent_connector/", wheel=True, source=a["source"], commit=a["sha"],
+    )
+
+
+@pytest.mark.parametrize("case", [
+    "sdist-untracked",
+    "sdist-long-and-multiple",
+    "wheel-package-untracked",
+    "wheel-duplicate-provenance",
+    "wheel-dist-info-untracked",
+    "wheel-top-level-untracked",
+])
+def test_check_package_members_refuses_untracked_members(candidates, case):
+    from scripts.release_identity import EvidenceError, _check_package_members, _git
+    a, _ = candidates()
+    tracked = [name for name in _git(a["source"], "ls-tree", "-r", "-z", "--name-only", a["sha"]).decode().split("\0")
+               if name]
+    base = f"bat_agent_connector-{__version__}/"
+    sdist_prefix = base + "src/bat_agent_connector/"
+    dist_info = f"bat_agent_connector-{__version__}.dist-info/"
+    wheel_base = [
+        name.removeprefix("src/") for name in tracked if name.startswith("src/bat_agent_connector/")
+    ] + [dist_info + "METADATA"]
+    if case == "sdist-untracked":
+        members = [base + name for name in tracked] + [base + "untracked.txt"]
+        wheel, prefix, expected = False, sdist_prefix, {"member": base + "untracked.txt", "count": 1}
+    elif case == "sdist-long-and-multiple":
+        long_name = base + "untracked/" + ("a" * 300)
+        members = [base + name for name in tracked] + [long_name, base + "second.txt"]
+        wheel, prefix, expected = False, sdist_prefix, {"member": long_name[:256], "count": 2}
+    elif case == "wheel-package-untracked":
+        members = wheel_base + ["bat_agent_connector/untracked.py"]
+        wheel, prefix, expected = True, "bat_agent_connector/", {"member": "bat_agent_connector/untracked.py", "count": 1}
+    elif case == "wheel-duplicate-provenance":
+        members = wheel_base + ["bat_agent_connector/build-info.json"]
+        wheel, prefix, expected = True, "bat_agent_connector/", {"member": "bat_agent_connector/build-info.json", "count": 1}
+    elif case == "wheel-dist-info-untracked":
+        members = wheel_base + [dist_info + "unexpected.txt"]
+        wheel, prefix, expected = True, "bat_agent_connector/", {"member": dist_info + "unexpected.txt", "count": 1}
+    else:
+        members = wheel_base + ["unexpected_top_level.py"]
+        wheel, prefix, expected = True, "bat_agent_connector/", {"member": "unexpected_top_level.py", "count": 1}
+    with pytest.raises(EvidenceError) as exc_info:
+        _check_package_members(members, prefix, wheel=wheel, source=a["source"], commit=a["sha"])
+    assert exc_info.value.status == "differs"
+    assert exc_info.value.reason == "ARCHIVE_MEMBER_UNTRACKED"
+    assert exc_info.value.details == expected
+
+
+def test_check_package_members_requires_tracked_skill_source(tmp_path):
+    from scripts.release_identity import EvidenceError, _check_package_members
+    repo = tmp_path / "minimal"
+    (repo / "src/bat_agent_connector").mkdir(parents=True)
+    (repo / "src/bat_agent_connector/__init__.py").write_text('__version__ = "0.0.0"\n')
+    env = _build_env(tmp_path)
+    for args in (["git", "init", "-q"], ["git", "add", "."],
+                 ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                  "commit", "-qm", "minimal"]):
+        _command(args, cwd=repo, env=env)
+    sha = _command(["git", "rev-parse", "HEAD"], cwd=repo, env=env)
+    members = [
+        "bat_agent_connector/__init__.py",
+        "bat_agent_connector/skill/build-info.json",
+        "bat_agent_connector/skill/SKILL.md",
+        "bat_agent_connector-0.0.0.dist-info/METADATA",
+    ]
+    with pytest.raises(EvidenceError) as exc_info:
+        _check_package_members(members, "bat_agent_connector/", wheel=True, source=repo, commit=sha)
+    assert exc_info.value.reason == "ARCHIVE_MEMBER_UNTRACKED"
+    assert exc_info.value.details == {"member": "bat_agent_connector/skill/SKILL.md", "count": 1}
+
+
+def test_archive_built_from_tree_with_untracked_file_is_refused(candidates, tmp_path):
+    from scripts.release_identity import receipt, validate
+    a, _ = candidates()
+    dirty = tmp_path / "dirty-source"
+    shutil.copytree(a["source"], dirty, ignore=shutil.ignore_patterns(".git"))
+    (dirty / "untracked.txt").write_text("untracked fixture\n")
+    (dirty / "src/bat_agent_connector/untracked_module.py").write_text("VALUE = 1\n")
+    wheel = _build(dirty, tmp_path, "wheel", commit=a["sha"])
+    sdist = _build(dirty, tmp_path, "sdist", commit=a["sha"])
+    result = validate(
+        a["sha"],
+        [receipt("wheel", wheel), receipt("sdist", sdist)],
+        source=a["source"],
+        required=["wheel", "sdist"],
+    )
+    assert result["one_candidate"] is False
+    refusals = {row["component"]: row for row in result["refusals"]}
+    assert set(refusals) == {"wheel", "sdist"}
+    assert refusals["wheel"] == {
+        "component": "wheel",
+        "status": "differs",
+        "reason": "ARCHIVE_MEMBER_UNTRACKED",
+        "details": {"member": "bat_agent_connector/untracked_module.py", "count": 1},
+    }
+    assert refusals["sdist"]["status"] == "differs"
+    assert refusals["sdist"]["reason"] == "ARCHIVE_MEMBER_UNTRACKED"
+    assert refusals["sdist"]["details"]["count"] == 2
+    assert refusals["sdist"]["details"]["member"].endswith(
+        ("untracked.txt", "src/bat_agent_connector/untracked_module.py")
+    )
+
+    git_dirty = tmp_path / "git-dirty-source"
+    git_dirty_out = tmp_path / "git-dirty-out"
+    git_dirty_out.mkdir()
+    shutil.copytree(a["source"], git_dirty)
+    (git_dirty / "untracked.txt").write_text("untracked fixture\n")
+    dirty_sdist = _build(git_dirty, git_dirty_out, "sdist")
+    dirty_claim = receipt("sdist", dirty_sdist)
+    assert dirty_claim["commit"] is None
+    dirty_result = validate(a["sha"], [dirty_claim], source=a["source"], required=["sdist"])
+    assert dirty_result["one_candidate"] is False
+    assert dirty_result["refusals"] == [{"component": "sdist", "status": "unknown", "reason": "CLAIM_UNAVAILABLE"}]
+
+
 if __name__ == "__main__":
     import argparse
 
