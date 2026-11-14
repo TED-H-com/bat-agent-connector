@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Translate the Dashboard fallback reason text, include the history section name on English "load more" buttons in Meetings, and add accessible names to Dashboard text fields in English and Traditional Chinese.
+
 - Keep existing BAT hosts working as before while checking the identity and
   version of hosts that support the suite's new connection handshake. This
   does not enable any new host actions.
