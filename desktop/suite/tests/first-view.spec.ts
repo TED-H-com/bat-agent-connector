@@ -39,8 +39,9 @@ for (const language of ['en', 'zh-TW']) {
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await assertCalls();
     await expect.poll(() => page.evaluate(() => window.__suiteCalls.length)).toBeGreaterThanOrEqual(3);
-    const beforeRecovery = await page.evaluate(() => window.__suiteCalls.length);
     const now = await page.evaluate(() => Date.now());
+    await page.clock.pauseAt(new Date(now));
+    const beforeRecovery = await page.evaluate(() => window.__suiteCalls.length);
     // Move wall time without firing the poll timer: visibility must wake recovery.
     await page.clock.setSystemTime(new Date(now + 3100));
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
