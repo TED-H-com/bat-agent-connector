@@ -17,6 +17,7 @@ test('fixture serves only manifest assets with the required headers', async ({re
       expect(response.headers()['cache-control']).toBe('no-store');
       expect(response.headers()['x-frame-options']).toBe('DENY');
       expect(response.headers()['content-security-policy']).toBe(csp);
+      expect(response.headers()['access-control-allow-origin']).toBeUndefined();
     }
     expect((await get.body()).length).toBe(asset.length);
     expect((await head.body()).length).toBe(0);

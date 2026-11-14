@@ -24,7 +24,7 @@ for (const language of ['en', 'zh-TW']) {
         }}});
     }, language);
     await page.goto('/index.html#/settings');
-    await expect(page.getByText(language === 'en' ? 'No current observation' : '尚無可用觀測')).toHaveCount(1);
+    await expect(page.getByText(language === 'en' ? 'No current observation' : '尚無可用觀測')).toBeVisible();
     await expect(page.locator('[data-api-error], .ui-inline-error')).toHaveCount(0);
     await expect(page.locator('[data-managed-service]')).toHaveCount(0);
     await expect(page.locator('section[aria-label="Tailscale"]')).toHaveCount(0);
