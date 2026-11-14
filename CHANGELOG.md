@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preview exact retained external context together with an independently verified
+  published branch head through HTTP, MCP and the desktop bridge. Preserve both
+  identities and bilingual refusal reasons without creating Work or attributing
+  the commit to the external CLI; continuation remains unavailable.
 - For contributors, `scripts/check_public_content.py` also covers token and
   encrypted-configuration filenames, additional conversation-share links, SSH
   key fingerprints, Connector tokens, private and tailnet IPv4 addresses, and
@@ -16,6 +20,11 @@
 - Keep existing BAT hosts working as before while checking the identity and
   version of hosts that support the suite's new connection handshake. This
   does not enable any new host actions.
+
+### Fixed
+
+- Check RPC and MCP caller scopes before reading referenced resources, so a
+  caller without the required scope gets the same `FORBIDDEN` refusal as over HTTP.
 
 ## 0.2.20 / Desktop 0.1.16 (2026-11-13)
 
