@@ -167,6 +167,7 @@ def test_update_source_verification_accepts_only_producer_provenance(clean_wheel
     ("dirty", None), ("override", "HEAD"), ("malformed", "not-a-commit"),
     ("too-long", "b" * 64), ("no-git", None), ("archive-override", "b" * 40),
     ("staged", None), ("deleted", None), ("dirty-override", "b" * 40),
+    ("untracked-package", None), ("untracked-other", None), ("ignored", None),
 ])
 def test_wheel_build_commit_sources(tmp_path, mode, override):
     repo, head = _source_repo(tmp_path, mode)
@@ -179,10 +180,17 @@ def test_wheel_build_commit_sources(tmp_path, mode, override):
         _command(["git", "add", "README.md"], cwd=repo, env=_build_env(tmp_path))
     if mode == "deleted":
         (repo / "src/bat_agent_connector/cli.py").unlink()
+    if mode in {"untracked-package", "untracked-other", "ignored"}:
+        relative = {"untracked-package": "src/bat_agent_connector/untracked.py",
+                    "untracked-other": "untracked.txt", "ignored": "__pycache__/fixture.pyc"}[mode]
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture\n")
     if mode in {"no-git", "archive-override"}:
         shutil.rmtree(repo / ".git")
     wheel = _build(repo, tmp_path, commit=override)
     expected = {"dirty": None, "staged": None, "deleted": None, "dirty-override": None,
+                "untracked-package": None, "untracked-other": None,
                 "no-git": None, "override": head,
                 "archive-override": "b" * 40}.get(mode, head)
     assert _installed_identity(wheel, tmp_path) == {
@@ -271,13 +279,23 @@ def test_sdist_preserves_provenance_without_borrowing_an_enclosing_checkout(tmp_
         assert sum(name.endswith("src/bat_agent_connector/build-info.json") for name in names) == 1
         assert any(name.endswith("hatch_build.py") for name in names)
         assert any(name.endswith("skills/bat-agent-connector/SKILL.md") for name in names)
+        info = next(name for name in names if name.endswith("src/bat_agent_connector/build-info.json"))
+        sdist_commit = json.loads(archive.extractfile(info).read())["commit"]
     # First exercise the real frontend's sdist extraction, then extract the same
     # producer archive under an unrelated Git checkout. Neither may relabel it.
     wheel = _build(sdist, tmp_path)
     with zipfile.ZipFile(wheel) as archive:
+        assert "bat_agent_connector/build-info.json" not in archive.namelist()
+        assert json.loads(archive.read("bat_agent_connector/skill/build-info.json"))["commit"] == sdist_commit
         assert archive.read("bat_agent_connector/skill/SKILL.md") == (
             repo / "skills/bat-agent-connector/SKILL.md"
         ).read_bytes()
+        from_sdist = set(archive.namelist())
+    direct_output = tmp_path / "direct-build"
+    direct_output.mkdir()
+    direct_wheel = _build(repo, direct_output)
+    with zipfile.ZipFile(direct_wheel) as archive:
+        assert set(archive.namelist()) == from_sdist
     assert _installed_identity(wheel, tmp_path) == {
         "version": __version__, "commit": None if dirty else head, "source": "package"}
     foreign = tmp_path / "foreign-checkout"

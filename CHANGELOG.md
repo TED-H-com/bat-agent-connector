@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Wheels no longer contain a second build-provenance file beside the package modules;
+  published wheels 0.2.14–0.2.20 contain it, and updaters from 0.2.12 or earlier
+  refuse such an installation.
+
 - Keep existing BAT hosts working as before while checking the identity and
   version of hosts that support the suite's new connection handshake. This
   does not enable any new host actions.
