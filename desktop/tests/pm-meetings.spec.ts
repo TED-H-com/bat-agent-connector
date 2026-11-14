@@ -134,9 +134,9 @@ test('follow-up result is an unverified record on the original assignment',async
 test('history follows cursors and a revoked history read clears previously visible facts',async({page})=>{
   const f=meetingFixture();f.state.moreNotes=true;f.state.pagedSnapshots=true;await mount(page,f);
   expect(f.state.reads).toContain('/pm/workspaces/'+'ws_'+'1'.repeat(32)+'/snapshots?after=10&limit=50');
-  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Discussion notes',{exact:true}));await page.getByRole('button',{name:'Load more',exact:true}).click();
+  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Discussion notes',{exact:true}));await page.getByRole('button',{name:'Discussion notes: load more',exact:true}).click();
   await openRead(page.getByText('#2 · Developer',{exact:true}));await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
-  f.state.failRead='revoked';await openRead(page.getByText('Context revisions',{exact:true}));await page.getByText('Context revisions',{exact:true}).locator('..').getByRole('button',{name:'Load more',exact:true}).click();
+  f.state.failRead='revoked';await openRead(page.getByText('Context revisions',{exact:true}));await page.getByText('Context revisions',{exact:true}).locator('..').getByRole('button',{name:'Context revisions: load more',exact:true}).click();
   await expect(page.locator('[data-pm-meetings]')).toContainText('Workspace access removed');
   expect(await page.locator('[data-pm-meetings]').innerText()).not.toContain('Members regain access');expect(f.state.writes).toEqual([]);
 });
@@ -173,7 +173,7 @@ test('non-latest meeting selection survives reload with its original lost note r
 });
 test('zero cursor offers standalone history when detail budget includes no notes',async({page})=>{
   const f=meetingFixture();f.state.meetings[0].history_next_cursors.notes=0;await mount(page,f);
-  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Discussion notes',{exact:true}));await page.getByRole('button',{name:'Load more',exact:true}).click();
+  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Discussion notes',{exact:true}));await page.getByRole('button',{name:'Discussion notes: load more',exact:true}).click();
   expect(f.state.reads.some((path:string)=>path.endsWith('/history/notes?after=0&limit=20'))).toBe(true);
   await openRead(page.getByText('#2 · Developer',{exact:true}));await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
 });

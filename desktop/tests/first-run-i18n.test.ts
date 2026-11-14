@@ -1,6 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readdirSync, readFileSync} from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {parse} from 'acorn';
 import {STRINGS, detectLocale, initialLocale} from '../src/i18n.js';
 
@@ -43,5 +46,63 @@ test('every first-run translation and error has an explicit zh-TW entry with mat
     const variables = (value: string) => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort();
     // Chinese count labels do not need the English singular/plural nouns.
     if (key !== 'setup_counts') assert.deepEqual(variables(STRINGS['zh-TW'][key]), variables(STRINGS.en[key]), key);
+  }
+});
+
+test('every literal t(...) key in desktop/src exists in en and zh-TW, and shared keys have matching placeholders', () => {
+  const srcRoot = fileURLToPath(new URL('../src', import.meta.url));
+  const walk = (dir: string): string[] => readdirSync(dir, {withFileTypes: true}).flatMap(entry => {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) return walk(full);
+    return (entry.name.endsWith('.js') || (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts'))) ? [full] : [];
+  });
+  // reported
+  const reportedMissingKeys = new Set<string>([
+    // reported
+  ]);
+  // reported
+  const reportedPlaceholderMismatches = new Set<string>([
+    'setup_counts', // reported
+    'wres_changes_summary_one', // reported
+    'wres_changes_summary_one_file', // reported
+    'wres_changes_summary_one_commit', // reported
+  ]);
+  const literalKeys = new Set<string>();
+  for (const file of walk(srcRoot)) {
+    const raw = readFileSync(file, 'utf8');
+    const source = file.endsWith('.ts') ? stripTypeScriptTypes(raw) : raw;
+    const tree = parse(source, {ecmaVersion: 'latest', sourceType: 'module'});
+    function visit(node: any) {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'CallExpression' && node.callee?.type === 'Identifier' && node.callee.name === 't'
+          && node.arguments[0]?.type === 'Literal' && typeof node.arguments[0].value === 'string') {
+        literalKeys.add(node.arguments[0].value);
+      }
+      for (const child of Object.values(node)) {
+        if (Array.isArray(child)) child.forEach(visit);
+        else visit(child);
+      }
+    }
+    visit(tree);
+  }
+  assert.ok(literalKeys.has('reason_unavailable'));
+  assert.ok(literalKeys.has('pm_meeting_more'));
+  for (const key of literalKeys) {
+    if (reportedMissingKeys.has(key)) {
+      assert.ok(!Object.hasOwn(STRINGS.en, key) && !Object.hasOwn(STRINGS['zh-TW'], key), `Allowlisted missing key is now defined: ${key}`);
+      continue;
+    }
+    assert.ok(Object.hasOwn(STRINGS.en, key) && STRINGS.en[key].trim(), `Missing English key for t('${key}')`);
+    assert.ok(Object.hasOwn(STRINGS['zh-TW'], key) && STRINGS['zh-TW'][key].trim(), `Missing zh-TW key for t('${key}')`);
+  }
+  assert.deepEqual(new Set(Object.keys(STRINGS['zh-TW'])), new Set(Object.keys(STRINGS.en)));
+  const placeholders = (value: string) => [...new Set([...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]))].sort();
+  for (const key of Object.keys(STRINGS.en)) {
+    if (!Object.hasOwn(STRINGS['zh-TW'], key)) continue;
+    if (reportedPlaceholderMismatches.has(key)) {
+      assert.notDeepEqual(placeholders(STRINGS['zh-TW'][key]), placeholders(STRINGS.en[key]), `Allowlisted mismatch is now equal: ${key}`);
+      continue;
+    }
+    assert.deepEqual(placeholders(STRINGS['zh-TW'][key]), placeholders(STRINGS.en[key]), `Placeholder mismatch for ${key}`);
   }
 });

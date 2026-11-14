@@ -1180,7 +1180,7 @@ export const STRINGS = {
     op_needs_attention: "需要處理", op_uncertain: "結果不明，回查中", op_succeeded: "完成", op_failed: "失敗",
     op_cancelled: "已取消", cancel: "取消", resume: "重新執行",
     resume_help: "處理完原因後再跑一次：已完成的步驟不重做，未確定的步驟先回查，不會重送。", steps: "步驟", action: "動作", actor: "操作者", created: "建立時間",
-    error: "錯誤", reason: "原因",
+    error: "錯誤", reason: "原因", reason_unavailable: "無法取得原因",
     token: "API 權杖", token_help: "以 batc api-token issue 發行；只存在這台瀏覽器。", connect: "連線",
     remember: "在這台電腦記住", disconnect: "中斷", connected_as: "已連線：{actor}（{scopes}）",
     need_token: "請先在「連線」輸入 API 權杖。", unreachable_hosts: "主機異常", loading: "載入中…",
@@ -2356,7 +2356,7 @@ export const STRINGS = {
     op_cancelled: "cancelled", cancel: "Cancel", resume: "Resume",
     resume_help: "Run it again after fixing the cause: finished steps are not repeated and unproven ones are read " +
       "back, never re-sent.", steps: "Steps", action: "Action", actor: "Actor",
-    created: "Created", error: "Error", reason: "Reason",
+    created: "Created", error: "Error", reason: "Reason", reason_unavailable: "Reason unavailable",
     token: "API token", token_help: "Issue one with batc api-token issue; it stays in this browser.",
     connect: "Connect", remember: "Remember on this computer", disconnect: "Disconnect",
     connected_as: "Connected as {actor} ({scopes})", need_token: "Enter an API token under Connection first.",
