@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import tempfile
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +31,10 @@ def isolated_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("BATC_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("BATC_TEST_TOKEN", TOKEN)
     monkeypatch.delenv("BATC_DEVICE_ID", raising=False)
+    git_config = tmp_path / "gitconfig"
+    git_config.write_text("")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(git_config))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     # Autouse setup precedes other per-test fixtures, so this teardown runs
     # after their servers, journals and worktrees have been closed. Retention
     # alone only removes passing tmp_paths; failed tests must release large state too.
@@ -123,19 +130,32 @@ def checkpoint_repo_seed(tmp_path_factory, request):
 
 def build_checkpoint_repo(repo):
     """Also support standalone desktop fixtures that run outside pytest."""
+    repo = Path(repo)
     repo.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=repo.parent, prefix=".git-cfg-") as cfg_dir:
+        git_config = Path(cfg_dir) / "gitconfig"
+        git_config.write_text("")
+        env = {
+            **os.environ,
+            "GIT_CONFIG_GLOBAL": str(git_config),
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_AUTHOR_NAME": "dev",
+            "GIT_AUTHOR_EMAIL": "dev@example.invalid",
+            "GIT_COMMITTER_NAME": "dev",
+            "GIT_COMMITTER_EMAIL": "dev@example.invalid",
+        }
 
-    def git(*args):
-        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+        def git(*args):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
 
-    git("init", "--template=", "-q", "-b", "main")
-    git("config", "user.email", "dev@example.invalid")
-    git("config", "user.name", "dev")
-    git("remote", "add", "origin", "https://github.example/o/r.git")
-    for i in (1, 2):
-        (repo / "notes.txt").write_text(f"v{i}\n")
-        git("add", "notes.txt")
-        git("commit", "-q", "-m", f"step {i}")
-    # Consolidate six loose objects before copying this repository many times.
-    git("repack", "-ad")
+        git("init", "--template=", "-q", "-b", "main")
+        git("config", "user.email", "dev@example.invalid")
+        git("config", "user.name", "dev")
+        git("remote", "add", "origin", "https://github.example/o/r.git")
+        for i in (1, 2):
+            (repo / "notes.txt").write_text(f"v{i}\n")
+            git("add", "notes.txt")
+            git("commit", "-q", "-m", f"step {i}")
+        # Consolidate six loose objects before copying this repository many times.
+        git("repack", "-ad")
     return repo

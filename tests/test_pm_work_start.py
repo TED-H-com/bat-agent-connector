@@ -2118,7 +2118,10 @@ async def test_active_parent_with_pending_cancel_ends_cancelled_not_failed(start
         if calls == 1:
             raise NeedsAttention("PKG_HOLD", "Initial pause before active cancel")
         child_entered.set()
-        await child_release.wait()
+        try:
+            await asyncio.wait_for(child_release.wait(), timeout=30)
+        except asyncio.TimeoutError as exc:
+            raise AssertionError("timed out waiting for package child release event") from exc
         ctx.check_cancel()
         return await pkg_act.run(ctx)
 
@@ -2142,7 +2145,10 @@ async def test_active_parent_with_pending_cancel_ends_cancelled_not_failed(start
         # Resume the child into an active run waiting on child_release, then cancel the child directly.
         ops.resume(STARTER_OWNER, pkg_child_id)
         await ops.run_due()
-        await child_entered.wait()
+        try:
+            await asyncio.wait_for(child_entered.wait(), timeout=30)
+        except asyncio.TimeoutError as exc:
+            raise AssertionError("timed out waiting for package child entry event") from exc
         assert ops._running(pkg_child_id) is True
         ops.cancel(STARTER_OWNER, pkg_child_id)
         child_release.set()
