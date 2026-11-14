@@ -201,11 +201,14 @@ def test_email_addresses_positive_negative_and_exemptions():
         "first.last+tag" + "@" + "sub.domain.org",
         "<mailto:person" + "@" + "corp.internal.net>",
         "git" + "@" + "github.com",
+        "Write to someone" + "@" + "corp.com.",
+        "Write to someone" + "@" + "corp.com. More text.",
     ]
     for email in flagged_emails:
         assert GUARD.check_text(email) == [(1, "e-mail address")], email
     assert GUARD.check_text(
         "alice@example.com\n"
+        "name@example.com.\n"
         "bob@example.org\n"
         "carol@example.net\n"
         "user@host.example\n"

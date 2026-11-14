@@ -95,7 +95,7 @@ SYNTHETIC_EMAILS = {
 EMAIL_CANDIDATE = re.compile(
     r"(?<![A-Za-z0-9._%+-])([A-Za-z0-9_][A-Za-z0-9._%+-]*@(?:"
     r"localhost|(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}"
-    r"))(?![A-Za-z0-9._%+-])"
+    r"))(?![A-Za-z0-9_%+-])(?!\.[A-Za-z0-9_%+-])"
 )
 URL_AUTHORITY_PREFIX = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s\"'<>()/?#@]*\Z")
 SCP_PATH_SUFFIX = re.compile(r":[A-Za-z0-9_./~-]")
@@ -133,8 +133,6 @@ def _is_flagged_email(line: str, match: re.Match[str]) -> bool:
     if low in SYNTHETIC_EMAILS:
         return False
     domain = low.rsplit("@", 1)[1]
-    if any(label.startswith("-") or label.endswith("-") for label in domain.split(".")):
-        return False
     return not (domain in ALLOWED_EMAIL_DOMAINS or domain.endswith(ALLOWED_EMAIL_DOMAIN_SUFFIXES))
 
 
