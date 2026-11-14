@@ -9,9 +9,8 @@
 
 ### Fixed
 
-- Check RPC and MCP method scopes before reading resource lineage, so a token
-  without the required scope receives the same refusal for existing, missing or
-  extra resource IDs.
+- Check RPC and MCP caller scopes before reading referenced resources, so a
+  caller without the required scope gets the same `FORBIDDEN` refusal as over HTTP.
 
 ## 0.2.20 / Desktop 0.1.16 (2026-11-13)
 
