@@ -257,7 +257,7 @@ exercise scrolling. They contain no live Fleet or account data.
 | View | Before | Candidate |
 | --- | --- | --- |
 | Work, zh-TW, 390×900 | [Before](workbench-evidence/ec11-mobile/before-phone-zh-TW.png) | [After](workbench-evidence/ec11-mobile/work-phone-zh-TW.png) |
-| Work, English, 1440×900 | [Before](workbench-evidence/ec11-mobile/before-desktop-en.png) | [After](workbench-evidence/ec11-mobile/work-desktop-en.png) |
+| Work, English, 1440×900 | The earlier capture is not available. | [After](workbench-evidence/ec11-mobile/work-desktop-en.png) |
 | List, zh-TW, 390×844 | — | [Full-screen list](workbench-evidence/ec11-mobile/list-phone-zh-TW.png) |
 | Results, English, 768×844 | — | [Full-width sheet](workbench-evidence/ec11-mobile/results-tablet-en.png) |
 
