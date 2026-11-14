@@ -361,7 +361,9 @@ class TaskDaemon:
             if method == "pm_history_continuation_preview":
                 from .pm_history_continuation import require_context_source
                 require_context_source(self.ops, principal, params.get('workspace_id'), params.get('body'))
-            if API_RPC.get(method) == "observe":
+            # Continuation preview is a POST on HTTP (no generic read_request) and
+            # validates/authorizes every preview field itself; keep read_response below.
+            if API_RPC.get(method) == "observe" and method != "pm_history_continuation_preview":
                 read_request(self.journal.db, principal, params)
             result = await self._call_api_bound(method, params, principal,
                                                 _observation_transport=_observation_transport)

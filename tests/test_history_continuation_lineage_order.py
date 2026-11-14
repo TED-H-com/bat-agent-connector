@@ -22,6 +22,14 @@ async def lineage_context(protected, tmp_path, monkeypatch, mock):  # noqa: F811
     principal = api_auth.Principal('synthetic-other', frozenset({'observe', 'manage'}))
     with pytest.raises(OperationError, match='NOT_FOUND'):
         pm_source_lineage.read_request(d.ops.db, principal, {'operation_id': oid})
+    row = d.ops.db.execute(
+        "SELECT resource_id FROM pm_source_lineage WHERE resource_type='work_item' AND original_operation_id=?",
+        (oid,),
+    ).fetchone()
+    assert row is not None
+    wi_id = row[0]
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        pm_source_lineage.read_request(d.ops.db, principal, {'work_item_id': wi_id})
     workspace = (await act(d, principal, 'pm.workspace.create', params={'name': 'Synthetic other'}))['result']['workspace']
     wid = workspace['workspace_id']
     source, ref = await retain(d, wid, principal, tmp_path, monkeypatch)
@@ -30,7 +38,7 @@ async def lineage_context(protected, tmp_path, monkeypatch, mock):  # noqa: F811
     monkeypatch.setenv('BATC_API_TOKEN', auth)
     server, fleet = mcp_server.build_server(d.fleet.config, principal_only=True)
     try:
-        yield d, port, oid, wid, source, ref, auth, server, mock
+        yield d, port, oid, wi_id, wid, source, ref, auth, server, mock, principal
     finally:
         await fleet.close()
 
@@ -49,7 +57,7 @@ async def invoke(transport, port, wid, auth, server, body):
 
 
 async def test_revoked_grant_fences_nested_lineage_ids(lineage_context):
-    d, port, oid, wid, source, ref, auth, server, mock = lineage_context
+    d, port, oid, _, wid, source, ref, auth, server, mock, _ = lineage_context
     d.history_collector.config = HistoryConfig(10, (replace(source, readers=('different-reader',)),))
     before, frame_at = db_snapshot(d.ops.db), len(mock.invokes)
     message = ' / '.join(pm_history_continuation.REASONS['PM_HISTORY_SOURCE_UNAVAILABLE'])
@@ -82,7 +90,7 @@ async def test_revoked_grant_fences_nested_lineage_ids(lineage_context):
 
 @pytest.mark.parametrize('shape', ['schema', 'missing-digest', 'unknown-key'])
 async def test_current_grant_preserves_reference_validation(lineage_context, shape):
-    d, port, _, wid, _, ref, auth, server, mock = lineage_context
+    d, port, _, _, wid, _, ref, auth, server, mock, _ = lineage_context
     body = malformed(request_body(ref), shape)
     before, frame_at = db_snapshot(d.ops.db), len(mock.invokes)
     message = ' / '.join(pm_history_continuation.REASONS['PM_HISTORY_REFERENCE_INVALID'])
@@ -98,16 +106,51 @@ async def test_current_grant_preserves_reference_validation(lineage_context, sha
     assert len(mock.invokes) == frame_at
 
 
-async def test_current_grant_retains_existing_lineage_protection(lineage_context):
-    d, port, oid, wid, _, ref, auth, server, mock = lineage_context
-    body = request_body(copy.deepcopy(ref))
-    body['context_ref']['operation_id'] = oid
+async def test_valid_preview_request_with_all_optional_fields_has_no_lineage_references(lineage_context):
+    from bat_agent_connector import pm_external_history as refs
+
+    d, _, _, _, wid, source, ref, _, _, _, principal = lineage_context
+    text_ref = refs.preview(
+        d.ops.db,
+        principal,
+        wid,
+        source.source_id,
+        ref['entry_id'],
+        ref['content_digest'],
+        {'kind': 'text', 'part_index': 0, 'start_codepoint': 0, 'end_codepoint': 8},
+    )['ref']
+    for selected_ref in (ref, text_ref):
+        body = request_body(copy.deepcopy(selected_ref)) | {'model': 'claude-sonnet-4-5'}
+        pm_history_continuation.validate_preview_request(body)
+        assert pm_source_lineage.references(body) == set()
+        assert pm_source_lineage.references({'workspace_id': wid, 'body': body}) == set()
+
+
+async def test_current_grant_unknown_ref_keys_match_http_across_transports(lineage_context):
+    d, port, oid, wi_id, wid, _, ref, auth, server, mock, _ = lineage_context
     before, frame_at = db_snapshot(d.ops.db), len(mock.invokes)
-    for transport in ('rpc', 'mcp'):
-        status, raw = await invoke(transport, port, wid, auth, server, body)
-        if transport == 'rpc':
-            assert status == 400 and json.loads(raw)['error'] == 'NOT_FOUND'
-        else:
-            assert 'NOT_FOUND' in raw.decode()
-        assert db_snapshot(d.ops.db) == before
+    cases = [
+        ('context_ref_operation_id', (oid, 'op_' + 'f' * 32), 'PM_HISTORY_REFERENCE_INVALID'),
+        ('body_work_item_id', (wi_id, 'wi_' + 'f' * 20), 'PM_EXTERNAL_CONTINUATION_UNSUPPORTED'),
+    ]
+    for kind, identities, code in cases:
+        message = ' / '.join(pm_history_continuation.REASONS[code])
+        for transport in ('http', 'rpc', 'mcp'):
+            replies = []
+            for identity in identities:
+                body = request_body(copy.deepcopy(ref))
+                if kind == 'context_ref_operation_id':
+                    body['context_ref']['operation_id'] = identity
+                else:
+                    body['work_item_id'] = identity
+                status, raw = await invoke(transport, port, wid, auth, server, body)
+                if transport == 'http':
+                    assert status == 422 and json.loads(raw) == {'error': {'code': code, 'message': message}}
+                elif transport == 'rpc':
+                    assert status == 400 and json.loads(raw) == {'error': code, 'message': message}
+                else:
+                    assert code in raw.decode() and message in raw.decode()
+                assert db_snapshot(d.ops.db) == before
+                replies.append(raw)
+            assert replies[0] == replies[1]
     assert len(mock.invokes) == frame_at
