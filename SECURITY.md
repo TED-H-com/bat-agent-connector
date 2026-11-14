@@ -38,8 +38,9 @@ Sessions a person created in BAT are read-only through every tool, whatever the 
 * **Orchestrate:** per-host cap on concurrently orchestrated sessions (default 4), per-call cap for fan-out, merges
   only into a main checkout inside a managed root (never a human checkout) and only when BAT reports the branch
   strictly ahead of its source (no conflicts possible), the worktree and main checkout are clean and the main checkout
-  already sits on the source branch; removal refuses dirty worktrees and (when
-  deleting the branch) unmerged commits unless explicitly overridden. Nothing is ever forced by default.
+  already sits on the source branch. Legacy `worktree_remove` is disabled and refuses with
+  `LEGACY_WORKTREE_REMOVE_DISABLED` after its existing guards; use `cleanup_preview` / `cleanup_apply` or
+  `batc resource-cleanup preview` / `apply` for reviewed removal. Nothing is ever forced by default.
 * **Backpressure:** a background reader always drains the socket; per-subscriber queues are bounded (drop-oldest).
 * **Size caps:** frames up to 48 MiB, tool output capped (`session_read` hard cap 60k chars, diffs 100k).
 
