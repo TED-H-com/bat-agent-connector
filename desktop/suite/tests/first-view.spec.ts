@@ -40,10 +40,16 @@ for (const language of ['en', 'zh-TW']) {
     await assertCalls();
     await expect.poll(() => page.evaluate(() => window.__suiteCalls.length)).toBeGreaterThanOrEqual(3);
     const now = await page.evaluate(() => Date.now());
-    await page.clock.pauseAt(new Date(now));
-    const beforeRecovery = await page.evaluate(() => window.__suiteCalls.length);
-    // Move wall time without firing the poll timer: visibility must wake recovery.
-    await page.clock.setSystemTime(new Date(now + 3100));
+    const pausedAt = now + 1000;
+    await page.clock.pauseAt(new Date(pausedAt));
+    let beforeRecovery = -1;
+    await expect.poll(async () => {
+      const previous = beforeRecovery;
+      beforeRecovery = await page.evaluate(() => window.__suiteCalls.length);
+      return beforeRecovery === previous;
+    }, {intervals: [250]}).toBe(true);
+    // With the clock paused and in-flight calls settled, advance past the 3s throttle so only visibilitychange can wake recovery.
+    await page.clock.setSystemTime(new Date(pausedAt + 3100));
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await expect.poll(() => page.evaluate(() => window.__suiteCalls.length)).toBeGreaterThan(beforeRecovery);
     await assertCalls();
