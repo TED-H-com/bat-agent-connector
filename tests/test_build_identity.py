@@ -1,12 +1,13 @@
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 import tarfile
 import time
 import zipfile
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -435,3 +436,126 @@ def test_update_source_verification_tolerates_legacy_location(clean_wheel, tmp_p
     (package / "build-info.json").write_text(json.dumps({"commit": None}))
     with pytest.raises(UpdateError, match="installed_identity_mismatch"):
         verify_source_package(repo / "src/bat_agent_connector", package, head)
+
+
+def _load_hook(monkeypatch):
+    if importlib.util.find_spec("hatchling") is None:
+        interface = ModuleType("hatchling.builders.hooks.plugin.interface")
+        interface.BuildHookInterface = object
+        for name, module in (
+            ("hatchling", ModuleType("hatchling")),
+            ("hatchling.builders", ModuleType("hatchling.builders")),
+            ("hatchling.builders.hooks", ModuleType("hatchling.builders.hooks")),
+            ("hatchling.builders.hooks.plugin", ModuleType("hatchling.builders.hooks.plugin")),
+            ("hatchling.builders.hooks.plugin.interface", interface),
+        ):
+            monkeypatch.setitem(sys.modules, name, module)
+    path = Path(__file__).resolve().parents[1] / "hatch_build.py"
+    spec = importlib.util.spec_from_file_location("test_hatch_build_hook", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_managed_runtime_builder():
+    path = Path(__file__).resolve().parents[1] / "desktop/scripts/build-managed-runtime.py"
+    spec = importlib.util.spec_from_file_location("test_managed_runtime_builder", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("mode", [
+    "clean",
+    "tracked-change",
+    "untracked",
+    "ignored",
+    "override-equal",
+    "override-different",
+    "not-a-checkout",
+    "not-a-checkout-override",
+])
+def test_managed_runtime_build_commit_parity_with_hook(tmp_path, monkeypatch, mode):
+    for key in ("BATC_BUILD_COMMIT", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+        monkeypatch.delenv(key, raising=False)
+    hook = _load_hook(monkeypatch)
+    builder = _load_managed_runtime_builder()
+    repo, head = _source_repo(tmp_path, mode)
+    other = "b" * 40 if head != "b" * 40 else "c" * 40
+    if mode == "tracked-change":
+        with (repo / "README.md").open("a") as stream:
+            stream.write("\nTracked change.\n")
+    elif mode == "untracked":
+        (repo / "untracked.txt").write_text("untracked\n")
+    elif mode == "ignored":
+        cache = repo / "__pycache__"
+        cache.mkdir()
+        (cache / "fixture.pyc").write_text("ignored\n")
+    elif mode == "override-equal":
+        monkeypatch.setenv("BATC_BUILD_COMMIT", head)
+    elif mode == "override-different":
+        monkeypatch.setenv("BATC_BUILD_COMMIT", other)
+    elif mode in {"not-a-checkout", "not-a-checkout-override"}:
+        shutil.rmtree(repo / ".git")
+        if mode == "not-a-checkout-override":
+            monkeypatch.setenv("BATC_BUILD_COMMIT", other)
+    expected = {
+        "clean": head,
+        "ignored": head,
+        "override-equal": head,
+        "not-a-checkout-override": other,
+    }.get(mode)
+    builder_commit = builder._build_commit(repo)
+    hook_commit = hook._build_commit(repo)
+    assert builder_commit == hook_commit == expected
+
+
+def test_managed_runtime_build_commit_format_rules_and_outputs(tmp_path, monkeypatch):
+    for key in ("BATC_BUILD_COMMIT", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+        monkeypatch.delenv(key, raising=False)
+    builder = _load_managed_runtime_builder()
+    repo, head = _source_repo(tmp_path, "managed-runtime-format")
+    build_dir = repo / "build" / "managed-runtime"
+    output_dir = repo / "desktop" / "managed-runtime"
+    real_run = subprocess.run
+
+    def fake_run(args, **kwargs):
+        if len(args) >= 3 and args[1:3] == ["-m", "PyInstaller"]:
+            executable = "batc-managed-runtime" + (".exe" if sys.platform == "win32" else "")
+            dist = build_dir / "dist"
+            dist.mkdir(parents=True, exist_ok=True)
+            (dist / executable).write_bytes(b"fixture runtime\n")
+            return SimpleNamespace(returncode=0)
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(builder, "ROOT", repo)
+    monkeypatch.setattr(builder, "BUILD", build_dir)
+    monkeypatch.setattr(builder, "OUTPUT", output_dir)
+    monkeypatch.setattr(builder, "importlib", SimpleNamespace(
+        metadata=SimpleNamespace(version=lambda name: "6.22.3" if name == "pyinstaller" else __version__)))
+    monkeypatch.setattr(builder, "subprocess", SimpleNamespace(
+        run=fake_run, CalledProcessError=subprocess.CalledProcessError))
+
+    monkeypatch.setenv("BATC_BUILD_COMMIT", head.upper())
+    with pytest.raises(ValueError, match="BATC_BUILD_COMMIT must be a full commit hash"):
+        builder._build_commit(repo)
+    with pytest.raises(SystemExit, match="BATC_BUILD_COMMIT must be a full commit hash"):
+        builder.main()
+
+    monkeypatch.setenv("BATC_BUILD_COMMIT", "b" * 64)
+    assert builder._build_commit(repo) is None
+
+    monkeypatch.delenv("BATC_BUILD_COMMIT", raising=False)
+    builder.main()
+    assert json.loads((build_dir / "build-info.json").read_text()) == {"commit": head}
+    assert json.loads((output_dir / "manifest.json").read_text())["build_commit"] == head
+
+    (repo / "untracked.txt").write_text("untracked\n")
+    monkeypatch.setenv("BATC_BUILD_COMMIT", head)
+    builder.main()
+    assert json.loads((build_dir / "build-info.json").read_text()) == {"commit": None}
+    assert json.loads((output_dir / "manifest.json").read_text())["build_commit"] is None
+
+    shutil.rmtree(repo / ".git")
+    monkeypatch.setenv("BATC_BUILD_COMMIT", "b" * 64)
+    assert builder._build_commit(repo) == "b" * 64
