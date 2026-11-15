@@ -36,8 +36,8 @@ from . import (
     service,
     triage,
 )
-from .config import Config, load_config
-from .errors import BatError, WriteRefused
+from .config import Config, default_config_path, load_config, parse_config
+from .errors import BatError, ConfigNotFound, WriteRefused
 from .fleet import Fleet
 from .redact import redact
 from .task_daemon import request as task_request
@@ -1981,11 +1981,28 @@ def _check_loopback(host: str) -> None:
     raise SystemExit("refusing to bind the HTTP transport to a non-loopback address")
 
 
+def _startup_config(args: argparse.Namespace) -> Config:
+    """Load the host configuration this process starts with.
+
+    The principal-only profile reaches hosts only through the central service, so it needs no
+    host configuration of its own: when no file is named and none exists at the default place,
+    it starts with an empty one. A file named by --config or BATC_CONFIG must exist in every
+    profile, and a file that exists but cannot be read or parsed is always an error.
+    """
+    named = bool(args.config or os.environ.get("BATC_CONFIG"))
+    try:
+        return load_config(args.config)
+    except ConfigNotFound:
+        if named or not args.principal_only:
+            raise
+        return parse_config({}, default_config_path())
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="bat-agent-connector-mcp", description="MCP server for Better Agent Terminal"
     )
-    ap.add_argument("--config", help="path to hosts.toml")
+    ap.add_argument("--config", help="path to hosts.toml (--principal-only starts without one when none is named)")
     ap.add_argument("--read-only", action="store_true", help="never register write tools")
     ap.add_argument("--principal-only", action="store_true",
                     help="only central, BATC_API_TOKEN-authorized tools; omit direct Fleet tools and admin fallback")
@@ -1995,7 +2012,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--version", action="version", version=__version__)
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
-    cfg = load_config(args.config)
+    cfg = _startup_config(args)
     server, _ = build_server(cfg, read_only=args.read_only, principal_only=args.principal_only)
     if args.http:
         _check_loopback(args.host)

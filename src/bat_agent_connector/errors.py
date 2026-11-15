@@ -9,6 +9,10 @@ class ConfigError(BatError):
     pass
 
 
+class ConfigNotFound(ConfigError):
+    """Neither the selected configuration file nor a fragment beside it exists."""
+
+
 class TokenUnavailable(ConfigError):
     pass
 

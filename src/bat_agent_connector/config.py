@@ -53,7 +53,7 @@ from .connection_sources import (
 )
 from .connection_sources import SourceUnavailable, TokenMode, read_token_store, select_profiles_directory
 from .deploy_status import parse_deploy_status
-from .errors import ConfigError, TokenUnavailable
+from .errors import ConfigError, ConfigNotFound, TokenUnavailable
 from .redact import register_secret
 from .session_history_config import HistoryConfig, parse_history
 from .usage_config import UsageConfig, parse_usage
@@ -782,7 +782,7 @@ def load_config(path: str | Path | None = None) -> Config:
         raise ConfigError(f"cannot list config fragments: {overlay}") from None
     files = ([p] if os.path.lexists(p) else []) + fragments
     if not files:
-        raise ConfigError(
+        raise ConfigNotFound(
             f"config not found: {p} (run `batc import-bat` or copy examples/hosts.example.toml)"
         )
     data: dict = {}
