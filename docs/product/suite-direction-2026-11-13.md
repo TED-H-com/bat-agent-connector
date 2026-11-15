@@ -71,8 +71,10 @@
 
 ## 分期
 
-主機合約：[Connector 握手合約](../design/host-contracts.md)記錄 P1 第一段的 capability
-偵測、hello、記憶中的身分及降級行為；此段不啟用任何主機功能，也不是 P1 完成或實機驗收。
+主機合約：[Connector 主機合約](../design/host-contracts.md)記錄 P1 的 capability
+偵測、hello、記憶中的身分、降級行為，以及 client 可以送出的兩個唯讀操作
+（`bac:workspace-read`、`bac:session-locate`）；目前沒有任何產品路徑呼叫這兩個讀取，
+也沒有啟用任何主機寫入功能，這不是 P1 完成或實機驗收。
 
 各期的驗收都分開回報 branch、merged、installed、live-tested；CI 不是實機驗收。
 
