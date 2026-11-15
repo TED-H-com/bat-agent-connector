@@ -89,7 +89,7 @@ jobs:
 
   pytest:
     needs: scope
-    name: pytest ${{ matrix.python }} (${{ matrix.shard }}/5)
+    name: pytest ${{ matrix.python }} (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     # Twice the slowest predicted job (including overhead), rounded up to 5m.
     timeout-minutes: 45
@@ -97,7 +97,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ${{ fromJSON(needs.scope.outputs.pythons) }}
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -108,7 +108,9 @@ jobs:
       - name: Sync (locked)
         run: uv sync --locked --extra dev
       - name: Tests (mock server only; existing live-test policy unchanged)
-        # Run 39922072602: max completed Tests 1705s * 1.5 = 42m37.5s < 43m.
+        # Run 43657077963 timed every test file on five shards. Split over eight, a shard holds
+        # at most 1203s of tests on a Python version with complete reports, and a Tests step
+        # took at most 39s longer than its tests: (1203s + 39s) * 1.5 = 31m03s < 43m.
         # Max setup 11s + Tests 43m + upload/cleanup reserve 1m < job 45m (post-test max 6s).
         # A step deadline can preserve uploads only while the runner remains healthy.
         timeout-minutes: 43
@@ -119,7 +121,7 @@ jobs:
           # setup/call/teardown, including failed-call cleanup. Disable the built-in
           # timer: its exception hook cancels dumps before a failed test's teardown.
           uv run pytest -q -p tests.ci_shard_plugin -p no:faulthandler \
-            --ci-shard-index=${{ matrix.shard }} --ci-shard-count=5 \
+            --ci-shard-index=${{ matrix.shard }} --ci-shard-count=8 \
             --ci-shard-manifest=ci-results/manifest.json \
             --junitxml=ci-results/junit.xml -o junit_family=xunit1 --durations=15 \
             --ci-watchdog-seconds=600 \
@@ -159,7 +161,7 @@ jobs:
           PYTHONS: ${{ join(fromJSON(needs.scope.outputs.pythons), ' ') }}
         run: >-
           uv run --no-project python -m scripts.ci_complete ci-results
-          --python $PYTHONS --shards 5 --shards-result "$SHARDS_RESULT"
+          --python $PYTHONS --shards 8 --shards-result "$SHARDS_RESULT"
 
   secrets-scan:
     runs-on: ubuntu-latest

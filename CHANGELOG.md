@@ -4,6 +4,8 @@
 
 - Dashboard data tables now have accessible names and mark the current row with `aria-current` for assistive technology.
 - CI now runs the managed browser check in English and Traditional Chinese.
+- CI runs each Python version's tests on eight runners instead of five, with freshly measured
+  per-file durations, after a job on `main` reached its 43-minute limit.
 - On Linux and macOS, create the missing parent directories of the journal, task artifacts and handoff archives owner-only (`0700`), so a group-writable umask such as Ubuntu's default `0002` no longer leaves directories that the Fleet bootstrap refuses.
 - Preview exact retained external context together with an independently verified
   published branch head through HTTP, MCP and the desktop bridge. Preserve both
