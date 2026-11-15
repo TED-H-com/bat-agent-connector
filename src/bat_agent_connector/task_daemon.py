@@ -140,8 +140,8 @@ class LegacyTaskError(OperationError, ValueError):
 
 ADMIN_RPC = {"api_token_issue", "api_token_revoke", "api_token_list", "work_reconcile_capability"}
 # Fixed answers: neither repeats anything the caller sent.
-CREDENTIAL_REFUSAL = ("the presented token is not accepted for this request "
-                      "(unknown to this service, revoked, expired or issued for another task)")
+CREDENTIAL_REFUSAL = ("the presented token is not accepted for this request (unknown to this service, "
+                      "revoked, expired, or a capability that does not cover this request)")
 TASK_URL_REFUSAL = ("task daemon URL must be a loopback RPC address such as http://127.0.0.1:18796/rpc "
                     "(reach a remote daemon through SSH forwarding)")
 

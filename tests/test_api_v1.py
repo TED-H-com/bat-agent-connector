@@ -602,6 +602,21 @@ async def test_rpc_keeps_its_answers_for_accepted_credentials(served):
     assert status == "HTTP/1.1 200 OK" and [p["actor"] for p in body["result"]["principals"]] == ["observer"]
 
 
+async def test_rpc_accepts_a_task_capability_only_for_what_it_covers(served):
+    d, port = served
+    own, other = (d.journal.submit(project="p", host="h1", workspace="w", original_words="do the work",
+                                   acceptance="tests pass", idempotency_key=key)["task_id"]
+                  for key in ("capability:1", "capability:2"))
+    capability = d.journal.issue_capability(own)
+    # For its own task the capability is accepted: whatever the request then gets, it is not this refusal.
+    _, accepted = await rpc_exchange(port, capability, "task_read", {"task_id": own})
+    assert accepted.get("error") != "UNAUTHORIZED"
+    # For another task, or for a method it does not cover, it is not accepted.
+    assert await rpc_exchange(port, capability, "task_read", {"task_id": other}) == UNACCEPTED
+    assert await rpc_exchange(port, capability, "work_status", {"task_id": own}) == UNACCEPTED
+    assert await rpc_exchange(port, capability, "api_capabilities") == UNACCEPTED
+
+
 async def test_rpc_clients_report_the_refusal_and_the_expected_address(served, monkeypatch):
     d, port = served
     url = f"http://127.0.0.1:{port}/rpc"
