@@ -171,7 +171,7 @@ class MockBac:
         if channel == "bac:workspace-read":
             valid = (
                 isinstance(value, str)
-                and bool(re.fullmatch(r"[A-Za-z0-9_.\-一-鿿]+", value))
+                and bool(re.fullmatch(r"[A-Za-z0-9_.\-\u4e00-\u9fff]+", value))
                 and 1 <= len(value.encode("utf-8")) <= 128
             )
         else:
