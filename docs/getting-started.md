@@ -459,7 +459,7 @@ Register `bat-agent-connector-mcp` in the MCP client's supported configuration. 
 }
 ```
 
-Run the configured central service and give this MCP process its own scoped `BATC_API_TOKEN` through private environment configuration, including `observe` for reads. Ensure it can find the executable and intended configuration. `--principal-only` keeps the agent on its authenticated central identity; retain it when enabling writes. Remove only `--read-only` when the client is meant to act; host gates and scopes still apply. Set `BATC_TASK_URL` privately if central uses a different RPC endpoint.
+Run the configured central service and give this MCP process its own scoped `BATC_API_TOKEN` through private environment configuration, including `observe` for reads. Ensure the client can find the executable. A `--principal-only` process needs no host configuration file of its own, because it reads hosts through the central service. `--principal-only` keeps the agent on its authenticated central identity; retain it when enabling writes. Remove only `--read-only` when the client is meant to act; host gates and scopes still apply. Set `BATC_TASK_URL` privately if central uses a different RPC endpoint.
 
 The operator compatibility mode without `--principal-only` includes local-admin read fallback and direct Fleet tools. It is not a scope-isolated agent endpoint. A trusted local operator can use `bat-agent-connector-mcp --read-only` for direct BAT observation without the central workflow, but this is not the default for a shared agent integration.
 
@@ -470,6 +470,20 @@ bat-agent-connector-mcp --principal-only --read-only --http --port 8765
 ```
 
 This serves MCP at `http://127.0.0.1:8765/mcp`; it is not the Web Dashboard address. Use the [canonical skill](../skills/bat-agent-connector/SKILL.md) and [matching agent adapters](agent-skills.md) for durable work and recovery. Task Service recipes have additional settings; a queued task with the planner disabled does not prove dispatch failure. [Task Service](design/task-service.md).
+
+### Connect a new agent, step by step
+
+Each step depends on the one before it. Steps 1 to 4 run on the Connector host, as the user that runs the service.
+
+1. **BAT accepts remote connections.** BAT's remote access is running on the BAT host, and the service's host configuration lists that host (see "3. Configure BAT access"). `batc hosts` probes it.
+2. **The operator installation is present.** `batc --version` and `bat-agent-connector-mcp --version` both print a version (see "2. Install Connector"). The bundled desktop app does not provide these commands.
+3. **The central service is running.** `batc serve` stays running (see "4. Start central and open Web").
+4. **The agent has its own token.** `batc api-token issue --actor NAME --scope observe` prints a JSON object once; its `token` field is the token. Add `--scope operate` for an agent that sends to managed sessions and `--scope start` for one that starts them. Run the command as the same user and with the same `BATC_STATE_DIR` as the service.
+5. **The MCP client starts the agent profile.** The client runs `bat-agent-connector-mcp` with the argument `--principal-only` and gives the process that token as `BATC_API_TOKEN`. The process runs on the Connector host, or reaches the service's loopback port through an SSH tunnel. Set `BATC_TASK_URL` only when the service is not at `http://127.0.0.1:18796/rpc`.
+6. **The agent reads first.** `capabilities_get` returns its actor, its scopes and the actions it may use. `inventory_hosts`, `workspaces_list` and `inventory_sessions` show what the service observes.
+7. **The agent acts on managed work.** `session_start` starts a managed session in its own worktree. `operation_submit` with `action="session.send"`, the session as `target`, an `idempotency_key` and `confirm=true` sends to it; the agent profile has no `session_send` tool. Sending needs the host's `writes` gate, and starting needs `writes` and `orchestrate` (see "6. Enable useful work deliberately"). A session that a person opened in BAT stays read-only: the agent can read it, or continue from a recorded checkpoint in a new managed session.
+
+The [canonical skill](../skills/bat-agent-connector/SKILL.md) continues from here for the agent: "Connect or reconnect" covers reading capabilities, recovering saved context and what to do after a lost reply.
 
 ## Troubleshooting
 
@@ -497,6 +511,31 @@ removing write permissions alone will not fix ownership; ask the administrator.
 | Fleet does not start | For a new installation, use the [public Rust configuration](design/fleet-configuration.md), then check selected connections, prerequisites and ownership. An omitted backend retains PowerShell compatibility; existing owners require reviewed migration. |
 
 Real Fleet/account/deployment acceptance is performed by the user. The [46-item acceptance reference](product/acceptance-v2.md) remains useful for that work; it is excluded from the agent's completion checklist, not reported as already passed.
+
+### An agent cannot connect or act
+
+The texts below are what an MCP client or `batc` reports. A refusal is the service's answer, not a fault to work around: do not switch to the operator profile, another identity's token or raw BAT to get past it.
+
+| What the agent or operator sees | What it means and what to do |
+| --- | --- |
+| The MCP client cannot start `bat-agent-connector-mcp`, or lists no tools | The operator installation is missing on that machine, or the command is not on the `PATH` that the client uses. The bundled desktop app does not install the command. |
+| `config not found` when the MCP process starts | Without `--principal-only` the process connects to BAT hosts itself and needs `hosts.toml`. An agent keeps `--principal-only`. A file named by `--config` or `BATC_CONFIG` must exist. |
+| `BATC_API_TOKEN is required for the principal-only profile (including reads)` | The MCP process did not receive a token. Set it in the environment that the MCP client gives this server; a variable set in another shell does not reach it. |
+| `Connection refused` | No service listens at that address. Start `batc serve`, or set `BATC_TASK_URL` to the port it uses. |
+| `task daemon URL must be a loopback RPC address such as http://127.0.0.1:18796/rpc` | `BATC_TASK_URL` must use `http`, a loopback host and the path `/rpc`. Reach a remote service through an SSH tunnel to its loopback port. |
+| `UNAUTHORIZED: the presented token is not accepted for this request` | This service does not know the token (for example, another service issued it), or the token is revoked or expired. Issue a new one from the running service. |
+| A `batc` command ends with `FileNotFoundError` and names `task-admin.token` | The command cannot find the service's local admin token: the service has not been started with this state directory, or the command runs as another user or with another `BATC_STATE_DIR`. Start `batc serve` first, then run the command in the same environment. |
+| `FORBIDDEN: … needs the 'operate' scope` (or another scope) | The token lacks that scope. Issue a token that includes it. |
+| `inventory_hosts` returns no hosts | The agent profile reads hosts through the central service. Add the host to the configuration that the service uses (see "3. Configure BAT access"). |
+| `UNKNOWN_HOST` | The service's host configuration has no host of that name. Use a name that `inventory_hosts` returns. |
+| `TIER_DISABLED` | The operator has not turned on `writes` for that host in the service's host configuration; starting a session needs `writes` and `orchestrate`. |
+| `MANUAL_READ_ONLY` or `UNKNOWN_READ_ONLY` | A person opened the session in BAT, or its origin is not proven, so it stays read-only. Read it, or continue from a checkpoint in a new managed session. |
+| `FOREIGN_CONTROLLER` | Another controller started the session. Start a managed session of your own. |
+| `Unknown tool: session_send` | The agent profile sends with `operation_submit` and `action="session.send"`. |
+| `… requires confirm=true` | A write tool needs the explicit argument `confirm=true`. |
+| No write tools are listed | The process runs with `--read-only`. Remove only that flag and keep `--principal-only`. |
+| `TOKEN_STORE_ENCRYPTED` when importing or connecting to a host | BAT's token store is encrypted with the system keychain, so the service cannot read it. Give that host a `token_ref` of `env:NAME` or `file:/path`. |
+| The setup form says that the connection link has no token | Headless BAT shows `token=[REDACTED]` in its `connect:` line. Start it with `--print-connect-link` and copy the `full-connect:` line. |
 
 ## Diagnostics
 
