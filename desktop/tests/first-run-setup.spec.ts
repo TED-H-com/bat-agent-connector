@@ -42,6 +42,19 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
     expect(await storage(page)).not.toMatch(/synthetic-bat-secret|token=/);expect(state.staged).toEqual([]);expect(state.posts).toEqual([]);
     await field(page,'connection_url').fill('');await expect(page.locator('[data-setup-error=connection_url]')).toBeHidden();
   });
+  test('redacted masked URL explains where the complete link is and is never saved; edits can clear it',async({page})=>{
+    const state = await managedSetupFixture(page,native,locale), redacted = `wss://demo.example:9876?token=[REDACTED]&fp=${'ab'.repeat(32)}`;
+    await page.goto('/dashboard/'); await openSetupAdvanced(page);
+    await field(page,'connection_url').fill(redacted);
+    await expect(page.locator('[data-setup-error=connection_url]')).toBeHidden();
+    await field(page,'connection_url').blur();
+    await expect(page.locator('[data-setup-error=connection_url]')).toHaveText(locale==='en'
+      ? 'This link has no token: BAT shows [REDACTED] in its place. Copy the link in the BAT window (Settings → Remote → Remote Access → Connection URL → Copy). For headless BAT, start it in a terminal with --print-connect-link and copy the full-connect: line.'
+      : '這個網址不含權杖：BAT 以 [REDACTED] 取代了它。請在 BAT 視窗的「設定 → 遠端 → 遠端存取 → 連線網址」按「複製」；無介面模式請在終端機以 --print-connect-link 啟動 BAT，再複製 full-connect: 行。');
+    await expect(field(page,'connection_url')).toHaveValue(redacted);
+    expect(await storage(page)).not.toMatch(/REDACTED|token=/);expect(state.staged).toEqual([]);expect(state.posts).toEqual([]);
+    await field(page,'connection_url').fill('');await expect(page.locator('[data-setup-error=connection_url]')).toBeHidden();
+  });
   test('URL errors wait for paste, change, blur or submit rather than typing',async({page})=>{
     const state = await managedSetupFixture(page,native,locale); await page.goto('/dashboard/'); await openSetupAdvanced(page);
     const input=field(page,'connection_url'), error=page.locator('[data-setup-error=connection_url]');

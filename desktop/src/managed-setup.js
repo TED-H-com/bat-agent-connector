@@ -14,6 +14,9 @@ export function normalizeSetupFingerprint(value) {
   return /^[0-9A-F]{64}$/.test(normalized) ? normalized : null;
 }
 const explicitPort = value => value.replace(/^wss?:\/\//i, '').split(/[/?#]/, 1)[0].match(/:(\d+)$/)?.[1];
+// BAT 3.2.16 and later print a display link whose token is this placeholder. It carries no
+// credential, so it is never a connection URL.
+const REDACTED_TOKEN = '[REDACTED]';
 export function parseBatConnectionUrl(value) {
   try {
     const raw = value.trim();
@@ -23,10 +26,20 @@ export function parseBatConnectionUrl(value) {
     // URL.port drops protocol-default ports (443/80); keep an explicit BAT port.
     const port = Number(explicitPort(raw) || 9876);
     if (!['wss:', 'ws:'].includes(url.protocol) || !url.hostname || url.username || url.password ||
-        !token || !fingerprint || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+        !token || token === REDACTED_TOKEN || !fingerprint || !Number.isInteger(port) || port < 1 || port > 65535) return null;
     return {endpoint: `wss://${url.hostname}:${port}`, fingerprint, token,
       loopback: ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname.toLowerCase())};
   } catch {return null;}
+}
+// The message for a value parseBatConnectionUrl refused: a redacted display link gets its own
+// explanation, every other value the general one.
+export function connectionUrlFault(value) {
+  try {
+    const raw = String(value).trim();
+    const url = new URL(/^wss?:\/\//i.test(raw) ? raw : `wss://${raw}`);
+    if (url.searchParams.get('token') === REDACTED_TOKEN) return 'setup_redacted_connection_url';
+  } catch { /* not a URL */ }
+  return 'setup_invalid_connection_url';
 }
 const connectionFacets = ['transport', 'service', 'trust_sign_in', 'connection'];
 const connectionReasons = new Set(['never_observed', 'host_unreachable', 'host_not_refreshed', 'DISCOVERY_SCOPE_CHANGED',
@@ -342,10 +355,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   });
   copyInput.addEventListener('compositionend', splitCopy);
   const copyForm = h('form', {hidden: true, 'data-setup-copy': '', onsubmit: event => {
-    event.preventDefault(); splitCopy();
+    event.preventDefault(); const fault = connectionUrlFault(copyInput.value); splitCopy();
     copyInput.value = ''; // Invalid links are cleared too, without echoing them.
     copyError.hidden = copyReady;
-    copyError.textContent = copyReady ? '' : t('setup_invalid_connection_url');
+    copyError.textContent = copyReady ? '' : t(fault);
     if (!copyReady || !alive() || busy || saved.intent || !readReady) return;
     copyReady = false; copyRead.hidden = true;
     if (snapshot.discovery_contract_version === 1) void findSources().catch(showError);
@@ -433,7 +446,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     if (!node.value) {fieldError('connection_url', null); return;}
     clearPasteRead();
     const parsed = parseBatConnectionUrl(node.value);
-    if (!parsed) {if (reportError) fieldError('connection_url', 'setup_invalid_connection_url'); return;}
+    if (!parsed) {if (reportError) fieldError('connection_url', connectionUrlFault(node.value)); return;}
     node.value = ''; fieldError('connection_url', null);
     try {applyConnection(parsed);} catch (error) {showError(error, {sourceRefresh:false});}
   }
@@ -527,7 +540,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
   }
   function validateHost(only, defaults = false) {
     const value = name => fields.get(name).value.trim(), faults = {};
-    if (fields.get('connection_url').value) faults.connection_url = 'setup_invalid_connection_url';
+    if (fields.get('connection_url').value) faults.connection_url = connectionUrlFault(fields.get('connection_url').value);
     if (!value('host')) faults.host = 'setup_required';
     else if (!validSetupHostId(value('host'))) faults.host = 'error_code_INVALID_TARGET';
     if (!value('url')) faults.url = 'setup_required';

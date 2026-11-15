@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {normalizeSetupFingerprint, parseBatConnectionUrl, validSetupEndpoint, validSetupHostId,
+import {connectionUrlFault, normalizeSetupFingerprint, parseBatConnectionUrl, validSetupEndpoint, validSetupHostId,
   validSetupRemoteUrl, setupDraftForStorage} from '../src/managed-setup.js';
 
 test('repository drafts accept credential-free HTTPS and SSH, never credential URLs', () => {
@@ -92,6 +92,18 @@ test('IPv6 loopback is a name suggestion, and URL parsing rejects malformed inpu
   for (const value of ['', 'bad', `https://localhost?token=x&fp=${fingerprint}`, `wss://localhost?fp=${fingerprint}`,
     'wss://localhost?token=synthetic-secret&fp=wrong', `wss://user:pass@localhost?token=x&fp=${fingerprint}`, `wss://localhost:0?token=x&fp=${fingerprint}`])
     assert.equal(parseBatConnectionUrl(value), null);
+});
+test('redacted BAT display links are rejected with a specific fault while normal tokens parse', () => {
+  for (const value of [`wss://demo.example:9876?token=[REDACTED]&fp=${fingerprint}`,
+    `wss://demo.example:9876?token=%5BREDACTED%5D&fp=${fingerprint}`,
+    `demo.example?token=[REDACTED]&fp=${fingerprint}`]) {
+    assert.equal(parseBatConnectionUrl(value), null);
+    assert.equal(connectionUrlFault(value), 'setup_redacted_connection_url');
+  }
+  for (const value of ['', 'bad', `wss://localhost?fp=${fingerprint}`])
+    assert.equal(connectionUrlFault(value), 'setup_invalid_connection_url');
+  for (const token of ['REDACTED', 'x[REDACTED]'])
+    assert.equal(parseBatConnectionUrl(`wss://demo.example:9876?token=${token}&fp=${fingerprint}`)?.token, token);
 });
 test('host IDs and manually entered origins match central admission rules', () => {
   for (const id of ['local', 'A_1.-', 'a'.repeat(64)]) assert.equal(validSetupHostId(id), true);

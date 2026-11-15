@@ -39,6 +39,12 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test.d
     await input.fill('bad-link-with-synthetic-secret'); await copy.locator('button').click();
     await expect(input).toHaveValue(''); await expect(copy.locator('[role=alert]')).toHaveText(locale === 'en' ? 'This is not a BAT connection URL' : '這不是 BAT 連線網址');
     expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
+    await input.fill(`wss://demo.example:9876?token=[REDACTED]&fp=${'ab'.repeat(32)}`); await copy.locator('button').click();
+    await expect(input).toHaveValue('');
+    await expect(copy.locator('[role=alert]')).toHaveText(locale === 'en'
+      ? 'This link has no token: BAT shows [REDACTED] in its place. Copy the link in the BAT window (Settings → Remote → Remote Access → Connection URL → Copy). For headless BAT, start it in a terminal with --print-connect-link and copy the full-connect: line.'
+      : '這個網址不含權杖：BAT 以 [REDACTED] 取代了它。請在 BAT 視窗的「設定 → 遠端 → 遠端存取 → 連線網址」按「複製」；無介面模式請在終端機以 --print-connect-link 啟動 BAT，再複製 full-connect: 行。');
+    expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
     await input.fill(`ws://demo.example:9876?token=synthetic-bat-secret&fp=${'ab'.repeat(32)}`);
     await expect(input).toHaveValue('');
     await expect(copy.locator('[role=status]')).toBeVisible();

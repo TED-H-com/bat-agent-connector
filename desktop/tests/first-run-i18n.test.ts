@@ -128,3 +128,14 @@ test('project rename input, checkpoint continuation textarea, and placeholder fi
     assert.ok(STRINGS['zh-TW'][key]?.trim(), `Missing zh-TW accessible name for ${key}`);
   }
 });
+
+test('redacted BAT connection URL guidance names --print-connect-link and full-connect: in en and zh-TW', () => {
+  for (const locale of ['en', 'zh-TW'] as const) {
+    assert.ok(Object.hasOwn(STRINGS[locale], 'setup_redacted_connection_url'));
+    for (const key of ['setup_redacted_connection_url', 'setup_connection_url_hint']) {
+      assert.ok(STRINGS[locale][key].includes('--print-connect-link'));
+      assert.ok(STRINGS[locale][key].includes('full-connect:'));
+    }
+    assert.doesNotMatch(STRINGS[locale].setup_connection_url_hint, /banner.*connect: line|banner’s connect:|啟動訊息的 connect:/);
+  }
+});
