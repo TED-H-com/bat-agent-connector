@@ -364,7 +364,10 @@ auto-filling host, port, token and fingerprint
 `BAT v3.2.15 renderer/src/locales/zh-TW.json:10,49,52,187,193–194`). The panel
 shows/copies that URL (`BAT v3.2.15 renderer/src/components/SettingsPanel.tsx:1321–1330`).
 Headless prints the equivalent URL on its startup **`connect:`** line
-(`BAT v3.2.15 src-tauri/src/lib.rs:609–613,687–700`).
+(`BAT v3.2.15 src-tauri/src/lib.rs:609–613,687–700`). From BAT 3.2.16 on that
+line carries `token=[REDACTED]`; the complete URL is printed on a line
+**`full-connect:`** only when the server is started with `--print-connect-link`
+on a terminal (`BAT v3.2.18 src-tauri/src/connection_diagnostics.rs`).
 
 BAT's builder produces `wss://host:port?token=<hex>&fp=<sha256>` with query
 values encoded by `URLSearchParams`. Its parser trims the input, accepts
@@ -495,9 +498,11 @@ a localized display name does not become its identifier.
 
 1. Copy **Settings → Remote → Remote Access → Connection URL → Copy** /
    **設定 → 遠端 → 遠端存取 → 連線網址 → 複製** in BAT. If stopped, use
-   **Start Server / 啟動伺服器** there. For headless, copy the value after
-   **`connect:`** in the running server's startup banner. BAT facts 1 and 6
-   above establish the labels, grammar and output.
+   **Start Server / 啟動伺服器** there. For headless BAT 3.2.15, copy the value
+   after **`connect:`** in the running server's startup banner; from 3.2.16 on,
+   start the server in a terminal with `--print-connect-link` and copy the value
+   after **`full-connect:`**. BAT facts 1 and 6 above establish the labels,
+   grammar and output.
 2. Paste only into the dedicated masked field. Parse locally with BAT's grammar:
    trim/normalize the input, decode its `token` and `fp`, and extract host/port.
    Produce only a **bare `wss://host:port`** endpoint, including correct literal

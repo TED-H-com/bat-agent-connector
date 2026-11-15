@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The Dashboard refuses a BAT connection link whose token is the `[REDACTED]` placeholder that
+  headless BAT 3.2.16 and later prints, and says where the complete link is. The setup hint and
+  the getting-started guides now describe `--print-connect-link` and the `full-connect:` line
+  instead of the `connect:` line.
 - Register the GUI tab of a started session through the host's own revision-checked
   append on hosts that support the suite's host contract, so a change made in the BAT
   window at the same moment is not overwritten. Tab registration stays opt-in
