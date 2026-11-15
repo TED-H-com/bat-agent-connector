@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__, api_auth, lifecycle, orchestrate, resource_policy, service, triage
-from .config import DEFAULT_BAT_PROFILES_DIR, default_config_path, load_config
+from .config import default_config_path, load_config
 from .errors import BatError, WriteRefused
 from .fleet import Fleet
-from .importer import read_bat_profiles, render_hosts_toml
+from .importer import import_notes, import_source, read_bat_profiles, render_hosts_toml, unresolved_tokens
 from .operations import OperationError
 from .redact import redact
 
@@ -425,23 +425,28 @@ async def _run(args) -> Any:
 
 
 def cmd_import(args) -> int:
-    profs = read_bat_profiles(args.profiles_dir)
+    directory, recorded = import_source(
+        args.profiles_dir, platform=sys.platform, environment=os.environ, home=Path.home())
+    profs = read_bat_profiles(directory)
     rename = dict(r.split("=", 1) for r in args.rename or [])
-    text = render_hosts_toml(profs, profiles_dir=args.profiles_dir, rename=rename, only=args.only)
+    chosen = [p for p in profs if not args.only or p["id"] in args.only]
+    unresolved = unresolved_tokens(directory, chosen)
+    text = render_hosts_toml(profs, profiles_dir=recorded, rename=rename, only=args.only, unresolved=unresolved)
+    notes = import_notes(directory, profs, chosen, unresolved)
     if args.output == "-":
         print(text)
-        return 0
-    out = Path(args.output).expanduser() if args.output else default_config_path()
-    if out.exists() and not args.force:
-        print(f"{out} exists; pass --force to overwrite (or --output -)", file=sys.stderr)
-        return 2
-    out.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
-        fh.write(text)
-    print(
-        f"wrote {out} ({len([p for p in profs if not args.only or p['id'] in args.only])} hosts, writes disabled)"
-    )
+    else:
+        out = Path(args.output).expanduser() if args.output else default_config_path()
+        if out.exists() and not args.force:
+            print(f"{out} exists; pass --force to overwrite (or --output -)", file=sys.stderr)
+            return 2
+        out.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+        print(f"wrote {out} ({len(chosen)} hosts, writes disabled)")
+    for note in notes:
+        print(note, file=sys.stderr)
     return 0
 
 
@@ -664,7 +669,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sp.add_parser(
         "import-bat", help="generate hosts.toml from BAT's profiles/index.json (no tokens copied)"
     )
-    p.add_argument("--profiles-dir", default=DEFAULT_BAT_PROFILES_DIR)
+    p.add_argument("--profiles-dir", help="BAT's profiles directory (default: BAT's own location on this platform)")
     p.add_argument("--output", help="output path (default: config path; - for stdout)")
     p.add_argument("--rename", action="append", metavar="PROFILE_ID=NAME")
     p.add_argument("--only", action="append", metavar="PROFILE_ID")

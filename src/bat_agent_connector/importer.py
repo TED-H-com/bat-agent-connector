@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
-from .config import DEFAULT_BAT_PROFILES_DIR, format_fingerprint, normalize_fingerprint
+from .config import DEFAULT_BAT_PROFILES_DIR, bat_source_message, format_fingerprint, normalize_fingerprint
+from .connection_sources import SourceUnavailable, TokenMode, read_token_store, select_profiles_directory
 from .errors import ConfigError
 
 
@@ -55,12 +57,53 @@ def read_bat_profiles(profiles_dir: str | Path = DEFAULT_BAT_PROFILES_DIR) -> li
     return out
 
 
+def import_source(
+    named: str | None, *, platform: str, environment: Mapping[str, str], home: Path,
+) -> tuple[Path, str]:
+    """The directory to read, and the text the generated file records for it.
+
+    Without a named directory the platform's BAT location is selected, as when a token is
+    resolved. The generated file names the directory the profiles were read from, so its token
+    references keep reading the same store; on Linux that text is the historical default.
+    """
+    try:
+        directory = select_profiles_directory(named, platform=platform, environment=environment, home=home)
+    except SourceUnavailable as error:
+        raise ConfigError(bat_source_message(str(error))) from None
+    if named:
+        return directory, named
+    return directory, str(directory) if platform in ("win32", "darwin") else DEFAULT_BAT_PROFILES_DIR
+
+
+def unresolved_tokens(directory: Path, profiles: list[dict]) -> dict[str, str]:
+    """Profile ID -> reason code, for each profile whose token BAT's store cannot supply now."""
+    store = read_token_store(directory, mode=TokenMode.LEGACY_RUNTIME)
+    return {p["id"]: found.reason for p in profiles if (found := store.lookup(p["id"])).token is None}
+
+
+def import_notes(directory: Path, available: list[dict], chosen: list[dict], unresolved: dict[str, str]) -> list[str]:
+    """Lines for standard error: what is still missing before the generated hosts can connect."""
+    notes = []
+    if not available:
+        notes.append(
+            f"note: {directory / 'index.json'} has no remote profile with a host, a port and a fingerprint; "
+            "local profiles are not imported. Describe the host by hand from examples/hosts.example.toml."
+        )
+    elif not chosen:
+        notes.append("note: --only matched no remote profile; available: " + ", ".join(sorted(p["id"] for p in available)))
+    for reason in sorted(set(unresolved.values())):
+        ids = ", ".join(sorted(ident for ident, found in unresolved.items() if found == reason))
+        notes.append(f"warning: {bat_source_message(reason)} (BAT profiles: {ids})")
+    return notes
+
+
 def render_hosts_toml(
     profiles: list[dict],
     *,
     profiles_dir: str = DEFAULT_BAT_PROFILES_DIR,
     rename: dict[str, str] | None = None,
     only: list[str] | None = None,
+    unresolved: dict[str, str] | None = None,
 ) -> str:
     rename = rename or {}
     lines = [
@@ -92,6 +135,12 @@ def render_hosts_toml(
             f"# BAT profile {_toml_str(p['name'])}",
             "url = " + _toml_str(_ws_url(p["host"], p["port"])),
             f"fingerprint = {_toml_str(format_fingerprint(p['fingerprint']))}",
+        ]
+        if unresolved and (reason := unresolved.get(p["id"])):
+            lines.append(
+                f"# {reason}: BAT's token store cannot supply this token now; use \"env:NAME\" or \"file:/path/to/token\"."
+            )
+        lines += [
             f"token_ref = {_toml_str('bat-profile:' + p['id'])}",
             f"profile_id = {_toml_str(p['remote_profile_id'])}",
             "writes = false",

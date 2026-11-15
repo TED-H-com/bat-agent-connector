@@ -263,7 +263,7 @@ batc import-bat
 batc hosts
 ```
 
-匯入會寫出 `~/.config/bat-agent-connector/hosts.toml`，預設關閉 writes；保存 endpoint、固定 TLS 指紋及 **token 參照**，不複製 token 值。`batc hosts` 會探測已配置主機，成功不代表 Git／部署也就緒。
+匯入會寫出 `~/.config/bat-agent-connector/hosts.toml`，預設關閉 writes；保存 endpoint、固定 TLS 指紋及 **token 參照**，不複製 token 值。未指定 `--profiles-dir` 時，會讀取 BAT 在 Linux、macOS 或 Windows 上的預設 profile 目錄。BAT 的 token 儲存檔無法提供某台主機的 token 時（例如已用系統鑰匙圈加密），匯入會說明原因，並在產生的設定檔中標示該主機：請改用 `env:NAME` 或 `file:/path` 作為它的 `token_ref`。`batc hosts` 會探測已配置主機，成功不代表 Git／部署也就緒。
 
 共用預設值可放在公開的 `hosts.toml`，私人主機定義放在有效設定檔旁、未追蹤的
 `hosts.d/90-private.toml`；有效設定檔由 `BATC_CONFIG` 選擇，未設定時由 `BATC_CONFIG_DIR`
@@ -283,7 +283,7 @@ Profile 位於別處可用 `batc import-bat --profiles-dir /path/to/profiles`；
 - `file:/path`：從私人 token 檔案讀取。
 - `bat-profile:ID`：從支援的 BAT client token store 讀取。
 
-預設 profile 路徑不代表完整跨平台自動發現。保留 BAT 原設定，憑證不要提交至 repo。
+匯入讀取 BAT 在各平台的標準資料目錄；資料放在別處的安裝需指定 `--profiles-dir`。只匯入遠端 profile。保留 BAT 原設定，憑證不要提交至 repo。
 
 ### 4. 啟動中央並開啟 Web
 

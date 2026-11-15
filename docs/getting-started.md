@@ -333,7 +333,7 @@ batc import-bat
 batc hosts
 ```
 
-Import writes `~/.config/bat-agent-connector/hosts.toml` with writes disabled. It stores the endpoint, pinned TLS fingerprint and a **token reference**, not the token value. `batc hosts` probes configured hosts; a successful probe does not prove Git access or deployment readiness.
+Import writes `~/.config/bat-agent-connector/hosts.toml` with writes disabled. It stores the endpoint, pinned TLS fingerprint and a **token reference**, not the token value. Without `--profiles-dir` it reads BAT's own profile directory on Linux, macOS or Windows. When BAT's token store cannot supply a host's token, for example because the store is encrypted with the system keychain, the import says so and marks that host in the generated file: give it a `token_ref` of `env:NAME` or `file:/path` instead. `batc hosts` probes configured hosts; a successful probe does not prove Git access or deployment readiness.
 
 Keep shared defaults in a public `hosts.toml` and private host definitions in untracked `hosts.d/90-private.toml` beside the effective config file (selected by `BATC_CONFIG`, or `BATC_CONFIG_DIR` when unset); the base file may be absent if fragments exist. Non-hidden `*.toml` fragments load in lexical filename order: tables merge recursively, while later scalars and arrays replace earlier values; defining a host in multiple files is an error. Fragments must be private regular files, not symlinks, owned by the current user where supported, with no group/other permissions on POSIX (`chmod 600`); use only `token_ref`, never token values. `batc import-bat` continues to write only `hosts.toml`.
 
@@ -347,7 +347,7 @@ Token files (`file:`) and BAT token stores (`bat-profile:`) must be regular file
 - `file:/path`: resolve from a private token file.
 - `bat-profile:ID`: resolve from the supported BAT client token store.
 
-A default profile path is not a cross-platform discovery guarantee. Preserve the original BAT configuration and keep credentials out of source control.
+The import reads BAT's standard data directory on each platform; an installation that keeps its data elsewhere needs `--profiles-dir`. Only remote profiles are imported. Preserve the original BAT configuration and keep credentials out of source control.
 
 ### 4. Start central and open Web
 
