@@ -7,7 +7,7 @@ import json
 import re
 import uuid
 
-from . import confinement, registry, resource_policy, service, task_control
+from . import bac, confinement, registry, resource_policy, service, task_control
 from .errlog import log_error
 from .errors import BatError, ResourceReadOnly
 from .operations import (
@@ -19,7 +19,7 @@ from .operations import (
     OperationError,
     StepFailed,
 )
-from .orchestrate import PRESETS, registry_permission_fields
+from .orchestrate import PRESETS, registry_permission_fields, tab_is_registered
 from .safety import Audit, audit_error_outcome, audit_reply_outcome
 
 FIELDS = frozenset({'agent', 'prompt', 'model', 'use_worktree', 'title'})
@@ -455,20 +455,36 @@ async def _run(ctx):
                 terminal['model'] = plan['model']
             if plan['use_worktree']:
                 terminal.update(worktreePath=carrier['cwd'], worktreeBranch=carrier['branch'])
+            route = {'channel': 'workspace:save'}
             def tab_guard():
                 _guard(ctx, plan)
+                if route['channel'] == bac.WORKSPACE_ADD_TERMINAL_CHANNEL:
+                    # Stored before the frame leaves: an unproven outcome of the host's append is
+                    # read back through the host's own read, with the host's comparison.
+                    ctx.set_refs(tab_route=route['channel'])
                 audit = Audit(fleet.config.safety)
                 audit.check_rate(host, sid + '#register')
-                audit.record(actor=ctx.actor, tool='api:session.start', host=host, session_id=sid, channel='workspace:save', phase='attempt')
+                audit.record(actor=ctx.actor, tool='api:session.start', host=host, session_id=sid, channel=route['channel'], phase='attempt')
 
             async def register():
                 _guard(ctx, plan)
                 try:
                     result = await client.append_workspace_terminal(plan['profile_id'], terminal,
                         grant=resource_policy.authorize_register_tab(host, sid),
-                        before_send=tab_guard, before_frame=start_frame)
+                        before_send=tab_guard, before_frame=start_frame,
+                        on_write_channel=lambda channel: route.update(channel=channel))
                 except (BatError, OSError, asyncio.TimeoutError) as exc:
                     raise AmbiguousOutcome('tab registration requires identity read-back') from exc
+                if result.get('route') == 'bac':
+                    # The host answered for exactly this registration: its answer settles the step.
+                    if result.get('appended') is True:
+                        return {**result, 'settled_by': 'host_receipt'}
+                    if result.get('identical') is True:
+                        return {**result, 'appended': True, 'settled_by': 'effective_registration'}
+                    if result.get('identical') is False:
+                        ctx.set_refs(tab_route=bac.WORKSPACE_ADD_TERMINAL_CHANNEL)
+                        raise NeedsAttention('START_TAB_MISMATCH', 'registered terminal differs from the fixed session')
+                    return result
                 if result.get('verified_previous_terminals_kept') is False:
                     ctx.set_refs(tab_conflict=True)
                     raise NeedsAttention('START_TAB_CONFLICT', 'workspace read-back did not preserve previous identities')
@@ -479,8 +495,18 @@ async def _run(ctx):
                     return {**result, **verified}
                 return result
             async def tab_read(_):
-                if (ctx.service.get(ctx.operation_id).get('external_refs') or {}).get('tab_conflict'):
+                refs = ctx.service.get(ctx.operation_id).get('external_refs') or {}
+                if refs.get('tab_conflict'):
                     raise NeedsAttention('START_TAB_CONFLICT', 'previous workspace identity loss needs explicit review')
+                if refs.get('tab_route') == bac.WORKSPACE_ADD_TERMINAL_CHANNEL:
+                    value = await client.bac_workspace_read(plan['profile_id'])
+                    stored = value['document'].get('terminals')
+                    found = [t for t in stored if isinstance(t, dict) and t.get('id') == sid] if isinstance(stored, list) else []
+                    if not found:
+                        return None
+                    if len(found) != 1 or not bac.registration_effectively_equal(found[0], terminal):
+                        raise NeedsAttention('START_TAB_MISMATCH', 'registered terminal differs from the fixed session')
+                    return {'appended': True, 'settled_by': 'effective_registration', 'route': 'bac'}
                 doc = await service._workspace(client)
                 found = [t for t in doc.get('terminals', []) if isinstance(t, dict) and t.get('id') == sid]
                 if not found:
@@ -490,7 +516,7 @@ async def _run(ctx):
                 return {'appended': True, 'settled_by': 'exact_terminal'}
             tab = await ctx.step('workspace.register', register, request={'terminal': terminal}, reconcile=tab_read)
             async def record_tab():
-                return project({'tab_registered': bool(tab.get('appended'))}, carrier=carrier, status='active')
+                return project({'tab_registered': tab_is_registered(tab)}, carrier=carrier, status='active')
             await ctx.step('workspace.record', record_tab, reconcile=reread)
 
         prompt = ctx.params.get('prompt')
