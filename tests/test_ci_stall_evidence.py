@@ -26,10 +26,11 @@ def workflow_test_step():
 def test_step_budget_preserves_upload_and_diagnostic_only_watchdog():
     job = workflow()["pytest"]
     step = workflow_test_step()
-    # Run 39922072602: 39 completed observations; max Tests=1705s,
-    # setup=11s, post-test=6s. Reserve a whole minute for upload/cleanup.
+    # Run 43657077963 (five shards): 19 completed observations. Its per-file durations put
+    # at most 1203s of tests in one of eight shards; a Tests step took at most 39s longer
+    # than its tests; setup=11s, post-test=6s. Reserve a whole minute for upload/cleanup.
     assert job["timeout-minutes"] == 45
-    assert 1705 * 1.5 < step["timeout-minutes"] * 60
+    assert (1203 + 39) * 1.5 < step["timeout-minutes"] * 60
     assert 11 + step["timeout-minutes"] * 60 + 60 < 45 * 60
     assert step["timeout-minutes"] == 43
     assert not step.get("continue-on-error")
@@ -59,7 +60,7 @@ def run_step(pytester):
     # Exercise the actual workflow's shell/tee/exit propagation, with only the
     # interpreter, partition and diagnostic threshold adapted to this tiny suite.
     command = workflow_test_step()["run"].replace("uv run pytest", shlex.join([sys.executable, "-m", "pytest"]))
-    command = command.replace("${{ matrix.shard }}", "1").replace("--ci-shard-count=5", "--ci-shard-count=1")
+    command = command.replace("${{ matrix.shard }}", "1").replace("--ci-shard-count=8", "--ci-shard-count=1")
     command = command.replace("--ci-watchdog-seconds=600", "--ci-watchdog-seconds=1")
     command = command.replace("--durations=15", "--durations=15 --ci-durations=weights.json")
     return pytester.run("bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", command)

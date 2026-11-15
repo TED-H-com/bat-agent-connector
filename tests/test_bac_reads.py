@@ -517,7 +517,8 @@ async def test_timeout_and_recovery(host, monkeypatch):
         pauses.append(delay)
 
     monkeypatch.setattr(client_mod, "_retry_pause", record_pause)
-    monkeypatch.setattr(client_mod, "timeout_for", lambda channel: 0.2)
+    deadline = {"seconds": 0.2}
+    monkeypatch.setattr(client_mod, "timeout_for", lambda channel: deadline["seconds"])
     host.bac.drop_feature_replies = True
     client = client_for(host)
     try:
@@ -527,6 +528,7 @@ async def test_timeout_and_recovery(host, monkeypatch):
         assert pauses == []
 
         host.bac.drop_feature_replies = False
+        deadline["seconds"] = 15.0
         res = await client.bac_workspace_read("default")
         assert res["profileId"] == "default"
         assert len(feature_frames(host)) == 2

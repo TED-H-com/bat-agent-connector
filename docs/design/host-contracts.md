@@ -1,10 +1,12 @@
-# Host contract handshake
+# Host contract handshake and reads
 
-This is the Connector side of the first P1 host-contract slice in the
-[single-product direction](../product/suite-direction-2026-11-13.md). It adds
-capability detection and connection negotiation only. Python Connector / Task
-Service remains the authority for policy, operations and scheduling. No BAC
-feature, API, MCP, RPC, CLI, Dashboard field or schema is added.
+This is the Connector side of the P1 host-contract slices in the
+[single-product direction](../product/suite-direction-2026-11-13.md). It covers
+capability detection, connection negotiation and two reads that a negotiated
+connection may send: `bac:workspace-read` and `bac:session-locate`. Python
+Connector / Task Service remains the authority for policy, operations and
+scheduling. No product path calls the reads yet, and no API, MCP, RPC, CLI,
+Dashboard field or schema is added.
 
 Authentication advertises only a protocol/minor pair; identity, build, features
 and limits arrive in hello. The host implementation is maintained separately in
@@ -54,8 +56,8 @@ UTF-8 serialization of the decoded frame, not the bytes received on the socket.
 
 The client waits for the hello reply before any subsequent BAC frame. Host state
 changes are serialized but not ordered by arrival, so arrival order alone is not
-a negotiation barrier. This client awaits hello inside connect and sends no
-other BAC channel in this slice. On the host a refused hello preserves an already
+a negotiation barrier. This client awaits hello inside connect before sending
+any other BAC channel. On the host a refused hello preserves an already
 negotiated connection except for `HOST_MISMATCH`, which revokes it. Every refusal
 on a fresh connection leaves it unnegotiated.
 
@@ -85,7 +87,8 @@ Hello's success value contains `protocol: "bac/1"`, integer `minor: 0`, a
 - `features`: an object with the known boolean flags `workspaceRead`,
   `workspaceAddTerminal`, `sessionLocate`, `gitObserve`. A missing known flag
   becomes false; a present non-boolean is invalid. Unknown flags are ignored.
-  The first host slice reports all four false; no flag authorizes a call here.
+  The first host slice reports all four false; only `workspaceRead` and
+  `sessionLocate` authorize the reads below.
 - `limits`: an object whose values are non-negative integers, excluding booleans.
   Limit names are retained, without assuming which limits a future feature uses.
 
@@ -130,7 +133,7 @@ features. Every reconnect starts fresh. The four completed states are:
 | --- | --- |
 | `absent` | Reason `not_advertised`; ordinary host behavior only |
 | `unsupported` | Reason `unsupported_advertisement`; ordinary behavior, zero BAC requests |
-| `negotiated` | Validated identity/build/features/limits for this connection; this slice still exposes no feature calls |
+| `negotiated` | Validated identity/build/features/limits for this connection; a read below may be sent when its feature is `true` |
 | `unavailable` | Hello failed; reason is the error code, with an optional bounded storage diagnostic; no usable negotiated identity/features; ordinary paths remain available |
 
 ## Outcomes
@@ -180,11 +183,71 @@ This identity names the host data directory, not a physical machine. A copied
 data directory can have the same identity; it is not an ownership grant or a
 replacement for the existing TLS pin and resource policy.
 
-`channels.HANDSHAKE_CHANNELS` lists only `bac:hello`. `check_allowed`, `invoke`
-and `guard_read` refuse it and all other `bac:*` names in every tier. No BAC
-channel is authorized by prefix. No feature channel is added to an allow-list.
-The host's pre-hello `NOT_OPTED_IN`, post-hello `UNSUPPORTED_FEATURE` and
-`UNKNOWN_CHANNEL` refusals are exercised solely through raw mock-wire tests.
+`channels.HANDSHAKE_CHANNELS` lists only `bac:hello`, and
+`channels.BAC_READ_CHANNELS` lists the two reads. `check_allowed`, `invoke` and
+`guard_read` refuse these and all other `bac:*` names in every tier. No BAC
+channel is authorized by prefix or added to a tier's allow-list: the reads leave
+the process only through `BatClient.bac_workspace_read` and
+`BatClient.bac_session_locate`. The host's pre-hello `NOT_OPTED_IN`, post-hello
+`UNSUPPORTED_FEATURE` and `UNKNOWN_CHANNEL` refusals are exercised through raw
+mock-wire tests; the client sends no feature frame that would receive them.
+
+## Workspace read and session location
+
+A connection whose hello negotiated the feature may send two reads. Only
+dedicated client methods send them, and nothing in the product calls those
+methods yet.
+
+| Method | Channel and params | Feature | Validated result members |
+| --- | --- | --- | --- |
+| `bac_workspace_read(profile_id)` | `bac:workspace-read`, `{ "profileId" }` | `workspaceRead` | `hostId`, `profileId`, `source` (`live` or `persisted`), `windowId` (string or null), `revision`, `document`, `appendTargetEligible` |
+| `bac_session_locate(session_id)` | `bac:session-locate`, `{ "sessionId" }` | `sessionLocate` | `hostId`, `locationRevision`, `disposition` (`unregistered`, `located` or `ambiguous`), `consistency` (`sequential`), `atomic` (`false`), `locations` |
+
+Each location row has `profileId`, `workspaceId`, `terminalId`, `windowId`,
+`source` and `profileRevision`. The client returns a copy with exactly these
+members and ignores unknown ones. It accepts a reply only when the reply names
+the negotiated host ID and the requested profile or session, every revision is
+`sha256:` plus 64 lowercase hexadecimal digits and, for locate, the disposition
+matches the number of rows and there are no more rows than the negotiated
+`locationMatches` limit (100 when the hello does not state it).
+
+A revision is an opaque token: the client checks its syntax and never
+recomputes or interprets it. A locate result is a sequential, non-atomic
+observation of the host's sources. `unregistered` and `ambiguous` are results,
+not errors, and the client does not choose among rows.
+
+The client refuses with `BacUnavailable` before any frame is sent:
+
+- an ID outside the host's request grammar, without connecting (profile: 1–128
+  UTF-8 bytes of ASCII letters, digits, `_`, `.`, `-` or `U+4E00`–`U+9FFF`;
+  session: 1–128 characters of `[A-Za-z0-9_.:-]`);
+- a connection whose state is `absent`, `unsupported` or `unavailable`, or whose
+  negotiated features do not include the one the channel needs.
+
+The client has no fallback of its own: a caller that cannot use a read gets the
+refusal and decides what to do. Both calls are reads. They need no grant and no
+tier, and they work with `writes = false`.
+
+| Observation | Result | Sent again |
+| --- | --- | --- |
+| Success envelope with a valid value | The validated copy | — |
+| Error envelope | `BacReplyError` with the host's code; message and details are diagnostics | No |
+| Invalid envelope or value, or an unexpected reply type | `InvokeError` ("invalid BAC reply"), without reply content or host ID | No |
+| `invoke-error` reporting a busy remote server | The read is repeated after a pause | Up to three attempts in total |
+| Any other `invoke-error` | `InvokeError` with the redacted text | No |
+| Connection lost | Reconnect with a new hello, then the read is repeated | Up to three attempts in total |
+| Timeout (15 s for the workspace read, 30 s for locate) | `InvokeTimeout` | No |
+| The reconnect negotiates another host identity or no longer offers the feature | `BacUnavailable` | No |
+
+The feature check and the frame use the same connection: the client reads the
+negotiated state and hands the frame to the socket without waiting in between.
+When another caller is reconnecting and its hello has not finished, the read
+waits for that hello instead of closing the connection.
+
+`bac.py` also holds pure helpers for a later change that appends a terminal
+registration through the host (`registration_error`,
+`registration_effectively_equal`, `parse_append_result`). Nothing calls them,
+and `bac:workspace-add-terminal` is never sent.
 
 ## Tests and open questions
 
@@ -196,22 +259,26 @@ limits. Optional `after` checks send `bac:workspace-read` with empty params afte
 the reply: only `NOT_OPTED_IN` means unnegotiated, independent of feature support.
 One conditional case asserts the exact `UNSUPPORTED_FEATURE` reply only when
 `workspaceRead` is false. `tests/test_mockbac.py` replays the cases over mock TLS,
-both with features off and with raised limits/features on (without implementing
-the features); `tests/test_bac.py` covers client negotiation, failures,
-identity memory, logs, isolation and unchanged guarded paths. Existing legacy
-tests retain their original expectations.
+both with features off and with raised limits and features switched on by hand (a
+feature switched on that way still answers `INTERNAL_ERROR`), and tests the
+mock's own answers for the two reads, which a test enables with
+`MockBac.enable_workspace`; `tests/test_bac.py` covers client negotiation,
+failures, identity memory, logs, isolation and unchanged guarded paths;
+`tests/test_bac_workspace_values.py` covers the pure grammar and reply
+validators; `tests/test_bac_reads.py` covers the client reads against the mock.
+Existing legacy tests retain their original expectations.
 
-Before the first feature uses the negotiated state, decide:
+Decided for the reads: a caller that cannot use a read gets a coded refusal
+(`BacUnavailable`), and the client has no fallback of its own. Still open
+before a feature writes through the host contract:
 
 - Where a durable identity pin lives and how it follows client/configuration
   lifetimes, including client-object replacement.
 - How an operator reconciles a mismatch and explicitly accepts a new identity.
-- What a feature caller does when state is `unavailable`: expose a coded refusal,
-  defer, or use an explicitly reviewed legacy route. This handshake does not
-  authorize a new fallback after an uncertain feature effect.
-- How each exact feature channel binds existing scopes, grants, final-frame
-  checks and durable operation reconciliation. Hello itself grants none of them.
+- How each exact write channel binds existing scopes, grants, final-frame
+  checks and durable operation reconciliation. Hello itself grants none of them,
+  and no fallback may follow an uncertain feature effect.
 
-This is a P1 handshake increment only. The product roadmap and lifecycle
+These are P1 handshake and read increments only. The product roadmap and lifecycle
 requirements retain their separate acceptance gates. No installation, native
 build or live test is claimed.
