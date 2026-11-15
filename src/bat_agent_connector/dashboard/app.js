@@ -11413,8 +11413,9 @@ var init_i18n = __esmMin((() => {
 			repair_dispatched: "這筆修復工作已有派工紀錄，可從原操作查回結果。",
 			repair_dispatch_help: "修復指示取自這筆工作的固定證據。選取儲存庫與分支、核對版本後，再開始新的管理工作。",
 			setup_connection_url: "貼上 BAT 連線網址",
-			setup_connection_url_hint: "BAT：設定 → 遠端 → 遠端存取 → 連線網址 → 複製；無介面模式請複製啟動訊息的 connect: 行。",
+			setup_connection_url_hint: "BAT：設定 → 遠端 → 遠端存取 → 連線網址 → 複製。無介面模式：在終端機以 --print-connect-link 啟動 BAT，複製 full-connect: 行；顯示 [REDACTED] 的 connect: 行不含權杖。",
 			setup_invalid_connection_url: "這不是 BAT 連線網址",
+			setup_redacted_connection_url: "這個網址不含權杖：BAT 以 [REDACTED] 取代了它。請在 BAT 視窗的「設定 → 遠端 → 遠端存取 → 連線網址」按「複製」；無介面模式請在終端機以 --print-connect-link 啟動 BAT，再複製 full-connect: 行。",
 			setup_connection_url_read: "✓ 已從 BAT 讀取：{host} · 指紋 {fingerprint} · 權杖已備妥",
 			setup_operation_receipt: "設定操作 · {status}",
 			setup_operation_done: "完成",
@@ -13233,8 +13234,9 @@ var init_i18n = __esmMin((() => {
 			repair_dispatched: "This repair already has a dispatch record. Check the original operation for its result.",
 			repair_dispatch_help: "Repair instructions come from this work item's fixed evidence. Select a repository and branch, review the version, then start new managed work.",
 			setup_connection_url: "Paste BAT connection URL",
-			setup_connection_url_hint: "BAT: Settings → Remote → Remote Access → Connection URL → Copy; headless: copy the startup banner’s connect: line.",
+			setup_connection_url_hint: "BAT: Settings → Remote → Remote Access → Connection URL → Copy. Headless BAT: start it in a terminal with --print-connect-link and copy the full-connect: line; a connect: line that shows [REDACTED] has no token.",
 			setup_invalid_connection_url: "This is not a BAT connection URL",
+			setup_redacted_connection_url: "This link has no token: BAT shows [REDACTED] in its place. Copy the link in the BAT window (Settings → Remote → Remote Access → Connection URL → Copy). For headless BAT, start it in a terminal with --print-connect-link and copy the full-connect: line.",
 			setup_connection_url_read: "✓ Read from BAT: {host} · fingerprint {fingerprint} · token ready",
 			setup_operation_receipt: "Setup operation · {status}",
 			setup_operation_done: "Done",
@@ -63028,6 +63030,7 @@ function normalizeSetupFingerprint(value) {
 	return /^[0-9A-F]{64}$/.test(normalized) ? normalized : null;
 }
 var explicitPort = (value) => value.replace(/^wss?:\/\//i, "").split(/[/?#]/, 1)[0].match(/:(\d+)$/)?.[1];
+var REDACTED_TOKEN = "[REDACTED]";
 function parseBatConnectionUrl(value) {
 	try {
 		const raw = value.trim();
@@ -63035,7 +63038,7 @@ function parseBatConnectionUrl(value) {
 		const url = new URL(/^wss?:\/\//i.test(raw) ? raw : `wss://${raw}`);
 		const token = url.searchParams.get("token"), fingerprint = normalizeSetupFingerprint(url.searchParams.get("fp") || "");
 		const port = Number(explicitPort(raw) || 9876);
-		if (!["wss:", "ws:"].includes(url.protocol) || !url.hostname || url.username || url.password || !token || !fingerprint || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+		if (!["wss:", "ws:"].includes(url.protocol) || !url.hostname || url.username || url.password || !token || token === REDACTED_TOKEN || !fingerprint || !Number.isInteger(port) || port < 1 || port > 65535) return null;
 		return {
 			endpoint: `wss://${url.hostname}:${port}`,
 			fingerprint,
@@ -63049,6 +63052,13 @@ function parseBatConnectionUrl(value) {
 	} catch {
 		return null;
 	}
+}
+function connectionUrlFault(value) {
+	try {
+		const raw = String(value).trim();
+		if (new URL(/^wss?:\/\//i.test(raw) ? raw : `wss://${raw}`).searchParams.get("token") === REDACTED_TOKEN) return "setup_redacted_connection_url";
+	} catch {}
+	return "setup_invalid_connection_url";
 }
 var connectionFacets = [
 	"transport",
@@ -63661,10 +63671,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		"data-setup-copy": "",
 		onsubmit: (event) => {
 			event.preventDefault();
+			const fault = connectionUrlFault(copyInput.value);
 			splitCopy();
 			copyInput.value = "";
 			copyError.hidden = copyReady;
-			copyError.textContent = copyReady ? "" : t("setup_invalid_connection_url");
+			copyError.textContent = copyReady ? "" : t(fault);
 			if (!copyReady || !alive() || busy || saved.intent || !readReady) return;
 			copyReady = false;
 			copyRead.hidden = true;
@@ -63797,7 +63808,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		clearPasteRead();
 		const parsed = parseBatConnectionUrl(node.value);
 		if (!parsed) {
-			if (reportError) fieldError("connection_url", "setup_invalid_connection_url");
+			if (reportError) fieldError("connection_url", connectionUrlFault(node.value));
 			return;
 		}
 		node.value = "";
@@ -63929,7 +63940,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function validateHost(only, defaults = false) {
 		const value = (name) => fields.get(name).value.trim(), faults = {};
-		if (fields.get("connection_url").value) faults.connection_url = "setup_invalid_connection_url";
+		if (fields.get("connection_url").value) faults.connection_url = connectionUrlFault(fields.get("connection_url").value);
 		if (!value("host")) faults.host = "setup_required";
 		else if (!validSetupHostId(value("host"))) faults.host = "error_code_INVALID_TARGET";
 		if (!value("url")) faults.url = "setup_required";
