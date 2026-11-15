@@ -18,6 +18,11 @@
   hosts through the central service, so a machine without `hosts.toml` no longer stops it with
   `config not found`. A file named by `--config` or `BATC_CONFIG` must still exist.
 - Dashboard data tables now have accessible names and mark the current row with `aria-current` for assistive technology.
+- The getting-started guides, in English and Traditional Chinese, list the steps that connect
+  a new agent in order, from BAT's remote access to the first tool call, and add a table of the
+  messages an agent or operator sees when a step is missing, with what each one means. The API
+  design note no longer says that the MCP session write tools leave no operation record: they
+  go through the central operation service.
 - CI now runs the managed browser check in English and Traditional Chinese.
 - `batc import-bat` reads BAT's own profile directory on macOS and Windows as well as on Linux
   when `--profiles-dir` is not given. It also says at import time when BAT's token store cannot

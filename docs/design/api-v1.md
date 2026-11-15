@@ -352,8 +352,6 @@ Agent MCP 安裝使用 `--principal-only`：只註冊 central daemon reads、ope
 
 - Artifact 的 managed capture 與 accept（Part B2）、跨主機接續（Part C），見 [artifacts.md](artifacts.md)。人工單檔 B1 不提供 dirty snapshot。
 
-- 既有 MCP 寫入工具（`session_send` 等）仍直接呼叫 service；它們受同一套資源政策約束，但不留 operation 紀錄。之後改為經 `operation_submit`。
-
 
 Deployment Part B 的 observation adapter 使用同一 `/events` feed：
 `deployment.selected/updated/verified/superseded/backfilled`、`deployment.drift`，只含保存的 IDs、generation、

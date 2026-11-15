@@ -392,7 +392,7 @@ batc resource-cleanup --help
 }
 ```
 
-先啟動已配置中央，透過私人環境給此 MCP process 專屬的 `BATC_API_TOKEN`，讀取也須包含 `observe`。確認執行檔與設定可用；`--principal-only` 讓 Agent 固定使用自己的中央身分，開啟寫入時仍應保留。確實需要操作才移除 `--read-only`，host 開關與 scopes 仍會檢查。中央 RPC 位址不同時，另私下設定 `BATC_TASK_URL`。
+先啟動已配置中央，透過私人環境給此 MCP process 專屬的 `BATC_API_TOKEN`，讀取也須包含 `observe`。確認 MCP client 找得到執行檔；`--principal-only` process 透過中央讀取主機，不需要自己的主機設定檔。`--principal-only` 讓 Agent 固定使用自己的中央身分，開啟寫入時仍應保留。確實需要操作才移除 `--read-only`，host 開關與 scopes 仍會檢查。中央 RPC 位址不同時，另私下設定 `BATC_TASK_URL`。
 
 沒有 `--principal-only` 的操作者相容模式，包含 local-admin 讀取備援與直接 Fleet 工具，不是依 scope 隔離的 Agent 入口。可信本機操作者可使用 `bat-agent-connector-mcp --read-only` 直接觀察 BAT，不必走中央工作流程；但共用 Agent 整合不以此為預設。
 
@@ -403,6 +403,20 @@ bat-agent-connector-mcp --principal-only --read-only --http --port 8765
 ```
 
 MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable 工作及復原請使用[共用 skill](../skills/bat-agent-connector/SKILL.md)與[同版 Agent 配接](agent-skills.md)。Task Service recipes 另有設定；planner 關閉時 task 排隊，不代表派工出錯。[Task Service](design/task-service.md)。
+
+### 連接新的 Agent：依序完成
+
+每一步都以前一步為前提。步驟 1 至 4 在 Connector 主機上、以執行服務的同一位使用者進行。
+
+1. **BAT 接受遠端連線。** BAT 主機上的遠端存取已在運行，且服務的主機設定已列出該主機（見「3. 配置 BAT 存取」）。`batc hosts` 會探測它。
+2. **已有管理員安裝版。** `batc --version` 與 `bat-agent-connector-mcp --version` 都會印出版本（見「2. 安裝 Connector」）。桌面套件不提供這兩個命令。
+3. **中央服務正在執行。** `batc serve` 持續運行（見「4. 啟動中央並開啟 Web」）。
+4. **Agent 有自己的權杖。** `batc api-token issue --actor NAME --scope observe` 只印出一次 JSON，其中的 `token` 欄位就是權杖。Agent 要傳送訊息給受管工作階段時加上 `--scope operate`，要啟動受管工作階段時加上 `--scope start`。請以與服務相同的使用者及相同的 `BATC_STATE_DIR` 執行這條命令。
+5. **MCP client 啟動 Agent 設定。** Client 以 `--principal-only` 參數執行 `bat-agent-connector-mcp`，並將該權杖以 `BATC_API_TOKEN` 交給這個 process。Process 在 Connector 主機上執行，或透過 SSH tunnel 連到服務的 loopback 連接埠。服務不在 `http://127.0.0.1:18796/rpc` 時才設定 `BATC_TASK_URL`。
+6. **Agent 先讀取。** `capabilities_get` 回傳它的 actor、scopes 與可使用的 actions；`inventory_hosts`、`workspaces_list` 與 `inventory_sessions` 顯示服務觀測到的內容。
+7. **Agent 操作受管工作。** `session_start` 會在獨立的工作目錄啟動受管工作階段。傳送訊息使用 `operation_submit`，帶 `action="session.send"`、以該工作階段為 `target`、`idempotency_key` 與 `confirm=true`；Agent 設定沒有 `session_send` 工具。傳送需要主機的 `writes`，啟動需要 `writes` 與 `orchestrate`（見「6. 啟用實際工作」）。人在 BAT 開啟的工作階段維持唯讀：Agent 可以讀取，或從已記錄的檢查點在新的受管工作階段繼續。
+
+[共用 skill](../skills/bat-agent-connector/SKILL.md)接續說明 Agent 端的做法：「Connect or reconnect」涵蓋讀取 capabilities、復原已保存的脈絡，以及回覆遺失後的處理。
 
 ## 常見問題
 
@@ -429,6 +443,31 @@ MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable �
 | Fleet 沒有啟動 | 新安裝使用[公開 Rust 設定](design/fleet-configuration.md)，再核對所選連線、前置條件及 ownership。未指定 backend 時沿用 PowerShell；既有 owner 需經預覽後遷移。 |
 
 真實 Fleet、帳號與部署驗收由使用者執行。[46 項驗收參考](product/acceptance-v2.md)供這項工作使用，不列入 Agent 完成清單，也不宣稱已經通過。
+
+### Agent 無法連線或操作
+
+下列文字是 MCP client 或 `batc` 回報的內容。拒絕是服務的答覆，不是需要繞過的故障：不要改用操作者設定、其他身分的權杖或直接操作 BAT 來繞過。
+
+| Agent 或操作者看到 | 意義與處理 |
+| --- | --- |
+| MCP client 無法啟動 `bat-agent-connector-mcp`，或沒有列出任何工具 | 這台電腦沒有管理員安裝版，或命令不在 client 使用的 `PATH`。桌面套件不會安裝這個命令。 |
+| MCP process 啟動時出現 `config not found` | 沒有 `--principal-only` 時，process 會自行連線 BAT 主機，因此需要 `hosts.toml`。Agent 應保留 `--principal-only`。以 `--config` 或 `BATC_CONFIG` 指定的檔案必須存在。 |
+| `BATC_API_TOKEN is required for the principal-only profile (including reads)` | MCP process 沒有收到權杖。請設定在 MCP client 交給這個 server 的環境中；只設在其他 shell 的變數不會傳給它。 |
+| `Connection refused` | 該位址沒有服務在接聽。請啟動 `batc serve`，或將 `BATC_TASK_URL` 設為它使用的連接埠。 |
+| `task daemon URL must be a loopback RPC address such as http://127.0.0.1:18796/rpc` | `BATC_TASK_URL` 必須使用 `http`、loopback 主機與路徑 `/rpc`。遠端服務請透過 SSH tunnel 連到它的 loopback 連接埠。 |
+| `UNAUTHORIZED: the presented token is not accepted for this request` | 這個服務不認得該權杖（例如由另一個服務簽發），或權杖已撤銷、已過期。請向執行中的服務重新簽發。 |
+| `batc` 命令以 `FileNotFoundError` 結束，並指出 `task-admin.token` | 命令找不到服務的本機管理權杖：服務尚未以這個狀態目錄啟動過，或命令以另一位使用者、另一個 `BATC_STATE_DIR` 執行。請先啟動 `batc serve`，再於相同環境執行命令。 |
+| `FORBIDDEN: … needs the 'operate' scope`（或其他 scope） | 權杖沒有該 scope。請簽發包含它的權杖。 |
+| `inventory_hosts` 沒有回傳任何主機 | Agent 設定透過中央服務讀取主機。請將主機加入服務使用的設定（見「3. 配置 BAT 存取」）。 |
+| `UNKNOWN_HOST` | 服務的主機設定沒有這個名稱的主機。請使用 `inventory_hosts` 回傳的名稱。 |
+| `TIER_DISABLED` | 操作者尚未在服務的主機設定為該主機開啟 `writes`；啟動工作階段需要 `writes` 與 `orchestrate`。 |
+| `MANUAL_READ_ONLY` 或 `UNKNOWN_READ_ONLY` | 工作階段是人在 BAT 開啟的，或無法證明其來源，因此維持唯讀。可以讀取，或從檢查點在新的受管工作階段繼續。 |
+| `FOREIGN_CONTROLLER` | 工作階段由另一個 controller 啟動。請啟動自己的受管工作階段。 |
+| `Unknown tool: session_send` | Agent 設定以 `operation_submit` 搭配 `action="session.send"` 傳送訊息。 |
+| `… requires confirm=true` | 寫入工具需要明確的 `confirm=true` 參數。 |
+| 沒有列出任何寫入工具 | Process 以 `--read-only` 執行。只移除這個旗標，並保留 `--principal-only`。 |
+| 匯入或連線主機時出現 `TOKEN_STORE_ENCRYPTED` | BAT 的 token 儲存檔已用系統鑰匙圈加密，服務無法讀取。請為該主機設定 `env:NAME` 或 `file:/path` 的 `token_ref`。 |
+| 設定表單表示連線網址不含權杖 | 無介面模式的 BAT 在 `connect:` 行顯示 `token=[REDACTED]`。請以 `--print-connect-link` 啟動 BAT，並複製 `full-connect:` 行。 |
 
 ## 診斷資料
 
