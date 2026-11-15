@@ -83,7 +83,7 @@ def summary_line(pythons: list[str], native: str, reason: str, workflow: str) ->
     if workflow == "ci":
         reason = reason or ("Python source/tooling changed" if pythons == FULL_PYTHONS
                             else "No Python source/tooling changed")
-        return f"pytest on {', '.join(pythons)} (5 shards each). {reason}.\n"
+        return f"pytest on {', '.join(pythons)} (8 shards each). {reason}.\n"
     selection, native_reason = {
         "none": ("Native builds skipped", "all paths on native allowlist"),
         "linux": ("Linux native build only", "generated dashboard assets need packaged Linux fixtures"),

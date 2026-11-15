@@ -12,7 +12,7 @@ import pytest
 import yaml
 
 from scripts.ci_complete import verify_manifests
-from scripts.ci_scope import FULL_PYTHONS, native_builds, select_scope
+from scripts.ci_scope import FULL_PYTHONS, native_builds, select_scope, summary_line
 from scripts.ci_sharding import collection_digest
 from scripts.desktop_fixture_inputs import filters, triggered
 
@@ -222,7 +222,7 @@ def test_stdlib_cli_outputs_and_workflow_specific_reason(tmp_path, paths, args, 
     if workflow == "ci":
         reason = "Python source/tooling changed" if pythons == FULL_PYTHONS else "No Python source/tooling changed"
         assert (fallback or reason) in lines[1]
-        assert "5 shards each" in lines[1] and "native" not in lines[1].lower()
+        assert "8 shards each" in lines[1] and "native" not in lines[1].lower()
     else:
         reason = {
             "none": "all paths on native allowlist",
@@ -249,19 +249,30 @@ def test_cli_event_environment_keeps_main_full(tmp_path):
 
 
 @pytest.mark.parametrize("paths", [["desktop/src/app.js"], ["tests/conftest.py"]])
-def test_selected_versions_still_require_all_five_shards(paths):
+def test_selected_versions_still_require_all_eight_shards(paths):
     versions, _, _ = select_scope(paths)
-    nodeids = [f"tests/test_{index}.py::test_example" for index in range(1, 6)]
+    nodeids = [f"tests/test_{index}.py::test_example" for index in range(1, 9)]
     manifests = [{
-        "schema_version": 1, "python_version": version, "shard_index": index, "shard_count": 5,
-        "collection_count": 5, "collection_sha256": collection_digest(nodeids),
+        "schema_version": 1, "python_version": version, "shard_index": index, "shard_count": 8,
+        "collection_count": 8, "collection_sha256": collection_digest(nodeids),
         "selected_nodeids": [nodeid],
     } for version in versions for index, nodeid in enumerate(nodeids, 1)]
-    assert len(verify_manifests(manifests, versions, 5)) == len(versions)
+    assert len(verify_manifests(manifests, versions, 8)) == len(versions)
     with pytest.raises(ValueError, match="missing shards"):
-        verify_manifests(manifests[:-1], versions, 5)
+        verify_manifests(manifests[:-1], versions, 8)
     with pytest.raises(ValueError, match="missing shards"):
-        verify_manifests([item for item in manifests if item["python_version"] != versions[-1]], versions, 5)
+        verify_manifests([item for item in manifests if item["python_version"] != versions[-1]], versions, 8)
+
+
+def test_pytest_shard_count_is_the_same_wherever_it_is_stated():
+    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
+    job = jobs["pytest"]
+    assert job["strategy"]["matrix"]["shard"] == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert job["name"] == "pytest ${{ matrix.python }} (${{ matrix.shard }}/8)"
+    tests = next(step for step in job["steps"] if step.get("name", "").startswith("Tests ("))
+    assert "--ci-shard-count=8 " in tests["run"]
+    assert "--shards 8 " in jobs["pytest-complete"]["steps"][-1]["run"]
+    assert "(8 shards each)" in summary_line(FULL_PYTHONS, "all", "", "ci")
 
 
 def test_merge_first_parent_diff_excludes_changes_only_on_main(tmp_path):
