@@ -34,6 +34,8 @@
   version of hosts that support the suite's new connection handshake. This
   does not enable any new host actions.
 
+- Run the Windows and Linux sandbox tests in CI, and allow local test runs when an ancestor of the temporary directory is group-writable.
+
 ### Fixed
 
 - Check RPC and MCP caller scopes before reading referenced resources, so a

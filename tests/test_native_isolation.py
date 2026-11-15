@@ -23,6 +23,11 @@ from tests.test_native_carrier import world as carrier_world
 
 world = carrier_world
 
+pytestmark = pytest.mark.skipif(
+    not (sys.platform == 'linux' and os.uname().machine == 'x86_64'),
+    reason='native isolation requires Linux x86_64',
+)
+
 FIXTURES = Path(__file__).parent / 'fixtures'
 LIMIT = 64 * 1024 * 1024
 
@@ -32,7 +37,7 @@ def runtime_mounts():
         isolation.Mount(str(Path(sys.base_prefix).resolve()), '/runtime'),
         isolation.Mount(str(Path('/lib/x86_64-linux-gnu').resolve()), '/lib/x86_64-linux-gnu'),
         isolation.Mount(str(Path('/lib64/ld-linux-x86-64.so.2').resolve()), '/lib64/ld-linux-x86-64.so.2'),
-        isolation.Mount('/etc/ssl/certs/ca-certificates.crt', '/etc/ssl/certs/ca-certificates.crt'),
+        isolation.Mount(str(Path('/etc/ssl/certs/ca-certificates.crt').resolve()), '/etc/ssl/certs/ca-certificates.crt'),
     )
 
 

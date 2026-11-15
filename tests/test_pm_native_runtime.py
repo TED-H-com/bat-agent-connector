@@ -583,11 +583,17 @@ async def test_cancel_waits_for_owned_process_death(fake_runtime):
             await runtime.run_turn(PROMPT, before_send=intents.append, record_event=lambda _: None)
 
     task = asyncio.create_task(run())
+    deadline = asyncio.get_running_loop().time() + 30
     while not intents:
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError("timed out waiting for native runtime turn intent")
         await asyncio.sleep(0.001)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
-        await task
+        try:
+            await asyncio.wait_for(task, timeout=30)
+        except asyncio.TimeoutError as exc:
+            raise AssertionError("timed out waiting for cancelled native runtime task") from exc
     assert lifecycle[-1]["process_death_confirmed"] and lifecycle[-1]["sent"]
     assert not runtime.directory.exists()
 

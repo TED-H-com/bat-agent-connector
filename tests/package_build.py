@@ -17,7 +17,11 @@ def _build_env(directory, commit=None):
         env.pop(key, None)
     scratch = directory / "scratch"
     scratch.mkdir(exist_ok=True)
+    gitconfig = scratch / "gitconfig"
+    gitconfig.touch()
     env["TMPDIR"] = str(scratch)
+    env["GIT_CONFIG_GLOBAL"] = str(gitconfig)
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
     # Snapshot/tamper tests write installed files in place. Never share their
     # inodes with uv's cache or another install of the session wheel.
     env["UV_LINK_MODE"] = "copy"

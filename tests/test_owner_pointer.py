@@ -35,6 +35,13 @@ def pointer():
     return registry.registry_path().parent / service.TASK_SERVICE_POINTER
 
 
+async def _wait_for_event(event: asyncio.Event, what: str) -> None:
+    try:
+        await asyncio.wait_for(event.wait(), timeout=30)
+    except asyncio.TimeoutError as exc:
+        raise AssertionError(f'timed out waiting for {what}') from exc
+
+
 def test_embedder_publishes_ownership_without_an_endpoint(mock, tmp_path):
     daemon = TaskDaemon(make_config(mock), tmp_path / 'tasks.db')
     other = TaskDaemon(make_config(mock), tmp_path / 'other.db')
@@ -90,10 +97,10 @@ async def test_endpoint_is_published_only_after_bind_and_withdrawn_before_close(
     monkeypatch.setattr(daemon, '_write_owner_pointer', write)
     serving = asyncio.create_task(daemon.serve(host=host, port=0))
     try:
-        await binding.wait()
+        await _wait_for_event(binding, 'daemon socket binding')
         assert 'endpoint' not in json.loads(pointer().read_text())
         proceed.set()
-        await published.wait()
+        await _wait_for_event(published, 'owner pointer endpoint publication')
         state = json.loads(pointer().read_text())
         bound_host, port, *_ = servers[0].sockets[0].getsockname()
         endpoint = urlsplit(state['endpoint'])
@@ -165,12 +172,12 @@ async def test_shutdown_closes_an_accepted_request_before_closing_its_journal(mo
     serving = asyncio.create_task(daemon.serve(port=0))
     writer = None
     try:
-        await published.wait()
+        await _wait_for_event(published, 'owner pointer endpoint publication')
         port = urlsplit(daemon._endpoint).port
         reader, writer = await asyncio.open_connection('127.0.0.1', port)
         writer.write(f'GET /api/v1/version HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n'.encode())
         await writer.drain()
-        await accepted.wait()
+        await _wait_for_event(accepted, 'pending HTTP request acceptance')
         serving.cancel()
         # Shutdown must not wait for an unbounded client request or close its DB underneath it.
         await asyncio.wait_for(asyncio.shield(asyncio.gather(serving, return_exceptions=True)), 5)

@@ -78,6 +78,7 @@ on:
       - "tests/test_delivery.py"
       - "tests/test_deployment_rollback.py"
       - "tests/test_deployments.py"
+      - "tests/test_e2e_windows_named_pipe.py"
       - "tests/test_integration.py"
       - "tests/test_journal_compatibility.py"
       - "tests/test_lifecycle.py"
@@ -122,6 +123,7 @@ on:
       - "tests/test_task_cleanup.py"
       - "tests/test_task_service.py"
       - "tests/test_windows_central.py"
+      - "tests/test_windows_monitor_task.py"
       - "tests/test_work_items.py"
       - "tests/upgrade_continuity_helpers.py"
       # END generated fixture inputs
@@ -203,6 +205,7 @@ on:
       - "tests/test_delivery.py"
       - "tests/test_deployment_rollback.py"
       - "tests/test_deployments.py"
+      - "tests/test_e2e_windows_named_pipe.py"
       - "tests/test_integration.py"
       - "tests/test_journal_compatibility.py"
       - "tests/test_lifecycle.py"
@@ -247,6 +250,7 @@ on:
       - "tests/test_task_cleanup.py"
       - "tests/test_task_service.py"
       - "tests/test_windows_central.py"
+      - "tests/test_windows_monitor_task.py"
       - "tests/test_work_items.py"
       - "tests/upgrade_continuity_helpers.py"
       # END generated fixture inputs

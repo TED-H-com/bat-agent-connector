@@ -213,10 +213,16 @@ async def test_cancel_kills_and_joins(binding, monkeypatch):
         return process
     monkeypatch.setattr(deploy_status_mod.hidden_process, 'create_subprocess_exec', spawn)
     task = asyncio.create_task(deploy_status_mod.DeployStatus({'worker': binding}).document())
-    await started.wait()
+    try:
+        await asyncio.wait_for(started.wait(), timeout=30)
+    except asyncio.TimeoutError as exc:
+        raise AssertionError('timed out waiting for deploy status subprocess start') from exc
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
-        await task
+        try:
+            await asyncio.wait_for(task, timeout=30)
+        except asyncio.TimeoutError as exc:
+            raise AssertionError('timed out waiting for cancelled deploy status task') from exc
     assert process.killed and process.joined
 
 

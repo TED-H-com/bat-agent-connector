@@ -11,6 +11,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.check_product_site import (
     LOCKFILE,
@@ -22,6 +23,7 @@ from scripts.check_product_site import (
     lockfile_digest,
     source_entry,
 )
+from scripts.desktop_fixture_inputs import path_matches
 
 
 def _sample_lockfile(version: str = "0.1.1") -> dict:
@@ -207,3 +209,75 @@ def test_capture_guard_paths_are_pinned_by_checker() -> None:
     # the next recapture, when its recorded hash changes anyway. The checker is
     # already authoritative for every pinned input, including that fixture.
     assert {path.rstrip("/") for path in guard_paths} <= {path.rstrip("/") for path in PINNED_PATHS}
+
+
+PAGES_WORKFLOW = ROOT / ".github/workflows/pages.yml"
+REQUIRED_PAGES_INPUTS = (
+    ".github/workflows/pages.yml",
+    ".github/actions/bounded-apt/action.yml",
+    "site/index.html",
+    "site/404.html",
+    "site/styles.css",
+    "site/app.js",
+    "site/lang.js",
+    "site/README.md",
+    "site/DESIGN.md",
+    "site/images/README.md",
+    "site/images/manifest.json",
+    "desktop/package.json",
+    "desktop/package-lock.json",
+    "desktop/tsconfig.json",
+    "desktop/vite.config.ts",
+    "desktop/index.html",
+    "desktop/playwright.config.ts",
+    "desktop/scripts/browser-assets.mjs",
+    "desktop/prototype/v1.3/vite.config.ts",
+    "desktop/prototype/v1.3/index.html",
+    "desktop/demo/vite.config.ts",
+    "desktop/demo/index.html",
+    "desktop/demo/main.ts",
+    "desktop/demo/transport.ts",
+    "desktop/demo/i18n.js",
+    "desktop/src/main.ts",
+    "desktop/src/i18n.js",
+    "desktop/tests/demo/index.ts",
+    "desktop/tests/demo/project.ts",
+    "desktop/tests/demo/schedule.ts",
+    "desktop/tests/public-demo.spec.ts",
+    "desktop/tests/pm-navigation.ts",
+    "desktop/tests/static-server.mjs",
+    "scripts/build_product_site.py",
+    "scripts/check_product_site.py",
+    "scripts/verify_product_site.mjs",
+    "scripts/capture_site.mjs",
+    "scripts/hidden-child-process.mjs",
+    "README.md",
+    "README.zh-TW.md",
+    "CHANGELOG.md",
+    "docs/getting-started.md",
+    "docs/getting-started.zh-TW.md",
+    "docs/windows.md",
+    "docs/windows.zh-TW.md",
+    "docs/design/managed-installation.md",
+    "docs/product/progress-2026-10-12.md",
+    "docs/product/progress-2026-10-14.md",
+    "docs/product/progress-2026-10-16.md",
+    "docs/product/implementation-status.md",
+    "docs/product/pm-v1.2-status.md",
+    "docs/product/pm-v1.2-history-through-2026-10-12.md",
+    "docs/handoff/2026-10-12-pm-v1.2.md",
+    "docs/handoff/2026-10-14-docs-ux-v2.md",
+)
+
+
+def test_pages_workflow_paths_match_all_required_inputs() -> None:
+    document = yaml.safe_load(PAGES_WORKFLOW.read_text(encoding="utf-8"))
+    events = document.get("on", document.get(True))
+    push_paths = events["push"]["paths"]
+    pull_request_paths = events["pull_request"]["paths"]
+    assert push_paths == pull_request_paths
+    for required in REQUIRED_PAGES_INPUTS:
+        assert (ROOT / required).is_file(), f"Missing required Pages input file: {required}"
+        assert any(path_matches(required, pattern) for pattern in push_paths), (
+            f"Pages workflow path filters omit required input: {required}"
+        )

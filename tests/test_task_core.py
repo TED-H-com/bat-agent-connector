@@ -107,29 +107,54 @@ async def test_coordinator_start_lead_agent(tmp_path, monkeypatch):
 
     coord._available_agents = mock_available
 
-    # Change mock command generation in journal to return fresh = True
-    original_command = journal.command
-
-    def mock_command(*args, **kwargs):
-        cmd, _ = original_command(*args, **kwargs)
-        return cmd, True
-
-    journal.command = mock_command
+    started = []
+    sent = []
 
     async def mock_start_adapter(task, role, agent, session_id):
-        return "cmd1"
+        started.append((role, agent, session_id))
+        return session_id
+
+    async def mock_presence(task, session_id):
+        return "present"
+
+    async def mock_send(task, session_id, text, message_id):
+        sent.append((session_id, text, message_id))
+        return {"accepted": True, "turn_marker": "m1"}
 
     adapter.start = mock_start_adapter
+    adapter.session_presence = mock_presence
+    adapter.send = mock_send
 
     t1 = await coord._start(journal.get("task_1"), role="lead")
-    assert t1["state"] == "uncertain"
+    assert len(started) == 1
+    role, agent, sid = started[0]
+    assert (role, agent) == ("lead", "claude")
+    assert t1["state"] == "running"
+    assert t1["session_id"] == sid
+    assert t1["turn_marker"] == "m1"
+    cmds = journal.commands("task_1")
+    start_cmd = next(c for c in cmds if c["kind"] == "start_lead")
+    send_cmd = next(c for c in cmds if c["kind"] == "send")
+    assert start_cmd["session_id"] == sid
+    assert start_cmd["status"] == "settled"
+    assert send_cmd["session_id"] == sid
+    assert send_cmd["status"] == "accepted"
+    assert send_cmd["marker"] == "m1"
+    assert sent == [(sid, initial_prompt(journal.get("task_1")), send_cmd["message_id"])]
+    branches = journal.branches("task_1")
+    assert len(branches) == 1
+    assert branches[0]["session_id"] == sid
+    assert branches[0]["provider"] == "claude"
+    assert branches[0]["role"] == "lead"
+    assert branches[0]["reason"] == "start"
+    assert journal.provider_daily_count("claude", since=0.0) == 1
 
 
 @pytest.mark.asyncio
 async def test_coordinator_start_review_agent(tmp_path, monkeypatch):
     journal = Journal(tmp_path / "test.db")
     journal.db.execute(
-        "INSERT INTO tasks (task_id, idem_key, engine, recipe, payload_hash, project, host, workspace, original_words, acceptance, state, paused, control_version, submitted_at, updated_at, session_id, lead_agent, review_rejections, session_replacements, verification_commit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (task_id, idem_key, engine, recipe, payload_hash, project, host, workspace, original_words, acceptance, state, paused, control_version, submitted_at, updated_at, session_id, lead_agent, review_rejections, session_replacements, verification_commit, review_commit, review_tree) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             "task_1",
             "k1",
@@ -139,7 +164,7 @@ async def test_coordinator_start_review_agent(tmp_path, monkeypatch):
             "project1",
             "host1",
             "workspace1",
-            100,
+            "100",
             "auto",
             "verifying",
             0,
@@ -151,6 +176,8 @@ async def test_coordinator_start_review_agent(tmp_path, monkeypatch):
             0,
             0,
             "c1",
+            "c1",
+            "t1",
         ),
     )
 
@@ -177,22 +204,48 @@ async def test_coordinator_start_review_agent(tmp_path, monkeypatch):
 
     coord._available_agents = mock_available
 
-    # Change mock command generation in journal to return fresh = True
-    original_command = journal.command
-
-    def mock_command(*args, **kwargs):
-        cmd, _ = original_command(*args, **kwargs)
-        return cmd, True
-
-    journal.command = mock_command
+    started = []
+    sent = []
 
     async def mock_start_adapter(task, role, agent, session_id):
-        return "cmd1"
+        started.append((role, agent, session_id))
+        return session_id
+
+    async def mock_presence(task, session_id):
+        return "present"
+
+    async def mock_send(task, session_id, text, message_id):
+        sent.append((session_id, text, message_id))
+        return {"accepted": True, "turn_marker": "r_m1"}
 
     adapter.start = mock_start_adapter
+    adapter.session_presence = mock_presence
+    adapter.send = mock_send
 
     t1 = await coord._start(journal.get("task_1"), role="reviewer")
-    assert t1["state"] == "uncertain"
+    assert len(started) == 1
+    role, agent, sid = started[0]
+    assert (role, agent) == ("reviewer", "claude")
+    assert t1["state"] == "verifying"
+    assert t1["reviewer_session_id"] == sid
+    assert t1["review_marker"] == "r_m1"
+    assert t1["session_id"] == "session_1"
+    cmds = journal.commands("task_1")
+    start_cmd = next(c for c in cmds if c["kind"] == "start_reviewer")
+    send_cmd = next(c for c in cmds if c["kind"] == "send")
+    assert start_cmd["session_id"] == sid
+    assert start_cmd["status"] == "settled"
+    assert send_cmd["session_id"] == sid
+    assert send_cmd["status"] == "accepted"
+    assert send_cmd["marker"] == "r_m1"
+    assert sent == [(sid, reviewer_prompt(journal.get("task_1"), "c1", "t1"), send_cmd["message_id"])]
+    branches = journal.branches("task_1")
+    assert len(branches) == 1
+    assert branches[0]["session_id"] == sid
+    assert branches[0]["provider"] == "claude"
+    assert branches[0]["role"] == "reviewer"
+    assert branches[0]["reason"] == "start"
+    assert journal.provider_daily_count("claude", since=0.0) == 1
 
 
 @pytest.mark.asyncio
@@ -308,22 +361,33 @@ async def test_coordinator_start_fresh_dispatching(tmp_path, monkeypatch):
 
     coord._available_agents = mock_available
 
+    during_start = []
+
     async def mock_start_adapter(task, role, agent, session_id):
-        return "cmd1"
+        start_cmd = next(c for c in journal.commands("task_1") if c["kind"] == "start_lead")
+        during_start.append((journal.get("task_1")["state"], start_cmd["status"], session_id))
+        return session_id
+
+    async def mock_presence(task, session_id):
+        return "present"
+
+    async def mock_send(task, session_id, text, message_id):
+        return {"accepted": True, "turn_marker": "m1"}
 
     adapter.start = mock_start_adapter
-
-    # Change mock command generation in journal to return fresh = True
-    original_command = journal.command
-
-    def mock_command(*args, **kwargs):
-        cmd, _ = original_command(*args, **kwargs)
-        return cmd, True
-
-    journal.command = mock_command
+    adapter.session_presence = mock_presence
+    adapter.send = mock_send
 
     t1 = await coord._start(journal.get("task_1"), role="lead")
-    assert t1["state"] in ["dispatching", "uncertain"]
+    assert len(during_start) == 1
+    assert during_start[0][:2] == ("dispatching", "intent")
+    sid = during_start[0][2]
+    assert t1["state"] == "running"
+    assert t1["session_id"] == sid
+    assert t1["turn_marker"] == "m1"
+    cmds = journal.commands("task_1")
+    assert next(c for c in cmds if c["kind"] == "start_lead")["status"] == "settled"
+    assert next(c for c in cmds if c["kind"] == "send")["status"] == "accepted"
 
 
 @pytest.mark.asyncio

@@ -204,3 +204,20 @@ jobs:
         env:
           BAC_REQUIRE_BWRAP: "1"
         run: bash scripts/check_native_isolation.sh
+      - name: Run bubblewrap-dependent disk wrapper and read-only mount tests without skipping
+        run: |
+          uv run pytest -q \
+            --basetemp="$RUNNER_TEMP/pytest-bwrap" \
+            --junitxml="$RUNNER_TEMP/pytest-bwrap-junit.xml" \
+            "tests/test_pytest_disktmp.py::test_disk_identity_cleanup_exit_status_and_host_permissions[0-True]" \
+            "tests/test_pytest_disktmp.py::test_disk_identity_cleanup_exit_status_and_host_permissions[7-True]" \
+            "tests/test_pm_native_runtime.py::test_real_readonly_mount_cannot_change_host_canary"
+          uv run python -c '
+          import sys, xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+          suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
+          tests = sum(int(s.attrib.get("tests", 0)) for s in suites)
+          skipped = max(sum(int(s.attrib.get("skipped", 0)) for s in suites), len(root.findall(".//skipped")))
+          if tests != 3 or skipped:
+              raise SystemExit(f"Expected 3 unskipped bubblewrap tests, got tests={tests}, skipped={skipped}")
+          ' "$RUNNER_TEMP/pytest-bwrap-junit.xml"
