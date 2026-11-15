@@ -105,8 +105,7 @@ class Journal:
                 self._storage_directory.close()
                 raise
         else:
-            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            self.path.parent.chmod(0o700)
+            platform_files.make_private_dirs(self.path.parent)
             if not self.path.exists():
                 fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 os.close(fd)

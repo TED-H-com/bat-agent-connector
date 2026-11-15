@@ -14,11 +14,7 @@ from .task_journal import Journal
 def original_words_archive(words: str, archive_dir: str | Path, task_id: str) -> dict:
     """Durably preserve the complete authoritative request outside the prompt limit."""
     directory = Path(archive_dir)
-    if platform_files.WINDOWS:
-        platform_files.ensure_private_directory(directory)
-    else:
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        directory.chmod(0o700)
+    platform_files.make_private_dirs(directory)
     path = directory / f"{task_id}-{uuid.uuid4().hex}.original.txt"
     data = words.encode("utf-8")
     fd = platform_files.open_private_file(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
@@ -62,11 +58,7 @@ def history_excerpt(history: str, archive_dir: str | Path, task_id: str,
     if len(history) <= 200_000 and not force_archive:
         return {"excerpt": history, "archive_path": None, "excerpt_path": None, "truncated": False}
     directory = Path(archive_dir)
-    if platform_files.WINDOWS:
-        platform_files.ensure_private_directory(directory)
-    else:
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        directory.chmod(0o700)
+    platform_files.make_private_dirs(directory)
     path = directory / f"{task_id}-{uuid.uuid4().hex}.txt"
     fd = platform_files.open_private_file(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
     with os.fdopen(fd, "w") as out:

@@ -15,6 +15,8 @@ import time
 from contextlib import suppress
 from pathlib import Path
 
+from ._private_files import mkdir_private
+
 WINDOWS = os.name == "nt"
 _OPEN_CREATE_ATTEMPTS = 8
 PRIVATE_READ_DEADLINE_S = 0.5
@@ -69,6 +71,22 @@ def ensure_private_directory(path) -> None:
         _check_private_stat(os.fstat(fd), directory=True)
     finally:
         os.close(fd)
+
+
+def make_private_dirs(path) -> None:
+    """Create `path` and its missing parents for the current user only.
+
+    On POSIX every directory this creates gets mode 0700 whatever the umask, symlinks in
+    existing parents are followed as `Path.mkdir` follows them, and `path` itself is set to
+    0700; existing parents are left unchanged. On Windows this is
+    `ensure_private_directory`.
+    """
+    path = Path(path)
+    if WINDOWS:
+        ensure_private_directory(path)
+        return
+    mkdir_private(path)
+    path.chmod(0o700)
 
 
 def _posix_dir(path, *, create=False):
