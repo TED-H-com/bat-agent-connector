@@ -17,7 +17,7 @@ from typing import Any
 
 from ._private_files import mkdir_private, open_private
 from .config import SafetyConfig, state_dir
-from .errors import ConnectionLost, InvokeTimeout, WriteRefused
+from .errors import BacOutcomeUnknown, ConnectionLost, InvokeTimeout, WriteRefused
 
 POST_EFFECT_PHASES = frozenset({"result", "append-terminal", "rollback", "record"})
 AUDIT_FAILURE_STAGES = frozenset({"mkdir", "open", "write", "flush", "close"})
@@ -49,7 +49,7 @@ def audit_error_outcome(error: BaseException) -> str:
     from .operations import AmbiguousOutcome
 
     return "unknown" if isinstance(error, (ConnectionLost, InvokeTimeout, OSError, asyncio.TimeoutError,
-                                           asyncio.CancelledError, AmbiguousOutcome)) else "error"
+                                           asyncio.CancelledError, AmbiguousOutcome, BacOutcomeUnknown)) else "error"
 
 
 def audit_reply_outcome(reply: Any, *, key: str | None = None) -> str:
@@ -114,7 +114,8 @@ class Audit:
             # A task's first prompt follows its reserved start on the same
             # session. Start attempts still consume the hourly budget, but
             # are not an earlier prompt for the per-session send interval.
-            start_channels = {"worktree:create", "claude:start-session", "workspace:save"}
+            start_channels = {"worktree:create", "claude:start-session", "workspace:save",
+                              "bac:workspace-add-terminal"}
             if initial_task_send and all(e.get("channel") in start_channels for e in same):
                 return
             age = now - max(float(e.get("at", 0)) for e in same)

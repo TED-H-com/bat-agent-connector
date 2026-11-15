@@ -33,6 +33,10 @@ class BacUnavailable(BatError):
     """The BAC feature this request needs cannot be used here. Nothing was sent."""
 
 
+class BacOutcomeUnknown(BatError):
+    """A BAC write was sent and its reply does not establish whether it was applied."""
+
+
 class BacReplyError(BatError):
     """A validated BAC error envelope. Details are diagnostics, never decisions."""
 
