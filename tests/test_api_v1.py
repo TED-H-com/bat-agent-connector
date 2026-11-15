@@ -8,12 +8,21 @@ import time
 
 import pytest
 
-from bat_agent_connector import api_auth, confinement, controller_authority, registry, service
+from bat_agent_connector import (
+    api_auth,
+    artifact_client,
+    confinement,
+    controller_authority,
+    registry,
+    service,
+    session_observation,
+)
 from bat_agent_connector.channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS, WRITE_CHANNELS
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.inventory import Inventory, InventorySettings
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_daemon import TaskDaemon
+from bat_agent_connector.task_daemon import request as task_request
 from bat_agent_connector.task_journal import Journal
 from tests.conftest import adopt, make_config
 from tests.operation_helpers import settle_operations
@@ -530,6 +539,118 @@ async def test_rpc_doors_share_the_operation_service(served, mock):
     caps = await rpc(issued["result"]["token"], "api_capabilities", {})
     assert caps["result"]["actor"] == "grokbot"
     assert (await rpc(issued["result"]["token"], "op_submit", {"action": "session.send"}))["error"] == "FORBIDDEN"
+
+
+async def rpc_exchange(port, tok, method, params=None):
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    body = json.dumps({"method": method, "params": params or {}}).encode()
+    writer.write(b"POST /rpc HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer " + tok.encode()
+                 + b"\r\nContent-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body)
+    await writer.drain()
+    raw = await asyncio.wait_for(reader.read(), 10)
+    writer.close()
+    head, _, payload = raw.partition(b"\r\n\r\n")
+    return head.split(b"\r\n", 1)[0].decode(), json.loads(payload)
+
+
+# The packaged upgrade check (desktop/tests/managed-upgrade-fixture.py) imports this module with the
+# source of earlier releases, so the module imports no name that those releases lack. The two fixed
+# texts are therefore written out here.
+CREDENTIAL_REFUSAL = ("the presented token is not accepted for this request (unknown to this service, "
+                      "revoked, expired, or a capability that does not cover this request)")
+TASK_URL_REFUSAL = ("task daemon URL must be a loopback RPC address such as http://127.0.0.1:18796/rpc "
+                    "(reach a remote daemon through SSH forwarding)")
+UNKNOWN_TOKEN = "batc_" + "x" * 43
+UNACCEPTED = ("HTTP/1.1 400 Bad Request", {"error": "UNAUTHORIZED", "message": CREDENTIAL_REFUSAL})
+RPC_PROBES = [
+    ("api_capabilities", {}),
+    ("op_submit", {"action": "session.send", "idempotency_key": "refused-1",
+                   "target": {"host": "h1", "session_id": MANUAL}, "params": {"text": "x"}, "entry": "mcp"}),
+    ("work_status", {"task_id": "task-unknown"}),
+    ("api_token_list", {}),
+    ("api_token_issue", {"actor": "x", "scopes": ["observe"]}),
+    ("work_submit", {"project": "p"}),
+    ("task_read", {"task_id": "task-unknown"}),
+    ("work_reconcile", {"task_id": "task-unknown", "command_id": "command-unknown"}),
+    ("no_such_method", {}),
+]
+
+
+@pytest.mark.parametrize(("method", "params"), RPC_PROBES, ids=[method for method, _ in RPC_PROBES])
+async def test_rpc_answers_a_credential_it_does_not_accept_with_one_fixed_refusal(served, mock, method, params):
+    d, port = served
+    revoked = token(d, "revoked-agent", "observe", "operate")
+    expired = token(d, "expired-agent", "observe", "operate")
+    with d.journal.tx():
+        assert api_auth.revoke(d.journal.db, "revoked-agent") == 1
+        d.journal.db.execute("UPDATE api_principals SET expires_at=? WHERE actor=?", (time.time() - 1, "expired-agent"))
+    listed = await rpc_exchange(port, d._admin_token, "api_token_list")
+    frames = len(mock.invokes)
+    for presented in (UNKNOWN_TOKEN, "", revoked, expired):
+        assert await rpc_exchange(port, presented, method, params) == UNACCEPTED
+    # The refusal comes before the request is looked at: nothing reaches BAT, no principal is added.
+    assert len(mock.invokes) == frames
+    assert await rpc_exchange(port, d._admin_token, "api_token_list") == listed
+    assert (await rpc_exchange(port, d._admin_token, "op_list"))[1]["result"]["operations"] == []
+
+
+async def test_rpc_keeps_its_answers_for_accepted_credentials(served):
+    d, port = served
+    observer = token(d, "observer", "observe")
+    status, body = await rpc_exchange(port, observer, "api_capabilities")
+    assert status == "HTTP/1.1 200 OK" and body["result"]["actor"] == "observer"
+    # An accepted credential that may not use a method keeps the earlier refusal, not the new code.
+    refused = ("HTTP/1.1 400 Bad Request", {"error": "ValueError"})
+    assert await rpc_exchange(port, observer, "api_token_list") == refused
+    assert await rpc_exchange(port, observer, "no_such_method") == refused
+    assert await rpc_exchange(port, d._admin_token, "work_reconcile",
+                              {"task_id": "task-unknown", "command_id": "command-unknown"}) == refused
+    status, body = await rpc_exchange(port, d._admin_token, "api_token_list")
+    assert status == "HTTP/1.1 200 OK" and [p["actor"] for p in body["result"]["principals"]] == ["observer"]
+
+
+async def test_rpc_accepts_a_task_capability_only_for_what_it_covers(served):
+    d, port = served
+    own, other = (d.journal.submit(project="p", host="h1", workspace="w", original_words="do the work",
+                                   acceptance="tests pass", idempotency_key=key)["task_id"]
+                  for key in ("capability:1", "capability:2"))
+    capability = d.journal.issue_capability(own)
+    # For its own task the capability is accepted: whatever the request then gets, it is not this refusal.
+    _, accepted = await rpc_exchange(port, capability, "task_read", {"task_id": own})
+    assert accepted.get("error") != "UNAUTHORIZED"
+    # For another task, or for a method it does not cover, it is not accepted.
+    assert await rpc_exchange(port, capability, "task_read", {"task_id": other}) == UNACCEPTED
+    assert await rpc_exchange(port, capability, "work_status", {"task_id": own}) == UNACCEPTED
+    assert await rpc_exchange(port, capability, "api_capabilities") == UNACCEPTED
+
+
+async def test_rpc_clients_report_the_refusal_and_the_expected_address(served, monkeypatch):
+    d, port = served
+    url = f"http://127.0.0.1:{port}/rpc"
+    observer = token(d, "observer", "observe")
+    caps = await asyncio.to_thread(task_request, "api_capabilities", _auth_token=observer, _url=url)
+    assert caps["actor"] == "observer"
+    with pytest.raises(ValueError) as refused:
+        await asyncio.to_thread(task_request, "api_capabilities", _auth_token=UNKNOWN_TOKEN, _url=url)
+    assert str(refused.value) == "UNAUTHORIZED: " + CREDENTIAL_REFUSAL
+    for address in (f"http://127.0.0.1:{port}", f"http://127.0.0.1:{port}/", f"http://127.0.0.1:{port}/rpc/",
+                    f"https://127.0.0.1:{port}/rpc", f"http://central.example.invalid:{port}/rpc",
+                    f"http://user@127.0.0.1:{port}/rpc", f"http://127.0.0.1:{port}/rpc?x=1",
+                    f"http://127.0.0.1:{port}/rpc#x"):
+        with pytest.raises(ValueError) as wrong:
+            task_request("api_capabilities", _auth_token=observer, _url=address)
+        assert str(wrong.value) == TASK_URL_REFUSAL
+        monkeypatch.setenv("BATC_TASK_URL", address)
+        with pytest.raises(ValueError) as wrong:
+            task_request("api_capabilities", _auth_token=observer)
+        assert str(wrong.value) == TASK_URL_REFUSAL
+        with pytest.raises(ValueError) as wrong:
+            artifact_client.content_request("/api/v1/artifacts", token=observer)
+        assert str(wrong.value) == TASK_URL_REFUSAL
+        with pytest.raises(ValueError) as wrong:
+            await session_observation.client_request("session_read", token=observer, entry="mcp",
+                                                     host="h1", session_id=MANUAL)
+        assert str(wrong.value) == TASK_URL_REFUSAL
 
 
 async def raw_get(port, path, *, method="GET", host=None):

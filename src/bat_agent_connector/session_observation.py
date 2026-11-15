@@ -123,11 +123,11 @@ async def client_request(method: str, *, token: str | None, entry: str, **params
     normalized = validate(method, params)
     # A cancellable async HTTP client is necessary here: cancelling to_thread(urllib) leaves its
     # socket and the central wait alive until the potentially 30-minute transport timeout.
-    from .task_daemon import DEFAULT_URL
+    from .task_daemon import DEFAULT_URL, TASK_URL_REFUSAL
     url = urlsplit(os.environ.get("BATC_TASK_URL", DEFAULT_URL))
     if (url.scheme != "http" or url.hostname not in {"127.0.0.1", "localhost", "::1"}
             or url.username or url.password or url.path != "/rpc" or url.query or url.fragment):
-        raise ValueError("task daemon URL must be loopback (reach a remote daemon through SSH forwarding)")
+        raise ValueError(TASK_URL_REFUSAL)
     port = url.port or 80
 
     async def exchange():

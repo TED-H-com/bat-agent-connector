@@ -26,6 +26,11 @@
   file is unchanged for hosts whose token is available.
 - CI runs each Python version's tests on eight runners instead of five, with freshly measured
   per-file durations, after a job on `main` reached its 43-minute limit.
+- The loopback RPC answers a token it does not accept (unknown to this service, revoked or
+  expired) with `UNAUTHORIZED` and a fixed message instead of the bare `ValueError`, so an MCP
+  client or `batc` with the wrong token says what is wrong. A `BATC_TASK_URL` that is refused
+  now names the expected form, `http://127.0.0.1:18796/rpc`: the earlier message said only
+  "must be loopback", also for a loopback address without `/rpc`.
 - On Linux and macOS, create the missing parent directories of the journal, task artifacts and handoff archives owner-only (`0700`), so a group-writable umask such as Ubuntu's default `0002` no longer leaves directories that the Fleet bootstrap refuses.
 - Preview exact retained external context together with an independently verified
   published branch head through HTTP, MCP and the desktop bridge. Preserve both
