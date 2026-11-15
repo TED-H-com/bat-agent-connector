@@ -426,7 +426,7 @@ Error transport conventions remain unchanged:
 
 | Condition | HTTP | RPC / MCP |
 | --- | --- | --- |
-| Missing credentials | 401, `error: {code: UNAUTHORIZED, message}` | RPC retains its authentication error (`error: "task API authorization failed"`, HTTP 400); MCP requires the caller's token and reports the existing ToolError, with no administrator fallback |
+| Missing credentials | 401, `error: {code: UNAUTHORIZED, message}` | RPC HTTP 400 with `error: "UNAUTHORIZED"` and one fixed message when no presented credential is accepted; MCP requires the caller's token and reports the existing ToolError, with no administrator fallback |
 | Missing observe or manage | 403, `error: {code: FORBIDDEN, message}` | RPC HTTP 400 with `error: code, message`; MCP ToolError wraps the same central code/message |
 | Semantic refusal | 404, existing `PM_HISTORY_SOURCE_UNAVAILABLE` code/message | RPC HTTP 400 with that code/message; MCP ToolError wraps that same central refusal |
 | Invalid selectors | Existing 422 codes/messages | RPC retains its HTTP 400 error wrapper; MCP uses SDK argument-validation ToolError or wraps the central input refusal |

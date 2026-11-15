@@ -51,6 +51,8 @@ Host 拒絕仍為 400（API code 為 `BAD_HOST`）。Static Dashboard 沒有 Ori
 HTTP 欄位外圍的空格與 tab 視為 framing OWS；其餘控制字元保留並由既有 gate 拒絕。
 API token 透過 bearer 驗證；managed browser session 僅接受 cookie 路徑，並核對來源、fetch metadata 與 CSRF，不接受作為 HTTP 或 `/rpc` bearer。既有 cookie session、拒絕後的連線恢復與同 host 不同埠限制見 [Managed installation](managed-installation.md#credentials-and-browser-connections)。只有列在 `allowed_origins` 的 Origin 會收到 CORS 標頭（含 `OPTIONS` preflight）；Dashboard 與 API 同源，不需要它。
 
+未被接受的憑證（例如不存在、已撤銷、已過期，或是為其他 task 簽發的 capability）在 `/api/v1` 回 `401 UNAUTHORIZED`；在 `/rpc` 回 HTTP 400，`error` 為 `UNAUTHORIZED`，並附一則固定訊息，不重複呼叫者送來的任何內容。已被接受、但無權使用該方法的憑證，沿用原有的拒絕。
+
 MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confirm=true`，而且只以 `BATC_API_TOKEN` 的主體執行，不退回本機 admin token：這個 client 能做什麼由它自己的 token scopes 決定，不是由 MCP server 啟動時的主機 tier 決定。PM 及共用 operation／event 讀取也要求 `BATC_API_TOKEN`；legacy Fleet 觀察保留原本唯讀方式。
 
 ## Operation

@@ -139,6 +139,15 @@ class LegacyTaskError(OperationError, ValueError):
 
 
 ADMIN_RPC = {"api_token_issue", "api_token_revoke", "api_token_list", "work_reconcile_capability"}
+# Fixed answers: neither repeats anything the caller sent.
+CREDENTIAL_REFUSAL = ("the presented token is not accepted for this request "
+                      "(unknown to this service, revoked, expired or issued for another task)")
+TASK_URL_REFUSAL = ("task daemon URL must be a loopback RPC address such as http://127.0.0.1:18796/rpc "
+                    "(reach a remote daemon through SSH forwarding)")
+
+
+class _CredentialRefused(Exception):
+    """No credential presented with an RPC request is accepted."""
 
 
 def request(method: str, *, _auth_token: str | None = None, _url: str | None = None, timeout: float = 5.0, **params) -> dict:
@@ -147,7 +156,7 @@ def request(method: str, *, _auth_token: str | None = None, _url: str | None = N
     parsed = urlsplit(url)
     if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
             or parsed.username or parsed.password or parsed.path != "/rpc" or parsed.query or parsed.fragment):
-        raise ValueError("task daemon URL must be loopback (reach a remote daemon through SSH forwarding)")
+        raise ValueError(TASK_URL_REFUSAL)
     cap = os.environ.get("BATC_TASK_CAPABILITY")
     token_file = Path(os.environ.get("BATC_TASK_ADMIN_TOKEN_FILE", state_dir() / "task-admin.token"))
     token = _auth_token or cap or token_file.read_text().strip()
@@ -1007,7 +1016,7 @@ class TaskDaemon:
                     principal = self.capability_principal(token, params.get("action"), params.get("target") or {},
                                                           params.get("idempotency_key"))
                 if principal is None:
-                    raise ValueError("task API authorization failed")
+                    raise _CredentialRefused
                 try:
                     transport = None
                     if method in {"session_read", "session_wait"}:
@@ -1045,6 +1054,8 @@ class TaskDaemon:
                              token, params["task_id"], params["command_id"]))
             cap_principal = self.capability_principal(token, task_actions.METHODS.get(method), params,
                                                        params.get("idempotency_key")) if method in task_actions.METHODS else None
+            if principal is None and not (scoped or reconcile or cap_principal):
+                raise _CredentialRefused
             if method == "work_reconcile" and not cap_principal:
                 raise ValueError("command-scoped reconciliation capability required")
             if cap_principal:
@@ -1063,6 +1074,9 @@ class TaskDaemon:
                 result = {"result": await self.call(method, params,
                                                     auth_token=token if reconcile or scoped else None, principal=principal)}
             status = "200 OK"
+        except _CredentialRefused:
+            result = {"error": "UNAUTHORIZED", "message": CREDENTIAL_REFUSAL}
+            status = "400 Bad Request"
         except (TaskControlRefused, OperationError) as exc:
             result = {"error": exc.code, "message": str(exc)}
             status = "400 Bad Request"

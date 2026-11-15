@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .config import state_dir
-from .task_daemon import DEFAULT_URL, request
+from .task_daemon import DEFAULT_URL, TASK_URL_REFUSAL, request
 
 
 def content_request(path, *, data=None, token=None, timeout=310):
@@ -19,7 +19,7 @@ def content_request(path, *, data=None, token=None, timeout=310):
     parsed = urlsplit(url)
     if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
             or parsed.username or parsed.password or parsed.path != "/rpc" or parsed.query or parsed.fragment):
-        raise ValueError("task daemon URL must be loopback")
+        raise ValueError(TASK_URL_REFUSAL)
     token = token or os.environ.get("BATC_API_TOKEN") or Path(os.environ.get(
         "BATC_TASK_ADMIN_TOKEN_FILE", state_dir() / "task-admin.token")).read_text().strip()
     req = urllib.request.Request(  # noqa: S310 - validated loopback origin, fixed API path
