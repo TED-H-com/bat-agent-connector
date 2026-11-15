@@ -241,8 +241,14 @@ the Python versions listed in that run's scope summary to `--python`.
 A test file that the table does not list is weighted as the table's median file, so new
 slow files unbalance the shards until the table is refreshed. Refresh it when the slowest
 `Tests` step of a run on `main` passes 28 minutes: one and a half times that no longer
-fits the 43-minute step limit. When one version's shards did not all complete, verify and
-use the versions that did.
+fits the 43-minute step limit. Python 3.10 is the version to watch: in the first
+eight-shard run its tests took about a fifth longer than on 3.11–3.13, and its slowest
+`Tests` step took 24 min 53 s against 20–22 minutes there. If the slowest step is still
+above 28 minutes after a refresh, raise the shard count:
+`tests/test_ci_scope.py::test_pytest_shard_count_is_the_same_wherever_it_is_stated` checks
+the places in the workflow and the scope summary that state it, and this guide states it
+as well. When one version's shards did not all complete, verify and use the versions that
+did.
 
 Commit the refreshed `tests/ci_durations.json`. Required local full checks are unchanged:
 ruff, the full Python suite, and Python 3.10 for backend changes. Use `pytest-disktmp`

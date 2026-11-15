@@ -26,11 +26,11 @@ def workflow_test_step():
 def test_step_budget_preserves_upload_and_diagnostic_only_watchdog():
     job = workflow()["pytest"]
     step = workflow_test_step()
-    # Run 43657077963 (five shards): 19 completed observations. Its per-file durations put
-    # at most 1203s of tests in one of eight shards; a Tests step took at most 39s longer
-    # than its tests; setup=11s, post-test=6s. Reserve a whole minute for upload/cleanup.
+    # Run 43665881162 (eight shards on four Python versions, 32 completed jobs): the slowest
+    # Tests step took 1493s, on Python 3.10. Over that run and run 43657077963: setup at most
+    # 11s, post-test at most 6s. Reserve a whole minute for upload/cleanup.
     assert job["timeout-minutes"] == 45
-    assert (1203 + 39) * 1.5 < step["timeout-minutes"] * 60
+    assert 1493 * 1.5 < step["timeout-minutes"] * 60
     assert 11 + step["timeout-minutes"] * 60 + 60 < 45 * 60
     assert step["timeout-minutes"] == 43
     assert not step.get("continue-on-error")

@@ -91,7 +91,7 @@ jobs:
     needs: scope
     name: pytest ${{ matrix.python }} (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
-    # Twice the slowest predicted job (including overhead), rounded up to 5m.
+    # The Tests step limit below plus setup and a reserve for upload and cleanup.
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -108,9 +108,9 @@ jobs:
       - name: Sync (locked)
         run: uv sync --locked --extra dev
       - name: Tests (mock server only; existing live-test policy unchanged)
-        # Run 43657077963 timed every test file on five shards. Split over eight, a shard holds
-        # at most 1203s of tests on a Python version with complete reports, and a Tests step
-        # took at most 39s longer than its tests: (1203s + 39s) * 1.5 = 31m03s < 43m.
+        # Run 43665881162 measured the eight shards on all four Python versions (32 jobs): the
+        # slowest Tests step took 1493s, on Python 3.10 (1221s to 1324s on 3.11 to 3.13).
+        # 1493s * 1.5 = 37m20s < 43m.
         # Max setup 11s + Tests 43m + upload/cleanup reserve 1m < job 45m (post-test max 6s).
         # A step deadline can preserve uploads only while the runner remains healthy.
         timeout-minutes: 43
