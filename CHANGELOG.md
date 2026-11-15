@@ -37,6 +37,13 @@
   now names the expected form, `http://127.0.0.1:18796/rpc`: the earlier message said only
   "must be loopback", also for a loopback address without `/rpc`.
 - On Linux and macOS, create the missing parent directories of the journal, task artifacts and handoff archives owner-only (`0700`), so a group-writable umask such as Ubuntu's default `0002` no longer leaves directories that the Fleet bootstrap refuses.
+- `batc` and the MCP server say in one sentence why a request to the central service was not
+  sent: no service listens at the address (the connection was refused), or the local admin
+  token is not where the command looks for it (the service has not been started with that
+  state directory, or the command runs as another user). Before, `batc api-token issue` and
+  other commands ended with a Python traceback, and an agent saw `URLError: <urlopen error
+  [Errno 111] Connection refused>`. Commands that record an operation, such as `batc start`
+  and `batc send`, keep their own answer.
 - Preview exact retained external context together with an independently verified
   published branch head through HTTP, MCP and the desktop bridge. Preserve both
   identities and bilingual refusal reasons without creating Work or attributing

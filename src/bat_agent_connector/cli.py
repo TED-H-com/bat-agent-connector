@@ -12,7 +12,7 @@ from typing import Any
 
 from . import __version__, api_auth, lifecycle, orchestrate, resource_policy, service, triage
 from .config import default_config_path, load_config
-from .errors import BatError, WriteRefused
+from .errors import BatError, CentralUnavailable, WriteRefused
 from .fleet import Fleet
 from .importer import import_notes, import_source, read_bat_profiles, render_hosts_toml, unresolved_tokens
 from .operations import OperationError
@@ -1509,7 +1509,7 @@ def main(argv: list[str] | None = None) -> int:
         obj, render = asyncio.run(_run(args))
         _print(obj, args.json, render)
         return 1 if args.cmd in {"merge", "record-verification", "failover", "relay", "fanout-plan", "fanout-start", "fanout", "start", "send", "continue", "interrupt", "answer", "permissions"} and obj.get("operation_status") in {"failed", "cancelled"} else 0
-    except (BatError, ValueError, OperationError) as e:
+    except (BatError, ValueError, OperationError, CentralUnavailable) as e:
         print(f"error: {redact(e)}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

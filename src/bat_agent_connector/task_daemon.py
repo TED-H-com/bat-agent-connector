@@ -44,7 +44,14 @@ from . import (
 from .api_v1 import ApiV1, is_dashboard_path
 from .artifact_host import ArtifactHost
 from .config import Config, default_journal_path, state_dir
-from .errors import BatError, OwnerConflict, ResourceReadOnly, TaskControlRefused, TokenUnavailable
+from .errors import (
+    BatError,
+    CentralUnavailable,
+    OwnerConflict,
+    ResourceReadOnly,
+    TaskControlRefused,
+    TokenUnavailable,
+)
 from .fleet import Fleet
 from .github import GitHubClient
 from .goose_acp import GooseACP
@@ -144,10 +151,24 @@ CREDENTIAL_REFUSAL = ("the presented token is not accepted for this request (unk
                       "revoked, expired, or a capability that does not cover this request)")
 TASK_URL_REFUSAL = ("task daemon URL must be a loopback RPC address such as http://127.0.0.1:18796/rpc "
                     "(reach a remote daemon through SSH forwarding)")
+# Why a request was not sent, for a person: `request` fills in the path or the address.
+ADMIN_FILE_MISSING = ("the local admin token was not found at {path}. `batc serve` writes it into its "
+                      "state directory when it first starts: start the service, or run this as the "
+                      "service's user with the same BATC_STATE_DIR")
+NOT_LISTENING = ("no service listens at {url} (connection refused), so nothing was sent. Start "
+                 "`batc serve`, or set BATC_TASK_URL to the address it listens on")
 
 
 class _CredentialRefused(Exception):
     """No credential presented with an RPC request is accepted."""
+
+
+class AdminTokenMissing(CentralUnavailable, FileNotFoundError):
+    """No credential was given and the local admin token file does not exist."""
+
+
+class CentralNotListening(CentralUnavailable, urllib.error.URLError):
+    """The connection to the service's address was refused."""
 
 
 def request(method: str, *, _auth_token: str | None = None, _url: str | None = None, timeout: float = 5.0, **params) -> dict:
@@ -159,7 +180,12 @@ def request(method: str, *, _auth_token: str | None = None, _url: str | None = N
         raise ValueError(TASK_URL_REFUSAL)
     cap = os.environ.get("BATC_TASK_CAPABILITY")
     token_file = Path(os.environ.get("BATC_TASK_ADMIN_TOKEN_FILE", state_dir() / "task-admin.token"))
-    token = _auth_token or cap or token_file.read_text().strip()
+    try:
+        token = _auth_token or cap or token_file.read_text().strip()
+    except FileNotFoundError as e:
+        missing = AdminTokenMissing(e.errno, e.strerror, e.filename)
+        missing.sentence = ADMIN_FILE_MISSING.format(path=token_file)
+        raise missing from None
     req = urllib.request.Request(  # noqa: S310 - validated loopback URL
         url, method="POST", data=json.dumps({"method": method, "params": params}).encode(),
         headers={"Content-Type": "application/json", "Authorization": "Bearer " + token})
@@ -169,6 +195,12 @@ def request(method: str, *, _auth_token: str | None = None, _url: str | None = N
             result = json.load(resp)
     except urllib.error.HTTPError as e:  # the daemon answers refusals with 400 and a JSON body
         result = json.load(e)
+    except urllib.error.URLError as e:
+        if not isinstance(e.reason, ConnectionRefusedError):
+            raise
+        refused = CentralNotListening(e.reason)  # the connection was refused: nothing was sent
+        refused.sentence = NOT_LISTENING.format(url=url)
+        raise refused from None
     if "error" in result:
         raise ValueError(result["error"] + (": " + result["message"] if result.get("message") else ""))
     return result["result"]

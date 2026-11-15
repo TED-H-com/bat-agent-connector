@@ -453,10 +453,11 @@ MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable �
 | MCP client 無法啟動 `bat-agent-connector-mcp`，或沒有列出任何工具 | 這台電腦沒有管理員安裝版，或命令不在 client 使用的 `PATH`。桌面套件不會安裝這個命令。 |
 | MCP process 啟動時出現 `config not found` | 沒有 `--principal-only` 時，process 會自行連線 BAT 主機，因此需要 `hosts.toml`。Agent 應保留 `--principal-only`。以 `--config` 或 `BATC_CONFIG` 指定的檔案必須存在。 |
 | `BATC_API_TOKEN is required for the principal-only profile (including reads)` | MCP process 沒有收到權杖。請設定在 MCP client 交給這個 server 的環境中；只設在其他 shell 的變數不會傳給它。 |
-| `Connection refused` | 該位址沒有服務在接聽。請啟動 `batc serve`，或將 `BATC_TASK_URL` 設為它使用的連接埠。 |
+| `no service listens at …` | 連線到該位址時被拒絕，因此請求並未送出。請啟動 `batc serve`，或將 `BATC_TASK_URL` 設為它使用的位址。 |
+| `central … request failed; its outcome may be unknown`，或 `central … reply unavailable` | `batc start`、`batc send` 等會留下操作紀錄的命令無法連上服務，或服務沒有及時回應；請求可能已送達，也可能沒有。請確認 `batc serve` 正在執行，先用 `batc op` 讀取最近的操作，再重新執行命令。若命令原本帶有 `--key`，請沿用同一個。 |
 | `task daemon URL must be a loopback RPC address such as http://127.0.0.1:18796/rpc` | `BATC_TASK_URL` 必須使用 `http`、loopback 主機與路徑 `/rpc`。遠端服務請透過 SSH tunnel 連到它的 loopback 連接埠。 |
 | `UNAUTHORIZED: the presented token is not accepted for this request` | 這個服務不認得該權杖（例如由另一個服務簽發），或權杖已撤銷、已過期。請向執行中的服務重新簽發。 |
-| `batc` 命令以 `FileNotFoundError` 結束，並指出 `task-admin.token` | 命令找不到服務的本機管理權杖：服務尚未以這個狀態目錄啟動過，或命令以另一位使用者、另一個 `BATC_STATE_DIR` 執行。請先啟動 `batc serve`，再於相同環境執行命令。 |
+| `the local admin token was not found at …` | 沒有其他憑證時，`batc` 會使用服務的本機管理權杖，而該檔案不存在：服務尚未以這個狀態目錄啟動過，或命令以另一位使用者、另一個 `BATC_STATE_DIR` 執行。請先啟動 `batc serve`，再於相同環境執行命令。 |
 | `FORBIDDEN: … needs the 'operate' scope`（或其他 scope） | 權杖沒有該 scope。請簽發包含它的權杖。 |
 | `inventory_hosts` 沒有回傳任何主機 | Agent 設定透過中央服務讀取主機。請將主機加入服務使用的設定（見「3. 配置 BAT 存取」）。 |
 | `UNKNOWN_HOST` | 服務的主機設定沒有這個名稱的主機。請使用 `inventory_hosts` 回傳的名稱。 |
