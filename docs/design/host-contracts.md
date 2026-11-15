@@ -1,12 +1,16 @@
-# Host contract handshake and reads
+# Host contract handshake, reads and tab registration
 
 This is the Connector side of the P1 host-contract slices in the
 [single-product direction](../product/suite-direction-2026-11-13.md). It covers
-capability detection, connection negotiation and two reads that a negotiated
-connection may send: `bac:workspace-read` and `bac:session-locate`. Python
-Connector / Task Service remains the authority for policy, operations and
-scheduling. No product path calls the reads yet, and no API, MCP, RPC, CLI,
-Dashboard field or schema is added.
+capability detection, connection negotiation, two reads that a negotiated
+connection may send (`bac:workspace-read` and `bac:session-locate`) and one
+write, `bac:workspace-add-terminal`, which registers the GUI tab of a session
+the Connector started. Python Connector / Task Service remains the authority
+for policy, operations and scheduling. Tab registration is the only product
+path that uses the contract; nothing calls the locate read yet. No API, MCP,
+RPC or CLI action, Dashboard field or schema is added; the `tab` member of a
+start result has more members when the registration went through the host
+(see below).
 
 Authentication advertises only a protocol/minor pair; identity, build, features
 and limits arrive in hello. The host implementation is maintained separately in
@@ -183,20 +187,23 @@ This identity names the host data directory, not a physical machine. A copied
 data directory can have the same identity; it is not an ownership grant or a
 replacement for the existing TLS pin and resource policy.
 
-`channels.HANDSHAKE_CHANNELS` lists only `bac:hello`, and
-`channels.BAC_READ_CHANNELS` lists the two reads. `check_allowed`, `invoke` and
-`guard_read` refuse these and all other `bac:*` names in every tier. No BAC
-channel is authorized by prefix or added to a tier's allow-list: the reads leave
-the process only through `BatClient.bac_workspace_read` and
-`BatClient.bac_session_locate`. The host's pre-hello `NOT_OPTED_IN`, post-hello
-`UNSUPPORTED_FEATURE` and `UNKNOWN_CHANNEL` refusals are exercised through raw
-mock-wire tests; the client sends no feature frame that would receive them.
+`channels.HANDSHAKE_CHANNELS` lists only `bac:hello`,
+`channels.BAC_READ_CHANNELS` lists the two reads, and
+`channels.GUARDED_CHANNELS` lists `bac:workspace-add-terminal` beside
+`workspace:save`. `check_allowed`, `invoke` and `guard_read` refuse these and
+all other `bac:*` names in every tier. No BAC channel is authorized by prefix
+or added to a tier's allow-list: the reads leave the process only through
+`BatClient.bac_workspace_read` and `BatClient.bac_session_locate`, and the
+append only through `BatClient.append_workspace_terminal`. The host's
+pre-hello `NOT_OPTED_IN`, post-hello `UNSUPPORTED_FEATURE` and
+`UNKNOWN_CHANNEL` refusals are exercised through raw mock-wire tests; the
+client sends no feature frame that would receive them.
 
 ## Workspace read and session location
 
 A connection whose hello negotiated the feature may send two reads. Only
-dedicated client methods send them, and nothing in the product calls those
-methods yet.
+dedicated client methods send them. Tab registration (below) uses the
+workspace read; nothing in the product calls the locate read yet.
 
 | Method | Channel and params | Feature | Validated result members |
 | --- | --- | --- | --- |
@@ -244,10 +251,129 @@ negotiated state and hands the frame to the socket without waiting in between.
 When another caller is reconnecting and its hello has not finished, the read
 waits for that hello instead of closing the connection.
 
-`bac.py` also holds pure helpers for a later change that appends a terminal
-registration through the host (`registration_error`,
-`registration_effectively_equal`, `parse_append_result`). Nothing calls them,
-and `bac:workspace-add-terminal` is never sent.
+## Tab registration through the host
+
+`BatClient.append_workspace_terminal` registers the GUI tab of a session the
+Connector started. As before, it needs `writes`, `orchestrate` and
+`orchestrate_register_tabs`, and a `workspace.register_tab` grant for that
+session. It chooses one of two routes per call, after connecting and before
+any workspace frame is sent:
+
+| Route | Chosen when | Frames |
+| --- | --- | --- |
+| Host append | The connection negotiated `workspaceRead` and `workspaceAddTerminal`, the profile ID fits the host's request grammar, and the registration fits the host's registration grammar and the negotiated `registrationBytes` limit (16384 when the hello does not state one) | `bac:workspace-read`, then `bac:workspace-add-terminal` |
+| Whole document | In every other case, including a host without the advertisement and a refused or failed hello | `workspace:load` and `workspace:save`, unchanged |
+
+Once the host append is chosen, nothing in that call uses the whole-document
+route, whatever happens later. A host without the capability receives exactly
+the frames it received before, and whole-document results are unchanged. When
+the connection attempt that precedes the choice fails, the call continues on
+the whole-document route with its usual reconnect attempts.
+
+The append request is `{ "profileId", "expectedRevision", "terminal" }`.
+`expectedRevision` is the revision the workspace read just returned.
+`terminal` is the registration as the caller passed it; `bac.registration_error`
+applies the host contract's rules to it, so a registration with a key outside
+`id`, `workspaceId`, `title`, `type`, `cwd`, `agentPreset`, `model`,
+`permissionMode`, `agentParams`, `worktreePath` and `worktreeBranch`, for
+example, stays on the whole-document route. The host adds this one terminal
+only while its document still has that revision. It never replaces the
+document, so a change made in the BAT window in the meantime is not
+overwritten: the host answers `REVISION_MISMATCH` and the client reads again.
+
+The grant must name the registration's `id` as its session. It is checked on
+entry and again as the last step before every append frame is handed to the
+socket, after the caller's own final checks and with no wait in between. Audit
+records name `bac:workspace-add-terminal` for this route and `workspace:save`
+for the other.
+
+A call on the host route ends in one of five results or in an exception.
+Every result has `route: "bac"`; a whole-document result never has `route`,
+`identical`, `refusal`, `source`, `window_id` or `revision`.
+
+| Result | Other members |
+| --- | --- |
+| Appended | `appended: true`, `saved: true`, `source`, `window_id`, `revision` |
+| Already there and equal | `appended: false`, `reason: "already present"`, `identical: true`, `revision` |
+| Already there and different | `appended: false`, `saved: false`, `reason: "already present"`, `identical: false` |
+| Refused | `appended: false`, `saved: false`, `reason: "host refused the registration"`, `refusal` (the code) |
+| Gave up | `appended: false`, `saved: false`, `reason: "workspace kept changing; gave up to avoid clobbering"` |
+
+What the client observes decides the outcome and how many append frames leave:
+
+| Observation | Outcome | Append frames |
+| --- | --- | --- |
+| The read shows one registration with this ID and it is effectively equal | Already there and equal | None |
+| The read shows this ID with another registration, or more than once | Already there and different | None |
+| The read shows no workspace with the registration's `workspaceId` | Refused, `WORKSPACE_NOT_FOUND` | None |
+| The host refuses the read | Refused, with the host's code | None |
+| The read fails: an invalid reply, an `invoke-error`, no reply within 15 s or a lost connection (a busy host and a lost connection are tried up to three times) | `InvokeError`, `InvokeTimeout` or `ConnectionLost` | None for that read |
+| The feature is no longer negotiated when a frame would be sent, for example after a reconnect that named another host identity | Refused, `BAC_UNAVAILABLE` (a local value, not a host code) | That frame is not sent |
+| The append succeeds with `appended: true` | Appended | One |
+| The append succeeds with `appended: false`: the host already holds an effectively equal registration | Already there and equal | One |
+| The append is refused with `REVISION_MISMATCH` | Read again, decide again and send again after 0.5 s; after the third such refusal: gave up | At most three per call, each through the complete gate |
+| The append is refused with `TERMINAL_EXISTS` | Already there and different | One |
+| The append is refused with `INVALID_REQUEST`, `PAYLOAD_TOO_LARGE`, `CONTEXT_NOT_SUPPORTED`, `NOT_OPTED_IN`, `UNSUPPORTED_FEATURE`, `UNKNOWN_CHANNEL`, `PROFILE_NOT_FOUND`, `PROFILE_NOT_LOCAL`, `WORKSPACE_UNAVAILABLE`, `WORKSPACE_TOO_LARGE` or `WORKSPACE_NOT_FOUND` | Refused, with that code | One |
+| Any other error code in the append's reply, including `WRITE_FAILED` and `INTERNAL_ERROR` | `BacOutcomeUnknown`, naming only the code | One, never repeated |
+| An append reply of another type, or one that is not a valid envelope or value | `BacOutcomeUnknown` | One, never repeated |
+| For the append: an `invoke-error` (also from a busy host), no reply within 30 s or a lost connection | `InvokeError`, `InvokeTimeout` or `ConnectionLost` | At most one, never repeated |
+
+Only the listed codes prove that nothing was written. The client never decides
+from an error's message or `details`: the next revision always comes from a
+new read.
+
+Two registrations are effectively equal under the host's rule: `id`,
+`workspaceId`, `title`, `cwd` and `agentPreset` are equal; a missing `type`
+counts as `terminal`; for `model`, `permissionMode` and `worktreePath` a
+missing member equals null; `worktreeBranch` distinguishes missing, null and a
+string; for `agentParams` missing, null and empty are equal. The host compares
+after applying its runtime's own values. The client cannot see those, so it
+ignores the `agentParams` keys the runtime maintains (`sandboxMode`,
+`approvalPolicy`, `effortLevel`) and stored keys outside the registration
+grammar.
+
+The host refuses a profile for which it cannot name one target document, for
+example a saved profile with several windows and none of them open
+(`WORKSPACE_UNAVAILABLE`). The session then runs without a tab: the Connector
+does not fall back to the whole-document route, even though that route makes
+no such check.
+
+### What a start records
+
+A session counts as having a registered tab when this call appended the
+registration or the host already held an effectively equal one. One function,
+`orchestrate.tab_is_registered`, decides this for the orchestrated start, the
+task reviewer start and the durable start. A refusal is a result, not an
+error: the session keeps running without a GUI tab, its registry row says the
+tab is not registered, and the start is not held up. In the orchestrated start
+and the task reviewer start an exception also leaves the session running with
+the tab recorded as not registered; the orchestrated start returns the error
+text in `tab` and audits the outcome as `unknown` for `BacOutcomeUnknown`, a
+timeout or a lost connection.
+
+The durable start (`session_start_operations`) settles the tab step from the
+host's answer when there is one: an appended registration with
+`settled_by: host_receipt`, an equal one that was already there with
+`settled_by: effective_registration`. A different registration under the
+session's ID needs attention (`START_TAB_MISMATCH`).
+
+When the call ends in an exception, the durable start never sends the step
+again. In the final gate, before an append frame leaves, the operation records
+that the step used the host append; with that record it reads the workspace
+through `bac:workspace-read` and compares with the rule above:
+
+| Read-back | Tab step |
+| --- | --- |
+| One registration with the session's ID, effectively equal | Settled as registered, `settled_by: effective_registration` |
+| No registration with that ID | Stays uncertain; a later resume reads again and does not append again |
+| Another registration under that ID, or the ID more than once | Needs attention, `START_TAB_MISMATCH` |
+| The read is refused, unavailable or fails | Stays uncertain |
+
+A host append is never settled through `workspace:load` and never repaired
+through `workspace:save`. When the exception came before any append frame (for
+example the read timed out), the step also stays uncertain, as it does on the
+whole-document route when a load fails. An uncertain tab step blocks the later
+effects of that start on both routes.
 
 ## Tests and open questions
 
@@ -261,24 +387,47 @@ One conditional case asserts the exact `UNSUPPORTED_FEATURE` reply only when
 `workspaceRead` is false. `tests/test_mockbac.py` replays the cases over mock TLS,
 both with features off and with raised limits and features switched on by hand (a
 feature switched on that way still answers `INTERNAL_ERROR`), and tests the
-mock's own answers for the two reads, which a test enables with
-`MockBac.enable_workspace`; `tests/test_bac.py` covers client negotiation,
+mock's own answers for the two reads and the append, which a test enables with
+`MockBac.enable_workspace` (the reads) or `MockBac.enable_append` (the reads
+and the append); `tests/test_bac.py` covers client negotiation,
 failures, identity memory, logs, isolation and unchanged guarded paths;
 `tests/test_bac_workspace_values.py` covers the pure grammar and reply
-validators; `tests/test_bac_reads.py` covers the client reads against the mock.
+validators; `tests/test_bac_reads.py` covers the client reads against the mock;
+`tests/test_bac_append_policy.py` covers the channel lists, the grant and how
+the audit and durable operations classify the append's errors;
+`tests/test_bac_append.py` covers the client's two routes, including every
+condition that keeps a call on the whole-document route;
+`tests/test_bac_append_orchestrate.py` and
+`tests/test_bac_append_start_operations.py` cover what the starts record and
+how the durable start settles an unproven append.
 Existing legacy tests retain their original expectations.
 
 Decided for the reads: a caller that cannot use a read gets a coded refusal
-(`BacUnavailable`), and the client has no fallback of its own. Still open
-before a feature writes through the host contract:
+(`BacUnavailable`), and the client has no fallback of its own.
+
+Decided for tab registration: the route is chosen once per call and never
+changed afterwards; the existing tier, grant and final-frame checks apply to
+the append frame; a certain refusal is a result; an unproven outcome is never
+sent again and is settled only by reading through the host contract.
+
+Tab registration does not wait for a durable identity pin. The append reaches
+the host that the whole-document save would reach, under the same TLS pin,
+token, tier and grant, and it writes less: one terminal at a checked revision
+instead of the whole document. Within one client object, a reconnect that
+names another host identity leaves the connection without the feature: a call
+in progress ends as refused with nothing more sent, and later calls take the
+whole-document route as on any host without the feature. Still open before a
+feature relies on the host identity across a Connector restart, or writes
+something the existing channels could not:
 
 - Where a durable identity pin lives and how it follows client/configuration
   lifetimes, including client-object replacement.
 - How an operator reconciles a mismatch and explicitly accepts a new identity.
-- How each exact write channel binds existing scopes, grants, final-frame
+- How each further write channel binds existing scopes, grants, final-frame
   checks and durable operation reconciliation. Hello itself grants none of them,
   and no fallback may follow an uncertain feature effect.
 
-These are P1 handshake and read increments only. The product roadmap and lifecycle
-requirements retain their separate acceptance gates. No installation, native
-build or live test is claimed.
+These are P1 handshake, read and tab-registration increments only. The product
+roadmap and lifecycle requirements retain their separate acceptance gates. No
+installation, native build or live test is claimed, and no test in this
+repository runs against a real host.

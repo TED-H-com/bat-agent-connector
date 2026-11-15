@@ -17,8 +17,10 @@ BAT 3.2.12 host semantics this module relies on (see docs/ORCHESTRATE.md):
 * ``worktree:remove`` always force-removes the folder; ``deleteBranch`` runs
   ``git branch -D``. We pre-check dirty files and unmerged commits.
 * A started session gets no GUI tab unless it is appended to the workspace
-  document (``workspace:save``, whole-document replace). That is opt-in
-  (``orchestrate_register_tabs``) and done append-only with verification.
+  document. That is opt-in (``orchestrate_register_tabs``): through the host's
+  revision-checked ``bac:workspace-add-terminal`` where the connection negotiated
+  it, otherwise through ``workspace:save`` (whole-document replace), done
+  append-only with verification.
 """
 
 from __future__ import annotations

@@ -14,13 +14,15 @@ connector deliberately exposes a small subset:
 |---|---|---|
 | read | on | `workspace:load`, `claude:get-session-meta/state`, `claude:load-archived`, `claude:list-sessions`, `worktree:status`, `git:status/branch/getRoot`, version/profile/notification reads |
 | write | off (`writes = true`) | `claude:send-message`, `claude:client-resume`, `claude:interrupt-turn`, `claude:abort-session`, `claude:resolve-ask-user`, `claude:resolve-permission` |
-| orchestrate | off (`orchestrate = true`, needs writes) | `claude:start-session`, `worktree:create/merge/remove/rehydrate`; `workspace:save` only via the append-only tab helper when `orchestrate_register_tabs = true` |
+| orchestrate | off (`orchestrate = true`, needs writes) | `claude:start-session`, `worktree:create/merge/remove/rehydrate`; when `orchestrate_register_tabs = true`, the tab helper alone sends either `bac:workspace-add-terminal` (on a connection whose handshake negotiated the workspace read and the append) or `workspace:save` (append-only, on every other host) |
 | connection handshake | only after an exact compatible `bac` advertisement | `bac:hello`; never callable through invoke or guard reads, in any tier |
 | host contract reads | only on a connection whose handshake negotiated the feature | `bac:workspace-read`, `bac:session-locate`; sent only by dedicated client methods, never callable through invoke or guard reads, in any tier |
 
 Everything else is rejected in the client core before a frame is written (see `channels.py` and `tests/test_client.py`).
-The [host contract](docs/design/host-contracts.md) adds these two reads and no write
-action or permission; nothing in the product calls the reads yet. Hosts without the capability receive the existing frames unchanged.
+The [host contract](docs/design/host-contracts.md) adds these two reads and one write, the tab registration
+`bac:workspace-add-terminal`. It adds no action and no permission: the write is another way to perform the existing
+opt-in tab registration, under the same tier and grant. Nothing in the product calls the locate read yet. Hosts
+without the capability receive the existing frames unchanged.
 
 Tiers say which channels may leave the process; the resource policy says which sessions and folders they may touch.
 Sessions a person created in BAT are read-only through every tool, whatever the tier (see
@@ -56,11 +58,19 @@ Sessions a person created in BAT are read-only through every tool, whatever the 
   clones and host-level account, sandbox or ACL limits where that matters.
 * **Prompt injection:** session transcripts are untrusted. A supervising agent that reads them must not follow
   instructions found inside, and should only write when its user asked.
-* **Tab registration (`workspace:save`)** replaces BAT's whole workspace document; BAT has no compare-and-swap. The
-  helper re-reads the document right before saving and aborts if it changed, appends exactly one terminal, then
-  verifies every previous workspace/terminal is still present. A narrow race with a GUI client saving at the same
-  moment remains, which could drop that client's latest unsaved tab change. Keep it off unless you need GUI tabs for
-  orchestrated sessions; without it, sessions are tracked in the connector's local registry.
+* **Tab registration** is off by default; without it, sessions are tracked in the connector's local registry. Turn
+  it on only if you need GUI tabs for orchestrated sessions. How it writes depends on the host:
+  * On a host whose connection negotiated the host contract's workspace read and append, the connector asks the host
+    to add exactly one terminal at the revision it just read (`bac:workspace-add-terminal`). The host refuses when
+    the document changed in between, and the connector reads again: nothing a person changed in the BAT window is
+    overwritten. When the reply does not establish what the host did, the connector never sends the request again;
+    it reports the outcome as unknown, and only a later read of the workspace settles it. The host refuses profiles
+    for which it cannot name one target document (for example a saved profile with several windows and none of them
+    open); the session then runs without a tab, and the connector does not fall back to the whole-document save.
+  * On every other host, `workspace:save` replaces BAT's whole workspace document; BAT has no compare-and-swap. The
+    helper re-reads the document right before saving and aborts if it changed, appends exactly one terminal, then
+    verifies every previous workspace/terminal is still present. A narrow race with a GUI client saving at the same
+    moment remains, which could drop that client's latest unsaved tab change.
 * **`worktree:remove`** in BAT always force-removes the folder. The connector checks for uncommitted changes first,
   but changes made between the check and the removal would be lost.
 * **`bat-profile:` tokens** come from BAT's client store, which BAT writes unencrypted on some platforms. Protect that

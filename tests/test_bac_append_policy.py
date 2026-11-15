@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import pathlib
+import re
 
 import pytest
 
@@ -190,3 +192,30 @@ def test_rate_limit_treats_workspace_add_terminal_as_start_channel(tmp_path):
     capped.record(host="h1", session_id="task-session", channel=ADD, phase="attempt")
     with pytest.raises(WriteRefused, match="max_writes_per_hour"):
         capped.check_rate("h1", "task-session", initial_task_send=True)
+
+
+def test_design_document_repeats_the_lists_the_client_decides_from():
+    """docs/design/host-contracts.md repeats five values of the code; they must change together."""
+    path = pathlib.Path(__file__).resolve().parents[1] / "docs/design/host-contracts.md"
+    section = path.read_text(encoding="utf-8").split("\n## Tab registration through the host\n", 1)[1]
+    section = section.split("\n## ", 1)[0]
+    flat = " ".join(section.split())
+
+    def names(text: str) -> set[str]:
+        return set(re.findall(r"`([A-Za-z_]+)`", text))
+
+    refused = [line for line in section.splitlines() if "| Refused, with that code |" in line]
+    assert len(refused) == 1
+    assert "| The append is refused with `REVISION_MISMATCH` |" in section
+    assert "| The append is refused with `TERMINAL_EXISTS` |" in section
+    assert names(refused[0]) | {"REVISION_MISMATCH", "TERMINAL_EXISTS"} == bac.APPEND_NOT_APPLIED
+
+    keys = flat.split("a registration with a key outside ", 1)[1].split(", for example", 1)[0]
+    assert names(keys) == set(bac.REGISTRATION_KEYS)
+
+    runtime = flat.split("keys the runtime maintains (", 1)[1].split(")", 1)[0]
+    assert names(runtime) == bac.RUNTIME_AGENT_PARAMS
+
+    assert f"({bac.REGISTRATION_BYTES} when the hello does not state one)" in flat
+    assert f"no reply within {channels.timeout_for(bac.WORKSPACE_READ_CHANNEL):g} s or a lost connection (a busy" in flat
+    assert f"no reply within {channels.timeout_for(ADD):g} s or a lost connection |" in flat

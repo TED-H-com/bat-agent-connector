@@ -27,7 +27,7 @@ profile_id = "default"
 writes = false                         # tier 2: send/continue/interrupt/answer
 orchestrate = false                    # tier 3: start worktree sessions, merge, remove (needs writes)
 orchestrate_max_sessions = 4
-orchestrate_register_tabs = false      # append a GUI tab via workspace:save (append-only; see SECURITY.md)
+orchestrate_register_tabs = false      # append a GUI tab for started sessions (see SECURITY.md)
 default_permission_mode = "default"    # "allow_all" = sessions the connector starts/fails over run like BAT's GUI
                                        # default (Claude bypassPermissions, Codex danger-full-access + never ask),
                                        # and approve_pending / session_set_permissions may raise sessions (needs writes)
