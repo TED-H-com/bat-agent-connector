@@ -3,7 +3,9 @@
 Only channels listed here can ever leave this process. Read channels are always
 allowed. Write channels are allowed only when the host config enables writes.
 Handshake channels are sent only during connection establishment, after an exact
-capability advertisement; they are never available through invoke or guard_read.
+capability advertisement; BAC read channels are sent only through dedicated
+client methods after the connection negotiated their feature; neither is
+available through invoke or guard_read.
 Everything else (stop/reset/kill sessions, pty writes, file ops, settings,
 workspace save, runtime installs, app updates, account/auth flows, ...) is
 rejected before a frame is sent.
@@ -11,8 +13,13 @@ rejected before a frame is sent.
 
 from __future__ import annotations
 
-# Only the connection handshake may send bac:hello. No BAC feature is exposed.
+# Only the connection handshake may send bac:hello.
 HANDSHAKE_CHANNELS = frozenset({"bac:hello"})
+
+# The complete list of feature reads the client sends through its dedicated
+# methods, only on a connection that negotiated the feature; never through
+# invoke or guard_read.
+BAC_READ_CHANNELS = frozenset({"bac:workspace-read", "bac:session-locate"})
 
 # Channels that stay in the `agent:` namespace on the server (not folded to `claude:`).
 AGENT_NATIVE = frozenset(
@@ -149,6 +156,7 @@ TIMEOUTS = {
     "git:diff": 20.0,
     "git:diff-files": 15.0,
     "workspace:save": 30.0,
+    "bac:session-locate": 30.0,
 }
 DEFAULT_TIMEOUT = 15.0
 

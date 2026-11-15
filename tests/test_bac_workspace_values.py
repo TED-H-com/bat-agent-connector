@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from bat_agent_connector import bac
+from bat_agent_connector import bac, channels
+from bat_agent_connector.errors import BacUnavailable, BatError, ChannelNotAllowed
 
 HOST_ID = "h_0123456789abcdef0123456789abcdef"
 EMPTY_REVISION = "sha256:66c1b7a04a05ee220e10341c9baec59bdf92885b193c2838d527a235d2ca5a9c"
@@ -661,3 +662,25 @@ def test_parse_append_result_violations(bad_payload):
         bac.parse_append_result(
             bad_payload, host_id=HOST_ID, profile_id="default", terminal_id="sess-claude-0001"
         )
+
+
+def test_bac_read_channels_and_errors():
+    assert channels.BAC_READ_CHANNELS == {
+        bac.WORKSPACE_READ_CHANNEL,
+        bac.SESSION_LOCATE_CHANNEL,
+    }
+    assert channels.is_write(bac.WORKSPACE_READ_CHANNEL) is False
+    assert channels.is_write(bac.SESSION_LOCATE_CHANNEL) is False
+    assert channels.timeout_for(bac.SESSION_LOCATE_CHANNEL) == 30.0
+    assert channels.timeout_for(bac.WORKSPACE_READ_CHANNEL) == channels.DEFAULT_TIMEOUT
+    for ch in channels.BAC_READ_CHANNELS:
+        assert ch in bac.CHANNEL_FEATURES
+        for allow_writes in (False, True):
+            for allow_orchestrate in (False, True):
+                with pytest.raises(ChannelNotAllowed):
+                    channels.check_allowed(
+                        ch, allow_writes=allow_writes, allow_orchestrate=allow_orchestrate
+                    )
+    assert all(feature in bac.FEATURES for feature in bac.CHANNEL_FEATURES.values())
+    assert issubclass(BacUnavailable, BatError)
+    assert isinstance(BacUnavailable("unavailable"), BatError)
