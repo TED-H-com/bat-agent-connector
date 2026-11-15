@@ -402,7 +402,7 @@ class BatTaskAdapter:
                         "permissionMode": opts.get("permissionMode"),
                         "agentParams": orchestrate.registry_permission_fields(opts)["agent_params"],
                     }, grant=resource_policy.authorize_register_tab(host, sid))
-                    registry.update(host, sid, tab_registered=bool(tab.get("appended")))
+                    registry.update(host, sid, tab_registered=orchestrate.tab_is_registered(tab))
                 except Exception:  # noqa: BLE001 - registration is visibility only
                     registry.update(host, sid, tab_registered=False)
             return sid
