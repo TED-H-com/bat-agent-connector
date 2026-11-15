@@ -72,9 +72,11 @@
 ## 分期
 
 主機合約：[Connector 主機合約](../design/host-contracts.md)記錄 P1 的 capability
-偵測、hello、記憶中的身分、降級行為，以及 client 可以送出的兩個唯讀操作
-（`bac:workspace-read`、`bac:session-locate`）；目前沒有任何產品路徑呼叫這兩個讀取，
-也沒有啟用任何主機寫入功能，這不是 P1 完成或實機驗收。
+偵測、hello、記憶中的身分、降級行為、client 可以送出的兩個唯讀操作
+（`bac:workspace-read`、`bac:session-locate`），以及一個寫入
+`bac:workspace-add-terminal`：選用的 tab 註冊在已協商的連線上改由主機在指定 revision
+追加一筆，其他主機維持原本的整份存檔。目前沒有產品路徑呼叫 `bac:session-locate`；
+這不是 P1 完成或實機驗收。
 
 各期的驗收都分開回報 branch、merged、installed、live-tested；CI 不是實機驗收。
 

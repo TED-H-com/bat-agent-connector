@@ -4,7 +4,7 @@
 
 ## 保證
 
-每個 BAT 寫入 frame 都要帶一張 `WriteGrant`。`BatClient.invoke` 在送出前核對 grant 的 host、channel 與 `sessionId`，不符就丟 `ResourceReadOnly`，frame 不會離開程序。`append_workspace_terminal`（`workspace:save`）同樣檢查。只有 `resource_policy.py` 會建立 grant，`test_only_the_policy_mints_write_grants` 掃描原始碼確認這點。因此 MCP、`batc`、task service 與舊工具都走同一個檢查，`confirm`、`force`、`discard_uncommitted`、`allow_unmerged`、`all_exhausted`、`approve_pending` 都不能繞過。
+每個 BAT 寫入 frame 都要帶一張 `WriteGrant`。`BatClient.invoke` 在送出前核對 grant 的 host、channel 與 `sessionId`，不符就丟 `ResourceReadOnly`，frame 不會離開程序。`append_workspace_terminal`（`workspace:save`，或連線已協商主機合約時的 `bac:workspace-add-terminal`）同樣檢查；後者的 grant 必須指名 registration 的 `id`。只有 `resource_policy.py` 會建立 grant，`test_only_the_policy_mints_write_grants` 掃描原始碼確認這點。因此 MCP、`batc`、task service 與舊工具都走同一個檢查，`confirm`、`force`、`discard_uncommitted`、`allow_unmerged`、`all_exhausted`、`approve_pending` 都不能繞過。
 
 人工（`manual`）與來源不明（`unknown`）的 session 永遠不收到 send、continue、answer、interrupt、client-resume、權限變更、批次批准、stop、rehydrate、merge、remove 或 cleanup。
 
@@ -70,7 +70,7 @@ BAT tab 記的 `cwd`／`worktreePath` 和紀錄不同也是 `BINDING_MISMATCH`�
 | `worktree.rehydrate`、`worktree.remove` | `worktree_merge`、`worktree_remove` | 同上 |
 | `worktree.merge` | `worktree_merge` | 同上，且目的端在 managed root |
 | `session.create` | `session_start`、`session_failover`、`session_relay(start_if_missing)`、fan-out、task lead／reviewer 啟動 | 先在 registry 預留 ID；資料夾是 managed root、connector 新建的 worktree，或共享 connector 擁有的 worktree |
-| `workspace.register_tab` | `session_start`、task reviewer 啟動 | 只為剛啟動的 managed session 追加 tab，其他 tab 必須保持不變 |
+| `workspace.register_tab` | `session_start`、task reviewer 啟動 | 只為剛啟動的 managed session 追加 tab：連線已協商主機合約時，由主機在指定 revision 追加這一筆；否則整份存檔，其他 tab 必須保持不變 |
 | `task.external_worktree` | task service 的 `base_branch` 啟動與整理（SSH git） | 固定命名的 connector worktree |
 | `checkpoint.managed_worktree` | `checkpoint.continue`（SSH git） | managed root 下一層的 connector clone，與固定命名的 worktree 及分支 |
 | `integration.area` | `integration.preview`、`integration.apply`、`batc integrate`（SSH git） | 只寫 `<第一個 managed root>/.batc-integration/<name>-<8 hex>/repo.git`，每次寫入前核對身分；其他 repository（包括人的）只當 fetch／ls-remote 的來源 |
@@ -121,7 +121,7 @@ task link 不授予 resource write grant。send／answer／interrupt／permissio
 
 - **A10 執行環境限制**：[confinement](confinement.md) 已新增 options／creation snapshot／current_verification 及不可 raise 閘門。Claude acceptEdits 沒有 path check；未查核 account 時 confined Claude 用 default，僅 prompt_gated。Codex sandbox 最多 options_confirmed，A10 尚待 W12 live run。資源歸屬、cwd、legacy_shared_clone 都不證明 agent 執行隔離；Task Service 保留測試行為並顯示 gap。
 - **Managed clone 的建立與 checkpoint 接續**（P2）。目前 `managed_roots` 只描述已存在的 clone。
-- **`workspace:save` 與 GUI 同時存檔的 race**（既有，見 SECURITY.md）。
+- **`workspace:save` 與 GUI 同時存檔的 race**（既有，見 SECURITY.md）：只發生在連線未協商主機合約 append 的主機；已協商時 tab 註冊改走 `bac:workspace-add-terminal`，不整份存檔。
 - **Part B legacy operations**：HTTP OperationService 已走同一 resource policy；其餘舊工具的 operation 轉接與外部 steps 拆分見 [operations-unification.md](operations-unification.md)。
 
 ## 設定

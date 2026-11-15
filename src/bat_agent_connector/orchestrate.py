@@ -17,8 +17,10 @@ BAT 3.2.12 host semantics this module relies on (see docs/ORCHESTRATE.md):
 * ``worktree:remove`` always force-removes the folder; ``deleteBranch`` runs
   ``git branch -D``. We pre-check dirty files and unmerged commits.
 * A started session gets no GUI tab unless it is appended to the workspace
-  document (``workspace:save``, whole-document replace). That is opt-in
-  (``orchestrate_register_tabs``) and done append-only with verification.
+  document. That is opt-in (``orchestrate_register_tabs``): through the host's
+  revision-checked ``bac:workspace-add-terminal`` where the connection negotiated
+  it, otherwise through ``workspace:save`` (whole-document replace), done
+  append-only with verification.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import confinement, registry, resource_policy, task_control
+from . import bac, confinement, registry, resource_policy, task_control
 from .errors import BatError, ResourceReadOnly, WriteRefused
 from .fleet import Fleet
 from .resource_policy import WriteGrant
@@ -213,6 +215,12 @@ def registry_permission_fields(opts: dict) -> dict:
     if opts.get("codexApprovalPolicy"):
         ap["approvalPolicy"] = opts["codexApprovalPolicy"]
     return {"permission_mode_claude": opts.get("permissionMode"), "agent_params": ap or None}
+
+
+def tab_is_registered(tab: dict | None) -> bool:
+    """True when the host holds this session's tab registration: this call appended it, or the
+    host already held an effectively equal one."""
+    return bool(tab) and (tab.get("appended") is True or tab.get("identical") is True)
 
 
 PRESETS = {
@@ -503,28 +511,36 @@ async def session_start(
                 term.update(worktreePath=wt["worktreePath"], worktreeBranch=wt.get("branchName"))
             tab_outcome = "unknown"
             tab_transported = False
+            tab_channel = "workspace:save"
             def tab_transport():
                 nonlocal tab_transported
                 tab_transported = True
+            def tab_write_channel(channel):
+                nonlocal tab_channel
+                tab_channel = channel
             try:
                 tab = await c.append_workspace_terminal(hc.profile_id, term,
                                                         grant=resource_policy.authorize_register_tab(host, sid),
                                                         before_send=_task_start_guard if _start_frame_check else None,
                                                         before_frame=_start_frame_check,
-                                                        on_transport=tab_transport)
-                tab_outcome = ("accepted" if tab.get("appended") is True and tab.get("saved") is True else
+                                                        on_transport=tab_transport,
+                                                        on_write_channel=tab_write_channel)
+                if tab.get("route") == "bac":
+                    tab_channel = bac.WORKSPACE_ADD_TERMINAL_CHANNEL
+                tab_outcome = ("accepted" if (tab.get("appended") is True and tab.get("saved") is True)
+                               or tab.get("identical") is True else
                                "error" if tab.get("saved") is False else "unknown")
             except BatError as e:
                 tab = {"appended": False, "error": _err(e)}
                 tab_outcome = audit_error_outcome(e)
             audit.record_after_effect(effect_sent=tab_transported, effect_outcome=tab_outcome,
                 **base,
-                channel="workspace:save",
+                channel=tab_channel,
                 phase="append-terminal",
-                ok=bool(tab.get("appended")),
+                ok=tab_is_registered(tab),
                 lost_terminals=len(tab.get("lost_terminals") or []),
             )
-            registry.update(host, sid, tab_registered=bool(tab.get("appended")))
+            registry.update(host, sid, tab_registered=tab_is_registered(tab))
         mid = None
         if prompt:
             mid = f"batc-{uuid.uuid4()}"
@@ -575,7 +591,7 @@ async def session_start(
         "confinement": confinement_record,
         "isolation": grant.isolation,
         "note": None
-        if tab and tab.get("appended")
+        if tab_is_registered(tab)
         else "no GUI tab registered (orchestrate_register_tabs=false); tracked in the local registry",
     }
 

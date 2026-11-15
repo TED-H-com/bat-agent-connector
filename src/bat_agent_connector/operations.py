@@ -25,6 +25,7 @@ from typing import Any
 
 from .api_auth import Principal
 from .errors import (
+    BacOutcomeUnknown,
     BatError,
     ConnectionLost,
     InvokeTimeout,
@@ -62,7 +63,7 @@ class AmbiguousOutcome(Exception):
     """An external call whose effect is unknown (timeout, lost connection, 5xx after sending)."""
 
 
-AMBIGUOUS = (InvokeTimeout, ConnectionLost, asyncio.TimeoutError, AmbiguousOutcome)
+AMBIGUOUS = (InvokeTimeout, ConnectionLost, asyncio.TimeoutError, AmbiguousOutcome, BacOutcomeUnknown)
 # A reconcile function returns RERUN when it proved the earlier attempt had no effect and the call is safe to
 # make again (for example a merge request deduplicated by the provider). Only use it with such proof.
 RERUN: dict = {"__rerun__": True}

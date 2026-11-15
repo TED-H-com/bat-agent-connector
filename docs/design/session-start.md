@@ -60,8 +60,8 @@ cleanup's existing fresh dependency, content and final-frame checks.
 
 Completed receipts replay without new write authority. Local registry projections compare the original operation/incarnation and owner under the registry flock; they do not overwrite a later binding. Positively unsent cancellation records a failed reservation and retains its known carrier for reviewed cleanup; unresolved external effects retain capacity.
 
-Tab registration remains append-only with the existing GUI save race limitation. A detected loss of previous workspace identities stays an explicit sticky conflict; it is never repaired by another save.
-Lost tab ACK needs exact terminal identity read-back; an uncertain tab blocks later
+Tab registration remains append-only. On a host whose connection negotiated the host contract's workspace read and append it uses the host's revision-checked append; on every other host it keeps the whole-document save with the existing GUI save race limitation, where a detected loss of previous workspace identities stays an explicit sticky conflict that is never repaired by another save.
+Lost tab ACK needs identity read-back through the route that carried the write: the exact terminal through `workspace:load`, or the host's registration comparison through `bac:workspace-read` (see [host contracts](host-contracts.md#tab-registration-through-the-host)); an uncertain tab blocks later
 effects. A first prompt uses a fixed operation message ID and no automatic client
 resume. Positive ACK, its saved operation-generated accepted-turn record, or the exact Claude user-message echo proves acceptance;
 Codex metadata/text similarity does not. Unknown send never resends. A partial

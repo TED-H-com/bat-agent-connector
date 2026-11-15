@@ -98,9 +98,11 @@ MUTATIONS: tuple[Mutation, ...] = (
               "integration.handoff", "repository.continue"),
              "new session ID reserved in the registry first; it works in a managed root, a worktree the "
              "connector creates, or a connector-owned worktree it shares; never in a human checkout"),
-    Mutation("workspace.register_tab", "bat", "tab", frozenset({"workspace:save"}),
+    Mutation("workspace.register_tab", "bat", "tab",
+             frozenset({"workspace:save", "bac:workspace-add-terminal"}),
              ("session_start", "task service reviewer start"),
-             "append-only tab for a session the connector just created; other tabs are verified unchanged"),
+             "append-only tab for a session the connector just created; revision-checked where the host "
+             "offers it, otherwise other tabs are verified unchanged"),
     Mutation("task.external_worktree", "ssh-git", "path", frozenset(),
              ("task service start with base_branch", "task service cleanup"),
              "only <workspace>/.bat-worktrees/batc-task-<12 hex> and branch batc/task-<12 hex>"),
@@ -153,7 +155,9 @@ MUTATIONS: tuple[Mutation, ...] = (
              "support and not_undone limits; a new deployment through that recipe, never a history edit"),
 )
 BY_ACTION = {m.action: m for m in MUTATIONS}
-# The only granted write channel whose frame names no session (its terminal carries the ID).
+# workspace:save names no session in its frame (the terminal inside the document carries the
+# ID), so its grant check cannot compare one. bac:workspace-add-terminal is deliberately not
+# listed: its caller passes the terminal's ID, and that must be the grant's session.
 SESSIONLESS_CHANNELS = frozenset({"workspace:save"})
 SESSION_ACTIONS = tuple(m.action for m in MUTATIONS if m.scope == "session")
 BAT_WRITE_CHANNELS = WRITE_CHANNELS | ORCHESTRATE_CHANNELS | GUARDED_CHANNELS

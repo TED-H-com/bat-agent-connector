@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+- Register the GUI tab of a started session through the host's own revision-checked
+  append on hosts that support the suite's host contract, so a change made in the BAT
+  window at the same moment is not overwritten. Tab registration stays opt-in
+  (`orchestrate_register_tabs`), and existing BAT hosts receive the same requests as
+  before.
 - Let the Connector client read a workspace and look up where a session is registered on
-  hosts that support the suite's host contract. Nothing in the product uses these reads
-  yet, and existing BAT hosts receive the same requests as before.
+  hosts that support the suite's host contract. Nothing in the product uses the session
+  lookup yet, and existing BAT hosts receive the same requests as before.
 - Dashboard data tables now have accessible names and mark the current row with `aria-current` for assistive technology.
 - CI now runs the managed browser check in English and Traditional Chinese.
 - CI runs each Python version's tests on eight runners instead of five, with freshly measured

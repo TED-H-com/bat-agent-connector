@@ -35,6 +35,15 @@ REGISTRATION_BYTES = 16384
 AGENT_PARAMS_LIMIT = 32
 LOCATION_MATCHES = 100
 RUNTIME_AGENT_PARAMS = frozenset({"sandboxMode", "approvalPolicy", "effortLevel"})
+# Error codes of bac:workspace-add-terminal that establish that the host changed nothing.
+# WRITE_FAILED and INTERNAL_ERROR are deliberately absent: after them, and after any code that
+# is not listed here, the outcome is unknown and has to be read back.
+APPEND_NOT_APPLIED = frozenset({
+    "INVALID_REQUEST", "PAYLOAD_TOO_LARGE", "CONTEXT_NOT_SUPPORTED", "NOT_OPTED_IN",
+    "UNSUPPORTED_FEATURE", "UNKNOWN_CHANNEL", "PROFILE_NOT_FOUND", "PROFILE_NOT_LOCAL",
+    "WORKSPACE_UNAVAILABLE", "WORKSPACE_TOO_LARGE", "WORKSPACE_NOT_FOUND", "TERMINAL_EXISTS",
+    "REVISION_MISMATCH",
+})
 _HOST_ID = re.compile(r"h_[0-9a-f]{32}")
 _BUILD_REVISION = re.compile(r"(?:[0-9a-f]{40}|unknown)")
 _BUILD_RELEASE = re.compile(r"[ -~]{1,64}")

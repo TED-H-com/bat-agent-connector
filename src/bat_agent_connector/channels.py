@@ -96,9 +96,10 @@ ORCHESTRATE_CHANNELS = frozenset(
     }
 )
 
-# Never sent through invoke(). Only BatClient.append_workspace_terminal() may use it,
-# and only in an append-only, verified way (orchestrate tier + register_tabs).
-GUARDED_CHANNELS = frozenset({"workspace:save"})
+# Never sent through invoke(). Only BatClient.append_workspace_terminal() may use them
+# (orchestrate tier + register_tabs): workspace:save in an append-only, verified way, and
+# bac:workspace-add-terminal on a connection that negotiated the feature.
+GUARDED_CHANNELS = frozenset({"workspace:save", "bac:workspace-add-terminal"})
 
 # Documented for tests and humans. Anything not in READ/WRITE is denied anyway.
 NEVER_EXPOSED_EXAMPLES = frozenset(
@@ -157,6 +158,7 @@ TIMEOUTS = {
     "git:diff-files": 15.0,
     "workspace:save": 30.0,
     "bac:session-locate": 30.0,
+    "bac:workspace-add-terminal": 30.0,
 }
 DEFAULT_TIMEOUT = 15.0
 

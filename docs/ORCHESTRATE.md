@@ -32,10 +32,15 @@ The connector therefore:
 
 1. tracks orchestrated sessions in a local registry (`~/.local/state/bat-agent-connector/orchestrated.json`); all
    read/write tools resolve them, `sessions_list` shows them with `orchestrated: true, has_tab: false`;
-2. optionally (`orchestrate_register_tabs = true`) appends a tab using an append-only helper: load, add exactly one
-   terminal (nothing else changes), re-load and abort if the document changed meanwhile, save, re-load and verify all
-   previous workspaces/terminals are still present. BAT has no compare-and-swap, so a narrow race with a concurrent
-   GUI save remains; see SECURITY.md. Connected GUI clients receive `workspace:reload` and show the new tab.
+2. optionally (`orchestrate_register_tabs = true`) appends a tab. On a host whose connection negotiated the host
+   contract's workspace read and append, the connector reads the workspace revision and asks the host to add exactly
+   one terminal at that revision (`bac:workspace-add-terminal`); the host refuses if the document changed meanwhile
+   and the connector reads again, so a concurrent GUI change is not overwritten. On every other host it uses an
+   append-only helper: load, add exactly one terminal (nothing else changes), re-load and abort if the document
+   changed meanwhile, save, re-load and verify all previous workspaces/terminals are still present. BAT has no
+   compare-and-swap, so on those hosts a narrow race with a concurrent GUI save remains; see SECURITY.md. On both
+   routes connected GUI clients receive `workspace:reload` and show the new tab. The `tab` member of the start
+   result says what happened; see [host contracts](design/host-contracts.md#tab-registration-through-the-host).
 
 ## Connector tools
 

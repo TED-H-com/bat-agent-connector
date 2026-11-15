@@ -20,7 +20,7 @@ Config file (default ``~/.config/bat-agent-connector/hosts.toml``)::
     writes = false                     # write tools stay unavailable unless true
     orchestrate = false                # 3rd tier: start worktree sessions, merge, remove (needs writes)
     orchestrate_max_sessions = 4       # cap on concurrently orchestrated sessions on this host
-    orchestrate_register_tabs = false  # append a tab to the host workspace (workspace:save, append-only)
+    orchestrate_register_tabs = false  # append a tab to the host workspace (host append or workspace:save)
     default_permission_mode = "default" # default/allow_all preserve BAT policy; confined gates tools/sandboxes
     # confined Codex may block installs/network/local sockets; BAT cannot pass network or writable roots.
     auto_cleanup = false               # deprecated: parses only; never enables cleanup writes

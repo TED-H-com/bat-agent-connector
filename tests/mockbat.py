@@ -30,11 +30,31 @@ class MockBac:
     """Synthetic BAC host for handshake and optional read features; never dispatches a BAC call to legacy handlers."""
 
     MISSING = _BAC_MISSING
+    CLOSE = object()
     CHANNELS = {
         "bac:workspace-read": "workspaceRead",
         "bac:workspace-add-terminal": "workspaceAddTerminal",
         "bac:session-locate": "sessionLocate",
         "bac:git-observe": "gitObserve",
+    }
+    _TERMINAL_KEYS = {
+        "id",
+        "workspaceId",
+        "title",
+        "type",
+        "cwd",
+        "agentPreset",
+        "model",
+        "permissionMode",
+        "agentParams",
+        "worktreePath",
+        "worktreeBranch",
+    }
+    _AGENT_PRESETS = {
+        "claude-code",
+        "claude-code-worktree",
+        "codex-agent",
+        "codex-agent-worktree",
     }
 
     def __init__(self):
@@ -63,11 +83,19 @@ class MockBac:
         self.busy_replies = 0
         self.drop_feature_replies = False
         self.extra_locations = []
+        self.before_append = None
+        self.overlay = None
+        self.append_error = None
+        self.append_fault = None
 
     def enable_workspace(self, mock):
         self.workspace_host = mock
         self.features["workspaceRead"] = True
         self.features["sessionLocate"] = True
+
+    def enable_append(self, mock):
+        self.enable_workspace(mock)
+        self.features["workspaceAddTerminal"] = True
 
     @staticmethod
     def revision(document):
@@ -75,6 +103,77 @@ class MockBac:
             json.dumps(document, sort_keys=True, separators=(",", ":"),
                        ensure_ascii=False).encode("utf-8")
         ).hexdigest()
+
+    @staticmethod
+    def _render_document(raw):
+        return copy.deepcopy({
+            "workspaces": raw.get("workspaces", []),
+            "activeWorkspaceId": raw.get("activeWorkspaceId"),
+            "activeGroup": raw.get("activeGroup"),
+            "terminals": raw.get("terminals", []),
+            "activeTerminalId": raw.get("activeTerminalId"),
+        })
+
+    @staticmethod
+    def _valid_id_list(items):
+        return (
+            isinstance(items, list)
+            and all(
+                isinstance(item, dict)
+                and isinstance(item.get("id"), str)
+                and bool(item["id"])
+                for item in items
+            )
+            and len({item["id"] for item in items}) == len(items)
+        )
+
+    @staticmethod
+    def _valid_profile_id(value):
+        return (
+            isinstance(value, str)
+            and bool(re.fullmatch(r"[A-Za-z0-9_.\-\u4e00-\u9fff]+", value))
+            and 1 <= len(value.encode("utf-8")) <= 128
+        )
+
+    @staticmethod
+    def _valid_id(value):
+        return isinstance(value, str) and bool(
+            re.fullmatch(r"[A-Za-z0-9_.:\-]{1,128}", value)
+        )
+
+    @staticmethod
+    def _valid_nonempty_str(value):
+        return isinstance(value, str) and bool(value) and "\0" not in value
+
+    @staticmethod
+    def _json_equal(left, right):
+        return json.dumps(
+            left, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ) == json.dumps(
+            right, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
+
+    @classmethod
+    def _registrations_equal(cls, a, b):
+        a_type = "terminal" if "type" not in a else a["type"]
+        b_type = "terminal" if "type" not in b else b["type"]
+        if not cls._json_equal(a_type, b_type):
+            return False
+        for key in ("id", "workspaceId", "title", "cwd", "agentPreset"):
+            if not cls._json_equal(a.get(key), b.get(key)):
+                return False
+        for key in ("model", "permissionMode", "worktreePath"):
+            if not cls._json_equal(a.get(key), b.get(key)):
+                return False
+        if ("worktreeBranch" in a) != ("worktreeBranch" in b):
+            return False
+        if "worktreeBranch" in a and not cls._json_equal(
+            a["worktreeBranch"], b["worktreeBranch"]
+        ):
+            return False
+        a_params = {} if a.get("agentParams") is None else a["agentParams"]
+        b_params = {} if b.get("agentParams") is None else b["agentParams"]
+        return cls._json_equal(a_params, b_params)
 
     @staticmethod
     def error(code, **details):
@@ -97,9 +196,13 @@ class MockBac:
             "WORKSPACE_TOO_LARGE": "Canonical workspace exceeds limit",
             "LOCATION_UNAVAILABLE": "Session locations are unavailable",
             "LOCATION_TOO_LARGE": "Session locations exceed limit",
+            "WORKSPACE_NOT_FOUND": "Target workspace not found",
+            "TERMINAL_EXISTS": "Terminal ID has a different registration",
+            "REVISION_MISMATCH": "Workspace revision changed",
+            "WRITE_FAILED": "Canonical workspace save failed; read back before retry",
         }
         return {"ok": False, "error": {"code": code, "message": messages[code],
-                                       "retryable": False, "details": details}}
+                                       "retryable": code == "REVISION_MISMATCH", "details": details}}
 
     def hello_value(self):
         return copy.deepcopy({"protocol": "bac/1", "minor": 0, "hostId": self.host_id,
@@ -158,26 +261,181 @@ class MockBac:
             return fail("UNKNOWN_CHANNEL")
         if not self.features[feature]:
             return fail("UNSUPPORTED_FEATURE", feature=feature)
-        if self.workspace_host is None or channel in {
-            "bac:workspace-add-terminal",
-            "bac:git-observe",
-        }:
-            # Write and git channels have no implementation in this mock; reads require enable_workspace.
+        if self.workspace_host is None or channel == "bac:git-observe":
+            # Git channel has no implementation in this mock; workspace channels require enable_workspace.
             return fail("INTERNAL_ERROR")
+        if channel == "bac:workspace-add-terminal":
+            if set(params) - {"profileId", "expectedRevision", "terminal"}:
+                return fail("INVALID_REQUEST", field="params")
+            profile_id = params.get("profileId")
+            if not self._valid_profile_id(profile_id):
+                return fail("INVALID_REQUEST", field="params.profileId")
+            expected_rev = params.get("expectedRevision")
+            if not isinstance(expected_rev, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", expected_rev
+            ):
+                return fail("INVALID_REQUEST", field="params.expectedRevision")
+            if "terminal" not in params:
+                return fail("INVALID_REQUEST", field="params.terminal")
+            terminal = params["terminal"]
+            if not isinstance(terminal, dict) or (set(terminal) - self._TERMINAL_KEYS):
+                return fail("INVALID_REQUEST", field="params.terminal")
+            if not self._valid_id(terminal.get("id")):
+                return fail("INVALID_REQUEST", field="params.terminal.id")
+            if not self._valid_id(terminal.get("workspaceId")):
+                return fail("INVALID_REQUEST", field="params.terminal.workspaceId")
+            if not self._valid_nonempty_str(terminal.get("title")):
+                return fail("INVALID_REQUEST", field="params.terminal.title")
+            if terminal.get("type") != "terminal":
+                return fail("INVALID_REQUEST", field="params.terminal.type")
+            if not self._valid_nonempty_str(terminal.get("cwd")):
+                return fail("INVALID_REQUEST", field="params.terminal.cwd")
+            preset = terminal.get("agentPreset")
+            if not (isinstance(preset, str) and preset in self._AGENT_PRESETS):
+                return fail("INVALID_REQUEST", field="params.terminal.agentPreset")
+            if terminal.get("model") is not None and not self._valid_nonempty_str(
+                terminal["model"]
+            ):
+                return fail("INVALID_REQUEST", field="params.terminal.model")
+            if terminal.get("permissionMode") is not None and not self._valid_nonempty_str(
+                terminal["permissionMode"]
+            ):
+                return fail("INVALID_REQUEST", field="params.terminal.permissionMode")
+            agent_params = terminal.get("agentParams")
+            if agent_params is not None and (
+                not isinstance(agent_params, dict)
+                or len(agent_params) > 32
+                or not all(
+                    self._valid_nonempty_str(k) and isinstance(v, str) and "\0" not in v
+                    for k, v in agent_params.items()
+                )
+            ):
+                return fail("INVALID_REQUEST", field="params.terminal.agentParams")
+            if terminal.get("worktreePath") is not None and not self._valid_nonempty_str(
+                terminal["worktreePath"]
+            ):
+                return fail("INVALID_REQUEST", field="params.terminal.worktreePath")
+            if terminal.get("worktreeBranch") is not None and not self._valid_nonempty_str(
+                terminal["worktreeBranch"]
+            ):
+                return fail("INVALID_REQUEST", field="params.terminal.worktreeBranch")
+            if (
+                len(
+                    json.dumps(
+                        terminal, ensure_ascii=False, separators=(",", ":")
+                    ).encode("utf-8")
+                )
+                > 16384
+            ):
+                return fail("INVALID_REQUEST", field="params.terminal")
+            if self.append_error:
+                details = (
+                    {"maxBytes": 520192}
+                    if self.append_error == "WORKSPACE_TOO_LARGE"
+                    else {}
+                )
+                return fail(self.append_error, **details)
+            if profile_id != "default":
+                return fail("PROFILE_NOT_FOUND")
+            if self.before_append is not None:
+                self.before_append()
+            raw = self.workspace_host.ws_doc
+            document = self._render_document(raw)
+            rev = self.revision(document)
+            if not (
+                self._valid_id_list(raw.get("workspaces"))
+                and self._valid_id_list(raw.get("terminals"))
+            ):
+                return fail("WORKSPACE_UNAVAILABLE")
+            normalized = {
+                "id": terminal["id"],
+                "workspaceId": terminal["workspaceId"],
+                "title": terminal["title"],
+                "type": "terminal",
+                "cwd": terminal["cwd"],
+                "agentPreset": terminal["agentPreset"],
+            }
+            for opt_key in ("model", "permissionMode", "agentParams", "worktreePath"):
+                if terminal.get(opt_key) is not None:
+                    normalized[opt_key] = copy.deepcopy(terminal[opt_key])
+            if "worktreeBranch" in terminal:
+                normalized["worktreeBranch"] = terminal["worktreeBranch"]
+            existing = next(
+                (t for t in document["terminals"] if t["id"] == normalized["id"]),
+                None,
+            )
+            if existing is not None:
+                stored_copy = copy.deepcopy(existing)
+                candidate_copy = copy.deepcopy(normalized)
+                if self.overlay is not None:
+                    self.overlay(stored_copy)
+                    self.overlay(candidate_copy)
+                if self._registrations_equal(stored_copy, candidate_copy):
+                    return {
+                        "ok": True,
+                        "value": {
+                            "hostId": self.host_id,
+                            "profileId": "default",
+                            "source": "persisted",
+                            "windowId": None,
+                            "terminalId": normalized["id"],
+                            "appended": False,
+                            "revision": rev,
+                        },
+                    }, negotiated
+                return fail(
+                    "TERMINAL_EXISTS",
+                    terminalId=normalized["id"],
+                    currentRevision=rev,
+                )
+            if expected_rev != rev:
+                return fail("REVISION_MISMATCH", currentRevision=rev)
+            if not any(
+                w["id"] == normalized["workspaceId"] for w in document["workspaces"]
+            ):
+                return fail("WORKSPACE_NOT_FOUND", workspaceId=normalized["workspaceId"])
+            fault = self.append_fault
+            self.append_fault = None
+
+            def apply_append():
+                stored = copy.deepcopy(normalized)
+                if self.overlay is not None:
+                    self.overlay(stored)
+                raw["terminals"] = document["terminals"] + [stored]
+
+            if fault == "lost_request":
+                return self.CLOSE, negotiated
+            if fault == "lost_reply":
+                apply_append()
+                return self.CLOSE, negotiated
+            if fault == "write_failed":
+                return fail("WRITE_FAILED", outcome="unknown")
+            if fault == "write_failed_applied":
+                apply_append()
+                return fail("WRITE_FAILED", outcome="unknown")
+            if fault == "internal_error":
+                return fail("INTERNAL_ERROR")
+            apply_append()
+            return {
+                "ok": True,
+                "value": {
+                    "hostId": self.host_id,
+                    "profileId": "default",
+                    "source": "persisted",
+                    "windowId": None,
+                    "terminalId": normalized["id"],
+                    "appended": True,
+                    "revision": self.revision(self._render_document(raw)),
+                },
+            }, negotiated
         key = "profileId" if channel == "bac:workspace-read" else "sessionId"
         if set(params) - {key}:
             return fail("INVALID_REQUEST", field="params")
         value = params.get(key)
         if channel == "bac:workspace-read":
-            valid = (
-                isinstance(value, str)
-                and bool(re.fullmatch(r"[A-Za-z0-9_.\-\u4e00-\u9fff]+", value))
-                and 1 <= len(value.encode("utf-8")) <= 128
-            )
+            valid = self._valid_profile_id(value)
         else:
-            valid = isinstance(value, str) and bool(
-                re.fullmatch(r"[A-Za-z0-9_.:\-]{1,128}", value)
-            )
+            valid = self._valid_id(value)
         if not valid:
             return fail("INVALID_REQUEST", field=f"params.{key}")
         err = self.read_error if channel == "bac:workspace-read" else self.locate_error
@@ -191,31 +449,14 @@ class MockBac:
             )
             return fail(err, **details)
         raw = self.workspace_host.ws_doc
-        document = copy.deepcopy({
-            "workspaces": raw.get("workspaces", []),
-            "activeWorkspaceId": raw.get("activeWorkspaceId"),
-            "activeGroup": raw.get("activeGroup"),
-            "terminals": raw.get("terminals", []),
-            "activeTerminalId": raw.get("activeTerminalId"),
-        })
+        document = self._render_document(raw)
         rev = self.revision(document)
         if channel == "bac:workspace-read":
             if value != "default":
                 return fail("PROFILE_NOT_FOUND")
-
-            def valid_list(items):
-                return (
-                    isinstance(items, list)
-                    and all(
-                        isinstance(item, dict)
-                        and isinstance(item.get("id"), str)
-                        and bool(item["id"])
-                        for item in items
-                    )
-                    and len({item["id"] for item in items}) == len(items)
-                )
-
-            eligible = valid_list(raw.get("workspaces")) and valid_list(raw.get("terminals"))
+            eligible = self._valid_id_list(raw.get("workspaces")) and self._valid_id_list(
+                raw.get("terminals")
+            )
             return {
                 "ok": True,
                 "value": {
@@ -274,11 +515,17 @@ class MockBac:
 
     async def handle(self, ws, frame, negotiated, protocol):
         self.frames.append(copy.deepcopy(frame))
-        result, negotiated = self.reply(frame, negotiated, protocol)
         mid = frame.get("id")
         if not isinstance(mid, str) or "\0" in mid or not 1 <= len(mid.encode("utf-8")) <= 128:
             mid = None
         channel = frame.get("channel")
+        is_feature = isinstance(channel, str) and channel in self.CHANNELS
+        if is_feature and not self.drop_feature_replies and self.busy_replies > 0:
+            self.busy_replies -= 1
+            await ws.send(json.dumps({"type": "invoke-error", "id": mid,
+                                      "error": "Remote server is busy"}))
+            return negotiated
+        result, negotiated = self.reply(frame, negotiated, protocol)
         if channel == "bac:hello":
             self.hello_received.set()
             if self.close_hello:
@@ -292,13 +539,11 @@ class MockBac:
                 return negotiated
             if self.hello_result is not _BAC_DEFAULT:
                 result = self.hello_result
-        elif isinstance(channel, str) and channel in self.CHANNELS:
-            if self.drop_feature_replies:
+        elif is_feature:
+            if result is self.CLOSE:
+                await ws.close()
                 return negotiated
-            if self.busy_replies > 0:
-                self.busy_replies -= 1
-                await ws.send(json.dumps({"type": "invoke-error", "id": mid,
-                                          "error": "Remote server is busy"}))
+            if self.drop_feature_replies:
                 return negotiated
             if channel in self.result_override:
                 result = self.result_override[channel]
