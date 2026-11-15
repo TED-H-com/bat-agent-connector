@@ -105,6 +105,14 @@ def assert_no_legacy_frames(mock: MockBat) -> None:
     assert "workspace:save" not in channels
 
 
+def legacy_frames(mock: MockBat) -> list[dict]:
+    return [f for f in mock.invokes if not f["channel"].startswith("bac:")]
+
+
+def registration_size(value: dict) -> int:
+    return len(json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+
+
 # --------------------------------------------------------------------------- 1. Append through the host
 
 
@@ -145,11 +153,100 @@ async def test_append_through_host(host):
 # --------------------------------------------------------------------------- 2. Whole-document route unchanged
 
 
-@pytest.mark.parametrize("case", ["no-bac"])
+def _host_reads_only(mock: MockBat, term: dict) -> None:
+    mock.bac.enable_workspace(mock)
+
+
+def _host_read_feature_off(mock: MockBat, term: dict) -> None:
+    mock.bac.enable_append(mock)
+    mock.bac.features["workspaceRead"] = False
+
+
+def _host_hello_refused(mock: MockBat, term: dict) -> None:
+    mock.bac.enable_append(mock)
+    mock.bac.storage_error = "STORAGE_UNAVAILABLE"
+
+
+def _host_append(mock: MockBat, term: dict) -> None:
+    mock.bac.enable_append(mock)
+
+
+def _host_limit_one_byte_short(mock: MockBat, term: dict) -> None:
+    mock.bac.enable_append(mock)
+    mock.bac.limits["registrationBytes"] = registration_size(term) - 1
+
+
+# case: (host advertises BAC, host setup, profile ID, registration,
+#        (workspaceRead, workspaceAddTerminal) as negotiated on the connection)
+WHOLE_DOCUMENT_CASES = {
+    "no-bac": (False, None, "default", terminal, (False, False)),
+    "reads-only": (True, _host_reads_only, "default", terminal, (True, False)),
+    "read-feature-off": (True, _host_read_feature_off, "default", terminal, (False, True)),
+    "hello-refused": (True, _host_hello_refused, "default", terminal, (False, False)),
+    "registration-incomplete": (
+        True, _host_append, "default", lambda sid: {"id": sid, "workspaceId": "ws-1"}, (True, True)),
+    "registration-extra-key": (
+        True, _host_append, "default", lambda sid: terminal(sid, sdkSessionId="sdk-1"), (True, True)),
+    "profile-outside-grammar": (True, _host_append, "a:b", terminal, (True, True)),
+    "registration-over-limit": (True, _host_limit_one_byte_short, "default", terminal, (True, True)),
+}
+
+
+@pytest.mark.parametrize("case", list(WHOLE_DOCUMENT_CASES))
 async def test_whole_document_route_unchanged(controller_context, case):
-    mock = MockBat(bac=False)
+    advertises, setup, profile_id, make, negotiated = WHOLE_DOCUMENT_CASES[case]
+    mock = MockBat(bac=advertises)
     sid = f"sess-legacy-{case}"
+    term = make(sid)
+    if setup is not None:
+        setup(mock, term)
+    expected = copy.deepcopy(mock.ws_doc)
+    expected["terminals"].append(copy.deepcopy(term))
+
+    await mock.start()
+    try:
+        client = client_for(mock)
+        try:
+            res = await client.append_workspace_terminal(profile_id, term, grant=tab_grant(sid))
+            features = (client.bac_supports("workspaceRead"), client.bac_supports("workspaceAddTerminal"))
+        finally:
+            await client.close()
+    finally:
+        await mock.stop()
+
+    assert features == negotiated
+    assert res == {
+        "appended": True,
+        "saved": True,
+        "verified_previous_terminals_kept": True,
+        "lost_terminals": [],
+        "lost_workspaces": [],
+    }
+    assert NEW_RESULT_KEYS.isdisjoint(res)
+    frames = legacy_frames(mock)
+    assert [f["channel"] for f in frames] == [
+        "workspace:load", "workspace:load", "workspace:save", "workspace:load"]
+    assert all(set(f) == {"type", "id", "channel", "params"} for f in frames)
+    assert [frames[i]["params"] for i in (0, 1, 3)] == [{"profileId": profile_id}] * 3
+    save = frames[2]["params"]
+    assert set(save) == {"profileId", "data"}
+    assert save["profileId"] == profile_id
+    assert json.loads(save["data"]) == expected
+    assert mock.ws_doc == expected
+    if advertises:
+        assert [f["channel"] for f in mock.bac.frames] == [HELLO]
+    else:
+        assert mock.channels() == [f["channel"] for f in frames]
+    assert bac_frames(mock, READ) == []
+    assert bac_frames(mock, ADD) == []
+
+
+async def test_registration_exactly_at_the_advertised_limit_takes_the_host_route(controller_context):
+    mock = MockBat(bac=True)
+    mock.bac.enable_append(mock)
+    sid = "sess-at-limit"
     term = terminal(sid)
+    mock.bac.limits["registrationBytes"] = registration_size(term)
 
     await mock.start()
     try:
@@ -161,17 +258,12 @@ async def test_whole_document_route_unchanged(controller_context, case):
     finally:
         await mock.stop()
 
-    assert res == {
-        "appended": True,
-        "saved": True,
-        "verified_previous_terminals_kept": True,
-        "lost_terminals": [],
-        "lost_workspaces": [],
-    }
-    assert NEW_RESULT_KEYS.isdisjoint(res)
-    assert mock.channels() == ["workspace:load", "workspace:load", "workspace:save", "workspace:load"]
-    assert bac_frames(mock, READ) == []
-    assert bac_frames(mock, ADD) == []
+    assert res["route"] == "bac"
+    assert res["appended"] is True
+    assert res["saved"] is True
+    assert_no_legacy_frames(mock)
+    assert len(bac_frames(mock, ADD)) == 1
+    assert mock.ws_doc["terminals"][-1] == term
 
 
 async def test_default_registration_bytes_when_limit_omitted(host):
