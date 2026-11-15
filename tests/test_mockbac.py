@@ -996,6 +996,22 @@ async def test_enable_append_and_missing_workspace_host(bac_mock):
             {
                 'profileId': 'default',
                 'expectedRevision': _DUMMY_REV,
+                'terminal': {**VALID, 'agentPreset': []},
+            },
+            'params.terminal.agentPreset',
+        ),
+        (
+            {
+                'profileId': 'default',
+                'expectedRevision': _DUMMY_REV,
+                'terminal': {**VALID, 'agentPreset': {}},
+            },
+            'params.terminal.agentPreset',
+        ),
+        (
+            {
+                'profileId': 'default',
+                'expectedRevision': _DUMMY_REV,
                 'terminal': {**VALID, 'model': ''},
             },
             'params.terminal.model',
@@ -1128,6 +1144,8 @@ async def test_enable_append_and_missing_workspace_host(bac_mock):
         'cwd-empty',
         'agentPreset-shell',
         'agentPreset-missing',
+        'agentPreset-list',
+        'agentPreset-object',
         'model-empty',
         'model-int',
         'permissionMode-empty',
@@ -1691,6 +1709,8 @@ async def test_append_unknown_workspace_and_precedence(append_mock):
         {'workspaces': [{'name': 'ws'}], 'terminals': [VALID]},
         {'workspaces': [{'id': ''}], 'terminals': [VALID]},
         {'workspaces': [{'id': 'ws-1'}, {'id': 'ws-1'}], 'terminals': [VALID]},
+        {'workspaces': [{'id': 'ws-1'}]},
+        {'terminals': [VALID]},
     ],
     ids=[
         'terminals-dict',
@@ -1703,6 +1723,8 @@ async def test_append_unknown_workspace_and_precedence(append_mock):
         'workspace-without-id',
         'workspace-empty-id',
         'workspaces-duplicate-id',
+        'terminals-missing',
+        'workspaces-missing',
     ],
 )
 async def test_append_invalid_structure(append_mock, bad_ws_doc):

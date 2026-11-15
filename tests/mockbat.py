@@ -290,7 +290,8 @@ class MockBac:
                 return fail("INVALID_REQUEST", field="params.terminal.type")
             if not self._valid_nonempty_str(terminal.get("cwd")):
                 return fail("INVALID_REQUEST", field="params.terminal.cwd")
-            if terminal.get("agentPreset") not in self._AGENT_PRESETS:
+            preset = terminal.get("agentPreset")
+            if not (isinstance(preset, str) and preset in self._AGENT_PRESETS):
                 return fail("INVALID_REQUEST", field="params.terminal.agentPreset")
             if terminal.get("model") is not None and not self._valid_nonempty_str(
                 terminal["model"]
@@ -342,8 +343,8 @@ class MockBac:
             document = self._render_document(raw)
             rev = self.revision(document)
             if not (
-                self._valid_id_list(document["workspaces"])
-                and self._valid_id_list(document["terminals"])
+                self._valid_id_list(raw.get("workspaces"))
+                and self._valid_id_list(raw.get("terminals"))
             ):
                 return fail("WORKSPACE_UNAVAILABLE")
             normalized = {
