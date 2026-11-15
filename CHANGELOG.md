@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let the Connector client read a workspace and look up where a session is registered on
+  hosts that support the suite's host contract. Nothing in the product uses these reads
+  yet, and existing BAT hosts receive the same requests as before.
 - Dashboard data tables now have accessible names and mark the current row with `aria-current` for assistive technology.
 - CI now runs the managed browser check in English and Traditional Chinese.
 - CI runs each Python version's tests on eight runners instead of five, with freshly measured

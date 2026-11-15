@@ -29,6 +29,10 @@ class InvokeError(BatError):
     """The host returned invoke-error."""
 
 
+class BacUnavailable(BatError):
+    """The BAC feature this request needs cannot be used here. Nothing was sent."""
+
+
 class BacReplyError(BatError):
     """A validated BAC error envelope. Details are diagnostics, never decisions."""
 
