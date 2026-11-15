@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import inspect
 import json
 import re
@@ -26,7 +27,7 @@ _BAC_MISSING = object()
 
 
 class MockBac:
-    """Handshake-only synthetic host; never dispatches a BAC call to legacy handlers."""
+    """Synthetic BAC host for handshake and optional read features; never dispatches a BAC call to legacy handlers."""
 
     MISSING = _BAC_MISSING
     CHANNELS = {
@@ -55,6 +56,25 @@ class MockBac:
         self.hello_result = _BAC_DEFAULT
         self.hello_received = asyncio.Event()
         self.frames = []
+        self.workspace_host = None
+        self.read_error = None
+        self.locate_error = None
+        self.result_override = {}
+        self.busy_replies = 0
+        self.drop_feature_replies = False
+        self.extra_locations = []
+
+    def enable_workspace(self, mock):
+        self.workspace_host = mock
+        self.features["workspaceRead"] = True
+        self.features["sessionLocate"] = True
+
+    @staticmethod
+    def revision(document):
+        return "sha256:" + hashlib.sha256(
+            json.dumps(document, sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
 
     @staticmethod
     def error(code, **details):
@@ -71,6 +91,12 @@ class MockBac:
             "NOT_OPTED_IN": "Call bac:hello first",
             "UNSUPPORTED_FEATURE": "BAC feature is unavailable",
             "UNKNOWN_CHANNEL": "Unknown BAC channel",
+            "PROFILE_NOT_FOUND": "Local profile not found",
+            "PROFILE_NOT_LOCAL": "BAC requires a local profile",
+            "WORKSPACE_UNAVAILABLE": "Canonical workspace is unavailable",
+            "WORKSPACE_TOO_LARGE": "Canonical workspace exceeds limit",
+            "LOCATION_UNAVAILABLE": "Session locations are unavailable",
+            "LOCATION_TOO_LARGE": "Session locations exceed limit",
         }
         return {"ok": False, "error": {"code": code, "message": messages[code],
                                        "retryable": False, "details": details}}
@@ -132,8 +158,119 @@ class MockBac:
             return fail("UNKNOWN_CHANNEL")
         if not self.features[feature]:
             return fail("UNSUPPORTED_FEATURE", feature=feature)
-        # No feature implementation in this handshake-only mock.
-        return fail("INTERNAL_ERROR")
+        if self.workspace_host is None or channel in {
+            "bac:workspace-add-terminal",
+            "bac:git-observe",
+        }:
+            # Write and git channels have no implementation in this mock; reads require enable_workspace.
+            return fail("INTERNAL_ERROR")
+        key = "profileId" if channel == "bac:workspace-read" else "sessionId"
+        if set(params) - {key}:
+            return fail("INVALID_REQUEST", field="params")
+        value = params.get(key)
+        if channel == "bac:workspace-read":
+            valid = (
+                isinstance(value, str)
+                and bool(re.fullmatch(r"[A-Za-z0-9_.\-一-鿿]+", value))
+                and 1 <= len(value.encode("utf-8")) <= 128
+            )
+        else:
+            valid = isinstance(value, str) and bool(
+                re.fullmatch(r"[A-Za-z0-9_.:\-]{1,128}", value)
+            )
+        if not valid:
+            return fail("INVALID_REQUEST", field=f"params.{key}")
+        err = self.read_error if channel == "bac:workspace-read" else self.locate_error
+        if err:
+            details = (
+                {"maxBytes": 520192}
+                if err == "WORKSPACE_TOO_LARGE"
+                else {"profileIds": []}
+                if err == "LOCATION_UNAVAILABLE"
+                else {}
+            )
+            return fail(err, **details)
+        raw = self.workspace_host.ws_doc
+        document = copy.deepcopy({
+            "workspaces": raw.get("workspaces", []),
+            "activeWorkspaceId": raw.get("activeWorkspaceId"),
+            "activeGroup": raw.get("activeGroup"),
+            "terminals": raw.get("terminals", []),
+            "activeTerminalId": raw.get("activeTerminalId"),
+        })
+        rev = self.revision(document)
+        if channel == "bac:workspace-read":
+            if value != "default":
+                return fail("PROFILE_NOT_FOUND")
+
+            def valid_list(items):
+                return (
+                    isinstance(items, list)
+                    and all(
+                        isinstance(item, dict)
+                        and isinstance(item.get("id"), str)
+                        and bool(item["id"])
+                        for item in items
+                    )
+                    and len({item["id"] for item in items}) == len(items)
+                )
+
+            eligible = valid_list(raw.get("workspaces")) and valid_list(raw.get("terminals"))
+            return {
+                "ok": True,
+                "value": {
+                    "hostId": self.host_id,
+                    "profileId": "default",
+                    "source": "persisted",
+                    "windowId": None,
+                    "revision": rev,
+                    "document": document,
+                    "appendTargetEligible": eligible,
+                },
+            }, negotiated
+        workspaces = document["workspaces"]
+        terminals = document["terminals"]
+        locations = []
+        if isinstance(workspaces, list) and isinstance(terminals, list):
+            ws_ids = {
+                w["id"]
+                for w in workspaces
+                if isinstance(w, dict) and isinstance(w.get("id"), str)
+            }
+            for term in terminals:
+                if (
+                    isinstance(term, dict)
+                    and term.get("id") == value
+                    and isinstance(term.get("workspaceId"), str)
+                    and term["workspaceId"] in ws_ids
+                ):
+                    locations.append({
+                        "profileId": "default",
+                        "workspaceId": term["workspaceId"],
+                        "terminalId": value,
+                        "windowId": None,
+                        "source": "persisted",
+                        "profileRevision": rev,
+                    })
+        locations.extend(copy.deepcopy(self.extra_locations))
+        disposition = (
+            "unregistered"
+            if not locations
+            else "located"
+            if len(locations) == 1
+            else "ambiguous"
+        )
+        return {
+            "ok": True,
+            "value": {
+                "hostId": self.host_id,
+                "locationRevision": self.revision([["default", "persisted", None, rev]]),
+                "disposition": disposition,
+                "consistency": "sequential",
+                "atomic": False,
+                "locations": locations,
+            },
+        }, negotiated
 
     async def handle(self, ws, frame, negotiated, protocol):
         self.frames.append(copy.deepcopy(frame))
@@ -141,7 +278,8 @@ class MockBac:
         mid = frame.get("id")
         if not isinstance(mid, str) or "\0" in mid or not 1 <= len(mid.encode("utf-8")) <= 128:
             mid = None
-        if frame.get("channel") == "bac:hello":
+        channel = frame.get("channel")
+        if channel == "bac:hello":
             self.hello_received.set()
             if self.close_hello:
                 await ws.close()
@@ -154,6 +292,16 @@ class MockBac:
                 return negotiated
             if self.hello_result is not _BAC_DEFAULT:
                 result = self.hello_result
+        elif isinstance(channel, str) and channel in self.CHANNELS:
+            if self.drop_feature_replies:
+                return negotiated
+            if self.busy_replies > 0:
+                self.busy_replies -= 1
+                await ws.send(json.dumps({"type": "invoke-error", "id": mid,
+                                          "error": "Remote server is busy"}))
+                return negotiated
+            if channel in self.result_override:
+                result = self.result_override[channel]
         response = {"type": "invoke-result", "id": mid, "result": result}
         encoded = json.dumps(response, separators=(",", ":"), ensure_ascii=False)
         if len(encoded.encode("utf-8")) > 524288:
