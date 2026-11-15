@@ -35,6 +35,7 @@ from .config import HostConfig
 from .errlog import log_error
 from .errors import (
     AuthError,
+    BacUnavailable,
     BatError,
     ChannelNotAllowed,
     ConnectionLost,
@@ -566,6 +567,87 @@ class BatClient:
                     continue
                 raise
         raise last_exc or ConnectionLost(f"{self.host.name}: failed")  # pragma: no cover
+
+    # ------------------------------------------------------------------ BAC feature reads
+    def bac_supports(self, *features: str) -> bool:
+        """True when this connection negotiated every named BAC feature."""
+        state = self.bac
+        return (state is not None and state.status == "negotiated"
+                and all(state.features.get(name) is True for name in features))
+
+    async def _bac_call(self, channel: str, params: dict,
+                        *, check: Callable[[Any, bac.BacState], Any]) -> Any:
+        """Send one BAC feature read on a connection that negotiated its feature."""
+        feature = bac.CHANNEL_FEATURES[channel]
+        unavailable = f"{self.host.name}: {channel} is not available on this connection"
+        attempts = 3
+        last_exc: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                await self.connect()
+                async with self._sem:
+                    # No await between reading the negotiated state and _roundtrip: the state
+                    # must describe the connection that carries the frame.
+                    if not self.connected:
+                        raise ConnectionLost(f"{self.host.name}: not connected")
+                    state = self.bac
+                    if state is not None:
+                        if state.status != "negotiated" or state.features.get(feature) is not True:
+                            raise BacUnavailable(unavailable)
+                        frame = {"type": "invoke", "id": f"batc-{next(self._ids)}",
+                                 "channel": channel, "params": params}
+                        reply = await self._roundtrip(frame, timeout_for(channel))
+                if state is None:
+                    # Another caller's reconnect is still waiting for its hello; connect()
+                    # returns after it. This connection is left open.
+                    if attempt + 1 < attempts:
+                        continue
+                    raise BacUnavailable(unavailable)
+                self.last_used = time.monotonic()
+                if reply.get("type") == "invoke-error":
+                    err = redact(reply.get("error"))
+                    _record_invoke_error(channel, err)
+                    if BUSY_TEXT in err and attempt + 1 < attempts:
+                        await _retry_pause(0.5 * (attempt + 1))
+                        continue
+                    raise InvokeError(f"{self.host.name}: {channel}: {err}")
+                try:
+                    if reply.get("type") != "invoke-result":
+                        raise ValueError("invalid_reply")
+                    return check(bac.parse_envelope(reply.get("result")), state)
+                except ValueError:
+                    _record_invoke_error(channel, "invalid BAC reply")
+                    raise InvokeError(f"{self.host.name}: {channel}: invalid BAC reply") from None
+            except ConnectionLost as e:
+                log_error("bat-connector", "connector.reconnect.failed", e)
+                last_exc = e
+                await self.close()
+                if attempt + 1 < attempts:
+                    await _retry_pause(random.uniform(0.0, min(4.0, 0.5 * 2**attempt)))
+                    continue
+                raise
+        raise last_exc or ConnectionLost(f"{self.host.name}: failed")  # pragma: no cover
+
+    async def bac_workspace_read(self, profile_id: str) -> dict:
+        """Read one local profile's canonical workspace through the host contract."""
+        if not bac.valid_profile_id(profile_id):
+            raise BacUnavailable(
+                f"{self.host.name}: {bac.WORKSPACE_READ_CHANNEL} cannot address this profile")
+        return await self._bac_call(
+            bac.WORKSPACE_READ_CHANNEL, {"profileId": profile_id},
+            check=lambda value, state: bac.parse_workspace_read(
+                value, host_id=state.host_id, profile_id=profile_id))
+
+    async def bac_session_locate(self, session_id: str) -> dict:
+        """Ask the host where a terminal with this ID is registered (sequential, not atomic)."""
+        if not bac.valid_session_id(session_id):
+            raise BacUnavailable(
+                f"{self.host.name}: {bac.SESSION_LOCATE_CHANNEL} cannot address this session")
+        return await self._bac_call(
+            bac.SESSION_LOCATE_CHANNEL, {"sessionId": session_id},
+            check=lambda value, state: bac.parse_session_locate(
+                value, host_id=state.host_id, session_id=session_id,
+                max_rows=state.limits.get("locationMatches", bac.LOCATION_MATCHES)))
 
     async def append_workspace_terminal(self, profile_id: str, terminal: dict, *, grant: WriteGrant | None,
                                         retries: int = 3, before_send: Callable[[], None] | None = None,
