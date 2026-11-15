@@ -73,7 +73,11 @@ cannot select another principal by passing tool arguments.
 
 The operator supplies this agent's `BATC_API_TOKEN` through the MCP server's
 environment/secret configuration, and `BATC_TASK_URL` when the daemon endpoint
-differs. See [MCP setup](getting-started.md#cli-and-agent-access) for stdio/HTTP
+differs. A `--principal-only` process needs no host configuration file: when
+neither `--config` nor `BATC_CONFIG` names one and neither the default file nor
+a fragment beside it exists, it starts with an empty host configuration, because
+it reads hosts through the central service. A file that is named must exist. See
+[MCP setup](getting-started.md#cli-and-agent-access) for stdio/HTTP
 configuration. Changes to write configuration follow the existing host tiers and
 principal scopes; changing the agent name grants nothing. Standard MCP clients
 need neither Hermes nor an open Tauri window.
