@@ -186,8 +186,8 @@ def _resolve_token_ref(ref: str, profiles_dir: str) -> str:
     raise TokenUnavailable(f"unknown token_ref kind {kind!r}")
 
 
-def _bat_token_unavailable(reason: str) -> TokenUnavailable:
-    """Stable policy code plus actionable, content-free runtime guidance."""
+def bat_source_message(reason: str) -> str:
+    """Stable policy code plus actionable, content-free guidance."""
     messages = {
         "TOKEN_STORE_ENCRYPTED": "BAT token store is encrypted (OS keychain); use token_ref env: or file: instead",
         "TOKEN_STORE_UNREADABLE": "cannot read BAT token store: validate private file permissions, type, size and JSON format",
@@ -197,7 +197,11 @@ def _bat_token_unavailable(reason: str) -> TokenUnavailable:
         "DATA_DIRECTORY_UNREADABLE": "cannot read BAT profiles directory; check directory permissions or configure profiles_dir",
     }
     message = messages.get(reason, "BAT token store has an unexpected format")
-    return TokenUnavailable(f"{reason}: {message}")
+    return f"{reason}: {message}"
+
+
+def _bat_token_unavailable(reason: str) -> TokenUnavailable:
+    return TokenUnavailable(bat_source_message(reason))
 
 
 def _token_from_bat_profiles(pdir: str | Path | None, profile_id: str) -> str:
