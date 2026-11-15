@@ -35,6 +35,8 @@ from .config import HostConfig
 from .errlog import log_error
 from .errors import (
     AuthError,
+    BacOutcomeUnknown,
+    BacReplyError,
     BacUnavailable,
     BatError,
     ChannelNotAllowed,
@@ -575,17 +577,25 @@ class BatClient:
         return (state is not None and state.status == "negotiated"
                 and all(state.features.get(name) is True for name in features))
 
-    async def _bac_call(self, channel: str, params: dict,
-                        *, check: Callable[[Any, bac.BacState], Any]) -> Any:
-        """Send one BAC feature read on a connection that negotiated its feature."""
+    async def _bac_call(self, channel: str, params: dict, *, write: bool,
+                        check: Callable[[Any, bac.BacState], Any],
+                        before_send: Callable[[], None] | None = None,
+                        before_frame: Callable[[], Awaitable[None]] | None = None,
+                        on_transport: Callable[[], None] | None = None) -> Any:
+        """Send one BAC feature request on a connection that negotiated its feature.
+
+        A read is attempted up to three times. A write frame is sent at most once; when its
+        reply does not establish what the host did, BacOutcomeUnknown is raised."""
         feature = bac.CHANNEL_FEATURES[channel]
         unavailable = f"{self.host.name}: {channel} is not available on this connection"
-        attempts = 3
+        attempts = 1 if write else 3
         last_exc: Exception | None = None
         for attempt in range(attempts):
             try:
                 await self.connect()
                 async with self._sem:
+                    if before_frame:
+                        await before_frame()
                     # No await between reading the negotiated state and _roundtrip: the state
                     # must describe the connection that carries the frame.
                     if not self.connected:
@@ -596,7 +606,10 @@ class BatClient:
                             raise BacUnavailable(unavailable)
                         frame = {"type": "invoke", "id": f"batc-{next(self._ids)}",
                                  "channel": channel, "params": params}
-                        reply = await self._roundtrip(frame, timeout_for(channel))
+                        if before_send:
+                            before_send()
+                        reply = await self._roundtrip(frame, timeout_for(channel),
+                                                      on_transport=on_transport)
                 if state is None:
                     # Another caller's reconnect is still waiting for its hello; connect()
                     # returns after it. This connection is left open.
@@ -617,6 +630,9 @@ class BatClient:
                     return check(bac.parse_envelope(reply.get("result")), state)
                 except ValueError:
                     _record_invoke_error(channel, "invalid BAC reply")
+                    if write:
+                        raise BacOutcomeUnknown(
+                            f"{self.host.name}: {channel}: invalid BAC reply") from None
                     raise InvokeError(f"{self.host.name}: {channel}: invalid BAC reply") from None
             except ConnectionLost as e:
                 log_error("bat-connector", "connector.reconnect.failed", e)
@@ -634,7 +650,7 @@ class BatClient:
             raise BacUnavailable(
                 f"{self.host.name}: {bac.WORKSPACE_READ_CHANNEL} cannot address this profile")
         return await self._bac_call(
-            bac.WORKSPACE_READ_CHANNEL, {"profileId": profile_id},
+            bac.WORKSPACE_READ_CHANNEL, {"profileId": profile_id}, write=False,
             check=lambda value, state: bac.parse_workspace_read(
                 value, host_id=state.host_id, profile_id=profile_id))
 
@@ -644,7 +660,7 @@ class BatClient:
             raise BacUnavailable(
                 f"{self.host.name}: {bac.SESSION_LOCATE_CHANNEL} cannot address this session")
         return await self._bac_call(
-            bac.SESSION_LOCATE_CHANNEL, {"sessionId": session_id},
+            bac.SESSION_LOCATE_CHANNEL, {"sessionId": session_id}, write=False,
             check=lambda value, state: bac.parse_session_locate(
                 value, host_id=state.host_id, session_id=session_id,
                 max_rows=state.limits.get("locationMatches", bac.LOCATION_MATCHES)))
@@ -652,14 +668,24 @@ class BatClient:
     async def append_workspace_terminal(self, profile_id: str, terminal: dict, *, grant: WriteGrant | None,
                                         retries: int = 3, before_send: Callable[[], None] | None = None,
                                         before_frame: Callable[[], Awaitable[None]] | None = None,
-                                        on_transport: Callable[[], None] | None = None) -> dict:
-        """Append ONE terminal (tab) to the host's workspace document, append-only.
+                                        on_transport: Callable[[], None] | None = None,
+                                        on_write_channel: Callable[[str], None] | None = None) -> dict:
+        """Register ONE terminal (tab) in the host's workspace, append-only.
 
-        BAT only offers a whole-document ``workspace:save``. To stay append-only we:
+        On a connection that negotiated ``workspaceRead`` and ``workspaceAddTerminal``, and when
+        the profile ID and the registration fit the host's request grammar, the host appends the
+        registration itself, atomically and only at the revision this client read
+        (``bac:workspace-add-terminal``). Once that route is chosen, nothing in this call falls
+        back to ``workspace:save``.
+
+        Otherwise BAT only offers a whole-document ``workspace:save``. To stay append-only we:
         load -> build new doc = old doc + one terminal (nothing else changed) ->
         re-load and require it to be unchanged (else retry) -> save -> re-load and
         verify every previous terminal/workspace id is still present. A small race
         window with a concurrent GUI save remains (documented in SECURITY.md).
+
+        ``on_write_channel`` is called with the channel of every write frame at the start of
+        that frame's final gate, before ``before_send``.
         """
         from .errors import ChannelNotAllowed
 
@@ -669,6 +695,22 @@ class BatClient:
         if not isinstance(tid, str) or not tid:
             raise InvokeError("terminal needs an id")
         check_grant(grant, self.host.name, "workspace:save", {"sessionId": tid})
+
+        # Choose the route once, on a connected client. A failed connect is left to the
+        # attempts of the whole-document route below.
+        try:
+            await self.connect()
+        except ConnectionLost:
+            pass
+        state = self.bac
+        if (state is not None and self.bac_supports("workspaceRead", "workspaceAddTerminal")
+                and bac.valid_profile_id(profile_id)
+                and bac.registration_error(terminal, max_bytes=state.limits.get(
+                    "registrationBytes", bac.REGISTRATION_BYTES)) is None):
+            return await self._append_workspace_terminal_bac(
+                profile_id, terminal, grant=grant, retries=retries, before_send=before_send,
+                before_frame=before_frame, on_transport=on_transport,
+                on_write_channel=on_write_channel)
 
         async def load() -> tuple[str | None, dict]:
             raw = await self._invoke_checked("workspace:load", {"profileId": profile_id}, None)
@@ -706,6 +748,8 @@ class BatClient:
                 await asyncio.sleep(0.5)
                 continue  # someone saved in between; retry from scratch
             def save_gate():
+                if on_write_channel:
+                    on_write_channel("workspace:save")
                 if before_send:
                     before_send()
                 check_grant(grant, self.host.name, "workspace:save", {"sessionId": tid})
@@ -730,6 +774,85 @@ class BatClient:
                 "lost_workspaces": lost_ws,
             }
         return {"appended": False, "reason": "workspace kept changing; gave up to avoid clobbering"}
+
+    async def _append_workspace_terminal_bac(
+            self, profile_id: str, terminal: dict, *, grant: WriteGrant | None, retries: int,
+            before_send: Callable[[], None] | None,
+            before_frame: Callable[[], Awaitable[None]] | None,
+            on_transport: Callable[[], None] | None,
+            on_write_channel: Callable[[str], None] | None) -> dict:
+        """Register one terminal through the host's revision-checked append.
+
+        Returns a result for everything the host certainly did or certainly refused. Raises
+        when a write frame was sent and its outcome is not established; nothing is sent again
+        after that, on either route."""
+        channel = bac.WORKSPACE_ADD_TERMINAL_CHANNEL
+        tid = terminal["id"]
+        check_grant(grant, self.host.name, channel, {"sessionId": tid})
+
+        def gate():
+            if on_write_channel:
+                on_write_channel(channel)
+            if before_send:
+                before_send()
+            check_grant(grant, self.host.name, channel, {"sessionId": tid})
+
+        def refused(code: str) -> dict:
+            return {"appended": False, "saved": False, "reason": "host refused the registration",
+                    "refusal": code, "route": "bac"}
+
+        def present(revision: str | None) -> dict:
+            if revision is not None:
+                return {"appended": False, "reason": "already present", "identical": True,
+                        "route": "bac", "revision": revision}
+            return {"appended": False, "saved": False, "reason": "already present",
+                    "identical": False, "route": "bac"}
+
+        for attempt in range(retries):
+            try:
+                read = await self.bac_workspace_read(profile_id)
+            except BacReplyError as error:
+                return refused(error.code)
+            except BacUnavailable:
+                return refused("BAC_UNAVAILABLE")
+            terminals = read["document"].get("terminals")
+            workspaces = read["document"].get("workspaces")
+            if isinstance(terminals, list) and isinstance(workspaces, list):
+                found = [t for t in terminals if isinstance(t, dict) and t.get("id") == tid]
+                if found:
+                    equal = len(found) == 1 and bac.registration_effectively_equal(found[0], terminal)
+                    return present(read["revision"] if equal else None)
+                if not any(isinstance(w, dict) and w.get("id") == terminal["workspaceId"]
+                           for w in workspaces):
+                    return refused("WORKSPACE_NOT_FOUND")
+            try:
+                result = await self._bac_call(
+                    channel,
+                    {"profileId": profile_id, "expectedRevision": read["revision"],
+                     "terminal": terminal},
+                    write=True,
+                    check=lambda value, state: bac.parse_append_result(
+                        value, host_id=state.host_id, profile_id=profile_id, terminal_id=tid),
+                    before_send=gate, before_frame=before_frame, on_transport=on_transport)
+            except BacUnavailable:
+                return refused("BAC_UNAVAILABLE")
+            except BacReplyError as error:
+                if error.code == "REVISION_MISMATCH":
+                    if attempt + 1 < retries:
+                        await _retry_pause(0.5)
+                    continue
+                if error.code == "TERMINAL_EXISTS":
+                    return present(None)
+                if error.code in bac.APPEND_NOT_APPLIED:
+                    return refused(error.code)
+                raise BacOutcomeUnknown(f"{self.host.name}: {channel}: {error.code}") from error
+            if result["appended"]:
+                return {"appended": True, "saved": True, "route": "bac",
+                        "source": result["source"], "window_id": result["windowId"],
+                        "revision": result["revision"]}
+            return present(result["revision"])
+        return {"appended": False, "saved": False,
+                "reason": "workspace kept changing; gave up to avoid clobbering", "route": "bac"}
 
     def subscribe(
         self, predicate: Callable[[dict], bool] | None = None, maxsize: int = 512
