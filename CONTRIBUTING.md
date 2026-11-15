@@ -125,7 +125,7 @@ pytest versions; the `desktop.yml` summary explains only native builds.
 | `ci.yml` | `scope` | Select Python versions and explain why |
 | `desktop.yml` | `scope` | Select native build level/entries and explain why |
 | `ci.yml` | `lint`, `secrets-scan` | Static checks once on Python 3.13; secret scan |
-| `ci.yml` | `pytest <version> (i/5)` | Five runners per selected version: 3.10 for PRs without Python source/tooling changes; 3.10–3.13 otherwise and on `main` |
+| `ci.yml` | `pytest <version> (i/8)` | Eight runners per selected version: 3.10 for PRs without Python source/tooling changes; 3.10–3.13 otherwise and on `main` |
 | `ci.yml` | `pytest-complete` | Successful shards and exact collection coverage for exactly the selected versions |
 | `desktop.yml` | `frontend` | Regenerate/check browser assets and run Node tests |
 | `desktop.yml` | `browser-ui (i/5)` | Five Playwright shards on committed browser assets |
@@ -135,7 +135,7 @@ pytest versions; the `desktop.yml` summary explains only native builds.
 
 Read `pytest-complete` for the combined pytest check: every shard must succeed and
 the manifests must prove complete coverage without duplicates for each selected
-version. No tests are removed or deselected by scope selection; the five shards
+version. No tests are removed or deselected by scope selection; the eight shards
 still execute the whole suite once per version. `central-ui` also runs the Connector
 on Python 3.13. Frontend, browser UI, central UI and Windows endpoint jobs are not
 gated by scope.
@@ -222,7 +222,7 @@ Use a disk-backed `TMPDIR`:
 
 ```sh
 pytest-disktmp uv run pytest -q -p tests.ci_shard_plugin \
-  --ci-shard-index=1 --ci-shard-count=5 \
+  --ci-shard-index=1 --ci-shard-count=8 \
   --ci-shard-manifest="$TMPDIR/shard-1/manifest.json"
 ```
 
@@ -231,12 +231,18 @@ To refresh the measured per-file durations, download all
 
 ```sh
 uv run python -m scripts.ci_complete "$TMPDIR/pytest-artifacts" \
-  --python 3.10 3.11 3.12 3.13 --shards 5
+  --python 3.10 3.11 3.12 3.13 --shards 8
 uv run python -m scripts.ci_durations "$TMPDIR/pytest-artifacts"
 ```
 
 The example verifies a full-matrix run from `main`; for a scoped PR run, pass only
 the Python versions listed in that run's scope summary to `--python`.
+
+A test file that the table does not list is weighted as the table's median file, so new
+slow files unbalance the shards until the table is refreshed. Refresh it when the slowest
+`Tests` step of a run on `main` passes 28 minutes: one and a half times that no longer
+fits the 43-minute step limit. When one version's shards did not all complete, verify and
+use the versions that did.
 
 Commit the refreshed `tests/ci_durations.json`. Required local full checks are unchanged:
 ruff, the full Python suite, and Python 3.10 for backend changes. Use `pytest-disktmp`
