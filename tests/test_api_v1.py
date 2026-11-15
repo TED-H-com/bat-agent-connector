@@ -21,7 +21,7 @@ from bat_agent_connector.channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS,
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.inventory import Inventory, InventorySettings
 from bat_agent_connector.operations import OperationError
-from bat_agent_connector.task_daemon import CREDENTIAL_REFUSAL, TASK_URL_REFUSAL, TaskDaemon
+from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.task_daemon import request as task_request
 from bat_agent_connector.task_journal import Journal
 from tests.conftest import adopt, make_config
@@ -553,6 +553,13 @@ async def rpc_exchange(port, tok, method, params=None):
     return head.split(b"\r\n", 1)[0].decode(), json.loads(payload)
 
 
+# The packaged upgrade check (desktop/tests/managed-upgrade-fixture.py) imports this module with the
+# source of earlier releases, so the module imports no name that those releases lack. The two fixed
+# texts are therefore written out here.
+CREDENTIAL_REFUSAL = ("the presented token is not accepted for this request (unknown to this service, "
+                      "revoked, expired, or a capability that does not cover this request)")
+TASK_URL_REFUSAL = ("task daemon URL must be a loopback RPC address such as http://127.0.0.1:18796/rpc "
+                    "(reach a remote daemon through SSH forwarding)")
 UNKNOWN_TOKEN = "batc_" + "x" * 43
 UNACCEPTED = ("HTTP/1.1 400 Bad Request", {"error": "UNAUTHORIZED", "message": CREDENTIAL_REFUSAL})
 RPC_PROBES = [
@@ -626,7 +633,6 @@ async def test_rpc_clients_report_the_refusal_and_the_expected_address(served, m
     with pytest.raises(ValueError) as refused:
         await asyncio.to_thread(task_request, "api_capabilities", _auth_token=UNKNOWN_TOKEN, _url=url)
     assert str(refused.value) == "UNAUTHORIZED: " + CREDENTIAL_REFUSAL
-    assert "http://127.0.0.1:18796/rpc" in TASK_URL_REFUSAL and "SSH" in TASK_URL_REFUSAL
     for address in (f"http://127.0.0.1:{port}", f"http://127.0.0.1:{port}/", f"http://127.0.0.1:{port}/rpc/",
                     f"https://127.0.0.1:{port}/rpc", f"http://central.example.invalid:{port}/rpc",
                     f"http://user@127.0.0.1:{port}/rpc", f"http://127.0.0.1:{port}/rpc?x=1",
