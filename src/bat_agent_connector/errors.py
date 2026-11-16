@@ -65,6 +65,20 @@ class ConnectionLost(BatError):
     pass
 
 
+class CentralUnavailable(OSError):
+    """A request to the local central service that was not sent.
+
+    str() is one sentence that says why and what to do. The exception stays an OSError, and
+    each subclass also keeps the type of the error it replaces, so code that handled a
+    failed request before handles it the same way now.
+    """
+
+    sentence = ""
+
+    def __str__(self) -> str:
+        return self.sentence
+
+
 class WriteRefused(BatError):
     """A write tool refused to run (missing confirm, rate limit, writes disabled, streaming...)."""
 
