@@ -2,7 +2,7 @@
 
 Status: implementation design, 2026-11-21. No route, tool or Dashboard panel
 described below is implemented by this document. Tracking: [#545](https://github.com/TED-H-com/bat-agent-connector/issues/545),
-P1 session-location reads and P2 presentation; E08/E10 read parity. This does
+P1 session-location reads and P2 presentation; E05 BAT reads and E10 API parity. This does
 not close P1/P2, E00–E11, R0–R5, A01–A40 or the remaining PM v1.2 work.
 
 The session detail view will let a reader explicitly check where BAT recorded
