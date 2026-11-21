@@ -12,6 +12,11 @@ RPC or CLI action, Dashboard field or schema is added; the `tab` member of a
 start result has more members when the registration went through the host
 (see below).
 
+The next presentation increment is specified in
+[Session registration locations](session-placement.md): an explicit read of
+the selected session's registrations within the configured profile. That design
+does not add a current product caller or change inventory, ownership or focus.
+
 Authentication advertises only a protocol/minor pair; identity, build, features
 and limits arrive in hello. The host implementation is maintained separately in
 `TED-H-com/better-agent-terminal`. Its host contract at
